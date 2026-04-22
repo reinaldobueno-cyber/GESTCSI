@@ -1034,6 +1034,98 @@ nav{
   .dash-kpi,.kpi{padding:18px 16px!important;border-radius:18px!important;}
   .dash-kpi-v,.kpi-v{font-size:34px!important;}
 }
+/* ===== BALANCE FIX =====
+   Ajustes solicitados: lateral mais sutil, topo mais limpo e grafico mensal legivel. */
+.nav-command,.nav-icon-btn{display:none!important;}
+.nav-right{gap:12px!important;}
+.nav-profile{
+  width:auto!important;
+  min-width:58px!important;
+  padding:0 14px!important;
+  justify-content:center!important;
+  letter-spacing:.04em!important;
+}
+.nav-avatar{display:none!important;}
+.app-shell{
+  grid-template-columns:164px minmax(0,1fr)!important;
+}
+.sidenav,.sidenav:hover{
+  width:164px!important;
+  padding:14px 10px!important;
+}
+.snb{
+  height:42px!important;
+  gap:9px!important;
+  padding:0 10px!important;
+  font-size:11px!important;
+}
+.snb-icon{
+  width:24px!important;
+  height:24px!important;
+  flex-basis:24px!important;
+  font-size:14px!important;
+}
+.snb-badge{
+  transform:scale(.88);
+  transform-origin:right center;
+}
+.page{
+  max-width:1380px!important;
+}
+.exec-spark-wrap{
+  display:flex;
+  align-items:flex-end;
+  gap:10px;
+  height:92px;
+  padding:8px 4px 0;
+  border-bottom:1px solid #e2eadf;
+}
+.exec-spark-col{
+  flex:1;
+  min-width:42px;
+  display:flex;
+  flex-direction:column;
+  align-items:center;
+  justify-content:flex-end;
+  gap:6px;
+}
+.exec-spark-n{
+  font-size:11px;
+  font-weight:850;
+  color:#5f755d;
+}
+.exec-spark-bar{
+  width:68%;
+  min-width:18px;
+  border-radius:999px 999px 0 0;
+  background:linear-gradient(180deg,#7e947b 0%,#5f755d 100%);
+  box-shadow:0 8px 16px rgba(95,117,93,.16);
+}
+.exec-spark-month{
+  margin-top:2px;
+  font-size:10px;
+  font-weight:800;
+  color:#849184;
+  text-transform:uppercase;
+}
+.trend-wrap{
+  min-height:150px!important;
+}
+.trend-bar{
+  background:linear-gradient(180deg,#7e947b,#5f755d)!important;
+  box-shadow:0 6px 14px rgba(95,117,93,.13);
+}
+@media(max-width:1180px){
+  .app-shell{grid-template-columns:150px minmax(0,1fr)!important;}
+  .sidenav,.sidenav:hover{width:150px!important;}
+  .snb{font-size:10px!important;}
+}
+@media(max-width:800px){
+  .app-shell{grid-template-columns:58px minmax(0,1fr)!important;}
+  .sidenav,.sidenav:hover{width:58px!important;}
+  .exec-spark-wrap{gap:6px;overflow-x:auto;}
+  .exec-spark-col{min-width:40px;}
+}
 </style>
 </head>
 <body>
@@ -1049,13 +1141,11 @@ nav{
     <div class="nav-logo">M</div>
     <div class="nav-title">PAINEL DE GEST&Atilde;O - <em>MULTSOFT</em></div>
   </div>
-  <div class="nav-command"><span class="nav-command-icon">&#8984;</span><span>Central executiva PMO</span></div>
   <div class="nav-right">
     <span class="nav-date" id="nav-date">Carregando...</span>
-    <button class="nav-icon-btn" title="Notifica&ccedil;&otilde;es">&#128276;</button>
     <button class="btn-history" onclick="mostrarHistoricoAtualizacoes()">Hist&oacute;rico</button>
     <button class="btn-reload" onclick="loadAll('manual')">Atualizar</button>
-    <div class="nav-profile"><span class="nav-avatar">PM</span><span>PMO</span></div>
+    <div class="nav-profile">PMO</div>
   </div>
 </nav>
 <div class="period-bar" id="period-bar">
@@ -1617,11 +1707,11 @@ function initExec() {
   // Tendencia mensal sparkline
   var maxN = Math.max.apply(null, tendencia.map(function(t){return t.n;})||[1]);
   var spark = tendencia.map(function(t){
-    var h = Math.max(4, Math.round((t.n/maxN)*40));
-    return '<div style="display:flex;flex-direction:column;align-items:center;gap:3px;flex:1">'+
-      '<div style="font-size:9px;font-weight:700;color:var(--muted)">'+t.n+'</div>'+
-      '<div style="height:'+h+'px;background:var(--nav);border-radius:3px 3px 0 0;width:100%;min-width:16px"></div>'+
-      '<div style="font-size:9px;color:var(--muted)">'+t.m+'</div>'+
+    var h = Math.max(12, Math.round((t.n/maxN)*58));
+    return '<div class="exec-spark-col">'+
+      '<div class="exec-spark-n">'+t.n+'</div>'+
+      '<div class="exec-spark-bar" style="height:'+h+'px"></div>'+
+      '<div class="exec-spark-month">'+t.m+'</div>'+
     '</div>';
   }).join('');
 
@@ -1740,7 +1830,7 @@ function initExec() {
       '</div>'+
       '<div style="background:var(--surf);border:1px solid var(--border);border-radius:10px;padding:14px 16px">'+
         '<div style="font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:1px;color:var(--muted);margin-bottom:12px">Volume Mensal de Implanta\u00E7\u00F5es</div>'+
-        (tendencia.length?'<div style="display:flex;align-items:flex-end;gap:4px;height:60px;margin-bottom:6px">'+spark+'</div>':'<div style="color:var(--muted);font-size:12px">Selecione "Todos" para ver a tend\u00EAncia</div>')+
+        (tendencia.length?'<div class="exec-spark-wrap">'+spark+'</div>':'<div style="color:var(--muted);font-size:12px">Selecione "Todos" para ver a tend\u00EAncia</div>')+
       '</div>'+
     '</div>'+
 
