@@ -23,6 +23,8 @@ nav{background:var(--nav);height:58px;display:flex;align-items:center;justify-co
 .nav-right{display:flex;align-items:center;gap:10px;}
 .nav-date{font-family:'JetBrains Mono',monospace;font-size:11px;color:rgba(255,255,255,.4);}
 .btn-reload{background:var(--green2);border:none;color:#fff;font-family:'Inter',sans-serif;font-size:12px;font-weight:600;padding:7px 14px;border-radius:7px;cursor:pointer;}
+.btn-history{background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.12);color:rgba(255,255,255,.72);font-family:'Inter',sans-serif;font-size:12px;font-weight:600;padding:7px 12px;border-radius:7px;cursor:pointer;}
+.btn-history:hover{background:rgba(255,255,255,.14);color:#fff;}
 /* PERIOD BAR */
 .period-bar{background:var(--nav);padding:6px 24px;display:flex;align-items:center;gap:6px;border-top:1px solid rgba(255,255,255,.08);}
 .period-label{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:rgba(255,255,255,.35);margin-right:2px;}
@@ -249,8 +251,8 @@ nav{background:var(--nav);height:58px;display:flex;align-items:center;justify-co
 .leaflet-tooltip-top:before,.leaflet-tooltip-bottom:before,.leaflet-tooltip-left:before,.leaflet-tooltip-right:before{display:none!important;}
 
 /* ===== SIDEBAR ===== */
-.app-shell{display:block;min-height:calc(100vh - 94px);padding-left:60px;}
-.sidenav{width:60px;background:var(--nav);display:flex;flex-direction:column;padding:6px 0;transition:width .22s cubic-bezier(.4,0,.2,1),box-shadow .22s cubic-bezier(.4,0,.2,1);overflow:hidden;flex-shrink:0;border-right:1px solid rgba(255,255,255,.08);position:fixed;top:94px;left:0;height:calc(100vh - 94px);z-index:190;}
+.app-shell{display:grid;grid-template-columns:60px minmax(0,1fr);min-height:calc(100vh - 58px);}
+.sidenav{width:60px;background:var(--nav);display:flex;flex-direction:column;padding:6px 0;transition:width .22s cubic-bezier(.4,0,.2,1),box-shadow .22s cubic-bezier(.4,0,.2,1);overflow:hidden;flex-shrink:0;border-right:1px solid rgba(255,255,255,.08);position:sticky;top:58px;height:calc(100vh - 58px);z-index:190;align-self:start;}
 .sidenav:hover{width:192px;box-shadow:10px 0 28px rgba(0,0,0,.18);}
 .snb{display:flex;align-items:center;gap:10px;padding:10px 18px;border:none;background:none;color:rgba(255,255,255,.58);font-family:'Inter',sans-serif;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap;text-align:left;transition:background .14s,color .14s;border-left:3px solid transparent;box-sizing:border-box;width:100%;}
 .snb:hover{background:rgba(255,255,255,.1);color:#fff;}
@@ -281,7 +283,8 @@ nav{background:var(--nav);height:58px;display:flex;align-items:center;justify-co
   </div>
   <div class="nav-right">
     <span class="nav-date" id="nav-date">Carregando...</span>
-    <button class="btn-reload" onclick="loadAll()">Atualizar</button>
+    <button class="btn-history" onclick="mostrarHistoricoAtualizacoes()">Hist&oacute;rico</button>
+    <button class="btn-reload" onclick="loadAll('manual')">Atualizar</button>
   </div>
 </nav>
 <div class="period-bar" id="period-bar">
@@ -434,6 +437,82 @@ function showToast(msg, type) {
   t.className = 'toast show ' + (type || 'ok');
   setTimeout(function() { t.classList.remove('show'); }, 4000);
 }
+
+var UPDATE_HISTORY_KEY = 'gestcsi_update_history_v1';
+var UPDATE_DEVICE_KEY = 'gestcsi_update_device_id_v1';
+var UPDATE_ACTOR_KEY = 'gestcsi_update_actor_v1';
+var LAST_UPDATE_KEY = 'gestcsi_last_update_label_v1';
+function storageGet(key, fallback) {
+  try {
+    if (!window.localStorage) return fallback;
+    var value = localStorage.getItem(key);
+    return value === null || value === undefined ? fallback : value;
+  } catch(e) {
+    return fallback;
+  }
+}
+function storageSet(key, value) {
+  try {
+    if (window.localStorage) localStorage.setItem(key, value);
+  } catch(e) {}
+}
+function getUpdateDeviceId() {
+  var id = storageGet(UPDATE_DEVICE_KEY, '');
+  if (!id) {
+    id = 'DEV-' + Math.random().toString(36).slice(2, 8).toUpperCase() + '-' + Date.now().toString(36).toUpperCase();
+    storageSet(UPDATE_DEVICE_KEY, id);
+  }
+  return id;
+}
+function getUpdateActor() {
+  return storageGet(UPDATE_ACTOR_KEY, '') || ('Navegador ' + getUpdateDeviceId().slice(4, 10));
+}
+function carregarHistoricoAtualizacoes() {
+  try {
+    return JSON.parse(storageGet(UPDATE_HISTORY_KEY, '[]')) || [];
+  } catch(e) {
+    return [];
+  }
+}
+function registrarHistoricoAtualizacao(info) {
+  var now = new Date();
+  var entry = {
+    quando_iso: now.toISOString(),
+    quando: now.toLocaleString('pt-BR'),
+    usuario: getUpdateActor(),
+    dispositivo: getUpdateDeviceId(),
+    tipo: info && info.tipo || 'auto',
+    resultado: info && info.resultado || '-',
+    motivo: info && info.motivo || '-',
+    projetos: info && info.projetos || 0,
+    url: location.href,
+    navegador: navigator.userAgent || ''
+  };
+  var historico = carregarHistoricoAtualizacoes();
+  historico.unshift(entry);
+  historico = historico.slice(0, 40);
+  storageSet(UPDATE_HISTORY_KEY, JSON.stringify(historico));
+  if (entry.resultado === 'ok') storageSet(LAST_UPDATE_KEY, 'Planilha: ' + entry.quando.replace(',', ''));
+  return entry;
+}
+function mostrarHistoricoAtualizacoes() {
+  var historico = carregarHistoricoAtualizacoes();
+  var linhas = historico.slice(0, 12).map(function(x, i) {
+    return (i + 1) + '. ' + x.quando + ' | ' + x.usuario + ' | ' + x.tipo + ' | ' + x.resultado + ' | ' + x.projetos + ' projetos';
+  });
+  var atual = getUpdateActor();
+  var msg = 'Usuario deste navegador: ' + atual + '\n\n' +
+    (linhas.length ? linhas.join('\n') : 'Nenhuma atualizacao registrada ainda.') +
+    '\n\nPara identificar melhor este navegador, abra o console e rode:\nidentificarUsuarioAtualizacao(\"Seu Nome\")';
+  alert(msg);
+}
+window.identificarUsuarioAtualizacao = function(nome) {
+  var n = String(nome || '').trim();
+  if (!n) return getUpdateActor();
+  storageSet(UPDATE_ACTOR_KEY, n);
+  showToast('Usuario de atualizacao definido: ' + n, 'ok');
+  return n;
+};
 function goTab(id, btn) {
   document.querySelectorAll('.page').forEach(function(x){ x.classList.remove('on'); });
   document.querySelectorAll('.tab,.snb').forEach(function(x){ x.classList.remove('on'); });
@@ -3865,13 +3944,14 @@ function _limparJsonp(cb) {
   if (s && s.parentNode) s.parentNode.removeChild(s);
 }
 
-function loadAll() {
+function loadAll(tipoAtualizacao) {
   console.log('[INIT] Iniciando carga principal do painel');
   var nd = document.getElementById('nav-date');
   var lo = document.getElementById('load-overlay');
   var lt = document.getElementById('load-text');
   var rb = document.getElementById('refresh-bar');
   var isRefresh = window._jaCarregou === true;
+  window._lastUpdateTrigger = tipoAtualizacao || (isRefresh ? 'manual' : 'auto');
 
   if (!isRefresh) {
     // Primeiro acesso: mostra overlay, nao renderiza nada ainda
@@ -3886,7 +3966,7 @@ function loadAll() {
   try {
     if (!APPS_SCRIPT_URL || APPS_SCRIPT_URL.indexOf('AK') < 0) {
       console.warn('[INIT] URL do Apps Script ausente/inválida. Usando base local.');
-      _finalizarLoad([], isRefresh, 'local');
+      _finalizarLoad([], isRefresh, 'local', window._lastUpdateTrigger);
       return;
     }
 
@@ -3900,7 +3980,7 @@ function loadAll() {
       done = true;
       _limparJsonp(cbName);
       console.error('[INIT] Timeout na carga principal (12s)');
-      _finalizarLoad([], isRefresh, 'timeout');
+      _finalizarLoad([], isRefresh, 'timeout', window._lastUpdateTrigger);
     }, 12000);
 
     window[cbName] = function(resp) {
@@ -3911,9 +3991,9 @@ function loadAll() {
       var qtd = resp && Array.isArray(resp.projetos) ? resp.projetos.length : 0;
       console.log('[2] Resposta Apps Script recebida. Projetos brutos:', qtd);
       if (resp && resp.projetos && resp.projetos.length > 0) {
-        _finalizarLoad(resp.projetos, isRefresh, 'ok');
+        _finalizarLoad(resp.projetos, isRefresh, 'ok', window._lastUpdateTrigger);
       } else {
-        _finalizarLoad([], isRefresh, 'vazio');
+        _finalizarLoad([], isRefresh, 'vazio', window._lastUpdateTrigger);
       }
     };
 
@@ -3926,12 +4006,12 @@ function loadAll() {
       clearTimeout(timer);
       _limparJsonp(cbName);
       console.error('[INIT] Erro de rede/JSONP ao carregar Apps Script');
-      _finalizarLoad([], isRefresh, 'erro');
+      _finalizarLoad([], isRefresh, 'erro', window._lastUpdateTrigger);
     };
     document.head.appendChild(s);
   } catch (error) {
     console.error('[INIT] Erro inesperado na inicialização da carga principal:', error);
-    _finalizarLoad([], isRefresh, 'init_error');
+    _finalizarLoad([], isRefresh, 'init_error', window._lastUpdateTrigger);
   }
 }
 
@@ -3940,7 +4020,7 @@ function normalizeProjetoLink(p) {
   return normalizarUrlProjeto(obterLinkProjeto(p && p._row, p));
 }
 
-function _finalizarLoad(projetos, isRefresh, motivo) {
+function _finalizarLoad(projetos, isRefresh, motivo, tipoAtualizacao) {
   console.log('[CONSOLIDADO] Início');
   console.log('[CONSOLIDADO] Projetos lidos:', Array.isArray(projetos) ? projetos.length : 0);
   console.log('[3] Finalizando carga. Motivo:', motivo);
@@ -3994,11 +4074,13 @@ function _finalizarLoad(projetos, isRefresh, motivo) {
     var hora = now.toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'});
     var data = now.toLocaleDateString('pt-BR',{day:'2-digit',month:'2-digit',year:'numeric'});
     if (nd) nd.textContent = 'Planilha: ' + data + ' ' + hora;
+    registrarHistoricoAtualizacao({tipo: tipoAtualizacao || 'auto', resultado: 'ok', motivo: motivo, projetos: DATA.projetos.length});
     if (isRefresh) showToast(projetos.length + ' projetos atualizados \u2714', 'ok');
     } else {
       var baseLocalInfo = carregarBaseProjetos(lerDadosPlanilhaConsolidados(DATA.projetos).projetos);
       DATA.projetos = baseLocalInfo.projetos;
       if (nd) nd.textContent = 'Falha ao carregar planilha (' + motivo + ')';
+      registrarHistoricoAtualizacao({tipo: tipoAtualizacao || 'auto', resultado: 'falha', motivo: motivo, projetos: DATA.projetos.length});
       if (motivo === 'timeout') showToast('Planilha demorou — exibindo base local', 'err');
       else if (motivo === 'erro') showToast('Erro de conexão — exibindo base local', 'err');
       else if (motivo === 'vazio') showToast('Planilha respondeu sem projetos', 'err');
@@ -4013,6 +4095,7 @@ function _finalizarLoad(projetos, isRefresh, motivo) {
     console.error('[INIT] Erro ao consolidar/renderizar carga principal:', error);
     DATA.projetos = lerDadosPlanilhaConsolidados(DATA.projetos).projetos;
     if (nd) nd.textContent = 'Erro ao consolidar dados';
+    registrarHistoricoAtualizacao({tipo: tipoAtualizacao || 'auto', resultado: 'erro', motivo: motivo || 'consolidacao', projetos: DATA.projetos.length});
     showToast('Erro ao consolidar dados — base local preservada', 'err');
   }
 
@@ -4085,12 +4168,14 @@ function inicializarPainel() {
     }).catch(function(err){
       console.error('[INIT] Falha ao carregar metricas por aba:', err);
     });
-    loadAll();
+    var ultimoLabel = storageGet(LAST_UPDATE_KEY, '');
+    if (ultimoLabel && ndLocal) ndLocal.textContent = ultimoLabel;
+    loadAll('auto');
     // Watchdog: garante fallback final caso JSONP não conclua em browsers móveis.
     setTimeout(function(){
       if (window._cargaFinalizada) return;
       console.error('[INIT] Watchdog acionado: carga principal não finalizou.');
-      _finalizarLoad([], false, 'watchdog');
+      _finalizarLoad([], false, 'watchdog', 'auto');
     }, 15000);
   } catch (error) {
     console.error('[INIT] Erro ao inicializar painel:', error);
