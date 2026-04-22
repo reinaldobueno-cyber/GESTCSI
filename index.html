@@ -1288,6 +1288,126 @@ nav{
   .page{padding:18px 12px 72px!important;}
   .dash-grid{grid-template-columns:repeat(2,minmax(0,1fr))!important;}
 }
+/* ===== PREMIUM POLISH ROUND 2 =====
+   Refinamento final: filtros de logistica legiveis, lateral com nomes completos e labels executivos. */
+.app-shell{
+  grid-template-columns:164px minmax(0,1fr)!important;
+}
+.sidenav,.sidenav:hover{
+  width:164px!important;
+}
+.snb{
+  padding:0 9px!important;
+  gap:8px!important;
+  font-size:10.2px!important;
+  letter-spacing:.01em!important;
+}
+.snb-label{
+  padding-right:34px!important;
+  white-space:nowrap!important;
+}
+.snb-badge{
+  right:8px!important;
+  min-width:22px!important;
+}
+.log-toolbar{
+  display:flex;
+  align-items:center;
+  gap:12px;
+  margin-bottom:14px;
+  flex-wrap:wrap;
+}
+.log-mode-group,.log-format-group{
+  display:flex;
+  align-items:center;
+  gap:6px;
+  flex-wrap:wrap;
+}
+.log-mode-group{
+  padding:4px;
+  border:1px solid #dbe5d9;
+  border-radius:999px;
+  background:rgba(255,255,255,.72);
+  box-shadow:0 10px 24px rgba(94,113,91,.06);
+}
+.log-format-label{
+  font-size:10px;
+  font-weight:800;
+  letter-spacing:.12em;
+  color:#7f8c82;
+  text-transform:uppercase;
+  margin-left:2px;
+}
+.log-chip{
+  min-height:28px;
+  padding:6px 13px;
+  border-radius:999px;
+  cursor:pointer;
+  border:1px solid #d7e1d5;
+  background:#ffffff;
+  color:#314337;
+  font-size:11px;
+  font-weight:800;
+  line-height:1;
+  box-shadow:0 1px 0 rgba(255,255,255,.86) inset;
+  transition:background .18s ease,border-color .18s ease,color .18s ease,box-shadow .18s ease,transform .18s ease;
+}
+.log-chip:hover{
+  transform:translateY(-1px);
+  border-color:#becdbb;
+  background:#f8fbf7;
+  box-shadow:0 8px 18px rgba(94,113,91,.08);
+}
+.log-chip.on{
+  background:#6f826e;
+  border-color:#6f826e;
+  color:#fff;
+  box-shadow:0 10px 20px rgba(111,130,110,.16);
+}
+.log-count{
+  font-size:11px;
+  font-weight:700;
+  color:#819082;
+}
+.log-period-card{
+  background:rgba(255,255,255,.86);
+  border:1px solid #dfe8dc;
+  border-radius:16px;
+  padding:14px 16px;
+  margin-bottom:16px;
+  box-shadow:0 14px 32px rgba(94,113,91,.06);
+}
+.log-period-title{
+  font-size:10px;
+  font-weight:900;
+  text-transform:uppercase;
+  letter-spacing:.14em;
+  color:#78877a;
+  margin-bottom:6px;
+}
+.log-period-sub{
+  font-size:11px;
+  color:#78877a;
+  margin-bottom:11px;
+}
+.log-period-buttons{
+  display:flex;
+  gap:8px;
+  flex-wrap:wrap;
+}
+@media(max-width:1180px){
+  .app-shell{grid-template-columns:154px minmax(0,1fr)!important;}
+  .sidenav,.sidenav:hover{width:154px!important;}
+  .snb{font-size:9.8px!important;}
+}
+@media(max-width:800px){
+  .app-shell{grid-template-columns:54px minmax(0,1fr)!important;}
+  .sidenav,.sidenav:hover{width:54px!important;}
+  .snb-label{display:none!important;}
+  .log-toolbar{gap:8px;}
+  .log-mode-group{border-radius:18px;}
+  .log-chip{min-height:30px;padding:7px 11px;font-size:10.5px;}
+}
 </style>
 </head>
 <body>
@@ -1443,7 +1563,7 @@ function sl(s) {
   if (!s) return '-';
   if (s.indexOf('Atrasado') >= 0) return 'Atrasado';
   if (s.indexOf('Andamento') >= 0) return 'Em Andamento';
-  if (s.indexOf('Aguardando') >= 0) return 'Ag. In&iacute;cio';
+  if (s.indexOf('Aguardando') >= 0) return 'Aguardando In&iacute;cio';
   if (s.indexOf('Conclu') >= 0) return 'Concluido';
   return s;
 }
@@ -3014,7 +3134,7 @@ function initDash() {
   var kgrid = '<div class="dash-grid">'+
     '<div class="dash-kpi c-b"><div class="dash-kpi-icon">\uD83D\uDCCB</div><div class="dash-kpi-v">'+total+'</div><div class="dash-kpi-l">Total</div></div>'+
     '<div class="dash-kpi c-o"><div class="dash-kpi-icon">\u2699</div><div class="dash-kpi-v">'+and+'</div><div class="dash-kpi-l">Em Andamento</div>'+trendHtml(and,pAnd,false)+'</div>'+
-    '<div class="dash-kpi c-b"><div class="dash-kpi-icon">\u23F3</div><div class="dash-kpi-v">'+ag+'</div><div class="dash-kpi-l">Ag. In&iacute;cio</div></div>'+
+    '<div class="dash-kpi c-b"><div class="dash-kpi-icon">\u23F3</div><div class="dash-kpi-v">'+ag+'</div><div class="dash-kpi-l">Aguardando In&iacute;cio</div></div>'+
     '<div class="dash-kpi c-r"><div class="dash-kpi-icon">\uD83D\uDEA8</div><div class="dash-kpi-v">'+atr+'</div><div class="dash-kpi-l">Atrasados</div>'+trendHtml(atr,pAtr,true)+'</div>'+
     '<div class="dash-kpi c-o"><div class="dash-kpi-icon">\uD83D\uDCB0</div><div class="dash-kpi-v">'+exc+'</div><div class="dash-kpi-l">Di&aacute;rias Excedidas</div>'+trendHtml(exc,pExc,true)+'</div>'+
     '<div class="dash-kpi c-g"><div class="dash-kpi-icon">\uD83D\uDCC8</div><div class="dash-kpi-v">'+(total>0?Math.round(and/total*100):0)+'%</div><div class="dash-kpi-l">Em Andamento</div></div>'+
@@ -3132,7 +3252,7 @@ function initDash() {
   // Status bars
   var statRows = [
     {l:'Em Andamento', n:and, col:'var(--orange)'},
-    {l:'Ag. In&iacute;cio',   n:ag,  col:'var(--blue)'},
+    {l:'Aguardando In&iacute;cio',   n:ag,  col:'var(--blue)'},
     {l:'Atrasado',     n:atr, col:'var(--red)'}
   ].filter(function(s){return s.n>0;}).map(function(s){
     var pct = total > 0 ? Math.round((s.n/total)*100) : 0;
@@ -3208,7 +3328,7 @@ function buildTrend(tData, maxV, mActive) {
         '</div>'+
       '</div>'+
       hBar(d.and, 'var(--orange)', 'Em Andamento')+
-      hBar(d.ag,  'var(--blue)',   'Ag. In&iacute;cio')+
+      hBar(d.ag,  'var(--blue)',   'Aguardando In&iacute;cio')+
       hBar(d.a,   'var(--red)',    'Atrasados')+
     '</div>';
   });
@@ -3238,14 +3358,14 @@ function initAll() {
   var ag=p.filter(function(x){return x.status.indexOf('Aguardando')>=0;}).length;
   var atr=p.filter(function(x){return x.status.indexOf('Atrasado')>=0;}).length;
   var exc=p.filter(function(x){return x.diarias_rest!==null&&x.diarias_rest<0;}).length;
-  document.getElementById('kpis-all').innerHTML=kpi('Total',p.length)+kpi('Em Andamento',and,'o')+kpi('Ag. In&iacute;cio',ag,'b')+kpi('Atrasados',atr,'r')+kpi('Di&aacute;rias Excedidas',exc,'o');
+  document.getElementById('kpis-all').innerHTML=kpi('Total',p.length)+kpi('Em Andamento',and,'o')+kpi('Aguardando In&iacute;cio',ag,'b')+kpi('Atrasados',atr,'r')+kpi('Di&aacute;rias Excedidas',exc,'o');
   document.getElementById('n-all').textContent=p.length;
   var cons=[],cm={};
   p.forEach(function(x){if(x.consultor&&!cm[x.consultor]){cm[x.consultor]=1;cons.push(x.consultor);}});cons.sort();
   var meses=[],mm={};
   p.forEach(function(x){if(x.mes&&!mm[x.mes]){mm[x.mes]=1;meses.push(x.mes);}});
   meses = ordenarMesesPainel(meses);
-  document.getElementById('f-st').innerHTML=[['all','Todos'],['andamento','Em Andamento'],['atrasado','Atrasado'],['aguardando','Ag. In&iacute;cio']].map(function(v){return '<button class="fb '+(v[0]==='atrasado'?'r':v[0]==='aguardando'?'b':'')+' '+(fS===v[0]?'on':'')+'" onclick="setF(\'s\',\''+v[0]+'\',this)">'+v[1]+'</button>';}).join('');
+  document.getElementById('f-st').innerHTML=[['all','Todos'],['andamento','Em Andamento'],['atrasado','Atrasado'],['aguardando','Aguardando In&iacute;cio']].map(function(v){return '<button class="fb '+(v[0]==='atrasado'?'r':v[0]==='aguardando'?'b':'')+' '+(fS===v[0]?'on':'')+'" onclick="setF(\'s\',\''+v[0]+'\',this)">'+v[1]+'</button>';}).join('');
   document.getElementById('f-co').innerHTML=['all'].concat(cons).map(function(v){return '<button class="fb '+(fC===v?'on':'')+'" onclick="setF(\'c\',\''+v+'\',this)">'+(v==='all'?'Todos':v)+'</button>';}).join('');
   document.getElementById('f-me').innerHTML=['all'].concat(meses).map(function(v){return '<button class="fb '+(fM===v?'on':'')+'" onclick="setF(\'m\',\''+v+'\',this)">'+(v==='all'?'Todos':v)+'</button>';}).join('');
   applyF();
@@ -3286,7 +3406,7 @@ function initCons(){
       '<div class="cc-body">'+
         '<div class="cc-stats">'+
           '<div class="cc-s" onclick="event.stopPropagation();selCons(this.closest(\'.cc\').dataset.name,\'andamento\')"><div class="cc-sl">Andamento</div><div class="cc-sv o">'+d.and+'</div></div>'+
-          '<div class="cc-s" onclick="event.stopPropagation();selCons(this.closest(\'.cc\').dataset.name,\'aguardando\')"><div class="cc-sl">Ag. In&iacute;cio</div><div class="cc-sv b">'+d.ag+'</div></div>'+
+    '<div class="cc-s" onclick="event.stopPropagation();selCons(this.closest(\'.cc\').dataset.name,\'aguardando\')"><div class="cc-sl">Aguardando In&iacute;cio</div><div class="cc-sv b">'+d.ag+'</div></div>'+
           '<div class="cc-s"><div class="cc-sl">D. Cont.</div><div class="cc-sv">'+fn(d.dc)+'</div></div>'+
           '<div class="cc-s"><div class="cc-sv '+(d.dr>d.dc?'r':'')+'">'+fn(d.dr)+'</div><div class="cc-sl">D. Real.</div></div>'+
         '</div>'+
@@ -3307,10 +3427,10 @@ function selCons(name,filtro){
   else if(filtro==='aguardando')list=list.filter(function(x){return x.status.indexOf('Aguardando')>=0;});
   else if(filtro==='excedido')list=list.filter(function(x){return x.diarias_rest!==null&&x.diarias_rest<0;});
   var excN=d.proj.filter(function(x){return x.diarias_rest!==null&&x.diarias_rest<0;}).length;
-  var pills=[['all','Todos',d.t],['andamento','Em Andamento',d.and],['atrasado','Atrasado',d.atr],['aguardando','Ag. In&iacute;cio',d.ag],['excedido','Di&aacute;rias Excedidas',excN]].filter(function(x){return x[2]>0;}).map(function(v){return '<button class="fb '+(v[0]==='atrasado'?'r':v[0]==='aguardando'?'b':'')+' '+(filtro===v[0]?'on':'')+'" data-n="'+name+'" data-f="'+v[0]+'" onclick="selCons(this.dataset.n,this.dataset.f)">'+v[1]+' ('+v[2]+')</button>';}).join('');
+  var pills=[['all','Todos',d.t],['andamento','Em Andamento',d.and],['atrasado','Atrasado',d.atr],['aguardando','Aguardando In&iacute;cio',d.ag],['excedido','Di&aacute;rias Excedidas',excN]].filter(function(x){return x[2]>0;}).map(function(v){return '<button class="fb '+(v[0]==='atrasado'?'r':v[0]==='aguardando'?'b':'')+' '+(filtro===v[0]?'on':'')+'" data-n="'+name+'" data-f="'+v[0]+'" onclick="selCons(this.dataset.n,this.dataset.f)">'+v[1]+' ('+v[2]+')</button>';}).join('');
   var wrap=document.getElementById('cons-detail');
   wrap.innerHTML='<div class="cdetail"><div class="cd-top" style="background:'+col+'"><div><div class="cd-name">'+name+'</div><div class="cd-sub">'+d.t+' projetos - '+fn(d.dc)+' diarias contratadas</div></div><button class="cd-close" onclick="document.getElementById(\'cons-detail\').innerHTML=\'\';document.querySelectorAll(\'#cgrid-cons .cc\').forEach(function(c){c.classList.remove(\'on\');})">Fechar</button></div>'+
-    '<div class="cd-body"><div class="kpis" style="margin-bottom:14px">'+kpi('Total',d.t)+kpi('Andamento',d.and,'o')+kpi('Ag. In&iacute;cio',d.ag,'b')+kpi('Atrasados',d.atr,'r')+kpi('Avulso',d.a,'p')+kpi('Venda',d.v,'g')+'</div>'+
+    '<div class="cd-body"><div class="kpis" style="margin-bottom:14px">'+kpi('Total',d.t)+kpi('Andamento',d.and,'o')+kpi('Aguardando In&iacute;cio',d.ag,'b')+kpi('Atrasados',d.atr,'r')+kpi('Avulso',d.a,'p')+kpi('Venda',d.v,'g')+'</div>'+
     '<div class="cd-filters">'+pills+'</div>'+
     '<div class="ptable"><div class="ptable-head"><div>Cliente</div><div>Status</div><div>Tipo</div><div>Formato</div><div>Diarias</div><div></div></div>'+
     '<div>'+buildRows(list,'cd-'+name.replace(/[^a-zA-Z0-9]/g,'_')+'-')+'</div></div></div></div>';
@@ -3342,7 +3462,7 @@ function initVend(){
       '<div class="cc-body">'+
         '<div class="cc-stats">'+
           '<div class="cc-s"><div class="cc-sl">Andamento</div><div class="cc-sv o">'+d.and+'</div></div>'+
-          '<div class="cc-s"><div class="cc-sl">Ag. In&iacute;cio</div><div class="cc-sv b">'+d.ag+'</div></div>'+
+    '<div class="cc-s"><div class="cc-sl">Aguardando In&iacute;cio</div><div class="cc-sv b">'+d.ag+'</div></div>'+
           '<div class="cc-s"><div class="cc-sl">D. Cont.</div><div class="cc-sv">'+fn(d.dc)+'</div></div>'+
           '<div class="cc-s"><div class="cc-sl">D. Real.</div><div class="cc-sv '+(d.dr>d.dc?'r':'')+'">'+fn(d.dr)+'</div></div>'+
         '</div>'+
@@ -3365,7 +3485,7 @@ function selVend(name,filtro){
   else if(filtro==='excedido')list=list.filter(function(x){return x.diarias_rest!==null&&x.diarias_rest<0;});
   var excList=d.proj.filter(function(x){return x.diarias_rest!==null&&x.diarias_rest<0;});
   var totD=excList.reduce(function(s,x){return s+Math.abs(x.diarias_rest);},0);
-  var pills=[['all','Todos',d.t],['andamento','Em Andamento',d.and],['aguardando','Ag. In&iacute;cio',d.ag],['atrasado','Atrasado',d.atr],['excedido','Di&aacute;rias Excedidas',d.en]].filter(function(x){return x[2]>0;}).map(function(v){return '<button class="fb '+(v[0]==='atrasado'?'r':v[0]==='aguardando'?'b':'')+' '+(filtro===v[0]?'on':'')+'" data-n="'+name+'" data-f="'+v[0]+'" onclick="selVend(this.dataset.n,this.dataset.f)">'+v[1]+' ('+v[2]+')</button>';}).join('');
+  var pills=[['all','Todos',d.t],['andamento','Em Andamento',d.and],['aguardando','Aguardando In&iacute;cio',d.ag],['atrasado','Atrasado',d.atr],['excedido','Di&aacute;rias Excedidas',d.en]].filter(function(x){return x[2]>0;}).map(function(v){return '<button class="fb '+(v[0]==='atrasado'?'r':v[0]==='aguardando'?'b':'')+' '+(filtro===v[0]?'on':'')+'" data-n="'+name+'" data-f="'+v[0]+'" onclick="selVend(this.dataset.n,this.dataset.f)">'+v[1]+' ('+v[2]+')</button>';}).join('');
   var fat=d.en>0?('<div style="background:var(--red-s);border:1px solid rgba(192,57,43,.3);border-radius:8px;padding:12px 16px;margin-bottom:14px;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px">'+
     '<div><div style="font-size:10px;font-weight:700;text-transform:uppercase;color:var(--red);margin-bottom:6px">Dias a Faturar</div>'+
     excList.map(function(x){return '<div style="font-size:12px;color:var(--text2)">- '+x.cliente+' <span style="color:var(--red);font-weight:700">(+'+fn(Math.abs(x.diarias_rest))+'d)</span> - '+x.consultor+'</div>';}).join('')+'</div>'+
@@ -3373,7 +3493,7 @@ function selVend(name,filtro){
     '';
   var wrap=document.getElementById('vend-detail');
   wrap.innerHTML='<div class="cdetail"><div class="cd-top" style="background:'+col+'"><div><div class="cd-name">'+name+'</div><div class="cd-sub">'+d.t+' projetos</div></div><button class="cd-close" onclick="document.getElementById(\'vend-detail\').innerHTML=\'\';document.querySelectorAll(\'#cgrid-vend .cc\').forEach(function(c){c.classList.remove(\'on\');})">Fechar</button></div>'+
-    '<div class="cd-body"><div class="kpis" style="margin-bottom:14px">'+kpi('Total',d.t)+kpi('Andamento',d.and,'o')+kpi('Ag. In&iacute;cio',d.ag,'b')+kpi('Atrasados',d.atr,'r')+kpi('Proj. Exc.',d.en,'r')+kpi('Dias a Faturar',fn(d.ed),'o')+'</div>'+
+    '<div class="cd-body"><div class="kpis" style="margin-bottom:14px">'+kpi('Total',d.t)+kpi('Andamento',d.and,'o')+kpi('Aguardando In&iacute;cio',d.ag,'b')+kpi('Atrasados',d.atr,'r')+kpi('Proj. Exc.',d.en,'r')+kpi('Dias a Faturar',fn(d.ed),'o')+'</div>'+
     fat+'<div class="cd-filters">'+pills+'</div>'+
     '<div class="ptable"><div class="ptable-head"><div>Cliente / Consultor</div><div>Status</div><div>Tipo</div><div>Formato</div><div>Diarias</div><div></div></div>'+
     '<div>'+buildRows(list,'vd-'+name.replace(/[^a-zA-Z0-9]/g,'_')+'-')+'</div></div></div></div>';
@@ -3654,47 +3774,45 @@ function renderLog() {
   // ---- UI ----
   var btnMode = function(mode, label) {
     var on = mode === modoLog;
-    return '<button onclick="window._logModo=\''+mode+'\';renderLog()" style="font-size:12px;font-weight:700;padding:8px 20px;border:none;cursor:pointer;'+(on?'background:var(--nav);color:#fff':'background:none;color:var(--text2)')+'" >'+label+'</button>';
+    return '<button class="log-chip '+(on?'on':'')+'" onclick="window._logModo=\''+mode+'\';renderLog()">'+label+'</button>';
   };
   var btnFmt = function(fmt, label) {
     var on = fmtFiltro === fmt;
-    return '<button onclick="window._logFmt=\''+fmt+'\';renderLog()" style="font-size:12px;font-weight:700;padding:6px 16px;border-radius:20px;cursor:pointer;border:1.5px solid '+(on?'var(--nav)':'var(--border)')+';background:'+(on?'var(--nav)':'none')+';color:'+(on?'#fff':'var(--text2)')+' ">'+label+'</button>';
+    return '<button class="log-chip '+(on?'on':'')+'" onclick="window._logFmt=\''+fmt+'\';renderLog()">'+label+'</button>';
   };
 
   var subTabs =
-    '<div style="display:flex;align-items:center;gap:12px;margin-bottom:14px;flex-wrap:wrap">'+
-      '<div style="border:1px solid var(--border);border-radius:8px;overflow:hidden;display:flex">'+
+    '<div class="log-toolbar">'+
+      '<div class="log-mode-group">'+
         btnMode('geral',   '\uD83C\uDF0D Geral')+
-        '<span style="width:1px;background:var(--border)"></span>'+
         btnMode('proximas', '\uD83D\uDCC5 Pr\u00F3ximas semanas')+
-        '<span style="width:1px;background:var(--border)"></span>'+
         btnMode('passadas', '\u23F1 J\u00E1 passaram 1\u00BA treinamento')+
       '</div>'+
-      '<div style="display:flex;gap:6px;align-items:center">'+
-        '<span style="font-size:11px;font-weight:700;color:var(--muted)">Formato:</span>'+
+      '<div class="log-format-group">'+
+        '<span class="log-format-label">Formato</span>'+
         btnFmt('todos',  'Todos')+
         btnFmt('loco',   '\uD83C\uDFE0 In Loco')+
         btnFmt('online', '\uD83D\uDCBB Online')+
       '</div>'+
-      '<span style="font-size:11px;color:var(--muted)">'+filtrado.length+' projeto(s)</span>'+
+      '<span class="log-count">'+filtrado.length+' projeto(s)</span>'+
     '</div>';
 
   // Proximas semanas
   var periodos = [{v:'7',l:'1 semana'},{v:'14',l:'2 semanas'},{v:'28',l:'4 semanas'},{v:'56',l:'8 semanas'},{v:'84',l:'12 semanas'},{v:'180',l:'6 meses'}];
   var periodoHtml = modoProximas ?
-    '<div style="background:var(--surf);border:1px solid var(--border);border-radius:10px;padding:14px 16px;margin-bottom:16px">'+
-      '<div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--muted);margin-bottom:6px">Pr\u00F3ximas implanta\u00E7\u00F5es previstas</div>'+
-      '<div style="font-size:11px;color:var(--muted);margin-bottom:10px">Calculado a partir de hoje: <b>'+today.toLocaleDateString('pt-BR')+'</b> at\u00E9 <b>'+limite.toLocaleDateString('pt-BR')+'</b>.</div>'+
-      '<div style="display:flex;gap:8px;flex-wrap:wrap">'+
+    '<div class="log-period-card">'+
+      '<div class="log-period-title">Pr\u00F3ximas implanta\u00E7\u00F5es previstas</div>'+
+      '<div class="log-period-sub">Calculado a partir de hoje: <b>'+today.toLocaleDateString('pt-BR')+'</b> at\u00E9 <b>'+limite.toLocaleDateString('pt-BR')+'</b>.</div>'+
+      '<div class="log-period-buttons">'+
         periodos.map(function(p){
           var on = window._logPeriodo===p.v;
-          return '<button onclick="window._logPeriodo=\''+p.v+'\';renderLog()" style="font-size:12px;font-weight:700;padding:6px 16px;border-radius:6px;cursor:pointer;border:1px solid var(--border);'+(on?'background:var(--nav);color:#fff;border-color:var(--nav)':'background:none;color:var(--text2)')+' ">'+p.l+'</button>';
+          return '<button class="log-chip '+(on?'on':'')+'" onclick="window._logPeriodo=\''+p.v+'\';renderLog()">'+p.l+'</button>';
         }).join('')+
       '</div>'+
     '</div>' : (modoPassadas ?
-    '<div style="background:var(--surf);border:1px solid var(--border);border-radius:10px;padding:14px 16px;margin-bottom:16px">'+
-      '<div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--muted);margin-bottom:6px">Projetos que j\u00E1 passaram do 1\u00BA treinamento</div>'+
-      '<div style="font-size:11px;color:var(--muted)">Mostra projetos com data de 1\u00BA treinamento anterior a <b>'+today.toLocaleDateString('pt-BR')+'</b>. Use para enxergar hist\u00F3rico e pend\u00EAncias que ficaram para tr\u00E1s.</div>'+
+    '<div class="log-period-card">'+
+      '<div class="log-period-title">Projetos que j\u00E1 passaram do 1\u00BA treinamento</div>'+
+      '<div class="log-period-sub" style="margin-bottom:0">Mostra projetos com data de 1\u00BA treinamento anterior a <b>'+today.toLocaleDateString('pt-BR')+'</b>. Use para enxergar hist\u00F3rico e pend\u00EAncias que ficaram para tr\u00E1s.</div>'+
     '</div>' : '');
 
   // Warning
