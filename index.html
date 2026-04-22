@@ -227,6 +227,15 @@ nav{background:var(--nav);height:58px;display:flex;align-items:center;justify-co
 .toast.show{display:flex;}
 .toast.ok{border-color:rgba(45,110,78,.4);color:var(--green);}
 .toast.err{border-color:rgba(192,57,43,.4);color:var(--red);}
+.history-backdrop{position:fixed;inset:0;background:rgba(0,0,0,.48);z-index:10001;display:flex;align-items:center;justify-content:center;padding:20px;}
+.history-box{width:min(620px,calc(100vw - 36px));max-height:min(76vh,680px);background:var(--surf);border:1px solid var(--border);border-radius:12px;box-shadow:0 18px 60px rgba(0,0,0,.28);display:flex;flex-direction:column;overflow:hidden;}
+.history-head{padding:18px 20px 10px;border-bottom:1px solid var(--border);}
+.history-title{font-size:15px;font-weight:800;color:var(--text);margin-bottom:4px;}
+.history-sub{font-size:12px;color:var(--text2);line-height:1.5;}
+.history-body{padding:14px 20px;overflow:auto;font-family:'JetBrains Mono',monospace;font-size:12px;line-height:1.65;color:var(--text2);white-space:pre-wrap;}
+.history-foot{padding:12px 20px;border-top:1px solid var(--border);display:flex;justify-content:flex-end;background:var(--surf2);}
+.history-close{background:var(--green);border:1px solid var(--green);color:#fff;font-family:'Inter',sans-serif;font-size:12px;font-weight:800;padding:8px 22px;border-radius:8px;cursor:pointer;}
+.history-close:hover{background:var(--green2);border-color:var(--green2);}
 #log-map{height:420px;border-radius:8px;border:1px solid var(--border);z-index:1;background:#eef3ef;}
 #log-map .leaflet-container{background:#eef3ef;}
 .log-map-wrap{margin-bottom:16px;}
@@ -372,6 +381,28 @@ var DATA_EMBUTIDA = JSON.parse(JSON.stringify(DATA));
 var activePeriod = 'all';
 var fS='all', fC='all', fM='all';
 var _openId = null;
+var ORDEM_MESES = ['JAN','FEV','MAR','ABR','MAI','JUN','JUL','AGO','SET','OUT','NOV','DEZ'];
+
+function indiceMesPainel(mes) {
+  var idx = ORDEM_MESES.indexOf(String(mes || '').toUpperCase().trim());
+  return idx >= 0 ? idx : 999;
+}
+function ordenarMesesPainel(meses) {
+  return (meses || []).slice().sort(function(a, b) {
+    return indiceMesPainel(a) - indiceMesPainel(b) || String(a || '').localeCompare(String(b || ''));
+  });
+}
+function ordenarProjetosPainel(projetos) {
+  return (projetos || []).slice().sort(function(a, b) {
+    var ma = indiceMesPainel(a && a.mes);
+    var mb = indiceMesPainel(b && b.mes);
+    if (ma !== mb) return ma - mb;
+    var oa = Number(a && a._sheet_order);
+    var ob = Number(b && b._sheet_order);
+    if (!isNaN(oa) && !isNaN(ob) && oa !== ob) return oa - ob;
+    return String((a && a.cliente) || '').localeCompare(String((b && b.cliente) || ''));
+  });
+}
 
 // ---- Helpers ----
 var CC = {JULIANA:'#7c5cbf',LUCAS:'#2a7ab5',BRUNO:'#bf5c2a',SERGIO:'#2a8f60',ANITA:'#bf3030',WANDERLEY:'#917000',CAIO:'#1a8fa0',MARIA:'#a04080',YASMIN:'#4a7a50'};
@@ -430,7 +461,7 @@ function diffD(a, b) {
 function filteredProj() {
   var p = DATA.projetos.filter(function(x) { return x.cliente; });
   if (activePeriod !== 'all') p = p.filter(function(x) { return x.mes === activePeriod; });
-  return p;
+  return ordenarProjetosPainel(p);
 }
 function showToast(msg, type) {
   var t = document.getElementById('toast');
@@ -606,16 +637,58 @@ function formatarLinhasHistorico(historico) {
     return (i + 1) + '. ' + (x.quando || x.quando_iso || '-') + ' | ' + (x.usuario || '-') + ' | ' + (x.tipo || '-') + ' | ' + (x.resultado || '-') + ' | ' + (x.projetos || 0) + ' projetos';
   });
 }
+function abrirModalHistorico(titulo, subtitulo, linhas, rodape) {
+  fecharModalHistorico();
+  var wrap = document.createElement('div');
+  wrap.className = 'history-backdrop';
+  wrap.id = 'history-modal';
+  var box = document.createElement('div');
+  box.className = 'history-box';
+  var head = document.createElement('div');
+  head.className = 'history-head';
+  var title = document.createElement('div');
+  title.className = 'history-title';
+  title.textContent = titulo || 'Historico';
+  var sub = document.createElement('div');
+  sub.className = 'history-sub';
+  sub.textContent = subtitulo || '';
+  var body = document.createElement('div');
+  body.className = 'history-body';
+  body.textContent = (linhas && linhas.length ? linhas.join('\n') : 'Nenhum registro encontrado.') + (rodape ? '\n\n' + rodape : '');
+  var foot = document.createElement('div');
+  foot.className = 'history-foot';
+  var btn = document.createElement('button');
+  btn.className = 'history-close';
+  btn.type = 'button';
+  btn.textContent = 'Fechar';
+  btn.onclick = fecharModalHistorico;
+  head.appendChild(title);
+  if (sub.textContent) head.appendChild(sub);
+  foot.appendChild(btn);
+  box.appendChild(head);
+  box.appendChild(body);
+  box.appendChild(foot);
+  wrap.appendChild(box);
+  wrap.addEventListener('click', function(ev) {
+    if (ev.target === wrap) fecharModalHistorico();
+  });
+  document.body.appendChild(wrap);
+  btn.focus();
+}
+function fecharModalHistorico() {
+  var el = document.getElementById('history-modal');
+  if (el && el.parentNode) el.parentNode.removeChild(el);
+}
 function mostrarHistoricoLocal(motivo) {
   var historico = carregarHistoricoAtualizacoes();
   var linhas = formatarLinhasHistorico(historico);
   var atual = getUpdateActor();
-  var msg = 'Historico local deste navegador' + (motivo ? ' (' + motivo + ')' : '') + '\n' +
-    'Usuario deste navegador: ' + atual + '\n\n' +
-    (linhas.length ? linhas.join('\n') : 'Nenhuma atualizacao registrada ainda.') +
-    '\n\nObs.: se o historico global nao aparecer, publique a versao atualizada do Apps Script.' +
-    '\n\nPara identificar melhor este navegador, abra o console e rode:\nidentificarUsuarioAtualizacao(\"Seu Nome\")';
-  alert(msg);
+  abrirModalHistorico(
+    'Historico local deste navegador' + (motivo ? ' (' + motivo + ')' : ''),
+    'Usuario deste navegador: ' + atual,
+    linhas,
+    'Obs.: se o historico global nao aparecer, publique a versao atualizada do Apps Script.\nPara identificar melhor este navegador, abra o console e rode: identificarUsuarioAtualizacao("Seu Nome")'
+  );
 }
 function mostrarHistoricoAtualizacoes() {
   chamarAppsScriptJsonp('getPanelUpdateHistory', {limit: 20}, 10000).then(function(resp){
@@ -625,11 +698,12 @@ function mostrarHistoricoAtualizacoes() {
     }
     var linhas = formatarLinhasHistorico(resp.history);
     var atual = getUpdateActor();
-    var msg = 'Historico global de atualizacoes\n' +
-      'Usuario deste navegador: ' + atual + '\n\n' +
-      (linhas.length ? linhas.join('\n') : 'Nenhuma atualizacao global registrada ainda.') +
-      '\n\nPara identificar melhor este navegador, abra o console e rode:\nidentificarUsuarioAtualizacao(\"Seu Nome\")';
-    alert(msg);
+    abrirModalHistorico(
+      'Historico global de atualizacoes',
+      'Usuario deste navegador: ' + atual,
+      linhas,
+      'Para identificar melhor este navegador, abra o console e rode: identificarUsuarioAtualizacao("Seu Nome")'
+    );
   }).catch(function(error){
     mostrarHistoricoLocal(error && error.message || 'global indisponivel');
   });
@@ -2156,6 +2230,7 @@ function initAll() {
   p.forEach(function(x){if(x.consultor&&!cm[x.consultor]){cm[x.consultor]=1;cons.push(x.consultor);}});cons.sort();
   var meses=[],mm={};
   p.forEach(function(x){if(x.mes&&!mm[x.mes]){mm[x.mes]=1;meses.push(x.mes);}});
+  meses = ordenarMesesPainel(meses);
   document.getElementById('f-st').innerHTML=[['all','Todos'],['andamento','Em Andamento'],['atrasado','Atrasado'],['aguardando','Ag. In&iacute;cio']].map(function(v){return '<button class="fb '+(v[0]==='atrasado'?'r':v[0]==='aguardando'?'b':'')+' '+(fS===v[0]?'on':'')+'" onclick="setF(\'s\',\''+v[0]+'\',this)">'+v[1]+'</button>';}).join('');
   document.getElementById('f-co').innerHTML=['all'].concat(cons).map(function(v){return '<button class="fb '+(fC===v?'on':'')+'" onclick="setF(\'c\',\''+v+'\',this)">'+(v==='all'?'Todos':v)+'</button>';}).join('');
   document.getElementById('f-me').innerHTML=['all'].concat(meses).map(function(v){return '<button class="fb '+(fM===v?'on':'')+'" onclick="setF(\'m\',\''+v+'\',this)">'+(v==='all'?'Todos':v)+'</button>';}).join('');
@@ -3545,6 +3620,7 @@ function mapearProjetoMensalPorIndice(row, abaTitle) {
 function carregarProjetosDiretoPlanilha() {
   var abas = Object.keys(ABAS_GID_FIXAS).map(function(m){ return {title:m, gid:ABAS_GID_FIXAS[m]}; });
   var projetos = [];
+  var seq = 0;
   return Promise.all(abas.map(function(aba){
     var url = 'https://docs.google.com/spreadsheets/d/' + SHEET_ID + '/gviz/tq?gid=' + aba.gid;
     return loadGvizTableJsonp(url, 15000).then(function(table){
@@ -3555,6 +3631,7 @@ function carregarProjetosDiretoPlanilha() {
         ro = Object.assign(ro, mapearProjetoMensalPorIndice(row, aba.title));
         if (!valorRowAlias(ro, ['cliente','nome_cliente','nome_do_cliente'])) return;
         ro._aba_origem = aba.title;
+        ro._sheet_order = seq++;
         projetos.push(ro);
       });
       console.log('[SHEET DIRECT] '+aba.title+': projetos lidos', projetos.filter(function(p){ return p._aba_origem === aba.title; }).length);
