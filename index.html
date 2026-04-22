@@ -2555,11 +2555,8 @@ function initLog() {
 
   // Todos os projetos, qualquer formato
   all.forEach(function(x) {
-    if (x.data_inicio && !x.data_inicio.match(/^\d{4}-\d{2}-\d{2}$/)) {
-      x.data_estimada = x.data_estimada || x.data_inicio;
-      x.data_inicio = '';
-    }
-    x._data_log = x.data_inicio || x.data_estimada || '';
+    // Mantem a data real intacta; a logística usa _data_log apenas como campo auxiliar.
+    x._data_log = parseD(x.data_inicio) ? x.data_inicio : (x.data_estimada || x.data_inicio || '');
   });
 
   var comCidade  = all.filter(function(x){ return x.cidade; });
