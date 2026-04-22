@@ -517,6 +517,68 @@ function carregarHistoricoAtualizacoes() {
     return [];
   }
 }
+function chamarAppsScriptJsonp(action, params, timeoutMs) {
+  return new Promise(function(resolve, reject){
+    if (!APPS_SCRIPT_URL || APPS_SCRIPT_URL.indexOf('AK') < 0) {
+      reject(new Error('Apps Script URL indisponivel'));
+      return;
+    }
+    var cbName = '_hist_' + Date.now() + '_' + Math.floor(Math.random() * 10000);
+    var done = false;
+    var script = document.createElement('script');
+    var timer = setTimeout(function(){
+      if (done) return;
+      done = true;
+      _limparJsonp(cbName);
+      reject(new Error('Timeout ao acessar historico global'));
+    }, timeoutMs || 10000);
+
+    window[cbName] = function(resp) {
+      if (done) return;
+      done = true;
+      clearTimeout(timer);
+      _limparJsonp(cbName);
+      resolve(resp || {});
+    };
+
+    var query = Object.assign({}, params || {}, {
+      action: action,
+      callback: cbName,
+      _ts: Date.now()
+    });
+    script.id = '_jsonp_' + cbName;
+    script.src = APPS_SCRIPT_URL + '?' + Object.keys(query).map(function(key){
+      return encodeURIComponent(key) + '=' + encodeURIComponent(query[key] === undefined || query[key] === null ? '' : String(query[key]));
+    }).join('&');
+    script.onerror = function(){
+      if (done) return;
+      done = true;
+      clearTimeout(timer);
+      _limparJsonp(cbName);
+      reject(new Error('Erro ao acessar historico global'));
+    };
+    document.head.appendChild(script);
+  });
+}
+function registrarHistoricoGlobal(entry) {
+  if (!entry) return;
+  chamarAppsScriptJsonp('logPanelUpdate', {
+    quando_iso: entry.quando_iso,
+    quando: entry.quando,
+    usuario: entry.usuario,
+    dispositivo: entry.dispositivo,
+    tipo: entry.tipo,
+    resultado: entry.resultado,
+    motivo: entry.motivo,
+    projetos: entry.projetos,
+    url: entry.url,
+    navegador: entry.navegador
+  }, 8000).then(function(resp){
+    if (!resp || resp.ok === false) console.warn('[HISTORICO GLOBAL] Registro recusado:', resp);
+  }).catch(function(error){
+    console.warn('[HISTORICO GLOBAL] Registro indisponivel, mantendo historico local:', error && error.message);
+  });
+}
 function registrarHistoricoAtualizacao(info) {
   var now = new Date();
   var entry = {
@@ -536,18 +598,41 @@ function registrarHistoricoAtualizacao(info) {
   historico = historico.slice(0, 40);
   storageSet(UPDATE_HISTORY_KEY, JSON.stringify(historico));
   if (entry.resultado === 'ok') storageSet(LAST_UPDATE_KEY, 'Planilha: ' + entry.quando.replace(',', ''));
+  registrarHistoricoGlobal(entry);
   return entry;
 }
-function mostrarHistoricoAtualizacoes() {
-  var historico = carregarHistoricoAtualizacoes();
-  var linhas = historico.slice(0, 12).map(function(x, i) {
-    return (i + 1) + '. ' + x.quando + ' | ' + x.usuario + ' | ' + x.tipo + ' | ' + x.resultado + ' | ' + x.projetos + ' projetos';
+function formatarLinhasHistorico(historico) {
+  return (historico || []).slice(0, 12).map(function(x, i) {
+    return (i + 1) + '. ' + (x.quando || x.quando_iso || '-') + ' | ' + (x.usuario || '-') + ' | ' + (x.tipo || '-') + ' | ' + (x.resultado || '-') + ' | ' + (x.projetos || 0) + ' projetos';
   });
+}
+function mostrarHistoricoLocal(motivo) {
+  var historico = carregarHistoricoAtualizacoes();
+  var linhas = formatarLinhasHistorico(historico);
   var atual = getUpdateActor();
-  var msg = 'Usuario deste navegador: ' + atual + '\n\n' +
+  var msg = 'Historico local deste navegador' + (motivo ? ' (' + motivo + ')' : '') + '\n' +
+    'Usuario deste navegador: ' + atual + '\n\n' +
     (linhas.length ? linhas.join('\n') : 'Nenhuma atualizacao registrada ainda.') +
+    '\n\nObs.: se o historico global nao aparecer, publique a versao atualizada do Apps Script.' +
     '\n\nPara identificar melhor este navegador, abra o console e rode:\nidentificarUsuarioAtualizacao(\"Seu Nome\")';
   alert(msg);
+}
+function mostrarHistoricoAtualizacoes() {
+  chamarAppsScriptJsonp('getPanelUpdateHistory', {limit: 20}, 10000).then(function(resp){
+    if (!resp || resp.ok === false || !Array.isArray(resp.history)) {
+      mostrarHistoricoLocal('global indisponivel');
+      return;
+    }
+    var linhas = formatarLinhasHistorico(resp.history);
+    var atual = getUpdateActor();
+    var msg = 'Historico global de atualizacoes\n' +
+      'Usuario deste navegador: ' + atual + '\n\n' +
+      (linhas.length ? linhas.join('\n') : 'Nenhuma atualizacao global registrada ainda.') +
+      '\n\nPara identificar melhor este navegador, abra o console e rode:\nidentificarUsuarioAtualizacao(\"Seu Nome\")';
+    alert(msg);
+  }).catch(function(error){
+    mostrarHistoricoLocal(error && error.message || 'global indisponivel');
+  });
 }
 window.identificarUsuarioAtualizacao = function(nome) {
   var n = String(nome || '').trim();
