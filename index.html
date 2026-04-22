@@ -578,6 +578,91 @@ nav{
   .dash-kpi-v{font-size:28px;}
 }
 
+/* ===== MUTED SAGE REFINEMENT =====
+   Ajuste visual fino: verde apagado, header/periodo/sidebar claros e sem bloco escuro. */
+:root{
+  --green:#687b67;
+  --green2:#879b85;
+  --green3:#6f866d;
+  --green-s:#edf3eb;
+  --nav-soft:#e4ece1;
+  --rail-soft:#d2ddcf;
+  --period-soft:#f3f7f1;
+}
+body{background:#f4f7f2!important;}
+nav{
+  background:#f8faf6!important;
+  color:#223027!important;
+  border-bottom:1px solid #d7e0d4!important;
+  box-shadow:0 12px 34px rgba(73,89,72,.08)!important;
+}
+.nav-logo{background:#7f967d!important;box-shadow:none!important;}
+.nav-title{color:#223027!important;}
+.nav-title em{color:#687b67!important;}
+.nav-date{
+  background:#eef4ec!important;
+  color:#687767!important;
+  border:1px solid #d6e1d3!important;
+}
+.btn-history{
+  background:#eef4ec!important;
+  border-color:#d6e1d3!important;
+  color:#334435!important;
+}
+.btn-reload{
+  background:#70866e!important;
+  border-color:#70866e!important;
+  color:#fff!important;
+  box-shadow:none!important;
+}
+.period-bar{
+  background:var(--period-soft)!important;
+  color:#334435!important;
+  border-top:0!important;
+  border-bottom:1px solid #d8e2d5!important;
+  box-shadow:0 10px 22px rgba(84,101,82,.06)!important;
+}
+.period-label{color:#6f7f70!important;}
+.period-bar .pb,.pb{
+  background:#f9fbf7!important;
+  border-color:#d2ded0!important;
+  color:#5f715f!important;
+}
+.period-bar .pb:hover,.pb:hover{
+  background:#eef5ec!important;
+  border-color:#b8c8b5!important;
+  color:#2f412f!important;
+}
+.period-bar .pb.on,.pb.on{
+  background:#70866e!important;
+  border-color:#70866e!important;
+  color:#fff!important;
+  box-shadow:none!important;
+}
+.app-shell{background:#f4f7f2!important;}
+.main-content{background:linear-gradient(180deg,#f7faf5 0%,#f0f5ef 100%)!important;}
+.sidenav{
+  background:var(--rail-soft)!important;
+  border-right:1px solid #bac9b6!important;
+  box-shadow:8px 0 24px rgba(84,101,82,.08)!important;
+}
+.sidenav:hover{
+  background:var(--rail-soft)!important;
+  box-shadow:8px 0 24px rgba(84,101,82,.08)!important;
+}
+.snb{color:#496049!important;}
+.snb:hover{background:rgba(255,255,255,.5)!important;color:#263626!important;}
+.snb.on{
+  background:#eaf1e8!important;
+  color:#263626!important;
+  border-left-color:#71866f!important;
+  box-shadow:inset 0 0 0 1px rgba(113,134,111,.18)!important;
+}
+.snb-badge{background:#c94f52!important;color:#fff!important;}
+.tag-g{background:#e5eee2!important;color:#4f684e!important;}
+.tag-p{background:#eee9f3!important;color:#756289!important;}
+.project-link-btn{border-color:#aebfac!important;color:#516a50!important;}
+.cc-top,.cd-top{background:#7d937b!important;}
 </style>
 </head>
 <body>
@@ -2676,12 +2761,15 @@ function initAvul(){
   var vns = p.filter(function(x){return x.tipo==='VENDA'||x.tipo==='VENDA NOVA';});
   var dav = avs.reduce(function(s,x){return s+(x.diarias_cont||0);},0);
   var dvn = vns.reduce(function(s,x){return s+(x.diarias_cont||0);},0);
+  var totalDiariasTipo = dav + dvn;
+  var pctDiariaAvulsa = totalDiariasTipo ? Math.round(dav / totalDiariasTipo * 100) : 0;
+  var pctDiariaVendaNova = totalDiariasTipo ? Math.round(dvn / totalDiariasTipo * 100) : 0;
 
   document.getElementById('kpis-avul').innerHTML =
     kpi('Avulso',avs.length,'p')+kpi('Venda Nova',vns.length,'g')+
-    kpi('% Avulso',Math.round(avs.length/p.length*100)+'%','p')+
-    kpi('% Venda',Math.round(vns.length/p.length*100)+'%','g')+
-    kpi('D. Avulso',fn(dav),'p')+kpi('D. Venda',fn(dvn),'g');
+    kpi('% Di&aacute;ria Avulsa',pctDiariaAvulsa+'%','p')+
+    kpi('% Di&aacute;ria Venda Nova',pctDiariaVendaNova+'%','g')+
+    kpi('Di&aacute;rias Avulso',fn(dav),'p')+kpi('Di&aacute;rias Venda Nova',fn(dvn),'g');
 
   // Cards por consultor - clicaveis para filtrar listagem
   var cs = {};
@@ -2756,7 +2844,7 @@ function initAvul(){
       '<div class="cc-body">'+
         '<div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:8px">'+
           '<div class="cc-s"><div class="cc-sl">Avulso</div><div class="cc-sv" style="color:var(--purple)">'+d.a+'</div></div>'+
-          '<div class="cc-s"><div class="cc-sl">Venda</div><div class="cc-sv" style="color:var(--green)">'+d.v+'</div></div>'+
+          '<div class="cc-s"><div class="cc-sl">Venda Nova</div><div class="cc-sv" style="color:var(--green)">'+d.v+'</div></div>'+
         '</div>'+
         '<div class="cc-dl"><span>Prop. avulso</span><span>'+ap+'%</span></div>'+
         '<div class="cc-db"><div class="cc-df" style="width:'+ap+'%;background:var(--purple)"></div></div>'+
