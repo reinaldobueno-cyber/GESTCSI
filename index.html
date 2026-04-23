@@ -1816,6 +1816,15 @@ function chamarAppsScriptJsonp(action, params, timeoutMs) {
       _limparJsonp(cbName);
       reject(new Error('Erro ao acessar Apps Script'));
     };
+    script.onload = function(){
+      setTimeout(function(){
+        if (done) return;
+        done = true;
+        clearTimeout(timer);
+        _limparJsonp(cbName);
+        reject(new Error('Apps Script retornou uma resposta invalida'));
+      }, 250);
+    };
     document.head.appendChild(script);
   });
 }
