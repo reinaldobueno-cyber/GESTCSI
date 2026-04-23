@@ -238,6 +238,70 @@ nav{background:var(--nav);height:58px;display:flex;align-items:center;justify-co
 .history-close:hover{background:var(--green2);border-color:var(--green2);}
 #log-map{height:420px;border-radius:8px;border:1px solid var(--border);z-index:1;background:#eef3ef;}
 #log-map .leaflet-container{background:#eef3ef;}
+
+/* CONTROL TOWER - modulo adicional, somente front-end */
+.tower-page{padding-top:10px!important;}
+.tower-hero{position:relative;overflow:hidden;background:linear-gradient(135deg,#ffffff 0%,#f6faf5 52%,#edf5ef 100%);border:1px solid #cddccd;border-radius:28px;padding:28px 30px;margin-bottom:18px;box-shadow:0 22px 70px rgba(36,54,43,.10);}
+.tower-hero:after{content:'';position:absolute;right:-110px;top:-120px;width:320px;height:320px;border-radius:50%;background:radial-gradient(circle,rgba(95,116,95,.18),rgba(95,116,95,0) 70%);}
+.tower-eyebrow{font-size:10px;font-weight:900;letter-spacing:1.8px;text-transform:uppercase;color:#6f806f;margin-bottom:8px;}
+.tower-title{font-family:'Manrope',sans-serif;font-size:34px;line-height:1.05;font-weight:800;letter-spacing:-1px;color:#132119;margin-bottom:8px;}
+.tower-sub{max-width:760px;font-size:13px;line-height:1.65;color:#617061;font-weight:600;}
+.tower-hero-row{display:flex;align-items:flex-end;justify-content:space-between;gap:24px;position:relative;z-index:1;}
+.tower-hero-score{text-align:right;min-width:190px;}
+.tower-score-num{font-size:54px;line-height:.95;font-weight:900;color:#132119;letter-spacing:-2px;}
+.tower-score-label{font-size:10px;font-weight:900;text-transform:uppercase;letter-spacing:1.3px;color:#6f806f;margin-top:4px;}
+.tower-score-bar{height:8px;background:#dfe8df;border-radius:999px;overflow:hidden;margin-top:12px;}
+.tower-score-fill{height:100%;border-radius:999px;background:linear-gradient(90deg,#bf4b4b,#c9843f,#678a67);}
+.tower-kpis{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:14px;margin-bottom:18px;}
+.tower-kpi{background:#fff;border:1px solid #d8e3d8;border-radius:22px;padding:18px 18px 16px;box-shadow:0 12px 34px rgba(32,48,38,.07);transition:transform .18s ease,box-shadow .18s ease,border-color .18s ease;}
+.tower-kpi:hover{transform:translateY(-2px);box-shadow:0 18px 42px rgba(32,48,38,.11);border-color:#bdcebd;}
+.tower-kpi-top{display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;}
+.tower-kpi-icon{width:36px;height:36px;border-radius:14px;background:#eef5ee;display:flex;align-items:center;justify-content:center;font-size:16px;}
+.tower-kpi-trend{font-size:10px;font-weight:900;color:#6c7b6c;background:#f4f8f3;border:1px solid #dce8dc;border-radius:999px;padding:4px 8px;}
+.tower-kpi-value{font-size:34px;line-height:1;font-weight:900;letter-spacing:-1px;color:#102019;}
+.tower-kpi-label{font-size:10px;font-weight:900;text-transform:uppercase;letter-spacing:1.2px;color:#748174;margin-top:7px;}
+.tower-kpi-sub{font-size:11px;color:#687668;margin-top:4px;font-weight:600;}
+.tower-grid{display:grid;grid-template-columns:1.35fr .9fr;gap:16px;margin-bottom:16px;}
+.tower-grid-3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:16px;margin-bottom:16px;}
+.tower-panel{background:#fff;border:1px solid #d8e3d8;border-radius:22px;box-shadow:0 14px 40px rgba(32,48,38,.07);overflow:hidden;}
+.tower-panel-head{padding:17px 18px;border-bottom:1px solid #e4ece4;display:flex;align-items:center;justify-content:space-between;gap:14px;background:linear-gradient(180deg,#fff,#fbfdfb);}
+.tower-panel-title{font-size:11px;font-weight:900;text-transform:uppercase;letter-spacing:1.4px;color:#6d7c6d;}
+.tower-panel-note{font-size:11px;color:#758275;font-weight:700;}
+.tower-panel-body{padding:16px 18px;}
+.tower-risk-list{display:flex;flex-direction:column;gap:10px;}
+.tower-risk-row{display:grid;grid-template-columns:58px 1fr auto;gap:14px;align-items:center;padding:13px 14px;border:1px solid #e1e9e1;border-radius:16px;background:#fbfdfb;}
+.tower-health{width:52px;height:52px;border-radius:18px;display:flex;align-items:center;justify-content:center;font-size:18px;font-weight:900;border:1px solid transparent;}
+.tower-health.good{background:#eaf5ed;color:#1f7041;border-color:#cae5d0;}
+.tower-health.warn{background:#fff4e8;color:#ad641d;border-color:#efd7ba;}
+.tower-health.bad{background:#fdeeee;color:#b73535;border-color:#efc8c8;}
+.tower-risk-name{font-size:13px;font-weight:850;color:#15251b;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.tower-risk-meta{display:flex;flex-wrap:wrap;gap:6px;margin-top:5px;}
+.tower-mini-badge{display:inline-flex;align-items:center;border-radius:999px;padding:4px 8px;font-size:10px;font-weight:800;border:1px solid #dce6dc;background:#fff;color:#617061;}
+.tower-mini-badge.r{color:#b73535;background:#fff1f1;border-color:#efcbcb;}
+.tower-mini-badge.o{color:#a8641c;background:#fff7ed;border-color:#efd6b7;}
+.tower-mini-badge.g{color:#1f7041;background:#edf8ef;border-color:#cae6ce;}
+.tower-action-tag{font-size:10px;font-weight:900;letter-spacing:.7px;text-transform:uppercase;color:#5d705d;background:#eef5ee;border:1px solid #d8e7d8;border-radius:999px;padding:6px 9px;white-space:nowrap;}
+.tower-cons-row{display:grid;grid-template-columns:1fr 82px 82px 82px;gap:10px;align-items:center;padding:12px 0;border-bottom:1px solid #edf2ed;}
+.tower-cons-row:last-child{border-bottom:none;}
+.tower-cons-name{font-size:13px;font-weight:850;color:#17261c;}
+.tower-cons-meta{font-size:10px;color:#738173;margin-top:2px;font-weight:700;}
+.tower-metric{text-align:right;}
+.tower-metric strong{display:block;font-size:18px;color:#15251b;line-height:1;}
+.tower-metric span{font-size:9px;text-transform:uppercase;letter-spacing:.8px;color:#829083;font-weight:900;}
+.tower-bar{height:8px;background:#e5ede5;border-radius:999px;overflow:hidden;margin-top:8px;}
+.tower-bar-fill{height:100%;border-radius:999px;background:#6b836a;}
+.tower-table{width:100%;border-collapse:separate;border-spacing:0;}
+.tower-table th{font-size:9px;letter-spacing:1.1px;text-transform:uppercase;color:#7d8a7d;text-align:left;padding:12px 12px;background:#f8fbf8;border-bottom:1px solid #e5ece5;}
+.tower-table td{padding:13px 12px;border-bottom:1px solid #edf2ed;font-size:12px;color:#263528;vertical-align:middle;}
+.tower-table tr:hover td{background:#fbfdfb;}
+.tower-table tr:last-child td{border-bottom:none;}
+.tower-table .num{text-align:right;font-family:'JetBrains Mono',monospace;font-weight:800;}
+.tower-stage{display:flex;gap:8px;align-items:center;}
+.tower-stage-dot{width:9px;height:9px;border-radius:50%;}
+.tower-stage-dot.g{background:#2f7d49}.tower-stage-dot.o{background:#b8742b}.tower-stage-dot.r{background:#b73535}.tower-stage-dot.b{background:#2b6688}
+.tower-empty{padding:28px;text-align:center;color:#748174;font-weight:700;}
+@media(max-width:1100px){.tower-kpis{grid-template-columns:repeat(2,1fr)}.tower-grid,.tower-grid-3{grid-template-columns:1fr}.tower-hero-row{align-items:flex-start;flex-direction:column}.tower-hero-score{text-align:left}.tower-cons-row{grid-template-columns:1fr 72px 72px 72px}}
+@media(max-width:680px){.tower-kpis{grid-template-columns:1fr}.tower-risk-row{grid-template-columns:1fr}.tower-action-tag{justify-self:flex-start}.tower-table{min-width:760px}.tower-panel-body.table-scroll{overflow:auto}.tower-title{font-size:28px}}
 .log-map-wrap{margin-bottom:16px;}
 /* LOADING */
 #load-overlay{position:fixed;inset:0;background:rgba(28,58,40,.93);z-index:9999;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;}
@@ -1438,6 +1502,7 @@ nav{
 <div class="sidenav">
 <button class="snb on" onclick="goTab('dash',this)"><span class="snb-icon">&#128200;</span><span class="snb-label">Dashboard</span></button>
 <button class="snb" onclick="goTab('exec',this)"><span class="snb-icon">&#127775;</span><span class="snb-label">Executivo</span></button>
+<button class="snb" onclick="goTab('tower',this)"><span class="snb-icon">&#128737;</span><span class="snb-label">Control Tower</span><span class="snb-badge" id="n-tower">0</span></button>
 <button class="snb" onclick="goTab('all',this)"><span class="snb-icon">&#128203;</span><span class="snb-label">Projetos</span><span class="snb-badge" id="n-all">0</span></button>
 <button class="snb" onclick="goTab('cons',this)"><span class="snb-icon">&#128100;</span><span class="snb-label">Consultores</span></button>
 <button class="snb" onclick="goTab('vend',this)"><span class="snb-icon">&#129309;</span><span class="snb-label">Vendedores</span></button>
@@ -1448,6 +1513,7 @@ nav{
 </div>
 <div class="main-content">
 <div class="page on" id="page-dash"><div id="dash-content"></div></div>
+<div class="page tower-page" id="page-tower"><div id="tower-content"></div></div>
 <div class="page" id="page-all">
   <div class="kpis" id="kpis-all"></div>
   <div class="fbox">
@@ -1892,7 +1958,7 @@ function buildPeriodBar() {
 }
 
 function renderAll() {
-  buildPeriodBar(); initDash(); initAll(); initCons(); initVend(); initAvul(); initLog(); initPraz(); initAlert(); initExec();
+  buildPeriodBar(); initDash(); initControlTower(); initAll(); initCons(); initVend(); initAvul(); initLog(); initPraz(); initAlert(); initExec();
 }
 
 // ---- Aba Executiva ----
@@ -4235,6 +4301,163 @@ function renderPraz(pf,cons){
       '<div class="pz-viols">'+vcards+'</div>'+
     '</div>';
   }).join('');
+}
+
+// ---- Control Tower / PMO & Success ----
+function towerMoney(v) {
+  var n = Number(v || 0);
+  return 'R$ ' + Math.round(n).toLocaleString('pt-BR');
+}
+function towerPct(v) {
+  var n = Number(v || 0);
+  return Math.max(0, Math.min(100, Math.round(n))) + '%';
+}
+function towerRiskClass(score) {
+  if (score >= 80) return 'good';
+  if (score >= 60) return 'warn';
+  return 'bad';
+}
+function towerRiskLabel(score) {
+  if (score >= 80) return 'Saudavel';
+  if (score >= 60) return 'Atencao';
+  return 'Critico';
+}
+function towerAnaliseProjeto(p) {
+  var hoje = new Date();
+  var diasSem = (p.dias_sem_atualizacao !== null && p.dias_sem_atualizacao !== undefined) ? Number(p.dias_sem_atualizacao) : null;
+  if ((diasSem === null || isNaN(diasSem)) && p.data_ultima_atualizacao) {
+    var dUlt = parseD(p.data_ultima_atualizacao);
+    if (dUlt) diasSem = Math.max(0, diffD(dUlt, hoje));
+  }
+  if (isNaN(diasSem)) diasSem = null;
+  var dVenda = parseD(p.data_venda);
+  var idade = dVenda ? Math.max(0, diffD(dVenda, hoje)) : null;
+  var pend = Number(p.tasks_pendentes || 0) + Number(p.marcos_pendentes || 0);
+  var concl = Number(p.tasks_concluidas || 0) + Number(p.marcos_concluidos || 0);
+  var totalItens = pend + concl;
+  var progresso = p.progresso !== null && p.progresso !== undefined ? Number(p.progresso) : (totalItens ? Math.round((concl / totalItens) * 100) : null);
+  var score = 100;
+  var sinais = [];
+  function penaliza(pontos, texto, tipo) {
+    score -= pontos;
+    sinais.push({texto:texto,tipo:tipo || 'o'});
+  }
+  var statusTxt = String(p.status || '');
+  if (statusTxt.indexOf('Atrasado') >= 0) penaliza(28, 'Projeto em atraso', 'r');
+  if (p.diarias_rest !== null && Number(p.diarias_rest) < 0) penaliza(16, 'Diarias excedidas', 'r');
+  if (p.diarias_rest !== null && Number(p.diarias_rest) <= 0 && pend > 0) penaliza(14, 'Diarias esgotadas com pendencias', 'r');
+  if (diasSem !== null && diasSem > 15) penaliza(22, diasSem + ' dias sem update', 'r');
+  else if (diasSem !== null && diasSem > 7) penaliza(12, diasSem + ' dias sem update', 'o');
+  if (!p.consultor) penaliza(22, 'Sem owner claro', 'r');
+  if (!p.data_inicio && statusTxt.indexOf('Conclu') < 0) penaliza(10, 'Onboarding incompleto', 'o');
+  if (progresso !== null && progresso < 25 && idade !== null && idade > 45) penaliza(10, 'Baixa evolucao em carteira antiga', 'o');
+  if (pend >= 8) penaliza(8, pend + ' pendencias abertas', 'o');
+  score = Math.max(0, Math.min(100, Math.round(score)));
+  var obs = String((p.obs || '') + ' ' + (p.acompanhamento || '')).toLowerCase();
+  var capacitacao = !p.data_inicio || /trein|capacita|usuario|usu[aá]rio|colaborador|aguardando|falta/.test(obs);
+  var receita = Math.max(0, Number(p.diarias_cont || 0)) * 1200;
+  var risco = score < 60 || statusTxt.indexOf('Atrasado') >= 0 || (diasSem !== null && diasSem > 15);
+  return {
+    projeto:p, score:score, classe:towerRiskClass(score), label:towerRiskLabel(score), sinais:sinais,
+    diasSem:diasSem, idade:idade, pendencias:pend, progresso:progresso, receita:receita,
+    receitaRisco:risco ? receita : 0, risco:risco, premium:receita >= 6000 || Number(p.diarias_cont || 0) >= 5,
+    novo30:idade !== null && idade <= 30, antigo:idade !== null && idade >= 60,
+    semContato:diasSem !== null && diasSem > 10, capacitacao:capacitacao
+  };
+}
+function towerConsultores(analises) {
+  var map = {};
+  analises.forEach(function(a){
+    var p = a.projeto, c = p.consultor || 'Sem consultor';
+    if (!map[c]) map[c] = {nome:c,total:0,novos30:0,antigosSemUpdate:0,riscos:0,scoreTotal:0,receita:0,receitaRisco:0,backlog:0,capacitacao:0,projetos:[]};
+    var d = map[c];
+    d.total++; d.projetos.push(a); d.scoreTotal += a.score; d.receita += a.receita; d.receitaRisco += a.receitaRisco; d.backlog += a.pendencias;
+    if (a.novo30) d.novos30++;
+    if (a.antigo && a.semContato) d.antigosSemUpdate++;
+    if (a.risco) d.riscos++;
+    if (a.capacitacao) d.capacitacao++;
+  });
+  return Object.keys(map).map(function(k){
+    var d = map[k];
+    d.score = d.total ? Math.round(d.scoreTotal / d.total) : 0;
+    d.sobrecarga = d.total >= 12 || d.riscos >= 4 || (d.novos30 > 0 && d.antigosSemUpdate > 0);
+    d.alertaAbandono = d.novos30 > 0 && d.antigosSemUpdate > 0;
+    return d;
+  }).sort(function(a,b){
+    if (b.sobrecarga !== a.sobrecarga) return b.sobrecarga - a.sobrecarga;
+    if (b.receitaRisco !== a.receitaRisco) return b.receitaRisco - a.receitaRisco;
+    return a.score - b.score;
+  });
+}
+function towerBadge(texto, tipo) {
+  return '<span class="tower-mini-badge '+(tipo || '')+'">'+texto+'</span>';
+}
+function towerKpi(icon, label, value, sub, trend) {
+  return '<div class="tower-kpi"><div class="tower-kpi-top"><div class="tower-kpi-icon">'+icon+'</div>'+(trend?'<div class="tower-kpi-trend">'+trend+'</div>':'')+'</div><div class="tower-kpi-value">'+value+'</div><div class="tower-kpi-label">'+label+'</div>'+(sub?'<div class="tower-kpi-sub">'+sub+'</div>':'')+'</div>';
+}
+function towerRiskRow(a) {
+  var p = a.projeto;
+  var sinais = a.sinais.slice(0,3).map(function(s){ return towerBadge(s.texto, s.tipo); }).join('');
+  if (!sinais) sinais = towerBadge('Sem risco critico', 'g');
+  var acao = a.score < 60 ? 'Intervencao diretoria' : a.score < 80 ? 'Revisao PMO' : 'Monitorar';
+  return '<div class="tower-risk-row"><div class="tower-health '+a.classe+'">'+a.score+'</div><div style="min-width:0"><div class="tower-risk-name">'+p.cliente+'</div><div class="tower-cons-meta">'+(p.consultor || 'Sem consultor')+' - '+(p.mes || '-')+' - '+sl(p.status || '')+'</div><div class="tower-risk-meta">'+sinais+'</div></div><div class="tower-action-tag">'+acao+'</div></div>';
+}
+function towerConsultorRow(c, maxTotal) {
+  var pct = maxTotal ? Math.round((c.total / maxTotal) * 100) : 0;
+  return '<div class="tower-cons-row"><div><div class="tower-cons-name" style="color:'+ccol(c.nome)+'">'+c.nome+'</div><div class="tower-cons-meta">'+(c.alertaAbandono ? 'Pegou projeto novo e tem carteira antiga sem update' : 'Carteira sob acompanhamento')+'</div><div class="tower-bar"><div class="tower-bar-fill" style="width:'+pct+'%;background:'+ccol(c.nome)+'"></div></div></div><div class="tower-metric"><strong>'+c.total+'</strong><span>Projetos</span></div><div class="tower-metric"><strong>'+c.riscos+'</strong><span>Risco</span></div><div class="tower-metric"><strong>'+c.score+'</strong><span>Score</span></div></div>';
+}
+function towerProjectTable(analises) {
+  if (!analises.length) return '<div class="tower-empty">Sem projetos para exibir</div>';
+  return '<table class="tower-table"><thead><tr><th>Cliente</th><th>Consultor</th><th>Health</th><th>PMO</th><th>CS</th><th class="num">LTV proxy</th></tr></thead><tbody>'+analises.map(function(a){
+    var p = a.projeto;
+    var dot = a.classe === 'bad' ? 'r' : a.classe === 'warn' ? 'o' : 'g';
+    var pmo = a.pendencias ? a.pendencias + ' pend.' : 'sem pend.';
+    var cs = a.semContato ? (a.diasSem + 'd sem contato') : 'cadencia ok';
+    return '<tr><td><strong>'+p.cliente+'</strong><div class="tower-cons-meta">'+(p.mes || '-')+' - '+sl(p.status || '')+'</div></td><td>'+towerBadge(p.consultor || 'Sem consultor', p.consultor ? '' : 'r')+'</td><td><div class="tower-stage"><span class="tower-stage-dot '+dot+'"></span><strong>'+a.score+'</strong> '+a.label+'</div></td><td>'+pmo+'</td><td>'+cs+'</td><td class="num">'+towerMoney(a.receita)+'</td></tr>';
+  }).join('')+'</tbody></table>';
+}
+function initControlTower() {
+  var el = document.getElementById('tower-content');
+  if (!el) return;
+  var projetos = filteredProj();
+  var analises = projetos.map(towerAnaliseProjeto);
+  var total = analises.length;
+  if (!total) { el.innerHTML = '<div class="empty">Sem dados para a Control Tower</div>'; return; }
+  var riscos = analises.filter(function(a){ return a.risco; });
+  var semUpdate = analises.filter(function(a){ return a.diasSem !== null && a.diasSem > 7; });
+  var semContato = analises.filter(function(a){ return a.semContato; });
+  var churn = analises.filter(function(a){ return a.score < 60 || (a.premium && a.semContato); });
+  var capacitacao = analises.filter(function(a){ return a.capacitacao; });
+  var consultores = towerConsultores(analises);
+  var sobrecarga = consultores.filter(function(c){ return c.sobrecarga; });
+  var backlog = analises.reduce(function(s,a){ return s + a.pendencias; }, 0);
+  var backlogCritico = riscos.reduce(function(s,a){ return s + a.pendencias; }, 0);
+  var health = Math.round(analises.reduce(function(s,a){ return s + a.score; }, 0) / total);
+  var receitaTotal = analises.reduce(function(s,a){ return s + a.receita; }, 0);
+  var receitaRisco = analises.reduce(function(s,a){ return s + a.receitaRisco; }, 0);
+  var receitaProtegida = Math.max(0, receitaTotal - receitaRisco);
+  var nrrProxy = receitaTotal ? Math.max(0, Math.round(100 - ((receitaRisco / receitaTotal) * 100))) : 100;
+  var nTower = document.getElementById('n-tower'); if (nTower) nTower.textContent = riscos.length;
+  var topRiscos = analises.slice().sort(function(a,b){ if (a.score !== b.score) return a.score - b.score; return b.receitaRisco - a.receitaRisco; }).slice(0,8);
+  var clientesRisco = churn.slice().sort(function(a,b){ return a.score - b.score || b.receita - a.receita; }).slice(0,8);
+  var maxCons = consultores.reduce(function(m,c){ return Math.max(m,c.total); }, 0);
+  var consultoresHtml = consultores.slice(0,8).map(function(c){ return towerConsultorRow(c, maxCons); }).join('');
+  var receitaPorConsultor = consultores.slice().sort(function(a,b){ return b.receitaRisco - a.receitaRisco; }).slice(0,6);
+  var receitaHtml = receitaPorConsultor.map(function(c){
+    var pct = receitaTotal ? Math.round((c.receitaRisco / receitaTotal) * 100) : 0;
+    return '<div class="stat-row"><div class="stat-info"><span style="font-size:12px;font-weight:800;color:'+ccol(c.nome)+'">'+c.nome+'</span><span style="font-size:12px;font-weight:900;color:var(--red)">'+towerMoney(c.receitaRisco)+'</span></div><div class="stat-bar-bg"><div class="stat-bar-fill" style="width:'+pct+'%;background:var(--red)"></div></div></div>';
+  }).join('') || '<div class="tower-empty">Sem receita em risco relevante</div>';
+  var abandonoHtml = consultores.filter(function(c){ return c.alertaAbandono; }).slice(0,6).map(function(c){
+    return '<div class="tower-risk-row" style="grid-template-columns:1fr auto"><div><div class="tower-risk-name" style="color:'+ccol(c.nome)+'">'+c.nome+'</div><div class="tower-risk-meta">'+towerBadge(c.novos30+' novo(s) 30d','o')+towerBadge(c.antigosSemUpdate+' antigo(s) sem update','r')+towerBadge(c.total+' na carteira','')+'</div></div><div class="tower-action-tag">Rebalancear</div></div>';
+  }).join('') || '<div class="tower-empty">Nenhum sinal forte de abandono de carteira</div>';
+  el.innerHTML =
+    '<div class="tower-hero"><div class="tower-hero-row"><div><div class="tower-eyebrow">PMO & Success Control Tower</div><div class="tower-title">Gestao gerencial da carteira de consultoria</div><div class="tower-sub">Painel executivo para antecipar abandono de projetos antigos, risco de churn, gargalos de capacitacao, sobrecarga de consultores e receita em risco usando a base atual do PMO.</div></div><div class="tower-hero-score"><div class="tower-score-num">'+health+'</div><div class="tower-score-label">Health score medio</div><div class="tower-score-bar"><div class="tower-score-fill" style="width:'+health+'%"></div></div></div></div></div>'+
+    '<div class="tower-kpis">'+
+      towerKpi('&#128188;','Projetos ativos',total,'carteira filtrada',activePeriod==='all'?'todos os meses':activePeriod)+towerKpi('&#9888;','Projetos em risco',riscos.length,towerPct((riscos.length/total)*100)+' da carteira','PMO')+towerKpi('&#9201;','Sem atualizacao',semUpdate.length,'SLA > 7 dias','CS')+towerKpi('&#128148;','Risco de churn',churn.length,'clientes com sinais criticos','retencao')+towerKpi('&#129489;','Consultores sobrecarregados',sobrecarga.length,'capacidade e abandono','capacity')+towerKpi('&#128220;','Backlog critico',backlogCritico,backlog+' pendencias totais','PMO')+towerKpi('&#127891;','Capacitacoes pendentes',capacitacao.length,'onboarding e treinamento','CS')+towerKpi('&#128176;','LTV em risco',towerMoney(receitaRisco),'NRR proxy '+nrrProxy+'%','receita')+
+    '</div>'+
+    '<div class="tower-grid"><div class="tower-panel"><div class="tower-panel-head"><div class="tower-panel-title">Clientes em risco e prioridades executivas</div><div class="tower-panel-note">'+topRiscos.length+' prioridades</div></div><div class="tower-panel-body"><div class="tower-risk-list">'+topRiscos.map(towerRiskRow).join('')+'</div></div></div><div class="tower-panel"><div class="tower-panel-head"><div class="tower-panel-title">Consultores: capacidade e abandono</div><div class="tower-panel-note">novo vs antigo</div></div><div class="tower-panel-body">'+consultoresHtml+'</div></div></div>'+
+    '<div class="tower-grid-3"><div class="tower-panel"><div class="tower-panel-head"><div class="tower-panel-title">Alerta de abandono de carteira</div></div><div class="tower-panel-body"><div class="tower-risk-list">'+abandonoHtml+'</div></div></div><div class="tower-panel"><div class="tower-panel-head"><div class="tower-panel-title">Receita protegida vs risco</div><div class="tower-panel-note">proxy por diarias</div></div><div class="tower-panel-body"><div class="tower-score-num" style="font-size:38px">'+towerMoney(receitaProtegida)+'</div><div class="tower-score-label">LTV proxy protegido</div><div class="tower-bar" style="height:10px;margin:14px 0"><div class="tower-bar-fill" style="width:'+nrrProxy+'%;background:linear-gradient(90deg,#6b836a,#9bae97)"></div></div><div class="tower-risk-meta">'+towerBadge('NRR proxy '+nrrProxy+'%','g')+towerBadge(towerMoney(receitaRisco)+' em risco', receitaRisco ? 'r' : 'g')+'</div>'+receitaHtml+'</div></div><div class="tower-panel"><div class="tower-panel-head"><div class="tower-panel-title">Sinais Customer Success</div></div><div class="tower-panel-body"><div class="stat-row"><div class="stat-info"><span>Sem contato recente</span><strong>'+semContato.length+'</strong></div><div class="stat-bar-bg"><div class="stat-bar-fill" style="width:'+towerPct((semContato.length/total)*100)+';background:var(--orange)"></div></div></div><div class="stat-row"><div class="stat-info"><span>Contas premium sem atencao</span><strong>'+analises.filter(function(a){return a.premium && a.semContato;}).length+'</strong></div><div class="stat-bar-bg"><div class="stat-bar-fill" style="width:'+towerPct((churn.length/total)*100)+';background:var(--red)"></div></div></div><div class="stat-row"><div class="stat-info"><span>Onboardings incompletos</span><strong>'+capacitacao.length+'</strong></div><div class="stat-bar-bg"><div class="stat-bar-fill" style="width:'+towerPct((capacitacao.length/total)*100)+';background:var(--blue)"></div></div></div></div></div></div>'+
+    '<div class="tower-panel"><div class="tower-panel-head"><div class="tower-panel-title">Analise por projeto: health score, PMO, CS e LTV proxy</div><div class="tower-panel-note">'+clientesRisco.length+' contas em foco</div></div><div class="tower-panel-body table-scroll">'+towerProjectTable(clientesRisco.length ? clientesRisco : topRiscos)+'</div></div>';
 }
 
 // ---- Alertas ----
