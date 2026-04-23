@@ -1789,7 +1789,7 @@ function chamarAppsScriptJsonp(action, params, timeoutMs) {
       if (done) return;
       done = true;
       _limparJsonp(cbName);
-      reject(new Error('Timeout ao acessar historico global'));
+      reject(new Error('Timeout ao acessar Apps Script'));
     }, timeoutMs || 10000);
 
     window[cbName] = function(resp) {
@@ -1814,7 +1814,7 @@ function chamarAppsScriptJsonp(action, params, timeoutMs) {
       done = true;
       clearTimeout(timer);
       _limparJsonp(cbName);
-      reject(new Error('Erro ao acessar historico global'));
+      reject(new Error('Erro ao acessar Apps Script'));
     };
     document.head.appendChild(script);
   });
@@ -5286,6 +5286,44 @@ window.importarResumoClickupProjeto = function(key) {
   abrirModalImportacaoResumo(key);
   return true;
 };
+function montarProjectKeyClickup(p) {
+  if (!p || typeof p !== 'object') return '';
+  var existente = String(p.project_key || p.projectKey || '').trim();
+  if (existente) return existente;
+  var mes = String(p.mes || p.mes_origem || '').toUpperCase().trim();
+  var cliente = normalizeClienteKey(p.cliente || p.nome_cliente || '');
+  return mes && cliente ? (mes + '|' + cliente) : '';
+}
+window.sincronizarClickupProjeto = function(key) {
+  var chave = String(key || '').trim();
+  var projeto = (DATA.projetos || []).filter(function(item) {
+    return String(item && item._key || '') === chave;
+  })[0];
+  if (!projeto) {
+    showToast('Projeto nao encontrado para sincronizar', 'err');
+    return false;
+  }
+  var projectKey = montarProjectKeyClickup(projeto);
+  if (!projectKey) {
+    showToast('Projeto sem chave ClickUp configurada', 'err');
+    return false;
+  }
+  showToast('Sincronizando ClickUp: ' + (projeto.cliente || 'projeto'), 'ok');
+  chamarAppsScriptJsonp('syncProject', {
+    project_key: projectKey
+  }, 60000).then(function(resp) {
+    if (!resp || resp.ok === false) {
+      var msg = resp && (resp.error || resp.message) || 'falha na sincronizacao';
+      showToast('ClickUp nao sincronizou: ' + msg, 'err');
+      return;
+    }
+    showToast('ClickUp sincronizado. Recarregando painel...', 'ok');
+    setTimeout(function(){ loadAll('manual'); }, 900);
+  }).catch(function(error) {
+    showToast('Erro ao sincronizar ClickUp: ' + (error && error.message || 'tente novamente'), 'err');
+  });
+  return true;
+};
 window.removerResumoClickupProjeto = function(key) {
   var map = carregarResumosManuais();
   delete map[String(key || '').trim()];
@@ -5302,6 +5340,7 @@ function buildResumoActions(p) {
     : '<span style="color:var(--muted)">Sem link</span>';
   var botoes = [
     abrirHtml,
+    '<button type="button" class="project-link-btn alt" onclick="event.stopPropagation();sincronizarClickupProjeto('+JSON.stringify(chave)+')">Sincronizar ClickUp</button>',
     '<button type="button" class="project-link-btn alt" onclick="event.stopPropagation();copiarSnippetImportacaoClickup()">Copiar Snippet</button>',
     '<button type="button" class="project-link-btn alt" onclick="event.stopPropagation();importarResumoClickupProjeto('+JSON.stringify(chave)+')">'+(temManual ? 'Atualizar Resumo' : 'Importar JSON/Lote')+'</button>'
   ];
