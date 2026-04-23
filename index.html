@@ -2965,8 +2965,23 @@ function obterFasesDetalhadasProjeto(p) {
     };
   });
 }
-function mapearStatusFaseProjeto(statusRaw) {
-  var raw = String(statusRaw || '').trim();
+function faseConcluidaPorResumoProjeto(fase) {
+  var concluidos = Number(fase && fase.tasks_concluidas || 0) + Number(fase && fase.marcos_concluidos || 0);
+  var pendentes = Number(fase && fase.tasks_pendentes || 0) + Number(fase && fase.marcos_pendentes || 0);
+  var total = Number(fase && fase.total_itens || 0) || (concluidos + pendentes);
+  if (total > 0) return pendentes <= 0 && (concluidos > 0 || Number(fase && fase.progresso || 0) >= 100);
+  return statusConcluidoProjeto(fase && fase.status_original);
+}
+function faseEmAndamentoPorResumoProjeto(fase) {
+  var concluidos = Number(fase && fase.tasks_concluidas || 0) + Number(fase && fase.marcos_concluidos || 0);
+  var pendentes = Number(fase && fase.tasks_pendentes || 0) + Number(fase && fase.marcos_pendentes || 0);
+  return pendentes > 0 && concluidos > 0;
+}
+function mapearStatusFaseProjeto(faseOuStatus) {
+  var fase = (faseOuStatus && typeof faseOuStatus === 'object') ? faseOuStatus : null;
+  if (fase && faseConcluidaPorResumoProjeto(fase)) return { label: 'Concluída', cor: 'var(--green)', bg: 'var(--green-s)' };
+  if (fase && faseEmAndamentoPorResumoProjeto(fase)) return { label: 'Em Andamento', cor: 'var(--orange)', bg: 'var(--orange-s)' };
+  var raw = String(fase ? fase.status_original : (faseOuStatus || '')).trim();
   var norm = normalizarTextoProjeto(raw);
   if (/closed|done|conclu|finaliz|encerrad|sucesso/.test(norm)) return { label: 'Concluída', cor: 'var(--green)', bg: 'var(--green-s)' };
   if (/pendenc/.test(norm)) return { label: raw || 'Com Pendência', cor: 'var(--orange)', bg: 'var(--orange-s)' };
@@ -2979,7 +2994,14 @@ function obterFaseAtualClickupProjeto(p) {
   if (!fases.length) return '';
   var aberta = fases.find(function(fase){
     var pendencias = Number(fase.tasks_pendentes || 0) + Number(fase.marcos_pendentes || 0);
-    return !statusConcluidoProjeto(fase.status_original) && (pendencias > 0 || /pendenc|andamento|fazer|open/.test(normalizarTextoProjeto(fase.status_original)));
+    var total = Number(fase.total_itens || 0) || (pendencias + Number(fase.tasks_concluidas || 0) + Number(fase.marcos_concluidos || 0));
+    var statusNorm = normalizarTextoProjeto(fase.status_original);
+    return !faseConcluidaPorResumoProjeto(fase) && (
+      pendencias > 0 ||
+      faseEmAndamentoPorResumoProjeto(fase) ||
+      /pendenc|andamento|open/.test(statusNorm) ||
+      (/fazer/.test(statusNorm) && total > 0)
+    );
   });
   return (aberta || fases[fases.length - 1] || {}).nome || '';
 }
@@ -3004,18 +3026,20 @@ function formatarDataHoraProjeto(valor) {
 function etapaTrilhaProjeto(p) {
   var st = normalizarTextoProjeto((p && p.status) || '');
   var fases = obterFasesDetalhadasProjeto(p || {});
+  var temKickoff = !!parseD(p && p.data_kick);
+  var temInicio = !!parseD(p && p.data_inicio);
   if (/encerr|conclu|finaliz/.test(st)) return 'Encerramento';
-  if (!parseD(p && p.data_kick)) return 'Pré-Kickoff';
-  if (parseD(p && p.data_kick) && !parseD(p && p.data_inicio)) return 'Kickoff Realizado';
   if (fases.length) {
     var haPendencias = fases.some(function(fase){
-      return Number(fase.tasks_pendentes || 0) > 0 || Number(fase.marcos_pendentes || 0) > 0 || !statusConcluidoProjeto(fase.status_original);
+      return Number(fase.tasks_pendentes || 0) > 0 || Number(fase.marcos_pendentes || 0) > 0 || !faseConcluidaPorResumoProjeto(fase);
     });
     if (haPendencias) return 'Implantação em Execução';
     return 'Pós-Implantação';
   }
+  if (temInicio) return 'Implantação em Execução';
+  if (temKickoff) return 'Kickoff Realizado';
   if ((p && p.diarias_rest) !== null && Number(p.diarias_rest) <= 0) return 'Pós-Implantação';
-  return 'Implantação em Execução';
+  return 'Pré-Kickoff';
 }
 function renderResumoPorFaseProjeto(p) {
   var fases = obterFasesDetalhadasProjeto(p);
@@ -3032,7 +3056,7 @@ function renderResumoPorFaseProjeto(p) {
           '<div>Progresso</div>'+
         '</div>'+
         fases.map(function(fase){
-          var st = mapearStatusFaseProjeto(fase.status_original);
+          var st = mapearStatusFaseProjeto(fase);
           return ''+
             '<div style="display:grid;grid-template-columns:minmax(220px,2fr) minmax(120px,1fr) 120px 120px 90px;gap:12px;padding:10px 12px;border-top:1px solid var(--border);align-items:center">'+
               '<div style="font-size:12px;font-weight:700;color:var(--text)">'+fase.nome+'</div>'+
