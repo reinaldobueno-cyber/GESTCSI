@@ -5294,7 +5294,7 @@ function montarProjectKeyClickup(p) {
   var cliente = normalizeClienteKey(p.cliente || p.nome_cliente || '');
   return mes && cliente ? (mes + '|' + cliente) : '';
 }
-window.sincronizarClickupProjeto = function(key) {
+window.sincronizarClickupProjeto = function(key, btn) {
   var chave = String(key || '').trim();
   var projeto = (DATA.projetos || []).filter(function(item) {
     return String(item && item._key || '') === chave;
@@ -5308,6 +5308,11 @@ window.sincronizarClickupProjeto = function(key) {
     showToast('Projeto sem chave ClickUp configurada', 'err');
     return false;
   }
+  var labelOriginal = btn ? btn.textContent : '';
+  if (btn) {
+    btn.disabled = true;
+    btn.textContent = 'Sincronizando...';
+  }
   showToast('Sincronizando ClickUp: ' + (projeto.cliente || 'projeto'), 'ok');
   chamarAppsScriptJsonp('syncProject', {
     project_key: projectKey
@@ -5315,12 +5320,22 @@ window.sincronizarClickupProjeto = function(key) {
     if (!resp || resp.ok === false) {
       var msg = resp && (resp.error || resp.message) || 'falha na sincronizacao';
       showToast('ClickUp nao sincronizou: ' + msg, 'err');
+      if (btn) {
+        btn.disabled = false;
+        btn.textContent = labelOriginal || 'Sincronizar ClickUp';
+      }
       return;
     }
+    try { storageSet(PANEL_CACHE_KEY, ''); } catch(e) {}
     showToast('ClickUp sincronizado. Recarregando painel...', 'ok');
+    if (btn) btn.textContent = 'Sincronizado';
     setTimeout(function(){ loadAll('manual'); }, 900);
   }).catch(function(error) {
     showToast('Erro ao sincronizar ClickUp: ' + (error && error.message || 'tente novamente'), 'err');
+    if (btn) {
+      btn.disabled = false;
+      btn.textContent = labelOriginal || 'Sincronizar ClickUp';
+    }
   });
   return true;
 };
@@ -5340,7 +5355,7 @@ function buildResumoActions(p) {
     : '<span style="color:var(--muted)">Sem link</span>';
   var botoes = [
     abrirHtml,
-    '<button type="button" class="project-link-btn alt" onclick="event.stopPropagation();sincronizarClickupProjeto('+JSON.stringify(chave)+')">Sincronizar ClickUp</button>',
+    '<button type="button" class="project-link-btn alt" onclick="event.stopPropagation();sincronizarClickupProjeto('+JSON.stringify(chave)+',this)">Sincronizar ClickUp</button>',
     '<button type="button" class="project-link-btn alt" onclick="event.stopPropagation();copiarSnippetImportacaoClickup()">Copiar Snippet</button>',
     '<button type="button" class="project-link-btn alt" onclick="event.stopPropagation();importarResumoClickupProjeto('+JSON.stringify(chave)+')">'+(temManual ? 'Atualizar Resumo' : 'Importar JSON/Lote')+'</button>'
   ];
@@ -5477,7 +5492,7 @@ function carregarProjetosDiretoPlanilha() {
   var projetos = [];
   var seq = 0;
   return Promise.all(abas.map(function(aba){
-    var url = 'https://docs.google.com/spreadsheets/d/' + SHEET_ID + '/gviz/tq?gid=' + aba.gid;
+    var url = 'https://docs.google.com/spreadsheets/d/' + SHEET_ID + '/gviz/tq?gid=' + aba.gid + '&_ts=' + Date.now();
     return loadGvizTableJsonp(url, 15000).then(function(table){
       if (!table) return;
       var normalizada = normalizarTabelaGviz(table);
@@ -5515,7 +5530,7 @@ function loadMetricasFromSheet() {
     var map = {};
     var abas = Object.keys(ABAS_GID_FIXAS).map(function(m){ return {title:m, gid:ABAS_GID_FIXAS[m]}; });
     return Promise.all(abas.map(function(aba){
-      var url = 'https://docs.google.com/spreadsheets/d/' + SHEET_ID + '/gviz/tq?gid=' + aba.gid;
+      var url = 'https://docs.google.com/spreadsheets/d/' + SHEET_ID + '/gviz/tq?gid=' + aba.gid + '&_ts=' + Date.now();
       return loadGvizTableJsonp(url, 12000).then(function(table){
         if (!table) return;
         var cols = table.cols || [];
@@ -5609,7 +5624,7 @@ function loadProjectLinksFromSheet() {
     console.log('[LOAD DEBUG] Abas lidas:', _abasMensaisLidas);
 
     return Promise.all(abas.map(function(aba){
-      var url = 'https://docs.google.com/spreadsheets/d/' + SHEET_ID + '/gviz/tq?gid=' + aba.gid + '&tq=' + encodeURIComponent('select B, W');
+      var url = 'https://docs.google.com/spreadsheets/d/' + SHEET_ID + '/gviz/tq?gid=' + aba.gid + '&_ts=' + Date.now() + '&tq=' + encodeURIComponent('select B, W');
       return loadGvizTableJsonp(url, 12000).then(function(table){
         var rows = (table && table.rows) || [];
         mergeRowsIntoMap(rows, aba.title, map);
