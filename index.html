@@ -300,8 +300,27 @@ nav{background:var(--nav);height:58px;display:flex;align-items:center;justify-co
 .tower-stage-dot{width:9px;height:9px;border-radius:50%;}
 .tower-stage-dot.g{background:#2f7d49}.tower-stage-dot.o{background:#b8742b}.tower-stage-dot.r{background:#b73535}.tower-stage-dot.b{background:#2b6688}
 .tower-empty{padding:28px;text-align:center;color:#748174;font-weight:700;}
+.tower-info{width:18px;height:18px;border-radius:50%;border:1px solid #cfdccf;background:#fff;color:#647564;display:inline-flex;align-items:center;justify-content:center;font-size:11px;font-weight:900;line-height:1;cursor:pointer;vertical-align:middle;margin-left:6px;transition:background .16s,border-color .16s,color .16s,transform .16s;}
+.tower-info:hover{background:#eef5ee;border-color:#9fb39f;color:#314331;transform:translateY(-1px);}
+.tower-kpi .tower-info{margin-left:0;}
+.tower-info-panel{position:fixed;inset:0;background:rgba(19,31,24,.42);z-index:10002;display:flex;align-items:center;justify-content:center;padding:22px;}
+.tower-info-box{width:min(680px,calc(100vw - 36px));max-height:min(78vh,720px);background:#fff;border:1px solid #d8e4d8;border-radius:22px;box-shadow:0 28px 90px rgba(20,32,24,.28);overflow:hidden;display:flex;flex-direction:column;}
+.tower-info-head{padding:20px 22px 14px;border-bottom:1px solid #edf2ed;background:linear-gradient(180deg,#fff,#f8fbf8);}
+.tower-info-title{font-size:18px;font-weight:900;color:#132119;letter-spacing:-.2px;}
+.tower-info-sub{font-size:12px;color:#647364;margin-top:5px;font-weight:650;}
+.tower-info-body{padding:18px 22px;overflow:auto;color:#2c3c30;font-size:13px;line-height:1.65;}
+.tower-info-body h4{font-size:10px;text-transform:uppercase;letter-spacing:1.2px;color:#6f7f6f;margin:14px 0 6px;font-weight:900;}
+.tower-info-body ul{padding-left:18px;margin:0 0 8px;}
+.tower-info-body li{margin:3px 0;}
+.tower-info-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:12px;}
+.tower-info-chip{border:1px solid #dfe8df;background:#f8fbf8;border-radius:12px;padding:9px 10px;}
+.tower-info-chip b{display:block;font-size:9px;text-transform:uppercase;letter-spacing:.9px;color:#758575;margin-bottom:3px;}
+.tower-info-chip span{font-size:12px;font-weight:800;color:#17261c;}
+.tower-info-foot{padding:14px 22px;border-top:1px solid #edf2ed;background:#fbfdfb;display:flex;justify-content:flex-end;}
+.tower-info-close{border:1px solid #617761;background:#617761;color:#fff;font-family:'Inter',sans-serif;font-size:12px;font-weight:900;padding:9px 18px;border-radius:999px;cursor:pointer;}
+.tower-info-close:hover{background:#4e634e;border-color:#4e634e;}
 @media(max-width:1100px){.tower-kpis{grid-template-columns:repeat(2,1fr)}.tower-grid,.tower-grid-3{grid-template-columns:1fr}.tower-hero-row{align-items:flex-start;flex-direction:column}.tower-hero-score{text-align:left}.tower-cons-row{grid-template-columns:1fr 72px 72px 72px}}
-@media(max-width:680px){.tower-kpis{grid-template-columns:1fr}.tower-risk-row{grid-template-columns:1fr}.tower-action-tag{justify-self:flex-start}.tower-table{min-width:760px}.tower-panel-body.table-scroll{overflow:auto}.tower-title{font-size:28px}}
+@media(max-width:680px){.tower-kpis{grid-template-columns:1fr}.tower-risk-row{grid-template-columns:1fr}.tower-action-tag{justify-self:flex-start}.tower-table{min-width:760px}.tower-panel-body.table-scroll{overflow:auto}.tower-title{font-size:28px}.tower-info-grid{grid-template-columns:1fr}}
 .log-map-wrap{margin-bottom:16px;}
 /* LOADING */
 #load-overlay{position:fixed;inset:0;background:rgba(28,58,40,.93);z-index:9999;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;}
@@ -4304,6 +4323,161 @@ function renderPraz(pf,cons){
 }
 
 // ---- Control Tower / PMO & Success ----
+var TOWER_INFO = {
+  health: {
+    title:'Health Score medio',
+    sub:'Media simples do Health Score de todos os projetos filtrados.',
+    calc:['Cada projeto inicia com 100 pontos.','Penalidades: atraso (-28), diarias excedidas (-16), diarias esgotadas com pendencias (-14), mais de 15 dias sem update (-22), 8 a 15 dias sem update (-12), sem consultor (-22), onboarding incompleto (-10), baixa evolucao em carteira antiga (-10), 8+ pendencias (-8).','O valor exibido e a media aritmetica dos projetos visiveis no periodo selecionado.'],
+    fields:['status','diarias_cont / diarias_real / diarias_rest','tasks_pendentes / marcos_pendentes','progresso','data_ultima_atualizacao / dias_sem_atualizacao','consultor','data_inicio'],
+    real:'Score modelado pelo front-end, nao e campo financeiro nem campo nativo do ClickUp.',
+    confidence:'Media'
+  },
+  activeProjects: {
+    title:'Projetos ativos',
+    sub:'Quantidade de projetos carregados no filtro atual.',
+    calc:['Conta todos os registros com cliente preenchido em DATA.projetos apos filtro de periodo.','A base vem da planilha mensal consolidada e dos campos ja normalizados no front-end.'],
+    fields:['cliente','mes','status'],
+    real:'Valor real da base carregada no painel.',
+    confidence:'Alta'
+  },
+  projectRisk: {
+    title:'Projetos em risco',
+    sub:'Projetos com Health Score baixo ou sinais operacionais criticos.',
+    calc:['Conta projetos com score menor que 60, status Atrasado ou mais de 15 dias sem atualizacao.','A regra prioriza risco operacional e abandono de acompanhamento.'],
+    fields:['status','dias_sem_atualizacao','data_ultima_atualizacao','diarias_rest','tasks_pendentes','marcos_pendentes'],
+    real:'Classificacao modelada pelo front-end com dados reais da planilha/ClickUp.',
+    confidence:'Media'
+  },
+  stale: {
+    title:'Projetos sem atualizacao',
+    sub:'Carteira fora do SLA de acompanhamento.',
+    calc:['Conta projetos com dias_sem_atualizacao maior que 7.','Quando dias_sem_atualizacao nao vem pronto, o painel tenta derivar a partir de data_ultima_atualizacao.'],
+    fields:['dias_sem_atualizacao','data_ultima_atualizacao','date_updated do ClickUp quando sincronizado'],
+    real:'Valor real quando dias_sem_atualizacao vem da planilha; derivado quando calculado por data.',
+    confidence:'Alta quando ClickUp sync esta atualizado; Media quando falta data.'
+  },
+  churn: {
+    title:'Risco de churn',
+    sub:'Clientes com sinais de abandono, atraso ou baixa cadencia.',
+    calc:['Conta projetos com score abaixo de 60.','Tambem inclui contas premium sem contato recente, pois maior LTV sem atencao eleva risco de churn evitavel.'],
+    fields:['score calculado','diarias_cont','dias_sem_atualizacao','status','pendencias'],
+    real:'Indicador preditivo/modelado, nao e churn financeiro real.',
+    confidence:'Media'
+  },
+  capacity: {
+    title:'Consultores sobrecarregados',
+    sub:'Detecta risco de capacidade e abandono de carteira antiga.',
+    calc:['Marca consultor como sobrecarregado quando tem 12+ projetos, 4+ projetos em risco, ou possui projeto novo nos ultimos 30 dias junto com projeto antigo sem update.'],
+    fields:['consultor','data_venda','dias_sem_atualizacao','status','health score por projeto'],
+    real:'Classificacao operacional modelada.',
+    confidence:'Media'
+  },
+  backlog: {
+    title:'Backlog critico',
+    sub:'Pendencias abertas dentro dos projetos em risco.',
+    calc:['Soma tasks_pendentes + marcos_pendentes apenas dos projetos classificados em risco.','Backlog total aparece como contexto complementar.'],
+    fields:['tasks_pendentes','marcos_pendentes','clickup_json.resumo quando sincronizado','list_id/view_id quando presente'],
+    real:'Real quando o ClickUp sync populou tarefas/marcos; estimado como zero quando o projeto nao tem resumo sincronizado.',
+    confidence:'Alta para projetos com clickup_json atualizado; Baixa quando sem resumo.'
+  },
+  training: {
+    title:'Capacitacoes pendentes',
+    sub:'Sinal de onboarding ou treinamento ainda incompleto.',
+    calc:['Conta projetos sem data_inicio ou com acompanhamento/observacao contendo sinais como treinamento, capacitacao, usuario, colaborador, aguardando ou falta.'],
+    fields:['data_inicio','acompanhamento','obs'],
+    real:'Indicador interpretativo por texto e datas; nao e campo unico de capacitacao.',
+    confidence:'Media'
+  },
+  ltvRisk: {
+    title:'LTV em risco',
+    sub:'Proxy financeiro para priorizar contas com maior impacto.',
+    calc:['Valor estimado = diarias_contratadas x R$ 1.200.','LTV em risco soma esse proxy apenas para projetos em risco.','NRR proxy = 100 - percentual do LTV proxy em risco sobre o total da carteira.'],
+    fields:['diarias_cont','diarias_real','diarias_rest','status','score calculado'],
+    real:'ESTIMATIVA. Nao vem de contrato financeiro real nem campo de receita do ClickUp.',
+    confidence:'Baixa para financeiro real; Media para priorizacao operacional.'
+  },
+  protectedRevenue: {
+    title:'Receita protegida vs risco',
+    sub:'Modelo executivo para proteger carteira antes do churn.',
+    calc:['Receita protegida = LTV proxy total - LTV proxy em risco.','LTV proxy total = soma de diarias_contratadas x R$ 1.200.','Use como ordem de prioridade, nao como DRE.'],
+    fields:['diarias_cont','health score','status','dias_sem_atualizacao'],
+    real:'ESTIMATIVA financeira modelada.',
+    confidence:'Baixa para contabilidade; Media para decisao gerencial.'
+  },
+  consultantScore: {
+    title:'Score do consultor',
+    sub:'Qualidade media da carteira sob responsabilidade do consultor.',
+    calc:['Media dos Health Scores dos projetos do consultor.','Alertas de abandono aparecem quando o consultor tem projeto novo nos ultimos 30 dias e projeto antigo sem update.'],
+    fields:['consultor','data_venda','dias_sem_atualizacao','status','pendencias','diarias_rest'],
+    real:'Score modelado pelo front-end.',
+    confidence:'Media'
+  },
+  riskList: {
+    title:'Clientes em risco',
+    sub:'Lista priorizada para acao executiva.',
+    calc:['Ordena por menor Health Score.','Em empate, prioriza maior LTV proxy em risco.','Sugere acao: Monitorar, Revisao PMO ou Intervencao diretoria.'],
+    fields:['score calculado','diarias_cont','status','dias_sem_atualizacao','tasks_pendentes','marcos_pendentes'],
+    real:'Ranking modelado com dados reais/estimados.',
+    confidence:'Media'
+  },
+  csSignals: {
+    title:'Sinais Customer Success',
+    sub:'Indicadores de relacionamento e cadencia.',
+    calc:['Sem contato recente: dias_sem_atualizacao > 10.','Conta premium sem atencao: LTV proxy >= R$ 6.000 ou 5+ diarias, com sem contato recente.','Onboarding incompleto: sem data_inicio ou texto indicando treinamento/capacitacao pendente.'],
+    fields:['dias_sem_atualizacao','data_ultima_atualizacao','diarias_cont','data_inicio','obs','acompanhamento'],
+    real:'Indicador operacional modelado.',
+    confidence:'Media'
+  },
+  projectTable: {
+    title:'Analise por projeto',
+    sub:'Auditoria linha a linha dos sinais PMO, CS e LTV proxy.',
+    calc:['Health usa a formula aberta do score.','PMO mostra pendencias de tasks/marcos.','CS mostra cadencia de contato/update.','LTV proxy usa diarias_contratadas x R$ 1.200.'],
+    fields:['cliente','consultor','status','mes','tasks_pendentes','marcos_pendentes','dias_sem_atualizacao','diarias_cont','list_id/view_id/clickup_json quando disponivel'],
+    real:'Mistura dados reais operacionais com estimativa financeira explicitada.',
+    confidence:'Media'
+  },
+  source: {
+    title:'Origem dos dados ClickUp e planilha',
+    sub:'Como a Control Tower enxerga a base.',
+    calc:['O front-end le DATA.projetos ja consolidado pela planilha mensal.','Quando ha sync ClickUp, os campos de resumo sao gravados na planilha via clickup_json, list_id/view_id, data_ultima_atualizacao e dias_sem_atualizacao.','List ID e origem especifica aparecem por projeto quando a planilha contem esses campos.'],
+    fields:['list_id','view_id','clickup_json','data_ultima_atualizacao','dias_sem_atualizacao','status','tasks/marcos/fases normalizados'],
+    real:'Fonte real depende da ultima sincronizacao ClickUp -> Sheets.',
+    confidence:'Alta quando sync_status_clickup OK e ultima_sync_clickup recente.'
+  }
+};
+var TOWER_INFO_CONTEXT = {ultima:'-', origem:'Planilha mensal + ClickUp sync quando disponivel'};
+function towerInfoButton(key) {
+  return '<button type="button" class="tower-info" title="Ver formula e fonte dos dados" onclick="event.stopPropagation();towerShowInfo(\''+key+'\')">i</button>';
+}
+function towerInfoHtml(info) {
+  function list(items) { return '<ul>'+(items || []).map(function(i){ return '<li>'+i+'</li>'; }).join('')+'</ul>'; }
+  return '<h4>Como foi calculado</h4>'+list(info.calc)+
+    '<h4>Campos utilizados</h4>'+list(info.fields)+
+    '<h4>Real vs estimado</h4><p>'+info.real+'</p>'+
+    '<div class="tower-info-grid">'+
+      '<div class="tower-info-chip"><b>Ultima atualizacao</b><span>'+TOWER_INFO_CONTEXT.ultima+'</span></div>'+
+      '<div class="tower-info-chip"><b>Origem</b><span>'+TOWER_INFO_CONTEXT.origem+'</span></div>'+
+      '<div class="tower-info-chip"><b>Confiabilidade</b><span>'+info.confidence+'</span></div>'+
+    '</div>'+
+    '<h4>ClickUp</h4><p>Quando sincronizado, a origem tecnica vem de list_id/view_id, status, date_updated, due_date, tarefas, marcos, fases e resumo normalizado gravado no clickup_json. Comentarios/activity so entram se forem transformados em campos da planilha ou resumo sincronizado.</p>';
+}
+function towerShowInfo(key) {
+  var info = TOWER_INFO[key] || TOWER_INFO.source;
+  var old = document.getElementById('tower-info-panel');
+  if (old) old.remove();
+  var div = document.createElement('div');
+  div.id = 'tower-info-panel';
+  div.className = 'tower-info-panel';
+  div.onclick = function(e){ if (e.target === div) div.remove(); };
+  div.innerHTML = '<div class="tower-info-box"><div class="tower-info-head"><div class="tower-info-title">'+info.title+'</div><div class="tower-info-sub">'+info.sub+'</div></div><div class="tower-info-body">'+towerInfoHtml(info)+'</div><div class="tower-info-foot"><button class="tower-info-close" onclick="document.getElementById(\'tower-info-panel\').remove()">Fechar</button></div></div>';
+  document.body.appendChild(div);
+}
+document.addEventListener('keydown', function(e){
+  if (e.key === 'Escape') {
+    var p = document.getElementById('tower-info-panel');
+    if (p) p.remove();
+  }
+});
 function towerMoney(v) {
   var n = Number(v || 0);
   return 'R$ ' + Math.round(n).toLocaleString('pt-BR');
@@ -4392,23 +4566,23 @@ function towerConsultores(analises) {
 function towerBadge(texto, tipo) {
   return '<span class="tower-mini-badge '+(tipo || '')+'">'+texto+'</span>';
 }
-function towerKpi(icon, label, value, sub, trend) {
-  return '<div class="tower-kpi"><div class="tower-kpi-top"><div class="tower-kpi-icon">'+icon+'</div>'+(trend?'<div class="tower-kpi-trend">'+trend+'</div>':'')+'</div><div class="tower-kpi-value">'+value+'</div><div class="tower-kpi-label">'+label+'</div>'+(sub?'<div class="tower-kpi-sub">'+sub+'</div>':'')+'</div>';
+function towerKpi(icon, label, value, sub, trend, infoKey) {
+  return '<div class="tower-kpi"><div class="tower-kpi-top"><div class="tower-kpi-icon">'+icon+'</div>'+(infoKey?towerInfoButton(infoKey):(trend?'<div class="tower-kpi-trend">'+trend+'</div>':''))+'</div><div class="tower-kpi-value">'+value+'</div><div class="tower-kpi-label">'+label+(infoKey?'':'')+'</div>'+(sub?'<div class="tower-kpi-sub">'+sub+'</div>':'')+(trend&&infoKey?'<div class="tower-kpi-trend" style="display:inline-flex;margin-top:10px">'+trend+'</div>':'')+'</div>';
 }
 function towerRiskRow(a) {
   var p = a.projeto;
   var sinais = a.sinais.slice(0,3).map(function(s){ return towerBadge(s.texto, s.tipo); }).join('');
   if (!sinais) sinais = towerBadge('Sem risco critico', 'g');
   var acao = a.score < 60 ? 'Intervencao diretoria' : a.score < 80 ? 'Revisao PMO' : 'Monitorar';
-  return '<div class="tower-risk-row"><div class="tower-health '+a.classe+'">'+a.score+'</div><div style="min-width:0"><div class="tower-risk-name">'+p.cliente+'</div><div class="tower-cons-meta">'+(p.consultor || 'Sem consultor')+' - '+(p.mes || '-')+' - '+sl(p.status || '')+'</div><div class="tower-risk-meta">'+sinais+'</div></div><div class="tower-action-tag">'+acao+'</div></div>';
+  return '<div class="tower-risk-row"><div class="tower-health '+a.classe+'">'+a.score+'</div><div style="min-width:0"><div class="tower-risk-name">'+p.cliente+towerInfoButton('riskList')+'</div><div class="tower-cons-meta">'+(p.consultor || 'Sem consultor')+' - '+(p.mes || '-')+' - '+sl(p.status || '')+'</div><div class="tower-risk-meta">'+sinais+'</div></div><div class="tower-action-tag">'+acao+'</div></div>';
 }
 function towerConsultorRow(c, maxTotal) {
   var pct = maxTotal ? Math.round((c.total / maxTotal) * 100) : 0;
-  return '<div class="tower-cons-row"><div><div class="tower-cons-name" style="color:'+ccol(c.nome)+'">'+c.nome+'</div><div class="tower-cons-meta">'+(c.alertaAbandono ? 'Pegou projeto novo e tem carteira antiga sem update' : 'Carteira sob acompanhamento')+'</div><div class="tower-bar"><div class="tower-bar-fill" style="width:'+pct+'%;background:'+ccol(c.nome)+'"></div></div></div><div class="tower-metric"><strong>'+c.total+'</strong><span>Projetos</span></div><div class="tower-metric"><strong>'+c.riscos+'</strong><span>Risco</span></div><div class="tower-metric"><strong>'+c.score+'</strong><span>Score</span></div></div>';
+  return '<div class="tower-cons-row"><div><div class="tower-cons-name" style="color:'+ccol(c.nome)+'">'+c.nome+towerInfoButton('consultantScore')+'</div><div class="tower-cons-meta">'+(c.alertaAbandono ? 'Pegou projeto novo e tem carteira antiga sem update' : 'Carteira sob acompanhamento')+'</div><div class="tower-bar"><div class="tower-bar-fill" style="width:'+pct+'%;background:'+ccol(c.nome)+'"></div></div></div><div class="tower-metric"><strong>'+c.total+'</strong><span>Projetos</span></div><div class="tower-metric"><strong>'+c.riscos+'</strong><span>Risco</span></div><div class="tower-metric"><strong>'+c.score+'</strong><span>Score</span></div></div>';
 }
 function towerProjectTable(analises) {
   if (!analises.length) return '<div class="tower-empty">Sem projetos para exibir</div>';
-  return '<table class="tower-table"><thead><tr><th>Cliente</th><th>Consultor</th><th>Health</th><th>PMO</th><th>CS</th><th class="num">LTV proxy</th></tr></thead><tbody>'+analises.map(function(a){
+  return '<table class="tower-table"><thead><tr><th>Cliente</th><th>Consultor</th><th>Health '+towerInfoButton('health')+'</th><th>PMO '+towerInfoButton('backlog')+'</th><th>CS '+towerInfoButton('csSignals')+'</th><th class="num">LTV proxy '+towerInfoButton('ltvRisk')+'</th></tr></thead><tbody>'+analises.map(function(a){
     var p = a.projeto;
     var dot = a.classe === 'bad' ? 'r' : a.classe === 'warn' ? 'o' : 'g';
     var pmo = a.pendencias ? a.pendencias + ' pend.' : 'sem pend.';
@@ -4437,6 +4611,12 @@ function initControlTower() {
   var receitaRisco = analises.reduce(function(s,a){ return s + a.receitaRisco; }, 0);
   var receitaProtegida = Math.max(0, receitaTotal - receitaRisco);
   var nrrProxy = receitaTotal ? Math.max(0, Math.round(100 - ((receitaRisco / receitaTotal) * 100))) : 100;
+  var datasUpdate = analises.map(function(a){ return a.projeto.data_ultima_atualizacao || a.projeto.ultima_sync_clickup || ''; }).filter(function(v){ return !!v; });
+  var listIds = analises.filter(function(a){ return !!(a.projeto.list_id || a.projeto.view_id || a.projeto.clickup_json); }).length;
+  TOWER_INFO_CONTEXT = {
+    ultima: datasUpdate.length ? datasUpdate.sort().slice(-1)[0] : ((document.getElementById('nav-date') || {}).textContent || '-'),
+    origem: 'Sheets mensal + ClickUp sync em ' + listIds + ' de ' + total + ' projeto(s)'
+  };
   var nTower = document.getElementById('n-tower'); if (nTower) nTower.textContent = riscos.length;
   var topRiscos = analises.slice().sort(function(a,b){ if (a.score !== b.score) return a.score - b.score; return b.receitaRisco - a.receitaRisco; }).slice(0,8);
   var clientesRisco = churn.slice().sort(function(a,b){ return a.score - b.score || b.receita - a.receita; }).slice(0,8);
@@ -4451,13 +4631,13 @@ function initControlTower() {
     return '<div class="tower-risk-row" style="grid-template-columns:1fr auto"><div><div class="tower-risk-name" style="color:'+ccol(c.nome)+'">'+c.nome+'</div><div class="tower-risk-meta">'+towerBadge(c.novos30+' novo(s) 30d','o')+towerBadge(c.antigosSemUpdate+' antigo(s) sem update','r')+towerBadge(c.total+' na carteira','')+'</div></div><div class="tower-action-tag">Rebalancear</div></div>';
   }).join('') || '<div class="tower-empty">Nenhum sinal forte de abandono de carteira</div>';
   el.innerHTML =
-    '<div class="tower-hero"><div class="tower-hero-row"><div><div class="tower-eyebrow">PMO & Success Control Tower</div><div class="tower-title">Gestao gerencial da carteira de consultoria</div><div class="tower-sub">Painel executivo para antecipar abandono de projetos antigos, risco de churn, gargalos de capacitacao, sobrecarga de consultores e receita em risco usando a base atual do PMO.</div></div><div class="tower-hero-score"><div class="tower-score-num">'+health+'</div><div class="tower-score-label">Health score medio</div><div class="tower-score-bar"><div class="tower-score-fill" style="width:'+health+'%"></div></div></div></div></div>'+
+    '<div class="tower-hero"><div class="tower-hero-row"><div><div class="tower-eyebrow">PMO & Success Control Tower '+towerInfoButton('source')+'</div><div class="tower-title">Gestao gerencial da carteira de consultoria</div><div class="tower-sub">Painel executivo para antecipar abandono de projetos antigos, risco de churn, gargalos de capacitacao, sobrecarga de consultores e receita em risco usando a base atual do PMO.</div></div><div class="tower-hero-score"><div class="tower-score-num">'+health+towerInfoButton('health')+'</div><div class="tower-score-label">Health score medio</div><div class="tower-score-bar"><div class="tower-score-fill" style="width:'+health+'%"></div></div></div></div></div>'+
     '<div class="tower-kpis">'+
-      towerKpi('&#128188;','Projetos ativos',total,'carteira filtrada',activePeriod==='all'?'todos os meses':activePeriod)+towerKpi('&#9888;','Projetos em risco',riscos.length,towerPct((riscos.length/total)*100)+' da carteira','PMO')+towerKpi('&#9201;','Sem atualizacao',semUpdate.length,'SLA > 7 dias','CS')+towerKpi('&#128148;','Risco de churn',churn.length,'clientes com sinais criticos','retencao')+towerKpi('&#129489;','Consultores sobrecarregados',sobrecarga.length,'capacidade e abandono','capacity')+towerKpi('&#128220;','Backlog critico',backlogCritico,backlog+' pendencias totais','PMO')+towerKpi('&#127891;','Capacitacoes pendentes',capacitacao.length,'onboarding e treinamento','CS')+towerKpi('&#128176;','LTV em risco',towerMoney(receitaRisco),'NRR proxy '+nrrProxy+'%','receita')+
+      towerKpi('&#128188;','Projetos ativos',total,'carteira filtrada',activePeriod==='all'?'todos os meses':activePeriod,'activeProjects')+towerKpi('&#9888;','Projetos em risco',riscos.length,towerPct((riscos.length/total)*100)+' da carteira','PMO','projectRisk')+towerKpi('&#9201;','Sem atualizacao',semUpdate.length,'SLA > 7 dias','CS','stale')+towerKpi('&#128148;','Risco de churn',churn.length,'clientes com sinais criticos','retencao','churn')+towerKpi('&#129489;','Consultores sobrecarregados',sobrecarga.length,'capacidade e abandono','capacity','capacity')+towerKpi('&#128220;','Backlog critico',backlogCritico,backlog+' pendencias totais','PMO','backlog')+towerKpi('&#127891;','Capacitacoes pendentes',capacitacao.length,'onboarding e treinamento','CS','training')+towerKpi('&#128176;','LTV em risco',towerMoney(receitaRisco),'NRR proxy '+nrrProxy+'%','receita','ltvRisk')+
     '</div>'+
-    '<div class="tower-grid"><div class="tower-panel"><div class="tower-panel-head"><div class="tower-panel-title">Clientes em risco e prioridades executivas</div><div class="tower-panel-note">'+topRiscos.length+' prioridades</div></div><div class="tower-panel-body"><div class="tower-risk-list">'+topRiscos.map(towerRiskRow).join('')+'</div></div></div><div class="tower-panel"><div class="tower-panel-head"><div class="tower-panel-title">Consultores: capacidade e abandono</div><div class="tower-panel-note">novo vs antigo</div></div><div class="tower-panel-body">'+consultoresHtml+'</div></div></div>'+
-    '<div class="tower-grid-3"><div class="tower-panel"><div class="tower-panel-head"><div class="tower-panel-title">Alerta de abandono de carteira</div></div><div class="tower-panel-body"><div class="tower-risk-list">'+abandonoHtml+'</div></div></div><div class="tower-panel"><div class="tower-panel-head"><div class="tower-panel-title">Receita protegida vs risco</div><div class="tower-panel-note">proxy por diarias</div></div><div class="tower-panel-body"><div class="tower-score-num" style="font-size:38px">'+towerMoney(receitaProtegida)+'</div><div class="tower-score-label">LTV proxy protegido</div><div class="tower-bar" style="height:10px;margin:14px 0"><div class="tower-bar-fill" style="width:'+nrrProxy+'%;background:linear-gradient(90deg,#6b836a,#9bae97)"></div></div><div class="tower-risk-meta">'+towerBadge('NRR proxy '+nrrProxy+'%','g')+towerBadge(towerMoney(receitaRisco)+' em risco', receitaRisco ? 'r' : 'g')+'</div>'+receitaHtml+'</div></div><div class="tower-panel"><div class="tower-panel-head"><div class="tower-panel-title">Sinais Customer Success</div></div><div class="tower-panel-body"><div class="stat-row"><div class="stat-info"><span>Sem contato recente</span><strong>'+semContato.length+'</strong></div><div class="stat-bar-bg"><div class="stat-bar-fill" style="width:'+towerPct((semContato.length/total)*100)+';background:var(--orange)"></div></div></div><div class="stat-row"><div class="stat-info"><span>Contas premium sem atencao</span><strong>'+analises.filter(function(a){return a.premium && a.semContato;}).length+'</strong></div><div class="stat-bar-bg"><div class="stat-bar-fill" style="width:'+towerPct((churn.length/total)*100)+';background:var(--red)"></div></div></div><div class="stat-row"><div class="stat-info"><span>Onboardings incompletos</span><strong>'+capacitacao.length+'</strong></div><div class="stat-bar-bg"><div class="stat-bar-fill" style="width:'+towerPct((capacitacao.length/total)*100)+';background:var(--blue)"></div></div></div></div></div></div>'+
-    '<div class="tower-panel"><div class="tower-panel-head"><div class="tower-panel-title">Analise por projeto: health score, PMO, CS e LTV proxy</div><div class="tower-panel-note">'+clientesRisco.length+' contas em foco</div></div><div class="tower-panel-body table-scroll">'+towerProjectTable(clientesRisco.length ? clientesRisco : topRiscos)+'</div></div>';
+    '<div class="tower-grid"><div class="tower-panel"><div class="tower-panel-head"><div class="tower-panel-title">Clientes em risco e prioridades executivas '+towerInfoButton('riskList')+'</div><div class="tower-panel-note">'+topRiscos.length+' prioridades</div></div><div class="tower-panel-body"><div class="tower-risk-list">'+topRiscos.map(towerRiskRow).join('')+'</div></div></div><div class="tower-panel"><div class="tower-panel-head"><div class="tower-panel-title">Consultores: capacidade e abandono '+towerInfoButton('consultantScore')+'</div><div class="tower-panel-note">novo vs antigo</div></div><div class="tower-panel-body">'+consultoresHtml+'</div></div></div>'+
+    '<div class="tower-grid-3"><div class="tower-panel"><div class="tower-panel-head"><div class="tower-panel-title">Alerta de abandono de carteira '+towerInfoButton('capacity')+'</div></div><div class="tower-panel-body"><div class="tower-risk-list">'+abandonoHtml+'</div></div></div><div class="tower-panel"><div class="tower-panel-head"><div class="tower-panel-title">Receita protegida vs risco '+towerInfoButton('protectedRevenue')+'</div><div class="tower-panel-note">proxy por diarias</div></div><div class="tower-panel-body"><div class="tower-score-num" style="font-size:38px">'+towerMoney(receitaProtegida)+towerInfoButton('protectedRevenue')+'</div><div class="tower-score-label">LTV proxy protegido</div><div class="tower-bar" style="height:10px;margin:14px 0"><div class="tower-bar-fill" style="width:'+nrrProxy+'%;background:linear-gradient(90deg,#6b836a,#9bae97)"></div></div><div class="tower-risk-meta">'+towerBadge('NRR proxy '+nrrProxy+'%','g')+towerBadge(towerMoney(receitaRisco)+' em risco', receitaRisco ? 'r' : 'g')+'</div>'+receitaHtml+'</div></div><div class="tower-panel"><div class="tower-panel-head"><div class="tower-panel-title">Sinais Customer Success '+towerInfoButton('csSignals')+'</div></div><div class="tower-panel-body"><div class="stat-row"><div class="stat-info"><span>Sem contato recente '+towerInfoButton('csSignals')+'</span><strong>'+semContato.length+'</strong></div><div class="stat-bar-bg"><div class="stat-bar-fill" style="width:'+towerPct((semContato.length/total)*100)+';background:var(--orange)"></div></div></div><div class="stat-row"><div class="stat-info"><span>Contas premium sem atencao '+towerInfoButton('churn')+'</span><strong>'+analises.filter(function(a){return a.premium && a.semContato;}).length+'</strong></div><div class="stat-bar-bg"><div class="stat-bar-fill" style="width:'+towerPct((churn.length/total)*100)+';background:var(--red)"></div></div></div><div class="stat-row"><div class="stat-info"><span>Onboardings incompletos '+towerInfoButton('training')+'</span><strong>'+capacitacao.length+'</strong></div><div class="stat-bar-bg"><div class="stat-bar-fill" style="width:'+towerPct((capacitacao.length/total)*100)+';background:var(--blue)"></div></div></div></div></div></div>'+
+    '<div class="tower-panel"><div class="tower-panel-head"><div class="tower-panel-title">Analise por projeto: health score, PMO, CS e LTV proxy '+towerInfoButton('projectTable')+'</div><div class="tower-panel-note">'+clientesRisco.length+' contas em foco</div></div><div class="tower-panel-body table-scroll">'+towerProjectTable(clientesRisco.length ? clientesRisco : topRiscos)+'</div></div>';
 }
 
 // ---- Alertas ----
