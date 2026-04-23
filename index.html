@@ -4033,6 +4033,123 @@ var CIDADES_COORDS = {
   'SANTA ISABEL':[-15.2950,-49.4260]
 };
 
+var MAP_GEOCODE_CACHE_KEY = 'gestcsi_map_geocode_cache_v1';
+var _mapGeocodeCache = null;
+var _mapGeocodeInFlight = {};
+var _mapGeocodeRefreshTimer = null;
+
+function getMapGeocodeCache_() {
+  if (_mapGeocodeCache) return _mapGeocodeCache;
+  _mapGeocodeCache = {};
+  try {
+    _mapGeocodeCache = JSON.parse(localStorage.getItem(MAP_GEOCODE_CACHE_KEY) || '{}') || {};
+  } catch(e) {
+    _mapGeocodeCache = {};
+  }
+  return _mapGeocodeCache;
+}
+
+function saveMapGeocodeCache_() {
+  try {
+    localStorage.setItem(MAP_GEOCODE_CACHE_KEY, JSON.stringify(getMapGeocodeCache_()));
+  } catch(e) {}
+}
+
+function getMapGeocodeKey_(info) {
+  return (info.cidadeNorm || '') + '|' + (info.uf || '');
+}
+
+function getCachedMapGeocode_(info) {
+  var key = getMapGeocodeKey_(info);
+  var hit = key ? getMapGeocodeCache_()[key] : null;
+  if (!hit || !hit.coords || hit.coords.length !== 2) return null;
+  var lat = Number(hit.coords[0]);
+  var lon = Number(hit.coords[1]);
+  if (isNaN(lat) || isNaN(lon)) return null;
+  return {
+    coords: [lat, lon],
+    aproximado: false,
+    tipo: 'geocoded',
+    fonte: hit.fonte || 'OpenStreetMap',
+    cached_at: hit.cached_at || ''
+  };
+}
+
+function cacheMapGeocode_(info, coords, fonte) {
+  var key = getMapGeocodeKey_(info);
+  if (!key || !coords) return;
+  getMapGeocodeCache_()[key] = {
+    cidade: info.cidade,
+    uf: info.uf,
+    coords: coords,
+    fonte: fonte || 'OpenStreetMap',
+    cached_at: new Date().toISOString()
+  };
+  saveMapGeocodeCache_();
+}
+
+function geocodeCidadeAutomatica_(info) {
+  if (!info || !info.cidadeNorm || !info.uf || typeof fetch === 'undefined') {
+    return Promise.resolve(false);
+  }
+  if (CIDADES_COORDS[info.cidadeNorm] || getCachedMapGeocode_(info)) {
+    return Promise.resolve(false);
+  }
+
+  var key = getMapGeocodeKey_(info);
+  if (_mapGeocodeInFlight[key]) return _mapGeocodeInFlight[key];
+
+  var query = info.cidade + ' - ' + info.uf + ', Brasil';
+  var url = 'https://nominatim.openstreetmap.org/search?format=jsonv2&limit=1&countrycodes=br&addressdetails=1&q=' + encodeURIComponent(query);
+  _mapGeocodeInFlight[key] = fetch(url, { headers: { Accept: 'application/json' } })
+    .then(function(response) {
+      if (!response.ok) return false;
+      return response.json();
+    })
+    .then(function(items) {
+      var first = items && items[0];
+      if (!first || !first.lat || !first.lon) return false;
+      var lat = Number(first.lat);
+      var lon = Number(first.lon);
+      if (isNaN(lat) || isNaN(lon)) return false;
+      cacheMapGeocode_(info, [lat, lon], 'OpenStreetMap');
+      return true;
+    })
+    .catch(function() {
+      return false;
+    })
+    .then(function(found) {
+      delete _mapGeocodeInFlight[key];
+      return found;
+    });
+
+  return _mapGeocodeInFlight[key];
+}
+
+function hydrateMapGeocodes_(projList) {
+  if (typeof fetch === 'undefined') return;
+  var seen = {};
+  var jobs = [];
+  (projList || []).forEach(function(p) {
+    var info = parseCidadeInfo(p.cidade);
+    var key = getMapGeocodeKey_(info);
+    if (!info.cidadeNorm || !info.uf || seen[key]) return;
+    seen[key] = true;
+    if (CIDADES_COORDS[info.cidadeNorm] || getCachedMapGeocode_(info)) return;
+    jobs.push(geocodeCidadeAutomatica_(info));
+  });
+  if (!jobs.length) return;
+
+  Promise.all(jobs).then(function(results) {
+    var updated = results.some(function(item) { return !!item; });
+    if (!updated) return;
+    clearTimeout(_mapGeocodeRefreshTimer);
+    _mapGeocodeRefreshTimer = setTimeout(function() {
+      initLeafletMap(projList);
+    }, 180);
+  });
+}
+
 var _lmap = null;
 var _lmarkers = [];
 var _ufLayer = null;
@@ -4043,6 +4160,8 @@ function getCidadeCoordInfo(cidadeStr) {
   if (info.cidadeNorm && CIDADES_COORDS[info.cidadeNorm]) {
     return { coords: CIDADES_COORDS[info.cidadeNorm], aproximado: false, tipo: 'cidade' };
   }
+  var cached = getCachedMapGeocode_(info);
+  if (cached) return cached;
   if (info.uf && UF_COORDS[info.uf]) {
     return { coords: UF_COORDS[info.uf], aproximado: true, tipo: 'uf' };
   }
@@ -4078,11 +4197,18 @@ function getGroupColor(group, aproximado) {
   return first.formato && first.formato.toUpperCase().indexOf('ONLINE') >= 0 ? '#1a5276' : '#b85c00';
 }
 
-function buildTooltipHtml(group, info, aproximado) {
+function buildTooltipHtml(group, info, loc) {
+  loc = loc || {};
+  var aproximado = !!loc.aproximado;
   var titulo = info.cidade?(info.cidade+(info.uf?' - '+info.uf:'')):(info.uf||'Local n\u00E3o informado');
+  var localNote = aproximado
+    ? '<div style="margin-bottom:6px;background:#f6f1e8;border:1px solid #d9b77f;border-radius:6px;padding:5px 7px;color:#75501a;font-size:10px;font-weight:700">Posi\u00E7\u00E3o tempor\u00E1ria pelo estado. O mapa tenta localizar a cidade automaticamente e salva no navegador.</div>'
+    : (loc.tipo === 'geocoded'
+      ? '<div style="margin-bottom:6px;background:#eef7f1;border:1px solid #bcdac8;border-radius:6px;padding:5px 7px;color:#2d6e4e;font-size:10px;font-weight:700">Cidade localizada automaticamente via '+(loc.fonte || 'OpenStreetMap')+'.</div>'
+      : '');
   return '<div style="font-family:Inter,sans-serif;width:200px;background:#fff;border-radius:8px;padding:8px 10px;box-shadow:0 3px 14px rgba(0,0,0,.18);border:1px solid #e2e6ea;font-size:11px;">'+
     '<div style="font-weight:800;color:#1a2e1a;margin-bottom:5px;padding-bottom:4px;border-bottom:1px solid #eee">'+titulo+'</div>'+
-    (aproximado?'<div style="margin-bottom:6px;background:#eef2ef;border:1px dashed #9aa79f;border-radius:6px;padding:5px 7px;color:#425247;font-size:10px;font-weight:700">Local aproximado pelo estado. Cadastre a cidade na lista de coordenadas para pin exato.</div>':'')+
+    localNote+
     group.map(function(p){
       var fmt=p.formato||'-';
       var tc=fmt.toUpperCase().indexOf('ONLINE')>=0?'#1a5276':'#b85c00';
@@ -4116,7 +4242,7 @@ function buildBrazilMap(projList) {
       '<span style="display:flex;align-items:center;gap:5px;font-size:11px;font-weight:600;color:var(--green)"><span style="width:10px;height:10px;border-radius:50%;background:#2d6e4e;display:inline-block"></span>2+ visitas agrupadas</span>' +
       '<span style="display:flex;align-items:center;gap:5px;font-size:11px;font-weight:600;color:var(--orange)"><span style="width:10px;height:10px;border-radius:50%;background:#b85c00;display:inline-block"></span>In Loco</span>' +
       '<span style="display:flex;align-items:center;gap:5px;font-size:11px;font-weight:600;color:var(--blue)"><span style="width:10px;height:10px;border-radius:50%;background:#1a5276;display:inline-block"></span>Online</span>' +
-      '<span style="display:flex;align-items:center;gap:5px;font-size:11px;font-weight:600;color:#6f7f75"><span style="width:10px;height:10px;border-radius:50%;background:#6f7f75;border:1px dashed #fff;display:inline-block"></span>Local aproximado</span>' +
+      '<span style="display:flex;align-items:center;gap:5px;font-size:11px;font-weight:600;color:#6f7f75"><span style="width:10px;height:10px;border-radius:50%;background:#6f7f75;border:1px dashed #fff;display:inline-block"></span>Fallback por UF</span>' +
     '</div>' +
     '<div id="log-map" style="height:500px;border-radius:10px;border:1px solid var(--border);overflow:hidden;"></div>' +
   '</div>';
@@ -4128,6 +4254,7 @@ function initLeafletMap(projList) {
     return !!(info.cidade || info.uf);
   });
   if (!comLocal.length) return;
+  hydrateMapGeocodes_(comLocal);
 
   setTimeout(function() {
     var el = document.getElementById('log-map');
@@ -4215,7 +4342,7 @@ function initLeafletMap(projList) {
       });
 
       var marker = L.marker(loc.coords, { icon: icon });
-      marker.bindTooltip(buildTooltipHtml(group, info, loc.aproximado), {
+      marker.bindTooltip(buildTooltipHtml(group, info, loc), {
         sticky: true,
         direction: 'top',
         offset: [0, -12],
