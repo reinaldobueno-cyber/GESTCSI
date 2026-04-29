@@ -1857,6 +1857,9 @@ nav{
   height:100%!important;
 }
 #page-vend .cc-top{
+  display:grid!important;
+  grid-template-columns:44px minmax(0,1fr) auto!important;
+  gap:12px!important;
   min-height:92px!important;
   align-items:flex-start!important;
   padding:14px 14px 16px!important;
@@ -2029,7 +2032,7 @@ nav{
   <div class="nav-right">
     <span class="nav-date" id="nav-date">Carregando...</span>
     <button class="btn-history" onclick="mostrarHistoricoAtualizacoes()">Hist&oacute;rico</button>
-    <button class="btn-reload" onclick="loadAll('manual')">Atualizar</button>
+    <button class="btn-reload" onclick="recarregarPainelManual()">Atualizar</button>
     <div class="nav-profile">PMO</div>
   </div>
 </nav>
@@ -2287,6 +2290,24 @@ function persistirPainelCache(projetos, info) {
   }));
   return true;
 }
+function resetarCachesDerivadosPainel(opcoes) {
+  var opts = opcoes || {};
+  _metricasPromise = null;
+  _metricasProjetoMap = {};
+  _projectLinkPromise = null;
+  _projectLinkMap = {};
+  _projectLinkConflicts = [];
+  _projectRowsSemLink = [];
+  _resumoLinksPorAba = {};
+  if (opts.limparCachePainel) {
+    try { storageSet(PANEL_CACHE_KEY, ''); } catch(e) {}
+  }
+}
+window.recarregarPainelManual = function() {
+  resetarCachesDerivadosPainel({ limparCachePainel: true });
+  loadAll('manual');
+  return true;
+};
 function obterProjetosFallback() {
   var cache = carregarPainelCache();
   if (cache && cache.projetos && cache.projetos.length) {
@@ -4243,15 +4264,14 @@ function initVend(){
       '</div>'+
       '<div class="cc-body">'+
         '<div class="cc-stats">'+
-          '<div class="cc-s"><div class="cc-sl">Em Andamento</div><div class="cc-sv o">'+d.and+'</div></div>'+
-    '<div class="cc-s"><div class="cc-sl">Aguardando In&iacute;cio</div><div class="cc-sv b">'+d.ag+'</div></div>'+
+          '<div class="cc-s" onclick="event.stopPropagation();selVend(this.closest(\'.cc\').dataset.name,\'andamento\')"><div class="cc-sl">Em Andamento</div><div class="cc-sv o">'+d.and+'</div></div>'+
+    '<div class="cc-s" onclick="event.stopPropagation();selVend(this.closest(\'.cc\').dataset.name,\'aguardando\')"><div class="cc-sl">Aguardando In&iacute;cio</div><div class="cc-sv b">'+d.ag+'</div></div>'+
           '<div class="cc-s"><div class="cc-sl">Di&aacute;ria Contratada</div><div class="cc-sv">'+fn(d.dc)+'</div></div>'+
           '<div class="cc-s"><div class="cc-sl">Di&aacute;ria Realizada</div><div class="cc-sv '+(d.dr>d.dc?'r':'')+'">'+fn(d.dr)+'</div></div>'+
         '</div>'+
-        (d.en>0?'<div style="background:var(--red-s);border:1px solid rgba(192,57,43,.2);border-radius:6px;padding:8px 10px;margin-top:8px;cursor:pointer" onclick="event.stopPropagation();selVend(this.closest(\'.cc\').dataset.name,\'excedido\')">'+
-          '<div style="font-size:10px;font-weight:700;color:var(--red);margin-bottom:2px">Dias a faturar</div>'+
-          '<div style="display:flex;justify-content:space-between"><span style="font-size:12px;color:var(--red)">'+d.en+' projetos</span><span style="font-size:18px;font-weight:800;color:var(--red)">'+fn(d.ed)+' dias</span></div></div>':
-          '<div style="background:var(--green-s);border:1px solid rgba(45,110,78,.2);border-radius:6px;padding:7px 10px;margin-top:8px;font-size:12px;font-weight:600;color:var(--green)">Sem di&aacute;rias excedidas</div>')+
+        '<div class="cc-dl"><span>'+fn(d.dr)+' de '+fn(d.dc)+' di&aacute;rias</span><span '+(d.dr>d.dc?'style="color:var(--red);font-weight:700"':'')+'>'+( d.dr>d.dc?'EXCEDIDO':pb+'%')+'</span></div>'+
+        '<div class="cc-db"><div class="cc-df" style="width:'+Math.min(100,pb)+'%;background:'+pc+'"></div></div>'+
+        (d.en>0?'<div style="margin-top:8px"><span class="tag tag-o" style="cursor:pointer" onclick="event.stopPropagation();selVend(this.closest(\'.cc\').dataset.name,\'excedido\')">'+d.en+' '+(d.en===1?'projeto com di&aacute;ria excedida':'projetos com di&aacute;rias excedidas')+'</span></div>':'<div style="margin-top:8px"><span class="tag" style="background:var(--green-s);color:var(--green);border-color:rgba(45,110,78,.18)">Sem di&aacute;rias excedidas</span></div>')+
       '</div></div>';
   });
   document.getElementById('cgrid-vend').innerHTML=html;
@@ -6028,10 +6048,10 @@ window.sincronizarClickupProjeto = function(key, btn) {
       }
       return;
     }
-    try { storageSet(PANEL_CACHE_KEY, ''); } catch(e) {}
+    resetarCachesDerivadosPainel({ limparCachePainel: true });
     showToast(resp.warning ? ('ClickUp sincronizado com fallback: ' + resp.warning) : 'ClickUp sincronizado. Recarregando painel...', 'ok');
     if (btn) btn.textContent = 'Sincronizado';
-    setTimeout(function(){ loadAll('manual'); }, 900);
+    setTimeout(function(){ loadAll('manual'); }, 2200);
   }).catch(function(error) {
     showToast('Erro ao sincronizar ClickUp: ' + (error && error.message || 'tente novamente'), 'err');
     if (btn) {
