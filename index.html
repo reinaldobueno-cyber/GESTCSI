@@ -2308,6 +2308,51 @@ window.recarregarPainelManual = function() {
   loadAll('manual');
   return true;
 };
+function sleep(ms) {
+  return new Promise(function(resolve){ setTimeout(resolve, ms || 0); });
+}
+function syncedAtFromMetricItem(item) {
+  if (!item) return '';
+  var raw = item.clickup_json || item.clickup_payload || '';
+  var parsed = parseJsonSeguro(raw);
+  return parsed && parsed.synced_at ? String(parsed.synced_at) : '';
+}
+function syncedAtEhNovo(syncedAtAtual, syncedAtEsperado) {
+  if (!syncedAtAtual) return false;
+  if (!syncedAtEsperado) return true;
+  var atual = Date.parse(String(syncedAtAtual));
+  var esperado = Date.parse(String(syncedAtEsperado));
+  if (!isFinite(atual)) return false;
+  if (!isFinite(esperado)) return true;
+  return atual >= esperado;
+}
+function obterMetricaProjetoPorChave(projectKey) {
+  var key = String(projectKey || '').trim();
+  if (!key) return null;
+  return _metricasProjetoMap && _metricasProjetoMap[key] ? _metricasProjetoMap[key] : null;
+}
+function aguardarReflexoSyncClickup(projectKey, syncedAtEsperado) {
+  var chave = String(projectKey || '').trim();
+  var tentativas = 8;
+  var esperaMs = 1600;
+  if (!chave) return Promise.resolve(false);
+  function tentar(indice) {
+    resetarCachesDerivadosPainel({ limparCachePainel: true });
+    return loadMetricasFromSheet().then(function(){
+      var item = obterMetricaProjetoPorChave(chave);
+      var syncedAtAtual = syncedAtFromMetricItem(item);
+      if (syncedAtEhNovo(syncedAtAtual, syncedAtEsperado)) {
+        return true;
+      }
+      if (indice >= tentativas - 1) return false;
+      return sleep(esperaMs).then(function(){ return tentar(indice + 1); });
+    }).catch(function(){
+      if (indice >= tentativas - 1) return false;
+      return sleep(esperaMs).then(function(){ return tentar(indice + 1); });
+    });
+  }
+  return tentar(0);
+}
 function obterProjetosFallback() {
   var cache = carregarPainelCache();
   if (cache && cache.projetos && cache.projetos.length) {
@@ -6049,9 +6094,17 @@ window.sincronizarClickupProjeto = function(key, btn) {
       return;
     }
     resetarCachesDerivadosPainel({ limparCachePainel: true });
-    showToast(resp.warning ? ('ClickUp sincronizado com fallback: ' + resp.warning) : 'ClickUp sincronizado. Recarregando painel...', 'ok');
-    if (btn) btn.textContent = 'Sincronizado';
-    setTimeout(function(){ loadAll('manual'); }, 2200);
+    showToast(resp.warning ? ('ClickUp sincronizado com fallback: ' + resp.warning) : 'ClickUp sincronizado. Validando atualizacao no painel...', 'ok');
+    if (btn) btn.textContent = 'Atualizando painel...';
+    aguardarReflexoSyncClickup(chave, resp.synced_at).then(function(refletiu){
+      resetarCachesDerivadosPainel({ limparCachePainel: true });
+      loadAll('manual');
+      showToast(refletiu ? 'ClickUp atualizado no painel.' : 'ClickUp sincronizado; painel recarregado com a versao mais recente disponivel.', refletiu ? 'ok' : 'warn');
+      if (btn) {
+        btn.disabled = false;
+        btn.textContent = 'Sincronizar ClickUp';
+      }
+    });
   }).catch(function(error) {
     showToast('Erro ao sincronizar ClickUp: ' + (error && error.message || 'tente novamente'), 'err');
     if (btn) {
