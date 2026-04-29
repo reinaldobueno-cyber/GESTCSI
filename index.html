@@ -13,6 +13,7 @@
   --blue:#1a5276;--blue-s:rgba(26,82,118,.09);--purple:#5b3fa0;--purple-s:rgba(91,63,160,.09);
   --text:#1a2e1a;--text2:#4a5e4a;--muted:#7a917a;}
 *{margin:0;padding:0;box-sizing:border-box;}
+html,body{overscroll-behavior-y:auto;overflow-x:hidden;}
 body{background:var(--bg);color:var(--text);font-family:'Inter',sans-serif;font-size:14px;}
 /* NAV */
 nav{background:var(--nav);height:58px;display:flex;align-items:center;justify-content:space-between;padding:0 24px;position:sticky;top:0;z-index:200;box-shadow:0 2px 8px rgba(0,0,0,.25);}
@@ -43,8 +44,6 @@ nav{background:var(--nav);height:58px;display:flex;align-items:center;justify-co
 /* KPIS */
 .kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:10px;margin-bottom:20px;}
 .kpi{background:var(--surf);border:1px solid var(--border);border-radius:10px;padding:14px 16px;position:relative;overflow:hidden;}
-.kpi.actionable{cursor:pointer;transition:transform .18s ease,box-shadow .18s ease,border-color .18s ease;font:inherit;text-align:left;width:100%;}
-.kpi.actionable.on{border-color:rgba(37,79,50,.42)!important;box-shadow:0 0 0 2px rgba(37,79,50,.08),var(--premium-shadow-sm)!important;}
 .kpi::before{content:'';position:absolute;top:0;left:0;right:0;height:3px;background:var(--border2);}
 .kpi.g::before{background:var(--green);}.kpi.r::before{background:var(--red);}.kpi.o::before{background:var(--orange);}.kpi.b::before{background:var(--blue);}
 .kpi-l{font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:1px;color:var(--muted);margin-bottom:6px;}
@@ -65,19 +64,6 @@ nav{background:var(--nav);height:58px;display:flex;align-items:center;justify-co
 .fb.on{background:var(--nav);border-color:var(--nav);color:#fff;}
 .fb.on.r{background:var(--red);border-color:var(--red);}
 .fb.on.b{background:var(--blue);border-color:var(--blue);}
-.project-search-wrap{display:flex;align-items:center;gap:8px;width:100%;}
-.project-search{width:min(520px,100%);height:34px;border:1px solid var(--border);border-radius:999px;background:#fff;color:var(--text);font-family:'Inter',sans-serif;font-size:12px;font-weight:600;padding:0 14px;outline:none;transition:border-color .18s ease,box-shadow .18s ease;}
-.project-search::placeholder{color:var(--muted);font-weight:500;}
-.project-search:focus{border-color:rgba(45,110,78,.45);box-shadow:0 0 0 4px rgba(45,110,78,.08);}
-.project-search-clear{height:30px;border:1px solid var(--border);border-radius:999px;background:var(--surf);color:var(--muted);font-size:11px;font-weight:800;padding:0 12px;cursor:pointer;}
-.project-search-clear:hover{background:var(--surf2);color:var(--text);}
-.month-group{border-top:1px solid #edf2eb;}
-.month-group:first-child{border-top:none;}
-.month-group-head{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:12px 16px;background:#f8fbf6;border-bottom:1px solid #e4ece1;}
-.month-group-title{font-size:11px;font-weight:800;letter-spacing:.14em;text-transform:uppercase;color:#627161;}
-.month-group-meta{font-size:11px;font-weight:700;color:#7b8a7a;font-family:'JetBrains Mono',monospace;}
-.month-group-body{background:#fff;}
-.month-group .empty{padding:26px 20px;}
 /* TABLE */
 .ptable{background:var(--surf);border:1px solid var(--border);border-radius:10px;overflow:hidden;}
 .ptable-head{display:grid;grid-template-columns:1fr 130px 80px 80px 110px 24px;padding:8px 14px;background:var(--surf2);border-bottom:1px solid var(--border);font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--muted);}
@@ -172,6 +158,19 @@ nav{background:var(--nav);height:58px;display:flex;align-items:center;justify-co
 .cd-close{background:rgba(255,255,255,.15);border:1px solid rgba(255,255,255,.2);color:#fff;font-family:'Inter',sans-serif;font-size:12px;font-weight:600;padding:6px 12px;border-radius:5px;cursor:pointer;}
 .cd-body{padding:18px;}
 .cd-filters{display:flex;gap:5px;flex-wrap:wrap;margin-bottom:14px;}
+.page-toolbar{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;margin:-2px 0 14px;}
+.page-toolbar-left{display:flex;align-items:center;gap:10px;flex-wrap:wrap;}
+.search-input{min-width:280px;max-width:420px;width:min(420px,100%);height:38px;border:1px solid var(--border);border-radius:999px;background:var(--surf);padding:0 14px;font:600 13px 'Inter',sans-serif;color:var(--text);box-shadow:0 1px 2px rgba(20,32,24,.03);}
+.search-input:focus{outline:none;border-color:rgba(45,110,78,.35);box-shadow:0 0 0 4px rgba(45,110,78,.08);}
+.search-note{font-size:11px;font-weight:700;color:var(--muted);}
+.month-group{border-top:1px solid var(--border);}
+.month-group:first-child{border-top:none;}
+.month-group-title{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:12px 14px;background:linear-gradient(180deg,#f8faf7,#f5f8f5);border-bottom:1px solid var(--border);}
+.month-group-name{font-size:11px;font-weight:800;letter-spacing:1.1px;text-transform:uppercase;color:var(--green);}
+.month-group-count{font-size:11px;font-weight:800;color:var(--muted);font-family:'JetBrains Mono',monospace;}
+.kpi.kpi-btn{cursor:pointer;transition:transform .16s ease,box-shadow .16s ease,border-color .16s ease;}
+.kpi.kpi-btn:hover{transform:translateY(-1px);box-shadow:0 10px 24px rgba(20,32,24,.06);}
+.kpi.kpi-btn.active{border-color:rgba(45,110,78,.32);box-shadow:0 0 0 3px rgba(45,110,78,.08);}
 /* AVULSO */
 .av-split{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-top:14px;}
 .av-col{background:var(--surf);border:1px solid var(--border);border-radius:10px;overflow:hidden;}
@@ -268,9 +267,8 @@ nav{background:var(--nav);height:58px;display:flex;align-items:center;justify-co
 .tower-score-bar{height:8px;background:#dfe8df;border-radius:999px;overflow:hidden;margin-top:12px;}
 .tower-score-fill{height:100%;border-radius:999px;background:linear-gradient(90deg,#bf4b4b,#c9843f,#678a67);}
 .tower-kpis{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:14px;margin-bottom:18px;}
-.tower-kpi{background:#fff;border:1px solid #d8e3d8;border-radius:22px;padding:18px 18px 16px;box-shadow:0 12px 34px rgba(32,48,38,.07);transition:transform .18s ease,box-shadow .18s ease,border-color .18s ease;background-clip:padding-box;outline:none;}
+.tower-kpi{background:#fff;border:1px solid #d8e3d8;border-radius:22px;padding:18px 18px 16px;box-shadow:0 12px 34px rgba(32,48,38,.07);transition:transform .18s ease,box-shadow .18s ease,border-color .18s ease;}
 .tower-kpi:hover{transform:translateY(-2px);box-shadow:0 18px 42px rgba(32,48,38,.11);border-color:#bdcebd;}
-.tower-kpi.on{border-color:#7d9377;box-shadow:0 16px 42px rgba(58,86,69,.14);}
 .tower-kpi-top{display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;}
 .tower-kpi-icon{width:36px;height:36px;border-radius:14px;background:#eef5ee;display:flex;align-items:center;justify-content:center;font-size:16px;}
 .tower-kpi-trend{font-size:10px;font-weight:900;color:#6c7b6c;background:#f4f8f3;border:1px solid #dce8dc;border-radius:999px;padding:4px 8px;}
@@ -739,7 +737,7 @@ nav{
   box-shadow:none!important;
 }
 .app-shell{background:#f4f7f2!important;}
-.main-content{background:#f7faf5!important;}
+.main-content{background:linear-gradient(180deg,#f7faf5 0%,#f0f5ef 100%)!important;}
 .sidenav{
   background:var(--rail-soft)!important;
   border-right:1px solid #bac9b6!important;
@@ -781,7 +779,7 @@ nav{
   height:68px!important;
   padding:0 28px!important;
   background:rgba(250,252,248,.92)!important;
-  backdrop-filter:none!important;
+  backdrop-filter:blur(18px) saturate(1.15)!important;
   box-shadow:0 1px 0 rgba(151,166,146,.30),0 18px 42px rgba(86,104,84,.08)!important;
 }
 .nav-brand{gap:14px!important;}
@@ -893,7 +891,7 @@ nav{
   padding:12px 28px!important;
   min-height:50px!important;
   background:rgba(244,248,242,.94)!important;
-  backdrop-filter:none!important;
+  backdrop-filter:blur(16px)!important;
 }
 .pb,.fb,.pf-btn{
   min-height:30px;
@@ -917,7 +915,7 @@ nav{
   height:calc(100vh - 118px)!important;
   padding:16px 12px!important;
   gap:5px!important;
-  background:linear-gradient(180deg,#e7eee4 0%,#dbe6d8 100%)!important;
+  background:linear-gradient(180deg,#dce6d9 0%,#cfdbc9 100%)!important;
   box-shadow:12px 0 34px rgba(66,82,64,.09)!important;
 }
 .sidenav:hover{width:218px!important;}
@@ -1046,15 +1044,6 @@ nav{
   color:#7b8a7a!important;
 }
 .fbts{gap:9px!important;padding:12px 16px!important;}
-.project-search{
-  height:38px!important;
-  border-color:#dce7d9!important;
-  box-shadow:inset 0 1px 0 rgba(255,255,255,.7)!important;
-}
-.project-search-clear{
-  height:34px!important;
-  border-color:#dce7d9!important;
-}
 .ptable{
   overflow:hidden!important;
 }
@@ -1346,13 +1335,6 @@ nav{
   border-radius:18px!important;
   padding:18px 18px!important;
 }
-.dash-kpi{
-  cursor:pointer;
-  appearance:none;
-  font:inherit;
-  text-align:left;
-  width:100%;
-}
 .dash-kpi-icon{
   width:32px!important;
   height:32px!important;
@@ -1406,24 +1388,530 @@ nav{
 /* ===== PREMIUM POLISH ROUND 2 =====
    Refinamento final: filtros de logistica legiveis, lateral com nomes completos e labels executivos. */
 .app-shell{
-  grid-template-columns:164px minmax(0,1fr)!important;
+  grid-template-columns:172px minmax(0,1fr)!important;
+  background:#f4f7f2!important;
+  align-items:start!important;
+  min-height:calc(100vh - 94px)!important;
 }
 .sidenav,.sidenav:hover{
-  width:164px!important;
+  width:172px!important;
+  padding-top:8px!important;
+}
+.main-content{
+  background:#f5f8f3!important;
+  min-height:calc(100vh - 94px)!important;
 }
 .snb{
-  padding:0 9px!important;
+  padding:0 10px!important;
   gap:8px!important;
-  font-size:10.2px!important;
+  font-size:10.8px!important;
   letter-spacing:.01em!important;
 }
 .snb-label{
-  padding-right:34px!important;
+  padding-right:24px!important;
   white-space:nowrap!important;
 }
 .snb-badge{
   right:8px!important;
   min-width:22px!important;
+}
+.page{
+  padding:10px 24px 84px!important;
+  max-width:none!important;
+  margin:0!important;
+}
+.page-toolbar{
+  align-items:flex-start!important;
+  margin:4px 0 18px!important;
+}
+.page-toolbar-left{
+  align-items:flex-start!important;
+  flex-direction:column!important;
+  gap:7px!important;
+}
+.search-input{
+  width:min(520px,100%)!important;
+  max-width:520px!important;
+}
+.search-note{
+  font-size:12px!important;
+  font-weight:800!important;
+  color:#677866!important;
+}
+.kpi-hint{
+  margin-top:10px;
+  font-size:10px;
+  font-weight:700;
+  color:#7d8d7b;
+  letter-spacing:.01em;
+}
+.ptable-head,.prow{
+  grid-template-columns:minmax(420px,1.68fr) 176px 112px 112px 124px 24px!important;
+}
+.ptable-head > div{
+  display:flex!important;
+  align-items:center!important;
+}
+.ptable-head > div:first-child{
+  justify-content:flex-start!important;
+}
+.ptable-head > div:nth-child(n+2){
+  justify-content:center!important;
+  text-align:center!important;
+  justify-self:stretch!important;
+}
+.sh{
+  margin:0 0 14px!important;
+  align-items:flex-end!important;
+}
+.sh-title{
+  font-size:12px!important;
+  font-weight:900!important;
+  letter-spacing:.18em!important;
+  color:#233227!important;
+}
+.pcell{
+  align-items:center!important;
+  min-height:74px!important;
+  padding:14px 10px 14px 0!important;
+}
+.pcell:first-child{
+  padding-right:18px!important;
+}
+.pcell:last-child{
+  justify-content:flex-end!important;
+}
+.pcell:nth-child(n+2):not(:last-child){
+  justify-content:center!important;
+  text-align:center!important;
+}
+.pname-row{
+  align-items:flex-start!important;
+  gap:12px!important;
+}
+.pname{
+  font-size:14px!important;
+  line-height:1.22!important;
+}
+.psub{
+  margin-top:1px!important;
+  font-size:10.5px!important;
+}
+.month-seq-badge{
+  display:inline-flex;
+  align-items:center;
+  gap:4px;
+  margin-left:8px;
+  padding:3px 8px;
+  border-radius:999px;
+  background:#eef5ee;
+  border:1px solid #d8e3d7;
+  color:#456047;
+  font-size:10px;
+  font-weight:800;
+  letter-spacing:.01em;
+}
+.month-group{
+  margin-top:20px!important;
+  border:1px solid #dfe7dd!important;
+  border-radius:18px!important;
+  overflow:hidden!important;
+  background:#ffffff!important;
+  box-shadow:0 10px 30px rgba(48,68,51,.05)!important;
+}
+.month-group:first-child{
+  margin-top:0!important;
+}
+.month-group-title{
+  padding:18px 20px!important;
+  background:linear-gradient(180deg,#f8fbf7 0%,#eef5ee 100%)!important;
+  border-bottom:1px solid #dde7db!important;
+  align-items:center!important;
+}
+.month-group-name{
+  font-size:18px!important;
+  font-weight:900!important;
+  letter-spacing:.18em!important;
+  color:#243526!important;
+}
+.month-group-count{
+  font-size:12px!important;
+  font-weight:900!important;
+  color:#506150!important;
+}
+.month-group-order{
+  display:block;
+  margin-top:6px;
+  font-size:12px;
+  font-weight:800;
+  color:#586a59;
+  letter-spacing:.02em;
+}
+#page-all{
+  padding-top:4px!important;
+}
+#page-all .kpis{
+  margin:0 0 18px!important;
+}
+#page-all .fbox{
+  margin-bottom:16px!important;
+}
+#page-all .frow:last-child{
+  display:none!important;
+}
+#page-all .page-toolbar{
+  align-items:center!important;
+  gap:18px!important;
+  margin:4px 0 14px!important;
+}
+#page-all .page-toolbar-left{
+  align-items:flex-start!important;
+  gap:6px!important;
+  flex:1 1 420px!important;
+}
+#page-all .search-input{
+  width:min(420px,100%)!important;
+  max-width:420px!important;
+}
+#page-all .search-note{
+  display:block!important;
+  padding-left:12px!important;
+  font-size:12px!important;
+  font-weight:800!important;
+  color:#5b6d5d!important;
+}
+#page-all .sh{
+  align-items:center!important;
+  margin-bottom:12px!important;
+}
+#page-all .sh-title{
+  padding-left:12px!important;
+  font-size:12px!important;
+  letter-spacing:2.1px!important;
+  color:#2b3c2d!important;
+}
+#page-all .ptable{
+  border-radius:22px!important;
+}
+#page-all .month-group:first-child{
+  margin-top:8px!important;
+}
+#page-all .month-group-count{
+  display:inline-flex!important;
+  align-items:center!important;
+  justify-content:center!important;
+  min-width:170px!important;
+  padding:8px 12px!important;
+  text-align:center!important;
+  border-radius:999px!important;
+  background:#f5faf4!important;
+  border:1px solid #d9e6d7!important;
+  letter-spacing:.04em!important;
+}
+#page-all .month-group .prow:first-of-type{
+  border-top:1px solid #e3ebe1!important;
+}
+#page-all .ptable-head{
+  padding:12px 24px!important;
+  grid-template-columns:minmax(620px,2.22fr) 170px 118px 118px 128px 24px!important;
+}
+#page-all .ptable-head > div:nth-child(n+2){
+  justify-content:center!important;
+}
+#page-all .prow{
+  padding:0 24px!important;
+  align-items:stretch!important;
+  grid-template-columns:minmax(620px,2.22fr) 170px 118px 118px 128px 24px!important;
+}
+#page-all .prow.is-r,
+#page-all .prow.is-o,
+#page-all .prow.is-b{
+  border-left:none!important;
+  padding-left:24px!important;
+}
+#page-all .prow.is-r{
+  box-shadow:inset 3px 0 0 var(--red)!important;
+}
+#page-all .prow.is-o{
+  box-shadow:inset 3px 0 0 var(--orange)!important;
+}
+#page-all .prow.is-b{
+  box-shadow:inset 3px 0 0 var(--blue)!important;
+}
+#page-all .pcell{
+  min-height:76px!important;
+}
+#page-all .pcell:first-child{
+  justify-content:center!important;
+  padding-right:26px!important;
+}
+#page-all .pcell:nth-child(n+2):not(:last-child){
+  justify-content:center!important;
+  text-align:center!important;
+}
+#page-all .month-group{
+  margin-top:24px!important;
+  border-radius:20px!important;
+}
+#page-all .month-group-title{
+  padding:20px 22px!important;
+  background:linear-gradient(180deg,#f4f8f2 0%,#eaf2e7 100%)!important;
+}
+#page-all .month-group-name{
+  font-size:20px!important;
+  font-weight:900!important;
+  letter-spacing:.22em!important;
+}
+#page-all .month-group-order{
+  margin-top:4px!important;
+  font-size:12px!important;
+  font-weight:900!important;
+  color:#4f6451!important;
+}
+#page-all .month-group-title{
+  grid-template-columns:minmax(0,1fr) auto!important;
+}
+#page-all .month-group-title > div:first-child{
+  min-width:0!important;
+}
+#page-all .month-group-title > div:last-child{
+  align-self:center!important;
+}
+#page-all .pname-row{
+  align-items:flex-start!important;
+  gap:12px!important;
+}
+#page-all .project-link-btn{
+  align-self:flex-start!important;
+}
+.pz-head .section-hint-inline{
+  display:block;
+  margin-top:6px;
+  font-size:10.5px;
+  font-weight:700;
+  color:#839382;
+}
+.pz-head .pz-meta{
+  font-size:11px;
+  color:var(--muted);
+  margin-top:2px;
+}
+.pz-head .pz-month-badge{
+  display:inline-flex;
+  align-items:center;
+  gap:6px;
+  margin-bottom:4px;
+}
+.pz-card.compact{
+  margin-bottom:10px!important;
+}
+.pz-card.compact .pz-head{
+  cursor:pointer;
+  transition:background .18s ease;
+}
+.pz-card.compact .pz-head:hover{
+  background:#fbfdf9!important;
+}
+.pz-head-main{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:14px;
+  width:100%;
+}
+.pz-head-left{
+  min-width:0;
+  flex:1;
+}
+.pz-head-right{
+  display:flex;
+  align-items:center;
+  gap:10px;
+  flex-shrink:0;
+}
+.pz-toggle{
+  font-size:18px;
+  color:#8a9988;
+  transition:transform .18s ease,color .18s ease;
+}
+.pz-card.open .pz-toggle{
+  transform:rotate(90deg);
+  color:#5f745f;
+}
+.pz-body{
+  display:none;
+  padding:0 18px 18px;
+}
+.pz-card.open .pz-body{
+  display:block;
+}
+.pz-card{
+  margin-bottom:14px!important;
+  border-radius:16px!important;
+  overflow:hidden!important;
+  box-shadow:0 10px 26px rgba(55,74,57,.05)!important;
+}
+.pz-head{
+  padding:14px 18px!important;
+  background:#fff!important;
+}
+.pz-viols{
+  padding:0 18px 18px!important;
+  gap:10px!important;
+}
+.pz-vcard{
+  border-radius:12px!important;
+  padding:12px 14px!important;
+  min-width:0!important;
+  background:#fffdfb!important;
+}
+.pz-vcard.warn{
+  background:#fffaf7!important;
+}
+.pz-vtitle{
+  margin-bottom:8px!important;
+}
+.pz-vextra{
+  margin-top:6px!important;
+}
+.pz-head .section-hint-inline{
+  display:block;
+  margin-top:5px;
+  font-size:10.5px;
+  font-weight:700;
+  color:#7f8f7e;
+}
+.section-hint{
+  font-size:12px;
+  font-weight:700;
+  color:#5b6d5d;
+  margin-top:-2px;
+  margin-bottom:14px;
+}
+.cgrid{
+  grid-template-columns:repeat(auto-fit,minmax(320px,1fr))!important;
+  gap:16px!important;
+}
+.cc{
+  min-height:208px!important;
+}
+.cc-top,.cd-top{
+  align-items:flex-start!important;
+}
+.cc-stats{
+  grid-template-columns:repeat(4,minmax(0,1fr))!important;
+  gap:7px!important;
+}
+.cc-s{
+  min-height:68px!important;
+  padding:10px 10px!important;
+  display:flex!important;
+  flex-direction:column!important;
+  justify-content:center!important;
+}
+.cc-sl{
+  font-size:8.7px!important;
+  line-height:1.15!important;
+  margin-bottom:4px!important;
+}
+.cc-sv{
+  font-size:16px!important;
+  line-height:1!important;
+}
+#page-cons .cc-stats,
+#page-vend .cc-stats{
+  grid-template-columns:repeat(2,minmax(0,1fr))!important;
+  gap:9px!important;
+}
+#page-cons .cc-s,
+#page-vend .cc-s{
+  min-height:76px!important;
+  padding:10px 8px!important;
+  align-items:center!important;
+  text-align:center!important;
+}
+#page-cons .cc-sl,
+#page-vend .cc-sl{
+  display:flex!important;
+  align-items:center!important;
+  justify-content:center!important;
+  min-height:24px!important;
+  margin-bottom:5px!important;
+  white-space:normal!important;
+  word-break:normal!important;
+  overflow-wrap:anywhere!important;
+}
+#page-cons .cc-sv,
+#page-vend .cc-sv{
+  width:100%!important;
+  text-align:center!important;
+}
+#page-vend .cgrid{
+  grid-template-columns:repeat(auto-fit,minmax(340px,1fr))!important;
+  gap:18px!important;
+}
+#page-vend .cc{
+  display:flex!important;
+  flex-direction:column!important;
+  min-height:348px!important;
+  height:100%!important;
+}
+#page-vend .cc-top{
+  min-height:92px!important;
+  align-items:flex-start!important;
+  padding:14px 14px 16px!important;
+}
+#page-cons .cc-meta,
+#page-vend .cc-meta{
+  flex:1 1 auto!important;
+  min-width:0!important;
+  display:flex!important;
+  flex-direction:column!important;
+  justify-content:center!important;
+}
+#page-vend .cc-top > .cc-meta{
+  display:flex!important;
+  flex-direction:column!important;
+  justify-content:center!important;
+  min-height:52px!important;
+}
+#page-cons .cc-name,
+#page-vend .cc-name{
+  min-height:36px!important;
+  display:flex!important;
+  align-items:flex-start!important;
+  line-height:1.08!important;
+  white-space:normal!important;
+  word-break:break-word!important;
+}
+#page-cons .cc-sub,
+#page-vend .cc-sub{
+  display:block!important;
+  min-height:30px!important;
+  line-height:1.2!important;
+}
+#page-vend .cc-body{
+  display:flex!important;
+  flex-direction:column!important;
+  flex:1!important;
+  padding:14px!important;
+}
+#page-vend .cc-stats{
+  margin-bottom:12px!important;
+}
+#page-vend .cc-body > div:last-child{
+  margin-top:auto!important;
+}
+#page-vend .tag{
+  align-self:flex-start!important;
+  margin-left:8px!important;
+}
+#page-vend .cc-s,
+#page-vend .cc-body .cc-s{
+  min-height:84px!important;
+}
+#page-vend .cc-body .cc-sv{
+  font-size:17px!important;
 }
 .log-toolbar{
   display:flex;
@@ -1485,12 +1973,12 @@ nav{
   color:#819082;
 }
 .log-period-card{
-  background:rgba(255,255,255,.86);
+  background:#ffffff;
   border:1px solid #dfe8dc;
   border-radius:16px;
   padding:14px 16px;
   margin-bottom:16px;
-  box-shadow:0 14px 32px rgba(94,113,91,.06);
+  box-shadow:0 8px 18px rgba(94,113,91,.04);
 }
 .log-period-title{
   font-size:10px;
@@ -1511,8 +1999,8 @@ nav{
   flex-wrap:wrap;
 }
 @media(max-width:1180px){
-  .app-shell{grid-template-columns:154px minmax(0,1fr)!important;}
-  .sidenav,.sidenav:hover{width:154px!important;}
+  .app-shell{grid-template-columns:156px minmax(0,1fr)!important;}
+  .sidenav,.sidenav:hover{width:156px!important;}
   .snb{font-size:9.8px!important;}
 }
 @media(max-width:800px){
@@ -1553,7 +2041,7 @@ nav{
 <div class="sidenav">
 <button class="snb on" onclick="goTab('dash',this)"><span class="snb-icon">&#128200;</span><span class="snb-label">Dashboard</span></button>
 <button class="snb" onclick="goTab('exec',this)"><span class="snb-icon">&#127775;</span><span class="snb-label">Executivo</span></button>
-<button class="snb" onclick="goTab('tower',this)"><span class="snb-icon">&#128737;</span><span class="snb-label">Gestão Carteira</span><span class="snb-badge" id="n-tower">0</span></button>
+<button class="snb" onclick="goTab('tower',this)"><span class="snb-icon">&#128737;</span><span class="snb-label">Gest&atilde;o</span><span class="snb-badge" id="n-tower">0</span></button>
 <button class="snb" onclick="goTab('all',this)"><span class="snb-icon">&#128203;</span><span class="snb-label">Projetos</span><span class="snb-badge" id="n-all">0</span></button>
 <button class="snb" onclick="goTab('cons',this)"><span class="snb-icon">&#128100;</span><span class="snb-label">Consultores</span></button>
 <button class="snb" onclick="goTab('vend',this)"><span class="snb-icon">&#129309;</span><span class="snb-label">Vendedores</span></button>
@@ -1568,12 +2056,17 @@ nav{
 <div class="page" id="page-all">
   <div class="kpis" id="kpis-all"></div>
   <div class="fbox">
-    <div class="frow"><div class="flabel">Cliente</div><div class="fbts project-search-wrap"><input id="project-search" class="project-search" type="search" placeholder="Pesquisar cliente, consultor, vendedor ou cidade..." oninput="setProjectSearch(this.value)" autocomplete="off"><button type="button" class="project-search-clear" onclick="clearProjectSearch()">Limpar</button></div></div>
     <div class="frow"><div class="flabel">Consultor</div><div class="fbts" id="f-co"></div></div>
     <div class="frow"><div class="flabel">M&ecirc;s</div><div class="fbts" id="f-me"></div></div>
-    <div class="frow"><div class="flabel">Ordem</div><div class="fbts" id="f-ord"></div></div>
   </div>
-  <div class="sh"><div class="sh-title">Projetos</div><div class="sh-count" id="sh-count"></div></div>
+  <div class="page-toolbar">
+    <div class="page-toolbar-left">
+      <input id="project-search" class="search-input" type="search" placeholder="Buscar cliente espec&iacute;fico">
+      <span class="search-note" id="project-order">Sequ&ecirc;ncia real de entrada da venda, agrupada por m&ecirc;s</span>
+    </div>
+    <div class="sh-count" id="sh-count"></div>
+  </div>
+  <div class="sh"><div class="sh-title">Projetos</div></div>
   <div class="ptable">
     <div class="ptable-head"><div>Cliente / Consultor</div><div>Status</div><div>Tipo</div><div>Formato</div><div>Di&aacute;rias</div><div></div></div>
     <div id="rows-all"></div>
@@ -1582,12 +2075,14 @@ nav{
 <div class="page" id="page-cons">
   <div class="kpis" id="kpis-cons"></div>
   <div class="sh"><div class="sh-title">Clique em um consultor</div></div>
+  <div class="section-hint">Clique para visualizar a carteira, os indicadores e os projetos vinculados.</div>
   <div class="cgrid" id="cgrid-cons"></div>
   <div id="cons-detail"></div>
 </div>
 <div class="page" id="page-vend">
   <div class="kpis" id="kpis-vend"></div>
   <div class="sh"><div class="sh-title">Clique em um vendedor</div></div>
+  <div class="section-hint">Clique para visualizar a carteira comercial, di&aacute;rias e projetos relacionados.</div>
   <div class="cgrid" id="cgrid-vend"></div>
   <div id="vend-detail"></div>
 </div>
@@ -1640,7 +2135,7 @@ var CONTRACTS_MRR = {
 };
 
 var activePeriod = 'all';
-var fS='all', fC='all', fM='all', fQ='', fO='az';
+var fS='all', fC='all', fM='all', fQ='';
 var _openId = null;
 var ORDEM_MESES = ['JAN','FEV','MAR','ABR','MAI','JUN','JUL','AGO','SET','OUT','NOV','DEZ'];
 
@@ -1658,6 +2153,9 @@ function ordenarProjetosPainel(projetos) {
     var ma = indiceMesPainel(a && a.mes);
     var mb = indiceMesPainel(b && b.mes);
     if (ma !== mb) return ma - mb;
+    var oa = Number(a && a._sheet_order);
+    var ob = Number(b && b._sheet_order);
+    if (!isNaN(oa) && !isNaN(ob) && oa !== ob) return oa - ob;
     return String((a && a.cliente) || '').localeCompare(String((b && b.cliente) || ''));
   });
 }
@@ -1676,19 +2174,23 @@ function cinit(n) {
   return (w[0][0] + (w[1] ? w[1][0] : '')).toUpperCase();
 }
 function si(s) {
-  if (!s) return {cls:'tag-gray', rc:''};
-  if (s.indexOf('Atrasado') >= 0) return {cls:'tag-r', rc:'is-r'};
-  if (s.indexOf('Andamento') >= 0) return {cls:'tag-o', rc:'is-o'};
-  if (s.indexOf('Aguardando') >= 0) return {cls:'tag-b', rc:'is-b'};
-  if (s.indexOf('Conclu') >= 0) return {cls:'tag-g', rc:''};
+  var n = String(s || '').toLowerCase();
+  if (!n) return {cls:'tag-gray', rc:''};
+  if (n.indexOf('atras') >= 0) return {cls:'tag-r', rc:'is-r'};
+  if (n.indexOf('parado') >= 0) return {cls:'tag-gray', rc:''};
+  if (n.indexOf('andamento') >= 0) return {cls:'tag-o', rc:'is-o'};
+  if (n.indexOf('aguardando') >= 0) return {cls:'tag-b', rc:'is-b'};
+  if (n.indexOf('conclu') >= 0) return {cls:'tag-g', rc:''};
   return {cls:'tag-gray', rc:''};
 }
 function sl(s) {
-  if (!s) return '-';
-  if (s.indexOf('Atrasado') >= 0) return 'Atrasado';
-  if (s.indexOf('Andamento') >= 0) return 'Em Andamento';
-  if (s.indexOf('Aguardando') >= 0) return 'Aguardando In&iacute;cio';
-  if (s.indexOf('Conclu') >= 0) return 'Conclu&iacute;do';
+  var n = String(s || '').toLowerCase();
+  if (!n) return '-';
+  if (n.indexOf('atras') >= 0) return 'Atrasado';
+  if (n.indexOf('parado') >= 0) return 'Parado';
+  if (n.indexOf('andamento') >= 0) return 'Em Andamento';
+  if (n.indexOf('aguardando') >= 0) return 'Aguardando In&iacute;cio';
+  if (n.indexOf('conclu') >= 0) return 'Conclu&iacute;do';
   return s;
 }
 function fd(d) {
@@ -1700,11 +2202,15 @@ function fn(n) {
   if (n === null || n === undefined) return '-';
   return (n % 1 === 0) ? String(n) : n.toFixed(1).replace('.', ',');
 }
-function kpi(l, v, c) {
-  return '<div class="kpi '+(c||'')+'"><div class="kpi-l">'+l+'</div><div class="kpi-v">'+v+'</div></div>';
+function vendaNovaLabel(n) {
+  return Number(n) === 1 ? 'Venda Nova' : 'Vendas Novas';
 }
-function kpiAction(l, v, c, onClick, isOn) {
-  return '<button type="button" class="kpi actionable '+(c||'')+(isOn?' on':'')+'" onclick="'+onClick+'"><div class="kpi-l">'+l+'</div><div class="kpi-v">'+v+'</div></button>';
+function projetosExcedidosLabel(n) {
+  return Number(n) === 1 ? 'Projeto com Di&aacute;rias Excedidas' : 'Projetos com Di&aacute;rias Excedidas';
+}
+function kpi(l, v, c, attrs) {
+  var hint = arguments.length > 4 ? arguments[4] : '';
+  return '<div class="kpi '+(c||'')+' '+(attrs ? 'kpi-btn' : '')+'" '+(attrs||'')+'><div class="kpi-l">'+l+'</div><div class="kpi-v">'+v+'</div>'+(hint?'<div class="kpi-hint">'+hint+'</div>':'')+'</div>';
 }
 function parseD(s) {
   if (!s || s === '') return null;
@@ -1724,69 +2230,10 @@ function filteredProj() {
   if (activePeriod !== 'all') p = p.filter(function(x) { return x.mes === activePeriod; });
   return ordenarProjetosPainel(p);
 }
-function formatVendaNovaLabel(qtd) {
-  return qtd === 1 ? 'Venda Nova' : 'Vendas Novas';
-}
-function formatProjetoCountLabel(qtd) {
-  return qtd === 1 ? 'projeto' : 'projetos';
-}
-function formatAvulsoLabel(qtd) {
-  return qtd === 1 ? 'Avulso' : 'Avulsos';
-}
-function formatClienteSortLabel(ordem) {
-  return ordem === 'za' ? 'Cliente Z-A' : 'Cliente A-Z';
-}
-function ordenarProjetosLista(projetos, ordem) {
-  return (projetos || []).slice().sort(function(a, b) {
-    var ma = indiceMesPainel(a && a.mes);
-    var mb = indiceMesPainel(b && b.mes);
-    if (ma !== mb) return ma - mb;
-    var ca = String((a && a.cliente) || '');
-    var cb = String((b && b.cliente) || '');
-    return ordem === 'za' ? cb.localeCompare(ca) : ca.localeCompare(cb);
+function ordenarProjetosPorCliente(list) {
+  return (list || []).slice().sort(function(a, b) {
+    return String((a && a.cliente) || '').localeCompare(String((b && b.cliente) || ''));
   });
-}
-function formatProjectTypeTag(tipo) {
-  var isVenda = tipo === 'VENDA' || tipo === 'VENDA NOVA';
-  if (tipo === 'AVULSO') return '<span class="tag tag-p">AVULSO</span>';
-  if (isVenda) return '<span class="tag tag-g">VENDA NOVA</span>';
-  return '<span class="tag tag-gray">-</span>';
-}
-function formatDailyCell(real, contratado, excedido) {
-  if (!contratado && contratado !== 0) return '-';
-  var base = fn(real || 0) + ' / ' + fn(contratado);
-  return excedido ? '<span style="color:var(--red);font-weight:700">' + base + '</span>' : base;
-}
-function formatMonthGroupLabel(mes) {
-  return String(mes || '').trim() || 'Sem m&ecirc;s';
-}
-function buildMonthGroupedRows(list, pfx, emptyText) {
-  if (!list || !list.length) return '<div class="empty">' + (emptyText || 'Nenhum projeto encontrado') + '</div>';
-  var grupos = {};
-  var ordem = [];
-  list.forEach(function(item) {
-    var mes = String(item && item.mes || '').trim() || 'SEM_MES';
-    if (!grupos[mes]) {
-      grupos[mes] = [];
-      ordem.push(mes);
-    }
-    grupos[mes].push(item);
-  });
-  ordem.sort(function(a, b) {
-    if (a === 'SEM_MES') return 1;
-    if (b === 'SEM_MES') return -1;
-    return indiceMesPainel(a) - indiceMesPainel(b);
-  });
-  return ordem.map(function(mes, idx) {
-    var itens = ordenarProjetosPainel(grupos[mes] || []);
-    return '<div class="month-group">' +
-      '<div class="month-group-head">' +
-        '<div class="month-group-title">' + formatMonthGroupLabel(mes) + '</div>' +
-        '<div class="month-group-meta">' + itens.length + ' ' + formatProjetoCountLabel(itens.length) + '</div>' +
-      '</div>' +
-      '<div class="month-group-body">' + buildRows(itens, pfx + idx + '-') + '</div>' +
-    '</div>';
-  }).join('');
 }
 function showToast(msg, type) {
   var t = document.getElementById('toast');
@@ -1828,7 +2275,7 @@ function persistirPainelCache(projetos, info) {
   var lista = Array.isArray(projetos) ? projetos : [];
   if (!lista.length) return false;
   var atual = carregarPainelCache();
-  if (!(info && info.force) && atual && atual.projetos && atual.projetos.length > lista.length && lista.length < PANEL_CACHE_MIN_PROJECTS) {
+  if (atual && atual.projetos && atual.projetos.length > lista.length && lista.length < PANEL_CACHE_MIN_PROJECTS) {
     console.warn('[CACHE] Carga menor ignorada para preservar cache mais completo:', lista.length, 'vs', atual.projetos.length);
     return false;
   }
@@ -1900,8 +2347,7 @@ function chamarAppsScriptJsonp(action, params, timeoutMs) {
     var query = Object.assign({}, params || {}, {
       action: action,
       callback: cbName,
-      _ts: Date.now(),
-      _nonce: Math.random().toString(36).slice(2)
+      _ts: Date.now()
     });
     script.id = '_jsonp_' + cbName;
     script.src = APPS_SCRIPT_URL + '?' + Object.keys(query).map(function(key){
@@ -2077,30 +2523,8 @@ function setPeriod(p, btn) {
   activePeriod = p;
   document.querySelectorAll('.pb').forEach(function(b) { b.classList.remove('on'); });
   if (btn) btn.classList.add('on');
-  fS='all'; fC='all'; fM='all'; fQ=''; _openId=null;
+  fS='all'; fC='all'; fM='all'; _openId=null;
   renderAll();
-}
-function findSideNavButton(id) {
-  var found = null;
-  document.querySelectorAll('.snb').forEach(function(b){
-    if ((b.getAttribute('onclick') || '').indexOf("'" + id + "'") >= 0) found = b;
-  });
-  return found;
-}
-function openProjectsView(opts) {
-  opts = opts || {};
-  activePeriod = opts.period !== undefined ? opts.period : activePeriod;
-  fS = opts.status || 'all';
-  fC = opts.consultor || 'all';
-  fM = opts.mes || 'all';
-  fQ = String(opts.search || '').trim();
-  _openId = null;
-  renderAll();
-  goTab('all', findSideNavButton('all'));
-  var input = document.getElementById('project-search');
-  if (input) input.value = fQ;
-  var page = document.getElementById('page-all');
-  if (page) page.scrollIntoView({behavior:'smooth', block:'start'});
 }
 function buildPeriodBar() {
   var bar = document.getElementById('period-bar');
@@ -2116,6 +2540,61 @@ function buildPeriodBar() {
 
 function renderAll() {
   buildPeriodBar(); initDash(); initControlTower(); initAll(); initCons(); initVend(); initAvul(); initLog(); initPraz(); initAlert(); initExec();
+}
+function abrirProjetosComFiltro(status, clienteBusca) {
+  fS = status || 'all';
+  fC = 'all';
+  fM = 'all';
+  fQ = String(clienteBusca || '').trim().toLowerCase();
+  goTab('all');
+  initAll();
+  try {
+    var search = document.getElementById('project-search');
+    if (search) search.value = clienteBusca || '';
+  } catch(e) {}
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+function projectMonthKey(p){
+  return String((p && p.project_key) || (((p && p.mes) || '') + '|' + ((p && p.cliente) || ''))).toUpperCase();
+}
+function annotateMonthSequence(list){
+  var ordem = {};
+  var contagem = {};
+  (DATA.projetos || []).forEach(function(item){
+    if(!item || !item.cliente) return;
+    var mes = String(item.mes || 'SEM MES').toUpperCase();
+    if(!contagem[mes]) contagem[mes] = 0;
+    var key = projectMonthKey(item);
+    if(ordem[key] == null){
+      contagem[mes] += 1;
+      ordem[key] = contagem[mes];
+    }
+  });
+  (list || []).forEach(function(item, idx){
+    if(!item) return;
+    var key = projectMonthKey(item);
+    item._monthSeq = ordem[key] || (idx + 1);
+  });
+  return list;
+}
+function abrirPrazosComFiltro(tipo) {
+  goTab('praz');
+  initPraz();
+  renderPraz(tipo || 'all', 'all');
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+function abrirAlertasComFiltro(tipo) {
+  goTab('alert');
+  initAlert();
+  if (tipo === 'atrasados') {
+    var alvo = document.getElementById('rows-atr');
+    if (alvo) alvo.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  } else if (tipo === 'excedidos') {
+    var alvoExc = document.getElementById('rows-exc');
+    if (alvoExc) alvoExc.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  } else {
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  }
 }
 
 // ---- Aba Executiva ----
@@ -2201,23 +2680,23 @@ function initExec() {
   }
 
   // KPIs executivos
-  var kpiExec = function(label, val, sub, cor, clickJs) {
-    return '<button type="button" onclick="'+(clickJs||'')+'" style="background:#fff;border:1px solid var(--border);border-radius:10px;padding:14px 16px;text-align:center;width:100%;cursor:pointer">'+
+  var kpiExec = function(label, val, sub, cor, onclickJs) {
+    return '<div style="background:#fff;border:1px solid var(--border);border-radius:10px;padding:14px 16px;text-align:center;'+(onclickJs?'cursor:pointer;transition:transform .16s ease,box-shadow .16s ease;':'')+'" '+(onclickJs?'onclick="'+onclickJs+'" onmouseenter="this.style.transform=\'translateY(-1px)\';this.style.boxShadow=\'0 10px 22px rgba(66,82,64,.10)\'" onmouseleave="this.style.transform=\'none\';this.style.boxShadow=\'none\'"':'')+'>'+
       '<div style="font-size:28px;font-weight:800;color:'+(cor||'var(--text)')+'">'+val+'</div>'+
       '<div style="font-size:11px;font-weight:700;color:var(--text2);margin-top:2px">'+label+'</div>'+
       (sub?'<div style="font-size:10px;color:var(--muted);margin-top:2px">'+sub+'</div>':'')+
-    '</button>';
+    '</div>';
   };
 
   // Tendencia mensal sparkline
   var maxN = Math.max.apply(null, tendencia.map(function(t){return t.n;})||[1]);
   var spark = tendencia.map(function(t){
     var h = Math.max(12, Math.round((t.n/maxN)*58));
-    return '<button type="button" class="exec-spark-col" onclick="setPeriod(\''+t.m+'\')" style="background:none;border:0;cursor:pointer">'+
+    return '<div class="exec-spark-col">'+
       '<div class="exec-spark-n">'+t.n+'</div>'+
       '<div class="exec-spark-bar" style="height:'+h+'px"></div>'+
       '<div class="exec-spark-month">'+t.m+'</div>'+
-    '</button>';
+    '</div>';
   }).join('');
 
   // Projetos sem consultor - detalhamento
@@ -2248,10 +2727,10 @@ function initExec() {
   // Top vendedores
   var topVend = Object.keys(porVend).sort(function(a,b){return porVend[b]-porVend[a];}).slice(0,5)
     .map(function(v){
-      return '<button type="button" onclick="openProjectsView({search:'+JSON.stringify(v || '')+'})" style="display:flex;justify-content:space-between;align-items:center;padding:6px 0;border:0;border-bottom:1px solid var(--border);background:none;width:100%;cursor:pointer;text-align:left">'+
+      return '<div style="display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-bottom:1px solid var(--border)">'+
         '<span style="font-size:12px;font-weight:600">'+v+'</span>'+
-        '<span style="font-size:13px;font-weight:800;color:var(--nav)">'+porVend[v]+' '+formatVendaNovaLabel(porVend[v]).toLowerCase()+'</span>'+
-      '</button>';
+        '<span style="font-size:13px;font-weight:800;color:var(--nav)">'+porVend[v]+' venda'+(porVend[v]>1?'s':'')+'</span>'+
+      '</div>';
     }).join('');
 
   // Ranking consultores
@@ -2259,14 +2738,14 @@ function initExec() {
     var cor = c.score>=70?'#0f6e56':c.score>=40?'#854f0b':'#a32d2d';
     var bg  = c.score>=70?'#e1f5ee':c.score>=40?'#faeeda':'#fcebeb';
     var eficStr = c.efic!==null ? ' &bull; '+c.efic+'% efic.' : '';
-    return '<button type="button" onclick="openProjectsView({consultor:'+JSON.stringify(c.nome || 'all')+'})" style="display:flex;align-items:center;gap:10px;padding:8px 0;border:0;border-bottom:1px solid var(--border);background:none;width:100%;cursor:pointer;text-align:left">'+
+    return '<div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--border)">'+
       '<div style="width:34px;height:34px;border-radius:8px;background:'+bg+';display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:800;color:'+cor+';flex-shrink:0">'+cinit(c.nome)+'</div>'+
       '<div style="flex:1;min-width:0">'+
         '<div style="font-size:12px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+c.nome+'</div>'+
-        '<div style="font-size:10px;color:var(--muted)">'+c.total+' projetos &bull; '+c.atr+' atrasados &bull; '+c.exc+' com Di&aacute;rias Excedidas'+eficStr+'</div>'+
+        '<div style="font-size:10px;color:var(--muted)">'+c.total+' proj &bull; '+c.atr+' atr &bull; '+c.exc+' exc'+eficStr+'</div>'+
       '</div>'+
       '<div style="font-size:15px;font-weight:800;color:'+cor+'">'+c.score+'%</div>'+
-    '</button>';
+    '</div>';
   }).join('');
 
   // Riscos
@@ -2313,11 +2792,11 @@ function initExec() {
 
     // KPIs grid
     '<div style="display:grid;grid-template-columns:repeat(5,1fr);gap:10px;margin-bottom:18px">'+
-      kpiExec('Total Projetos', total, activePeriod==='all'?'todos os meses':activePeriod, 'var(--text)', "openProjectsView({status:'all'})") +
-      kpiExec('Em Andamento', emAnd.length, pctAnd+'% da carteira', '#0f6e56', "openProjectsView({status:'andamento'})") +
-      kpiExec('Aguardando In\u00EDcio', aguard.length, pctAgu+'% da carteira', '#854f0b', "openProjectsView({status:'aguardando'})") +
-      kpiExec('Em Atraso', atrasados.length, pctAtr+'% da carteira', pctAtr>=8?'#a32d2d':'#0f6e56', "openProjectsView({status:'atrasado'})") +
-      kpiExec('Di\u00E1rias Excedidas', excDiar.length, pctExc+'% da carteira', pctExc>=10?'#a32d2d':'#0f6e56', "openProjectsView({status:'excedido'})") +
+      kpiExec('Total Projetos', total, activePeriod==='all'?'todos os meses':activePeriod, 'var(--text)', 'abrirProjetosComFiltro(\'all\')') +
+      kpiExec('Em Andamento', emAnd.length, pctAnd+'% da carteira', '#0f6e56', 'abrirProjetosComFiltro(\'andamento\')') +
+      kpiExec('Aguardando In\u00EDcio', aguard.length, pctAgu+'% da carteira', '#854f0b', 'abrirProjetosComFiltro(\'aguardando\')') +
+      kpiExec('Em Atraso', atrasados.length, pctAtr+'% da carteira', pctAtr>=8?'#a32d2d':'#0f6e56', 'abrirAlertasComFiltro(\'atrasados\')') +
+      kpiExec('Di\u00E1rias Excedidas', excDiar.length, pctExc+'% da carteira', pctExc>=10?'#a32d2d':'#0f6e56', 'abrirAlertasComFiltro(\'excedidos\')') +
     '</div>'+
 
     // Grid: resumo + tendencia
@@ -2325,12 +2804,12 @@ function initExec() {
       '<div style="background:var(--surf);border:1px solid var(--border);border-radius:10px;padding:14px 16px">'+
         '<div style="font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:1px;color:var(--muted);margin-bottom:12px">Composi\u00E7\u00E3o da Carteira</div>'+
         '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">'+
-          '<button type="button" onclick="openProjectsView({search:\'VENDA NOVA\'})" style="text-align:left;background:none;border:0;padding:0;cursor:pointer"><div style="font-size:11px;color:var(--muted)">Vendas Novas</div><div style="font-size:18px;font-weight:800">'+vendaNova.length+'</div></button>'+
-          '<button type="button" onclick="openProjectsView({search:\'AVULSO\'})" style="text-align:left;background:none;border:0;padding:0;cursor:pointer"><div style="font-size:11px;color:var(--muted)">Avulsos</div><div style="font-size:18px;font-weight:800">'+avulso.length+'</div></button>'+
-          '<button type="button" onclick="openProjectsView({search:\'IN LOCO\'})" style="text-align:left;background:none;border:0;padding:0;cursor:pointer"><div style="font-size:11px;color:var(--muted)">In Loco</div><div style="font-size:18px;font-weight:800">'+inLoco.length+'</div></button>'+
-          '<button type="button" onclick="openProjectsView({search:\'ONLINE\'})" style="text-align:left;background:none;border:0;padding:0;cursor:pointer"><div style="font-size:11px;color:var(--muted)">Online</div><div style="font-size:18px;font-weight:800">'+online.length+'</div></button>'+
-          '<div><div style="font-size:11px;color:var(--muted)">Efici\u00EAncia de Di\u00E1rias</div><div style="font-size:18px;font-weight:800;color:'+(eficiencia>110?'#a32d2d':eficiencia>=80?'#0f6e56':'#854f0b')+'">'+eficiencia+'%</div></div>'+
-          '<button type="button" onclick="openProjectsView({search:\'Sem consultor\'})" style="text-align:left;background:none;border:0;padding:0;cursor:pointer"><div style="font-size:11px;color:var(--muted)">Sem Consultor</div><div style="font-size:18px;font-weight:800;color:'+(semCons.length?'#a32d2d':'#0f6e56')+'">'+semCons.length+'</div></button>'+
+          '<div><div style="font-size:11px;color:var(--muted)">Vendas Novas</div><div style="font-size:18px;font-weight:800">'+vendaNova.length+'</div></div>'+
+          '<div><div style="font-size:11px;color:var(--muted)">Avulso</div><div style="font-size:18px;font-weight:800">'+avulso.length+'</div></div>'+
+          '<div><div style="font-size:11px;color:var(--muted)">In Loco</div><div style="font-size:18px;font-weight:800">'+inLoco.length+'</div></div>'+
+          '<div><div style="font-size:11px;color:var(--muted)">Online</div><div style="font-size:18px;font-weight:800">'+online.length+'</div></div>'+
+          '<div><div style="font-size:11px;color:var(--muted)">Efic. Di\u00E1rias</div><div style="font-size:18px;font-weight:800;color:'+(eficiencia>110?'#a32d2d':eficiencia>=80?'#0f6e56':'#854f0b')+'">'+eficiencia+'%</div></div>'+
+          '<div><div style="font-size:11px;color:var(--muted)">Sem Consultor</div><div style="font-size:18px;font-weight:800;color:'+(semCons.length?'#a32d2d':'#0f6e56')+'">'+semCons.length+'</div></div>'+
         '</div>'+
       '</div>'+
       '<div style="background:var(--surf);border:1px solid var(--border);border-radius:10px;padding:14px 16px">'+
@@ -2354,7 +2833,7 @@ function initExec() {
     // Riscos
     semConsHtml +
         (riscos.length?'<div style="background:var(--surf);border:1px solid rgba(192,57,43,.25);border-radius:10px;padding:14px 16px;margin-bottom:14px">'+
-      '<div style="font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:1px;color:var(--red);margin-bottom:12px">\u26A0 Focos Operacionais do Per&iacute;odo</div>'+
+      '<div style="font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:1px;color:var(--red);margin-bottom:12px">\u26A0 Riscos & Pontos de Aten\u00E7\u00E3o</div>'+
       '<div style="display:flex;flex-direction:column;gap:8px">'+
         riscos.map(function(r){
           var c=r.nivel==='r'?'#a32d2d':'#854f0b';
@@ -2417,8 +2896,8 @@ function buildPrazoCards(p) {
     '</div>';
   }
   return banner+'<div class="prazo-grid">'+
-    card('Venda - Kickoff', vk, LK, dV, dK, 'Kickoff nao registrado')+
-    card('Venda - 1&ordm; Treinamento', vt, LT, dV, dT, '1&ordm; Treinamento n&atilde;o registrado')+
+    card('Venda Nova - Kickoff', vk, LK, dV, dK, 'Kickoff nao registrado')+
+    card('Venda Nova - 1&ordm; Treinamento', vt, LT, dV, dT, '1&ordm; Treinamento n&atilde;o registrado')+
     card('Kickoff - 1&ordm; Treinamento', kt, LT, dK, dT, 'Sem datas')+
   '</div>';
 }
@@ -2870,6 +3349,9 @@ function montarResumoProjeto(projetoBruto) {
   return resultado;
 }
 function obterResumoClickupNormalizadoProjeto(projetoBruto) {
+  var resumoManual = obterResumoManualProjeto(projetoBruto || {});
+  if (resumoManual && !resumoManual.indisponivel) return resumoManual;
+
   var payload =
     parseJsonSeguro(projetoBruto && projetoBruto.clickup_json) ||
     parseJsonSeguro(projetoBruto && projetoBruto.payload_json) ||
@@ -2887,14 +3369,9 @@ function obterResumoClickupNormalizadoProjeto(projetoBruto) {
   if (!temEstruturaNormalizada) return null;
 
   var resumo = montarResumoManualProjeto(payload, projetoBruto);
-  if (resumo && !resumo.indisponivel) {
-    resumo.fonte = 'clickup_sync';
-    return resumo;
-  }
-
-  var resumoManual = obterResumoManualProjeto(projetoBruto || {});
-  if (resumoManual && !resumoManual.indisponivel) return resumoManual;
-  return null;
+  if (!resumo || resumo.indisponivel) return null;
+  resumo.fonte = 'clickup_sync';
+  return resumo;
 }
 function montarResumoClickup(projetoBruto) {
   var resumoNormalizado = obterResumoClickupNormalizadoProjeto(projetoBruto || {});
@@ -3280,8 +3757,9 @@ function buildRows(list, pfx) {
     var id = pfx + i;
     var info = si(p.status);
     var exc = p.diarias_rest !== null && p.diarias_rest < 0;
-    var dCell = formatDailyCell(p.diarias_real, p.diarias_cont, exc);
-    var tTag = formatProjectTypeTag(p.tipo);
+    var dCell = p.diarias_cont ? (exc ? '<span style="color:var(--red);font-weight:700">'+fn(p.diarias_real)+'/'+fn(p.diarias_cont)+'</span>' : fn(p.diarias_real||0)+' / '+fn(p.diarias_cont)) : '-';
+    var isV = (p.tipo==='VENDA'||p.tipo==='VENDA NOVA');
+    var tTag = p.tipo==='AVULSO' ? '<span class="tag tag-p">AVULSO</span>' : (isV ? '<span class="tag tag-g">VENDA NOVA</span>' : '<span class="tag tag-gray">-</span>');
     var barHtml = '';
     if (p.diarias_cont) {
       var cont=p.diarias_cont, real=p.diarias_real||0, over=real>cont;
@@ -3295,7 +3773,8 @@ function buildRows(list, pfx) {
     var obsH = p.obs ? '<div class="sec-l">Observacoes</div><div class="obs-box">'+p.obs+'</div>' : '';
     out += '<div class="prow '+info.rc+'" id="'+id+'" onclick="togRow(\''+id+'\')">';
     var projetoLinkBtn = p.projeto_link ? '<a class=\"project-link project-link-btn\" href=\"'+p.projeto_link+'\" target=\"_blank\" rel=\"noopener noreferrer\" onclick=\"event.stopPropagation()\">Abrir Projeto</a>' : '';
-    out += '<div class="pcell"><div class="pname-row"><div class="pname">'+p.cliente+'</div>'+projetoLinkBtn+'</div><div class="psub">'+(p.consultor||'\u2014')+' - '+p.mes+'</div></div>';
+    var seqBadge = p._monthSeq ? '<span class="month-seq-badge">'+p._monthSeq+'&ordf; venda do m&ecirc;s</span>' : '';
+    out += '<div class="pcell"><div class="pname-row"><div class="pname">'+p.cliente+'</div>'+projetoLinkBtn+'</div><div class="psub">'+(p.consultor||'\u2014')+' &bull; '+p.mes+seqBadge+'</div></div>';
     out += '<div class="pcell"><span class="tag '+info.cls+'">'+sl(p.status)+'</span></div>';
     out += '<div class="pcell">'+tTag+'</div>';
     out += '<div class="pcell" style="font-size:12px;color:var(--text2)">'+(p.formato||'-')+'</div>';
@@ -3307,12 +3786,32 @@ function buildRows(list, pfx) {
     out += '<div><div class="ef-l">Adicionais</div><div class="ef-v" style="font-size:11px">'+(p.adicionais&&p.adicionais!=='-'?p.adicionais:'-')+'</div></div>';
     out += '<div><div class="ef-l">Vendedor</div><div class="ef-v">'+(p.vendedor||'-')+'</div></div>';
     out += '<div><div class="ef-l">Kickoff</div><div class="ef-v">'+fd(p.data_kick)+'</div></div>';
-    out += '<div><div class="ef-l">In&iacute;cio da Implanta&ccedil;&atilde;o</div><div class="ef-v">'+fd(p.data_inicio)+'</div></div>';
+    out += '<div><div class="ef-l">In&iacute;cio Implant.</div><div class="ef-v">'+fd(p.data_inicio)+'</div></div>';
     out += '<div><div class="ef-l">Data Venda</div><div class="ef-v">'+fd(p.data_venda)+'</div></div>';
-    out += '<div><div class="ef-l">Kickoff Realizado?</div><div class="ef-v">'+(p.kickoff||'-')+'</div></div>';
+    out += '<div><div class="ef-l">KO Realiz.?</div><div class="ef-v">'+(p.kickoff||'-')+'</div></div>';
     out += '</div>'+gerH+logH+obsH+'</div></div>';
   }
   return out;
+}
+function buildMonthGroupedRows(list, pfx) {
+  if (!list || !list.length) return '<div class="empty">Nenhum projeto encontrado</div>';
+  annotateMonthSequence(list);
+  var groups = {};
+  list.forEach(function(item) {
+    var mes = String(item && item.mes || 'SEM MES').toUpperCase();
+    if (!groups[mes]) groups[mes] = [];
+    groups[mes].push(item);
+  });
+  var meses = ordenarMesesPainel(Object.keys(groups));
+  return meses.map(function(mes, idx) {
+    var projetos = groups[mes];
+    var primeiraSeq = projetos.length ? projetos[0]._monthSeq : 0;
+    var ultimaSeq = projetos.length ? projetos[projetos.length - 1]._monthSeq : 0;
+    return '<div class="month-group">'+
+      '<div class="month-group-title"><div><div class="month-group-name">'+mes+'</div><span class="month-group-order">Sequ&ecirc;ncia real da planilha: '+primeiraSeq+'&ordf; at&eacute; '+ultimaSeq+'&ordf; entrada de venda do m&ecirc;s</span></div><div class="month-group-count">'+projetos.length+' projeto(s) no m&ecirc;s</div></div>'+
+      '<div>'+buildRows(projetos, pfx + idx + '-'+ mes + '-').replace('<div class="empty">Nenhum projeto encontrado</div>', '')+'</div>'+
+    '</div>';
+  }).join('');
 }
 function togRow(id) {
   var row=document.getElementById(id), exp=document.getElementById('xp-'+id);
@@ -3380,12 +3879,12 @@ function initDash() {
 
   // KPI grid
   var kgrid = '<div class="dash-grid">'+
-    '<button type="button" class="dash-kpi c-b" onclick="openProjectsView({status:\'all\'})"><div class="dash-kpi-icon">\uD83D\uDCCB</div><div class="dash-kpi-v">'+total+'</div><div class="dash-kpi-l">Projetos</div></button>'+
-    '<button type="button" class="dash-kpi c-o" onclick="openProjectsView({status:\'andamento\'})"><div class="dash-kpi-icon">\u2699</div><div class="dash-kpi-v">'+and+'</div><div class="dash-kpi-l">Em Andamento</div>'+trendHtml(and,pAnd,false)+'</button>'+
-    '<button type="button" class="dash-kpi c-b" onclick="openProjectsView({status:\'aguardando\'})"><div class="dash-kpi-icon">\u23F3</div><div class="dash-kpi-v">'+ag+'</div><div class="dash-kpi-l">Aguardando In&iacute;cio</div></button>'+
-    '<button type="button" class="dash-kpi c-r" onclick="openProjectsView({status:\'atrasado\'})"><div class="dash-kpi-icon">\uD83D\uDEA8</div><div class="dash-kpi-v">'+atr+'</div><div class="dash-kpi-l">Atrasados</div>'+trendHtml(atr,pAtr,true)+'</button>'+
-    '<button type="button" class="dash-kpi c-o" onclick="openProjectsView({status:\'excedido\'})"><div class="dash-kpi-icon">\uD83D\uDCB0</div><div class="dash-kpi-v">'+exc+'</div><div class="dash-kpi-l">Di&aacute;rias Excedidas</div>'+trendHtml(exc,pExc,true)+'</button>'+
-    '<button type="button" class="dash-kpi c-g" onclick="openProjectsView({status:\'andamento\'})"><div class="dash-kpi-icon">\uD83D\uDCC8</div><div class="dash-kpi-v">'+(total>0?Math.round(and/total*100):0)+'%</div><div class="dash-kpi-l">Em Andamento</div></button>'+
+    '<div class="dash-kpi c-b" onclick="abrirProjetosComFiltro(\'all\')" style="cursor:pointer"><div class="dash-kpi-icon">\uD83D\uDCCB</div><div class="dash-kpi-v">'+total+'</div><div class="dash-kpi-l">Total de Projetos</div></div>'+
+    '<div class="dash-kpi c-o" onclick="abrirProjetosComFiltro(\'andamento\')" style="cursor:pointer"><div class="dash-kpi-icon">\u2699</div><div class="dash-kpi-v">'+and+'</div><div class="dash-kpi-l">Em Andamento</div>'+trendHtml(and,pAnd,false)+'</div>'+
+    '<div class="dash-kpi c-b" onclick="abrirProjetosComFiltro(\'aguardando\')" style="cursor:pointer"><div class="dash-kpi-icon">\u23F3</div><div class="dash-kpi-v">'+ag+'</div><div class="dash-kpi-l">Aguardando In&iacute;cio</div></div>'+
+    '<div class="dash-kpi c-r" onclick="abrirAlertasComFiltro(\'atrasados\')" style="cursor:pointer"><div class="dash-kpi-icon">\uD83D\uDEA8</div><div class="dash-kpi-v">'+atr+'</div><div class="dash-kpi-l">Projetos Atrasados</div>'+trendHtml(atr,pAtr,true)+'</div>'+
+    '<div class="dash-kpi c-o" onclick="abrirAlertasComFiltro(\'excedidos\')" style="cursor:pointer"><div class="dash-kpi-icon">\uD83D\uDCB0</div><div class="dash-kpi-v">'+exc+'</div><div class="dash-kpi-l">Di&aacute;rias Excedidas</div>'+trendHtml(exc,pExc,true)+'</div>'+
+    '<div class="dash-kpi c-g" onclick="abrirProjetosComFiltro(\'andamento\')" style="cursor:pointer"><div class="dash-kpi-icon">\uD83D\uDCC8</div><div class="dash-kpi-v">'+(total>0?Math.round(and/total*100):0)+'%</div><div class="dash-kpi-l">Carteira em Andamento</div></div>'+
   '</div>';
 
   // Projetos criticos
@@ -3516,7 +4015,7 @@ function initDash() {
   dc.innerHTML = kgrid +
     '<div class="dash-row">'+
       '<div class="dash-panel">'+
-        '<div class="dash-ph"><span class="dash-ph-title">A&ccedil;&otilde;es Priorit&aacute;rias</span>'+
+        '<div class="dash-ph"><span class="dash-ph-title">Projetos Criticos</span>'+
           '<span style="font-size:10px;color:var(--muted)">'+criticos.length+' de '+total+'</span></div>'+
         '<div class="dash-pb" style="padding:0 16px">'+critHtml+'</div>'+
       '</div>'+
@@ -3602,16 +4101,18 @@ function handleTrendClick(el) {
 
 function initAll() {
   var p=filteredProj();
-  var and=p.filter(function(x){return x.status.indexOf('Andamento')>=0;}).length;
-  var ag=p.filter(function(x){return x.status.indexOf('Aguardando')>=0;}).length;
-  var atr=p.filter(function(x){return x.status.indexOf('Atrasado')>=0;}).length;
+  var and=p.filter(function(x){return String(x.status||'').toLowerCase().indexOf('andamento')>=0;}).length;
+  var par=p.filter(function(x){return String(x.status||'').toLowerCase().indexOf('parado')>=0;}).length;
+  var ag=p.filter(function(x){return String(x.status||'').toLowerCase().indexOf('aguardando')>=0;}).length;
+  var atr=p.filter(function(x){return String(x.status||'').toLowerCase().indexOf('atras')>=0;}).length;
   var exc=p.filter(function(x){return x.diarias_rest!==null&&x.diarias_rest<0;}).length;
   document.getElementById('kpis-all').innerHTML=
-    kpiAction('Total',p.length,'',"setF('s','all')",fS==='all')+
-    kpiAction('Em Andamento',and,'o',"setF('s','andamento')",fS==='andamento')+
-    kpiAction('Aguardando In&iacute;cio',ag,'b',"setF('s','aguardando')",fS==='aguardando')+
-    kpiAction('Atrasados',atr,'r',"setF('s','atrasado')",fS==='atrasado')+
-    kpiAction('Di&aacute;rias Excedidas',exc,'o',"setF('s','excedido')",fS==='excedido');
+    '<div class="kpi kpi-btn '+(fS==='all'?'active':'')+'" data-project-status="all" onclick="setProjectStatusFilter(\'all\')"><div class="kpi-l">Total</div><div class="kpi-v">'+p.length+'</div><div class="kpi-hint">Clique para visualizar</div></div>'+
+    '<div class="kpi kpi-btn o '+(fS==='andamento'?'active':'')+'" data-project-status="andamento" onclick="setProjectStatusFilter(\'andamento\')"><div class="kpi-l">Em Andamento</div><div class="kpi-v">'+and+'</div><div class="kpi-hint">Clique para visualizar</div></div>'+
+    '<div class="kpi kpi-btn '+(fS==='parado'?'active':'')+'" data-project-status="parado" onclick="setProjectStatusFilter(\'parado\')"><div class="kpi-l">Parado</div><div class="kpi-v">'+par+'</div><div class="kpi-hint">Clique para visualizar</div></div>'+
+    '<div class="kpi kpi-btn b '+(fS==='aguardando'?'active':'')+'" data-project-status="aguardando" onclick="setProjectStatusFilter(\'aguardando\')"><div class="kpi-l">Aguardando In&iacute;cio</div><div class="kpi-v">'+ag+'</div><div class="kpi-hint">Clique para visualizar</div></div>'+
+    '<div class="kpi kpi-btn r '+(fS==='atrasado'?'active':'')+'" data-project-status="atrasado" onclick="setProjectStatusFilter(\'atrasado\')"><div class="kpi-l">Atrasados</div><div class="kpi-v">'+atr+'</div><div class="kpi-hint">Clique para visualizar</div></div>'+
+    '<div class="kpi kpi-btn o '+(fS==='excedido'?'active':'')+'" data-project-status="excedido" onclick="setProjectStatusFilter(\'excedido\')"><div class="kpi-l">Di&aacute;rias Excedidas</div><div class="kpi-v">'+exc+'</div><div class="kpi-hint">Clique para visualizar</div></div>';
   document.getElementById('n-all').textContent=p.length;
   var cons=[],cm={};
   p.forEach(function(x){if(x.consultor&&!cm[x.consultor]){cm[x.consultor]=1;cons.push(x.consultor);}});cons.sort();
@@ -3619,62 +4120,57 @@ function initAll() {
   p.forEach(function(x){if(x.mes&&!mm[x.mes]){mm[x.mes]=1;meses.push(x.mes);}});
   meses = ordenarMesesPainel(meses);
   document.getElementById('f-co').innerHTML=['all'].concat(cons).map(function(v){return '<button class="fb '+(fC===v?'on':'')+'" onclick="setF(\'c\',\''+v+'\',this)">'+(v==='all'?'Todos':v)+'</button>';}).join('');
-  document.getElementById('f-me').innerHTML=['all'].concat(meses).map(function(v){return '<button class="fb '+(fM===v?'on':'')+'" onclick="setF(\'m\',\''+v+'\',this)">'+(v==='all'?'Todos':v)+'</button>';}).join('');
-  document.getElementById('f-ord').innerHTML=['az','za'].map(function(v){return '<button class="fb '+(fO===v?'on':'')+'" onclick="setF(\'o\',\''+v+'\',this)">'+formatClienteSortLabel(v)+'</button>';}).join('');
-  var searchInput = document.getElementById('project-search');
-  if (searchInput && searchInput.value !== fQ) searchInput.value = fQ;
+  var filtroMes = document.getElementById('f-me');
+  if (filtroMes) filtroMes.innerHTML=['all'].concat(meses).map(function(v){return '<button class="fb '+(fM===v?'on':'')+'" onclick="setF(\'m\',\''+v+'\',this)">'+(v==='all'?'Todos':v)+'</button>';}).join('');
+  var search = document.getElementById('project-search');
+  if (search && !search.dataset.bound) {
+    search.dataset.bound = '1';
+    search.addEventListener('input', function() {
+      fQ = String(this.value || '').trim().toLowerCase();
+      applyF();
+    });
+  }
+  if (search) search.value = fQ;
   applyF();
 }
-function setF(t,v,btn){
-  if(t==='s'){fS=v;applyF();return;}
-  if(t==='c')fC=v;else if(t==='m')fM=v;else fO=v;
-  if(btn&&btn.closest('.fbts')){
-    btn.closest('.fbts').querySelectorAll('.fb').forEach(function(b){b.classList.remove('on');});
-    btn.classList.add('on');
+function setProjectStatusFilter(v){
+  fS = v || 'all';
+  if (fS === 'all') {
+    fQ = '';
+    var search = document.getElementById('project-search');
+    if (search) search.value = '';
   }
   applyF();
 }
+function setF(t,v,btn){if(t==='s')fS=v;else if(t==='c')fC=v;else fM=v;btn.closest('.fbts').querySelectorAll('.fb').forEach(function(b){b.classList.remove('on');});btn.classList.add('on');applyF();}
 function applyF(){
   var p=filteredProj();
-  if(fS==='andamento')p=p.filter(function(x){return x.status.indexOf('Andamento')>=0;});
-  else if(fS==='atrasado')p=p.filter(function(x){return x.status.indexOf('Atrasado')>=0;});
-  else if(fS==='aguardando')p=p.filter(function(x){return x.status.indexOf('Aguardando')>=0;});
+  if(fS==='andamento')p=p.filter(function(x){return String(x.status||'').toLowerCase().indexOf('andamento')>=0;});
+  else if(fS==='parado')p=p.filter(function(x){return String(x.status||'').toLowerCase().indexOf('parado')>=0;});
+  else if(fS==='atrasado')p=p.filter(function(x){return String(x.status||'').toLowerCase().indexOf('atras')>=0;});
+  else if(fS==='aguardando')p=p.filter(function(x){return String(x.status||'').toLowerCase().indexOf('aguardando')>=0;});
   else if(fS==='excedido')p=p.filter(function(x){return x.diarias_rest!==null&&x.diarias_rest<0;});
   if(fC!=='all')p=p.filter(function(x){return x.consultor===fC;});
   if(fM!=='all')p=p.filter(function(x){return x.mes===fM;});
-  var termo = normalizeClienteKey(fQ);
-  if (termo) {
-    p = p.filter(function(x){
-      var alvo = normalizeClienteKey([
-        x.cliente, x.consultor || 'Sem consultor', x.vendedor, x.cidade,
-        x.mes, x.status, x.tipo, x.formato, x.pacote, x.adicionais
-      ].join(' '));
-      return alvo.indexOf(termo) >= 0;
-    });
-  }
-  p = ordenarProjetosLista(p, fO);
+  if(fQ)p=p.filter(function(x){return String(x.cliente||'').toLowerCase().indexOf(fQ)>=0;});
   _openId=null;
-  document.getElementById('rows-all').innerHTML=buildMonthGroupedRows(p,'r-','Nenhum projeto encontrado');
-  document.getElementById('sh-count').textContent=p.length+' '+formatProjetoCountLabel(p.length)+' • '+formatClienteSortLabel(fO)+(termo?' • filtro: "'+fQ+'"':'');
-}
-function setProjectSearch(value){
-  fQ = String(value || '').trim();
-  applyF();
-}
-function clearProjectSearch(){
-  fQ = '';
-  var input = document.getElementById('project-search');
-  if (input) input.value = '';
-  applyF();
+  document.getElementById('rows-all').innerHTML=buildMonthGroupedRows(p,'r-');
+  document.getElementById('sh-count').textContent=p.length+' encontrado'+(p.length===1?'':'s');
+  var orderEl = document.getElementById('project-order');
+  if (orderEl) orderEl.innerHTML = fQ ? 'Filtro ativo: clique em Total para limpar a busca e voltar &agrave; sequ&ecirc;ncia real da planilha' : 'Sequ&ecirc;ncia real de entrada da venda, agrupada por m&ecirc;s';
+  document.querySelectorAll('[data-project-status]').forEach(function(card){
+    card.classList.toggle('active', card.getAttribute('data-project-status') === fS);
+  });
 }
 
 // ---- By Consultant ----
 function initCons(){
-  var p=filteredProj().filter(function(x){return x.consultor;});
+  var base=filteredProj();
+  var p=base.filter(function(x){return x.consultor;});
   var cs={};
   p.forEach(function(x){if(!cs[x.consultor])cs[x.consultor]={t:0,a:0,v:0,and:0,atr:0,ag:0,dc:0,dr:0,proj:[]};var c=cs[x.consultor];c.t++;c.proj.push(x);if(x.tipo==='AVULSO')c.a++;else if(x.tipo==='VENDA'||x.tipo==='VENDA NOVA')c.v++;if(x.status.indexOf('Andamento')>=0)c.and++;if(x.status.indexOf('Atrasado')>=0)c.atr++;if(x.status.indexOf('Aguardando')>=0)c.ag++;c.dc+=x.diarias_cont||0;c.dr+=x.diarias_real||0;});
   window._cs=cs;
-  document.getElementById('kpis-cons').innerHTML=kpi('Consultores',Object.keys(cs).length)+kpi('Projetos',p.length)+kpi('Atrasados',p.filter(function(x){return x.status.indexOf('Atrasado')>=0;}).length,'r')+kpi('Di&aacute;rias Excedidas',p.filter(function(x){return x.diarias_rest!==null&&x.diarias_rest<0;}).length,'o');
+  document.getElementById('kpis-cons').innerHTML=kpi('Consultores',Object.keys(cs).length)+kpi('Total',base.length)+kpi('Atrasados',base.filter(function(x){return x.status.indexOf('Atrasado')>=0;}).length,'r')+kpi('Di&aacute;rias Excedidas',base.filter(function(x){return x.diarias_rest!==null&&x.diarias_rest<0;}).length,'o');
   var html='';
   Object.keys(cs).sort(function(a,b){return cs[b].t-cs[a].t;}).forEach(function(name){
     var d=cs[name],col=ccol(name),init=cinit(name);
@@ -3685,19 +4181,19 @@ function initCons(){
     html+='<div class="cc" id="'+sid+'" data-name="'+name+'" onclick="selCons(this.dataset.name,\'all\')">'+
       '<div class="cc-top" style="background:'+col+'">'+
         '<div class="cc-av">'+init+'</div>'+
-        '<div style="flex:1"><div class="cc-name">'+name+'</div><div class="cc-sub">'+d.t+' projetos • '+d.a+' '+formatAvulsoLabel(d.a).toLowerCase()+' • '+d.v+' '+formatVendaNovaLabel(d.v).toLowerCase()+'</div></div>'+
-        (d.atr>0?'<span class="tag tag-r" style="cursor:pointer;flex-shrink:0" onclick="event.stopPropagation();selCons(this.closest(\'.cc\').dataset.name,\'atrasado\')">'+d.atr+' atrasado'+(d.atr>1?'s':'')+'</span>':'')+
+        '<div class="cc-meta"><div class="cc-name">'+name+'</div><div class="cc-sub">'+d.t+' projeto(s) - '+d.a+' avulso(s) - '+d.v+' '+vendaNovaLabel(d.v).toLowerCase()+'</div></div>'+
+        (d.atr>0?'<span class="tag tag-r" style="cursor:pointer;flex-shrink:0" onclick="event.stopPropagation();selCons(this.closest(\'.cc\').dataset.name,\'atrasado\')">'+d.atr+' atrasado(s)</span>':'')+
       '</div>'+
       '<div class="cc-body">'+
         '<div class="cc-stats">'+
           '<div class="cc-s" onclick="event.stopPropagation();selCons(this.closest(\'.cc\').dataset.name,\'andamento\')"><div class="cc-sl">Em Andamento</div><div class="cc-sv o">'+d.and+'</div></div>'+
     '<div class="cc-s" onclick="event.stopPropagation();selCons(this.closest(\'.cc\').dataset.name,\'aguardando\')"><div class="cc-sl">Aguardando In&iacute;cio</div><div class="cc-sv b">'+d.ag+'</div></div>'+
           '<div class="cc-s"><div class="cc-sl">Di&aacute;ria Contratada</div><div class="cc-sv">'+fn(d.dc)+'</div></div>'+
-          '<div class="cc-s"><div class="cc-sv '+(d.dr>d.dc?'r':'')+'">'+fn(d.dr)+'</div><div class="cc-sl">Di&aacute;ria Realizada</div></div>'+
+          '<div class="cc-s"><div class="cc-sl">Di&aacute;ria Realizada</div><div class="cc-sv '+(d.dr>d.dc?'r':'')+'">'+fn(d.dr)+'</div></div>'+
         '</div>'+
         '<div class="cc-dl"><span>'+fn(d.dr)+' de '+fn(d.dc)+' di&aacute;rias</span><span '+(d.dr>d.dc?'style="color:var(--red);font-weight:700"':'')+'>'+( d.dr>d.dc?'EXCEDIDO':pb+'%')+'</span></div>'+
         '<div class="cc-db"><div class="cc-df" style="width:'+Math.min(100,pb)+'%;background:'+pc+'"></div></div>'+
-        (exc>0?'<div style="margin-top:8px"><span class="tag tag-o" style="cursor:pointer" onclick="event.stopPropagation();selCons(this.closest(\'.cc\').dataset.name,\'excedido\')">'+exc+' projetos com Di&aacute;rias Excedidas</span></div>':'')+
+        (exc>0?'<div style="margin-top:8px"><span class="tag tag-o" style="cursor:pointer" onclick="event.stopPropagation();selCons(this.closest(\'.cc\').dataset.name,\'excedido\')">'+exc+' '+(exc===1?'projeto com di&aacute;ria excedida':'projetos com di&aacute;rias excedidas')+'</span></div>':'')+
       '</div></div>';
   });
   document.getElementById('cgrid-cons').innerHTML=html;
@@ -3715,10 +4211,10 @@ function selCons(name,filtro){
   var pills=[['all','Todos',d.t],['andamento','Em Andamento',d.and],['atrasado','Atrasado',d.atr],['aguardando','Aguardando In&iacute;cio',d.ag],['excedido','Di&aacute;rias Excedidas',excN]].filter(function(x){return x[2]>0;}).map(function(v){return '<button class="fb '+(v[0]==='atrasado'?'r':v[0]==='aguardando'?'b':'')+' '+(filtro===v[0]?'on':'')+'" data-n="'+name+'" data-f="'+v[0]+'" onclick="selCons(this.dataset.n,this.dataset.f)">'+v[1]+' ('+v[2]+')</button>';}).join('');
   var wrap=document.getElementById('cons-detail');
   wrap.innerHTML='<div class="cdetail"><div class="cd-top" style="background:'+col+'"><div><div class="cd-name">'+name+'</div><div class="cd-sub">'+d.t+' projetos - '+fn(d.dc)+' di&aacute;rias contratadas</div></div><button class="cd-close" onclick="document.getElementById(\'cons-detail\').innerHTML=\'\';document.querySelectorAll(\'#cgrid-cons .cc\').forEach(function(c){c.classList.remove(\'on\');})">Fechar</button></div>'+
-    '<div class="cd-body"><div class="kpis" style="margin-bottom:14px">'+kpi('Projetos',d.t)+kpi('Em Andamento',d.and,'o')+kpi('Aguardando In&iacute;cio',d.ag,'b')+kpi('Atrasados',d.atr,'r')+kpi(formatAvulsoLabel(d.a),d.a,'p')+kpi(formatVendaNovaLabel(d.v),d.v,'g')+'</div>'+
+    '<div class="cd-body"><div class="kpis" style="margin-bottom:14px">'+kpi('Total',d.t)+kpi('Em Andamento',d.and,'o')+kpi('Aguardando In&iacute;cio',d.ag,'b')+kpi('Atrasados',d.atr,'r')+kpi('Avulso',d.a,'p')+kpi(vendaNovaLabel(d.v),d.v,'g')+'</div>'+
     '<div class="cd-filters">'+pills+'</div>'+
     '<div class="ptable"><div class="ptable-head"><div>Cliente</div><div>Status</div><div>Tipo</div><div>Formato</div><div>Di&aacute;rias</div><div></div></div>'+
-    '<div>'+buildMonthGroupedRows(list,'cd-'+name.replace(/[^a-zA-Z0-9]/g,'_')+'-','Nenhum projeto encontrado')+'</div></div></div></div>';
+    '<div>'+buildRows(list,'cd-'+name.replace(/[^a-zA-Z0-9]/g,'_')+'-')+'</div></div></div></div>';
   wrap.scrollIntoView({behavior:'smooth',block:'start'});
 }
 
@@ -3726,12 +4222,13 @@ function selCons(name,filtro){
 var VC={'JOSE CARLOS':'#2c5f8a','LEDAYANE':'#1e6b4a','GABRIEL ALEXANDRE':'#5a3580','THIAGO TAVARES':'#7a4800','MARCOS VINICIUS':'#7a2050'};
 function vcol(n){for(var k in VC){if((n||'').toUpperCase().indexOf(k)>=0)return VC[k];}return '#3a5a4a';}
 function initVend(){
-  var p=filteredProj().filter(function(x){return x.vendedor;});
+  var base=filteredProj();
+  var p=base.filter(function(x){return x.vendedor;});
   var vs={};
   p.forEach(function(x){var v=x.vendedor;if(!vs[v])vs[v]={t:0,proj:[],en:0,ed:0,dc:0,dr:0,and:0,ag:0,atr:0};var d=vs[v];d.t++;d.proj.push(x);d.dc+=x.diarias_cont||0;d.dr+=x.diarias_real||0;if(x.status.indexOf('Andamento')>=0)d.and++;if(x.status.indexOf('Atrasado')>=0)d.atr++;if(x.status.indexOf('Aguardando')>=0)d.ag++;if(x.diarias_rest!==null&&x.diarias_rest<0){d.en++;d.ed+=Math.abs(x.diarias_rest);}});
   window._vs=vs;
   var tEn=0,tEd=0;Object.keys(vs).forEach(function(k){tEn+=vs[k].en;tEd+=vs[k].ed;});
-  document.getElementById('kpis-vend').innerHTML=kpi('Vendedores',Object.keys(vs).length)+kpi('Projetos',p.length)+kpi('Projetos com Di&aacute;rias Excedidas',tEn,'r')+kpi('Di&aacute;rias a Faturar',fn(tEd),'o');
+  document.getElementById('kpis-vend').innerHTML=kpi('Vendedores',Object.keys(vs).length)+kpi('Total',base.length)+kpi(projetosExcedidosLabel(tEn),tEn,'r')+kpi('Di&aacute;rias a Faturar',fn(tEd),'o');
   var html='';
   Object.keys(vs).sort(function(a,b){return vs[b].t-vs[a].t;}).forEach(function(name){
     var d=vs[name],col=vcol(name),init=cinit(name);
@@ -3741,8 +4238,8 @@ function initVend(){
     html+='<div class="cc" id="'+sid+'" data-name="'+name+'" onclick="selVend(this.dataset.name,\'all\')">'+
       '<div class="cc-top" style="background:'+col+'">'+
         '<div class="cc-av">'+init+'</div>'+
-        '<div style="flex:1"><div class="cc-name">'+name+'</div><div class="cc-sub">'+d.t+' projetos - '+d.and+' em andamento</div></div>'+
-        (d.en>0?'<span class="tag tag-r" style="cursor:pointer;flex-shrink:0" onclick="event.stopPropagation();selVend(this.closest(\'.cc\').dataset.name,\'excedido\')">'+d.en+' com excesso</span>':'')+
+        '<div class="cc-meta"><div class="cc-name">'+name+'</div><div class="cc-sub">'+d.t+' projeto(s) - '+d.and+' em andamento</div></div>'+
+        (d.en>0?'<span class="tag tag-r" style="cursor:pointer;flex-shrink:0" onclick="event.stopPropagation();selVend(this.closest(\'.cc\').dataset.name,\'excedido\')">'+d.en+' excedido(s)</span>':'')+
       '</div>'+
       '<div class="cc-body">'+
         '<div class="cc-stats">'+
@@ -3752,9 +4249,9 @@ function initVend(){
           '<div class="cc-s"><div class="cc-sl">Di&aacute;ria Realizada</div><div class="cc-sv '+(d.dr>d.dc?'r':'')+'">'+fn(d.dr)+'</div></div>'+
         '</div>'+
         (d.en>0?'<div style="background:var(--red-s);border:1px solid rgba(192,57,43,.2);border-radius:6px;padding:8px 10px;margin-top:8px;cursor:pointer" onclick="event.stopPropagation();selVend(this.closest(\'.cc\').dataset.name,\'excedido\')">'+
-          '<div style="font-size:10px;font-weight:700;color:var(--red);margin-bottom:2px">Di&aacute;rias a faturar</div>'+
+          '<div style="font-size:10px;font-weight:700;color:var(--red);margin-bottom:2px">Dias a faturar</div>'+
           '<div style="display:flex;justify-content:space-between"><span style="font-size:12px;color:var(--red)">'+d.en+' projetos</span><span style="font-size:18px;font-weight:800;color:var(--red)">'+fn(d.ed)+' dias</span></div></div>':
-          '<div style="background:var(--green-s);border:1px solid rgba(45,110,78,.2);border-radius:6px;padding:7px 10px;margin-top:8px;font-size:12px;font-weight:600;color:var(--green)">Sem Di&aacute;rias Excedidas</div>')+
+          '<div style="background:var(--green-s);border:1px solid rgba(45,110,78,.2);border-radius:6px;padding:7px 10px;margin-top:8px;font-size:12px;font-weight:600;color:var(--green)">Sem di&aacute;rias excedidas</div>')+
       '</div></div>';
   });
   document.getElementById('cgrid-vend').innerHTML=html;
@@ -3772,16 +4269,16 @@ function selVend(name,filtro){
   var totD=excList.reduce(function(s,x){return s+Math.abs(x.diarias_rest);},0);
   var pills=[['all','Todos',d.t],['andamento','Em Andamento',d.and],['aguardando','Aguardando In&iacute;cio',d.ag],['atrasado','Atrasado',d.atr],['excedido','Di&aacute;rias Excedidas',d.en]].filter(function(x){return x[2]>0;}).map(function(v){return '<button class="fb '+(v[0]==='atrasado'?'r':v[0]==='aguardando'?'b':'')+' '+(filtro===v[0]?'on':'')+'" data-n="'+name+'" data-f="'+v[0]+'" onclick="selVend(this.dataset.n,this.dataset.f)">'+v[1]+' ('+v[2]+')</button>';}).join('');
   var fat=d.en>0?('<div style="background:var(--red-s);border:1px solid rgba(192,57,43,.3);border-radius:8px;padding:12px 16px;margin-bottom:14px;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px">'+
-    '<div><div style="font-size:10px;font-weight:700;text-transform:uppercase;color:var(--red);margin-bottom:6px">Di&aacute;rias a Faturar</div>'+
+    '<div><div style="font-size:10px;font-weight:700;text-transform:uppercase;color:var(--red);margin-bottom:6px">Dias a Faturar</div>'+
     excList.map(function(x){return '<div style="font-size:12px;color:var(--text2)">- '+x.cliente+' <span style="color:var(--red);font-weight:700">(+'+fn(Math.abs(x.diarias_rest))+'d)</span> - '+x.consultor+'</div>';}).join('')+'</div>'+
     '<div style="text-align:right"><div style="font-size:11px;font-weight:700;color:var(--red)">Total</div><div style="font-size:36px;font-weight:800;color:var(--red)">'+fn(totD)+'</div><div style="font-size:11px;color:var(--red)">dias</div></div></div>'):
     '';
   var wrap=document.getElementById('vend-detail');
   wrap.innerHTML='<div class="cdetail"><div class="cd-top" style="background:'+col+'"><div><div class="cd-name">'+name+'</div><div class="cd-sub">'+d.t+' projetos</div></div><button class="cd-close" onclick="document.getElementById(\'vend-detail\').innerHTML=\'\';document.querySelectorAll(\'#cgrid-vend .cc\').forEach(function(c){c.classList.remove(\'on\');})">Fechar</button></div>'+
-    '<div class="cd-body"><div class="kpis" style="margin-bottom:14px">'+kpi('Projetos',d.t)+kpi('Em Andamento',d.and,'o')+kpi('Aguardando In&iacute;cio',d.ag,'b')+kpi('Atrasados',d.atr,'r')+kpi('Projetos com Di&aacute;rias Excedidas',d.en,'r')+kpi('Di&aacute;rias a Faturar',fn(d.ed),'o')+'</div>'+
+    '<div class="cd-body"><div class="kpis" style="margin-bottom:14px">'+kpi('Total',d.t)+kpi('Em Andamento',d.and,'o')+kpi('Aguardando In&iacute;cio',d.ag,'b')+kpi('Atrasados',d.atr,'r')+kpi(projetosExcedidosLabel(d.en),d.en,'r')+kpi('Di&aacute;rias a Faturar',fn(d.ed),'o')+'</div>'+
     fat+'<div class="cd-filters">'+pills+'</div>'+
     '<div class="ptable"><div class="ptable-head"><div>Cliente / Consultor</div><div>Status</div><div>Tipo</div><div>Formato</div><div>Di&aacute;rias</div><div></div></div>'+
-    '<div>'+buildMonthGroupedRows(list,'vd-'+name.replace(/[^a-zA-Z0-9]/g,'_')+'-','Nenhum projeto encontrado')+'</div></div></div></div>';
+    '<div>'+buildRows(list,'vd-'+name.replace(/[^a-zA-Z0-9]/g,'_')+'-')+'</div></div></div></div>';
   wrap.scrollIntoView({behavior:'smooth',block:'start'});
 }
 
@@ -3797,7 +4294,7 @@ function initAvul(){
   var pctDiariaVendaNova = totalDiariasTipo ? Math.round(dvn / totalDiariasTipo * 100) : 0;
 
   document.getElementById('kpis-avul').innerHTML =
-    kpi('Avulso',avs.length,'p')+kpi(formatVendaNovaLabel(vns.length),vns.length,'g')+
+    kpi('Avulso',avs.length,'p')+kpi(vendaNovaLabel(vns.length),vns.length,'g')+
     kpi('% Di&aacute;ria Avulsa',pctDiariaAvulsa+'%','p')+
     kpi('% Di&aacute;ria Venda Nova',pctDiariaVendaNova+'%','g')+
     kpi('Di&aacute;rias Avulso',fn(dav),'p')+kpi('Di&aacute;rias Venda Nova',fn(dvn),'g');
@@ -3848,7 +4345,7 @@ function initAvul(){
         avHtml+
       '</div>'+
       '<div class="av-col">'+
-        '<div class="av-head"><div><div style="font-weight:700;color:var(--green)">Venda Nova</div></div>'+
+        '<div class="av-head"><div><div style="font-weight:700;color:var(--green)">'+vendaNovaLabel(vnR.length)+'</div></div>'+
         '<div style="font-size:20px;font-weight:800;color:var(--green)">'+vnR.length+'</div></div>'+
         vnHtml+
       '</div>';
@@ -3875,7 +4372,7 @@ function initAvul(){
       '<div class="cc-body">'+
         '<div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:8px">'+
           '<div class="cc-s"><div class="cc-sl">Avulso</div><div class="cc-sv" style="color:var(--purple)">'+d.a+'</div></div>'+
-          '<div class="cc-s"><div class="cc-sl">Venda Nova</div><div class="cc-sv" style="color:var(--green)">'+d.v+'</div></div>'+
+          '<div class="cc-s"><div class="cc-sl">'+vendaNovaLabel(d.v)+'</div><div class="cc-sv" style="color:var(--green)">'+d.v+'</div></div>'+
         '</div>'+
         '<div class="cc-dl"><span>Prop. avulso</span><span>'+ap+'%</span></div>'+
         '<div class="cc-db"><div class="cc-df" style="width:'+ap+'%;background:var(--purple)"></div></div>'+
@@ -4578,8 +5075,8 @@ function initPraz(){
     var dV=parseD(p.data_venda),dK=parseD(p.data_kick),dT=parseD(p.data_inicio);
     var vk=diffD(dV,dK),vt=diffD(dV,dT),kt=diffD(dK,dT);
     var v=[];
-    if(vk!==null&&vk>LK)v.push({tipo:'vk',label:'Venda - Kickoff',dias:vk,lim:LK,exc:vk-LK});
-    if(vt!==null&&vt>LT)v.push({tipo:'vt',label:'Venda - 1&ordm; Treinamento',dias:vt,lim:LT,exc:vt-LT});
+    if(vk!==null&&vk>LK)v.push({tipo:'vk',label:'Venda Nova - Kickoff',dias:vk,lim:LK,exc:vk-LK});
+    if(vt!==null&&vt>LT)v.push({tipo:'vt',label:'Venda Nova - 1&ordm; Treinamento',dias:vt,lim:LT,exc:vt-LT});
     if(kt!==null&&kt>LT)v.push({tipo:'kt',label:'Kickoff - 1&ordm; Treinamento',dias:kt,lim:LT,exc:kt-LT});
     if(v.length)viols.push({p:p,v:v,mx:Math.max.apply(null,v.map(function(x){return x.exc;}))});
   });
@@ -4590,16 +5087,28 @@ function initPraz(){
   var ktV=viols.filter(function(x){return x.v.some(function(v){return v.tipo==='kt';});});
   var n=document.getElementById('n-praz');if(n)n.textContent=viols.length;
   document.getElementById('kpis-praz').innerHTML=
-    kpiAction('Projetos com Prazo Excedido',viols.length,'r',"renderPraz('all','all')",_prazFilter==='all')+
-    kpiAction('Venda - Kickoff',vkV.length,'o',"renderPraz('vk','all')",_prazFilter==='vk')+
-    kpiAction('Venda - 1&ordm; Treinamento',vtV.length,'o',"renderPraz('vt','all')",_prazFilter==='vt')+
-    kpiAction('Kickoff - 1&ordm; Treinamento',ktV.length,'o',"renderPraz('kt','all')",_prazFilter==='kt');
+    kpi('Projetos Fora do Prazo',viols.length,'r','onclick="abrirPrazosComFiltro(\'all\')"','Clique para visualizar')+
+    kpi('Venda Nova - Kickoff',vkV.length,'o','onclick="abrirPrazosComFiltro(\'vk\')"','Clique para visualizar')+
+    kpi('Venda Nova - 1&ordm; Treinamento',vtV.length,'o','onclick="abrirPrazosComFiltro(\'vt\')"','Clique para visualizar')+
+    kpi('Kickoff - 1&ordm; Treinamento',ktV.length,'o','onclick="abrirPrazosComFiltro(\'kt\')"','Clique para visualizar');
   document.getElementById('praz-filters').innerHTML=
     '<button class="pf-btn on" data-pf="all" onclick="renderPraz(\'all\',\'all\')">Todos ('+viols.length+')</button>'+
-    '<button class="pf-btn" data-pf="vk" onclick="renderPraz(\'vk\',\'all\')">Venda - Kickoff ('+vkV.length+')</button>'+
-    '<button class="pf-btn" data-pf="vt" onclick="renderPraz(\'vt\',\'all\')">Venda - 1&ordm; Treinamento ('+vtV.length+')</button>'+
+    '<button class="pf-btn" data-pf="vk" onclick="renderPraz(\'vk\',\'all\')">Venda Nova - Kickoff ('+vkV.length+')</button>'+
+    '<button class="pf-btn" data-pf="vt" onclick="renderPraz(\'vt\',\'all\')">Venda Nova - 1&ordm; Treinamento ('+vtV.length+')</button>'+
     '<button class="pf-btn" data-pf="kt" onclick="renderPraz(\'kt\',\'all\')">Kickoff - 1&ordm; Treinamento ('+ktV.length+')</button>';
   renderPraz('all','all');
+}
+var _openPrazCardId=null;
+function togglePrazCard(id){
+  var card=document.getElementById(id);
+  if(!card)return;
+  var was=card.classList.contains('open');
+  if(_openPrazCardId&&_openPrazCardId!==id){
+    var prev=document.getElementById(_openPrazCardId);
+    if(prev)prev.classList.remove('open');
+  }
+  card.classList.toggle('open',!was);
+  _openPrazCardId=was?null:id;
 }
 function renderPraz(pf,cons){
   _prazFilter=pf;_prazConsultor=cons;
@@ -4621,26 +5130,12 @@ function renderPraz(pf,cons){
   document.getElementById('consult-summary').innerHTML=cbar;
   var pc=document.getElementById('praz-content');
   if(!list.length){pc.innerHTML='<div class="empty">Nenhum projeto nesta categoria</div>';return;}
-  var grupos={};
-  list.forEach(function(item){
-    var mes=String(item&&item.p&&item.p.mes||'').trim()||'SEM_MES';
-    if(!grupos[mes])grupos[mes]=[];
-    grupos[mes].push(item);
-  });
-  var ordem=Object.keys(grupos).sort(function(a,b){
-    if(a==='SEM_MES')return 1;
-    if(b==='SEM_MES')return -1;
-    return indiceMesPainel(a)-indiceMesPainel(b);
-  });
-  pc.innerHTML=ordem.map(function(mes){
-    var bloco=(grupos[mes]||[]).slice().sort(function(a,b){
-      return String((a&&a.p&&a.p.cliente)||'').localeCompare(String((b&&b.p&&b.p.cliente)||''));
-    });
-    var cards=bloco.map(function(x){
+  var renderCard = function(x){
     var p=x.p,info=si(p.status);
     var urgCol=x.mx>30?'var(--red)':x.mx>14?'var(--orange)':'var(--orange)';
     var urgLbl=x.mx>30?'Critico':x.mx>14?'Alto':'Moderado';
     var dispV=pf==='all'?x.v:x.v.filter(function(v){return v.tipo===pf;});
+    var cardId='praz-'+String(p.mes||'SEM')+'-'+normalizeClienteKey(p.cliente||'').replace(/\s+/g,'-');
     var vcards=dispV.map(function(v){
       var col=v.exc>30?'var(--red)':v.exc>14?'var(--red)':'var(--orange)';
       var bw=Math.min(100,Math.round((v.dias/(v.lim*2))*100));
@@ -4651,34 +5146,50 @@ function renderPraz(pf,cons){
         '<div class="pz-vextra" style="color:'+col+'">+'+v.exc+' dias acima do limite</div>'+
       '</div>';
     }).join('');
-    return '<div class="pz-card">'+
-      '<div class="pz-head">'+
-        '<div style="min-width:0;flex:1">'+
-          '<div style="display:flex;align-items:center;gap:6px;margin-bottom:3px">'+
+    return '<div class="pz-card compact" id="'+cardId+'">'+
+      '<div class="pz-head" onclick="togglePrazCard(\''+cardId+'\')">'+
+        '<div class="pz-head-main">'+
+          '<div class="pz-head-left">'+
+          '<div class="pz-month-badge">'+
             '<span style="font-size:9px;font-weight:800;padding:2px 7px;border-radius:4px;background:'+urgCol+'15;color:'+urgCol+'">'+urgLbl+'</span>'+
             '<span style="font-size:11px;color:var(--muted)">'+p.mes+'</span>'+
           '</div>'+
           '<div style="font-weight:700;font-size:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:500px">'+p.cliente+'</div>'+
-          '<div style="font-size:11px;color:var(--muted);margin-top:2px"><span style="font-weight:600;color:'+ccol(p.consultor||'')+'">'+( p.consultor||'\u2014')+'</span> - Vendedor: '+(p.vendedor||'-')+'</div>'+
+          '<div class="pz-meta"><span style="font-weight:600;color:'+ccol(p.consultor||'')+'">'+( p.consultor||'\u2014')+'</span> &bull; Vendedor: '+(p.vendedor||'-')+'</div>'+
+          '</div>'+
+          '<div class="pz-head-right"><span class="tag '+info.cls+'">'+sl(p.status)+'</span><span class="pz-toggle">&#8250;</span></div>'+
         '</div>'+
-        '<span class="tag '+info.cls+'">'+sl(p.status)+'</span>'+
       '</div>'+
-      '<div class="pz-viols">'+vcards+'</div>'+
+      '<div class="pz-body"><div class="pz-viols">'+vcards+'</div></div>'+
     '</div>';
-    }).join('');
-    return '<div class="month-group"><div class="month-group-head"><div class="month-group-title">'+formatMonthGroupLabel(mes)+'</div><div class="month-group-meta">'+bloco.length+' '+formatProjetoCountLabel(bloco.length)+'</div></div><div class="month-group-body" style="padding:12px">'+cards+'</div></div>';
+  };
+  var byMes = {};
+  list.forEach(function(item){
+    var mes = String(item && item.p && item.p.mes || 'SEM MES').toUpperCase();
+    if (!byMes[mes]) byMes[mes] = [];
+    byMes[mes].push(item);
+  });
+  var meses = ordenarMesesPainel(Object.keys(byMes));
+  pc.innerHTML = meses.map(function(mes){
+    var itens = byMes[mes].slice().sort(function(a,b){
+      return String(a.p.cliente || '').localeCompare(String(b.p.cliente || ''));
+    });
+    return '<div class="month-group">'+
+      '<div class="month-group-title"><div class="month-group-name">'+mes+'</div><div class="month-group-count">'+itens.length+' projeto(s)</div></div>'+
+      '<div style="padding:10px 0">'+itens.map(renderCard).join('')+'</div>'+
+    '</div>';
   }).join('');
 }
 
 // ---- Control Tower / PMO & Success ----
 var TOWER_INFO = {
   health: {
-    title:'Health Score operacional',
-    sub:'Score simples para saber se o cliente est&aacute; sendo acompanhado.',
-    calc:['Cada projeto inicia com 100 pontos.','Penaliza dias sem atualiza&ccedil;&atilde;o, dias sem contato, falta de pr&oacute;xima a&ccedil;&atilde;o, fase sem evolu&ccedil;&atilde;o, respons&aacute;vel ausente e pend&ecirc;ncias vencidas.','O score m&eacute;dio &eacute; a m&eacute;dia dos projetos filtrados.'],
+    title:'Health Score simples',
+    sub:'Score operacional para saber se o cliente esta sendo acompanhado.',
+    calc:['Cada projeto inicia com 100 pontos.','Penaliza dias sem update, dias sem contato, falta de proxima acao, fase sem evolucao, owner ausente e pendencias vencidas.','O score medio e a media dos projetos filtrados.'],
     fields:['dias_sem_atualizacao','data_ultima_atualizacao','acompanhamento','obs','data_estimada','data_inicio','consultor','status','tasks_pendentes','marcos_pendentes'],
-    real:'Score modelado pelo front-end com campos operacionais reais. N&atilde;o &eacute; um campo nativo do ClickUp.',
-    confidence:'M&eacute;dia alta quando ClickUp e planilha est&atilde;o atualizados.'
+    real:'Score modelado pelo front-end com campos operacionais reais. Nao e campo nativo do ClickUp.',
+    confidence:'Media alta quando ClickUp/planilha estao atualizados.'
   },
   activeProjects: {
     title:'Projetos ativos',
@@ -4690,110 +5201,110 @@ var TOWER_INFO = {
   },
   projectRisk: {
     title:'Projetos em risco',
-    sub:'Projetos com Health Score baixo ou sinais operacionais cr&iacute;ticos.',
-    calc:['Conta projetos com score abaixo de 70, pend&ecirc;ncia vencida, sem contato relevante ou cliente premium sem pr&oacute;xima a&ccedil;&atilde;o.','A regra prioriza risco de abandono e churn evit&aacute;vel.'],
+    sub:'Projetos com Health Score baixo ou sinais operacionais criticos.',
+    calc:['Conta projetos com score abaixo de 70, pendencia vencida, sem contato relevante ou cliente premium sem proxima acao.','A regra prioriza risco de abandono e churn evitavel.'],
     fields:['status','dias_sem_atualizacao','data_ultima_atualizacao','acompanhamento','obs','data_estimada','tasks_pendentes','marcos_pendentes','MRR contratado'],
-    real:'Classifica&ccedil;&atilde;o modelada pelo front-end com dados reais da planilha e do ClickUp.',
-    confidence:'M&eacute;dia'
+    real:'Classificacao modelada pelo front-end com dados reais da planilha/ClickUp.',
+    confidence:'Media'
   },
   stale: {
-    title:'Projetos sem atualiza&ccedil;&atilde;o',
+    title:'Projetos sem atualizacao',
     sub:'Carteira fora do SLA de acompanhamento.',
-    calc:['Conta projetos com `dias_sem_atualizacao` maior que 7.','Quando `dias_sem_atualizacao` n&atilde;o vem pronto, o painel deriva a partir de `data_ultima_atualizacao`.'],
+    calc:['Conta projetos com dias_sem_atualizacao maior que 7.','Quando dias_sem_atualizacao nao vem pronto, o painel tenta derivar a partir de data_ultima_atualizacao.'],
     fields:['dias_sem_atualizacao','data_ultima_atualizacao','date_updated do ClickUp quando sincronizado'],
-    real:'Valor real quando `dias_sem_atualizacao` vem da planilha; derivado quando calculado por data.',
-    confidence:'Alta quando o ClickUp Sync est&aacute; atualizado; m&eacute;dia quando falta data.'
+    real:'Valor real quando dias_sem_atualizacao vem da planilha; derivado quando calculado por data.',
+    confidence:'Alta quando ClickUp sync esta atualizado; Media quando falta data.'
   },
   churn: {
     title:'Risco de churn',
-    sub:'Clientes com sinais de abandono, atraso ou baixa cad&ecirc;ncia.',
-    calc:['Conta projetos com score baixo, sem contato, sem pr&oacute;xima a&ccedil;&atilde;o ou pend&ecirc;ncia vencida.','Clientes com MRR alto recebem prioridade maior porque o impacto recorrente &eacute; maior.'],
+    sub:'Clientes com sinais de abandono, atraso ou baixa cadencia.',
+    calc:['Conta projetos com score baixo, sem contato, sem proxima acao ou pendencia vencida.','Clientes com MRR alto recebem prioridade maior, porque o impacto recorrente e maior.'],
     fields:['score calculado','MRR normalizado','dias_sem_atualizacao','status','proxima acao','pendencias'],
-    real:'Indicador preditivo modelado. N&atilde;o representa churn financeiro realizado.',
-    confidence:'M&eacute;dia'
+    real:'Indicador preditivo/modelado, nao e churn financeiro real.',
+    confidence:'Media'
   },
   capacity: {
     title:'Consultores sobrecarregados',
     sub:'Detecta risco de capacidade e abandono de carteira antiga.',
-    calc:['Marca o consultor como sobrecarregado quando a carteira ativa est&aacute; acima da m&eacute;dia, quando h&aacute; muitos projetos sem acompanhamento ou muita receita em risco.','Carteira sem acompanhamento = sem atualiza&ccedil;&atilde;o 7d, sem contato 15d ou sem pr&oacute;xima a&ccedil;&atilde;o.'],
+    calc:['Marca consultor como sobrecarregado quando a carga esta acima da media, quando ha muitos esquecidos ou muita receita em risco.','Carteira esquecida = sem update 7d, sem contato 15d ou sem proxima acao.'],
     fields:['consultor','data_venda','dias_sem_atualizacao','proxima acao','MRR normalizado','health score por projeto'],
-    real:'Classifica&ccedil;&atilde;o operacional modelada.',
-    confidence:'M&eacute;dia'
+    real:'Classificacao operacional modelada.',
+    confidence:'Media'
   },
   backlog: {
-    title:'Backlog cr&iacute;tico',
-    sub:'Pend&ecirc;ncias abertas dentro dos projetos em risco.',
-    calc:['Soma `tasks_pendentes` + `marcos_pendentes` apenas dos projetos classificados em risco.','O backlog total aparece como contexto complementar.'],
+    title:'Backlog critico',
+    sub:'Pendencias abertas dentro dos projetos em risco.',
+    calc:['Soma tasks_pendentes + marcos_pendentes apenas dos projetos classificados em risco.','Backlog total aparece como contexto complementar.'],
     fields:['tasks_pendentes','marcos_pendentes','clickup_json.resumo quando sincronizado','list_id/view_id quando presente'],
-    real:'Real quando o ClickUp Sync populou tarefas e marcos; estimado como zero quando o projeto n&atilde;o tem resumo sincronizado.',
-    confidence:'Alta para projetos com `clickup_json` atualizado; baixa quando est&aacute; sem resumo.'
+    real:'Real quando o ClickUp sync populou tarefas/marcos; estimado como zero quando o projeto nao tem resumo sincronizado.',
+    confidence:'Alta para projetos com clickup_json atualizado; Baixa quando sem resumo.'
   },
   training: {
-    title:'Sem pr&oacute;xima a&ccedil;&atilde;o',
-    sub:'Projetos que n&atilde;o deixam claro o pr&oacute;ximo movimento.',
-    calc:['Conta projetos sem data futura ou texto de a&ccedil;&atilde;o em acompanhamento, observa&ccedil;&atilde;o, data estimada ou data de in&iacute;cio.','&Eacute; o principal campo de comando para reduzir abandono.'],
+    title:'Sem proxima acao',
+    sub:'Projetos que nao deixam claro o proximo movimento.',
+    calc:['Conta projetos sem data futura ou texto de acao em acompanhamento, observacao, data estimada ou data de inicio.','E o principal campo de comando para reduzir abandono.'],
     fields:['acompanhamento','obs','data_estimada','data_inicio','data_enc'],
     real:'Indicador interpretativo por texto e datas, sem criar campo novo.',
-    confidence:'M&eacute;dia'
+    confidence:'Media'
   },
   ltvRisk: {
     title:'Receita recorrente em risco',
     sub:'MRR normalizado dos clientes com sinais de risco.',
-    calc:['Busca o cliente em `contracts_mrr.json`, gerado a partir da planilha de contratos.','Usa `Valor/Mes` quando existe; contratos anuais, semestrais e trimestrais entram proporcionalizados para MRR.','Soma MRR apenas uma vez por cliente e contrato para evitar duplicidade.'],
+    calc:['Busca o cliente em contracts_mrr.json gerado a partir da planilha de contratos.','Usa Valor/Mes quando existe; contratos anuais, semestrais e trimestrais ja entram proporcionalizados para MRR.','Soma MRR apenas uma vez por cliente/contrato para evitar duplicidade.'],
     fields:['cliente','Valor/Mes','Forma de Pagamento','Documento','status','score calculado'],
-    real:'MRR real quando o cliente foi localizado na planilha de contratos; zero quando n&atilde;o localizado.',
-    confidence:'Alta para contratos localizados; m&eacute;dia quando o nome exige aproxima&ccedil;&atilde;o.'
+    real:'MRR real quando o cliente foi localizado na planilha de contratos; zero quando nao localizado.',
+    confidence:'Alta para contratos localizados; media quando o nome exige aproximacao.'
   },
   protectedRevenue: {
     title:'MRR monitorado',
     sub:'Receita recorrente mensal dos contratos encontrados na carteira filtrada.',
-    calc:['Soma o MRR dos contratos associados aos projetos vis&iacute;veis.','O MRR vem de `Valor/Mes` da planilha de contratos.','Quando a forma &eacute; anual, semestral ou trimestral, a pr&oacute;pria coluna `Valor/Mes` j&aacute; deixa proporcional.'],
+    calc:['Soma o MRR dos contratos associados aos projetos visiveis.','MRR vem de Valor/Mes da planilha de contratos.','Quando a forma e anual/semestral/trimestral, a propria coluna Valor/Mes ja deixa proporcional.'],
     fields:['cliente','Valor/Mes','Forma de Pagamento','Documento'],
-    real:'Valor financeiro real conforme relat&oacute;rio de contratos importado.',
-    confidence:'Alta para clientes com correspond&ecirc;ncia exata; m&eacute;dia para correspond&ecirc;ncia aproximada.'
+    real:'Valor financeiro real conforme relatorio de contratos importado.',
+    confidence:'Alta para clientes com correspondencia exata; media para correspondencia aproximada.'
   },
   consultantScore: {
     title:'Score do consultor',
-    sub:'Qualidade m&eacute;dia da carteira sob responsabilidade do consultor.',
-    calc:['M&eacute;dia dos Health Scores dos projetos do consultor.','Mostra carteira saud&aacute;vel, carteira sem acompanhamento, volume atual de projetos, MRR sob gest&atilde;o e MRR em risco.'],
+    sub:'Qualidade media da carteira sob responsabilidade do consultor.',
+    calc:['Media dos Health Scores dos projetos do consultor.','Mostra carteira saudavel, carteira esquecida, carga atual, MRR sob gestao e MRR em risco.'],
     fields:['consultor','dias_sem_atualizacao','proxima acao','status','pendencias','MRR normalizado'],
     real:'Score modelado pelo front-end.',
-    confidence:'M&eacute;dia'
+    confidence:'Media'
   },
   riskList: {
-    title:'A&ccedil;&atilde;o hoje',
+    title:'Acao hoje',
     sub:'Lista priorizada para agir agora.',
-    calc:['Ordena projetos que est&atilde;o sem atualiza&ccedil;&atilde;o 7d, sem contato 15d, sem pr&oacute;xima a&ccedil;&atilde;o, com respons&aacute;vel ausente ou cliente premium em risco.','Em empate, prioriza menor score e maior MRR.'],
+    calc:['Ordena projetos que estao sem update 7d, sem contato 15d, sem proxima acao, com owner ausente ou cliente premium em risco.','Em empate, prioriza menor score e maior MRR.'],
     fields:['score calculado','MRR normalizado','status','dias_sem_atualizacao','proxima acao','consultor'],
-    real:'Ranking modelado com dados reais e estimados.',
-    confidence:'M&eacute;dia'
+    real:'Ranking modelado com dados reais/estimados.',
+    confidence:'Media'
   },
   csSignals: {
     title:'Sinais Customer Success',
-    sub:'Indicadores de relacionamento e cad&ecirc;ncia.',
-    calc:['Sem contato recente: mais de 15 dias sem atualiza&ccedil;&atilde;o ou contato.','Sem pr&oacute;xima a&ccedil;&atilde;o: nenhum texto ou data indica o pr&oacute;ximo movimento.','Cliente premium em risco: MRR relevante com sinais de abandono.'],
+    sub:'Indicadores de relacionamento e cadencia.',
+    calc:['Sem contato recente: mais de 15 dias sem update/contato.','Sem proxima acao: nenhum texto/data indica o proximo movimento.','Cliente premium em risco: MRR relevante com sinais de abandono.'],
     fields:['dias_sem_atualizacao','data_ultima_atualizacao','acompanhamento','obs','data_estimada','MRR normalizado'],
     real:'Indicador operacional modelado.',
-    confidence:'M&eacute;dia'
+    confidence:'Media'
   },
   projectTable: {
-    title:'An&aacute;lise por projeto',
-    sub:'Auditoria linha a linha dos sinais de PMO, CS e MRR.',
-    calc:['Health usa a f&oacute;rmula simples do score.','A&ccedil;&atilde;o mostra o pr&oacute;ximo comando recomendado.','MRR vem da planilha de contratos quando localizado.'],
+    title:'Analise por projeto',
+    sub:'Auditoria linha a linha dos sinais PMO, CS e MRR.',
+    calc:['Health usa a formula simples do score.','Acao mostra o proximo comando recomendado.','MRR vem da planilha de contratos quando localizado.'],
     fields:['cliente','consultor','status','mes','tasks_pendentes','marcos_pendentes','dias_sem_atualizacao','MRR','list_id/view_id/clickup_json quando disponivel'],
     real:'Mistura dados operacionais reais com MRR real quando localizado.',
-    confidence:'M&eacute;dia'
+    confidence:'Media'
   },
   source: {
     title:'Origem dos dados',
-    sub:'Como a Gest&atilde;o de Carteira enxerga a base.',
-    calc:['O front-end l&ecirc; `DATA.projetos`, consolidado pela planilha mensal.','Quando h&aacute; ClickUp Sync, usa `clickup_json`, `list_id` ou `view_id`, `data_ultima_atualizacao` e `dias_sem_atualizacao`.','O MRR vem do arquivo `contracts_mrr.json`, gerado a partir do relat&oacute;rio de contratos de manuten&ccedil;&atilde;o.'],
+    sub:'Como a Gest&atilde;o enxerga a base.',
+    calc:['O front-end le DATA.projetos consolidado pela planilha mensal.','Quando ha sync ClickUp, usa clickup_json, list_id/view_id, data_ultima_atualizacao e dias_sem_atualizacao.','MRR vem do arquivo contracts_mrr.json gerado a partir do relatorio de contratos de manutencao.'],
     fields:['list_id','view_id','clickup_json','data_ultima_atualizacao','dias_sem_atualizacao','status','Valor/Mes','Forma de Pagamento'],
-    real:'Projetos v&ecirc;m da planilha e do ClickUp; receita vem do relat&oacute;rio de contratos importado.',
-    confidence:'Alta quando ambas as fontes est&atilde;o atualizadas.'
+    real:'Projetos vem da planilha/ClickUp; receita vem do relatorio de contratos importado.',
+    confidence:'Alta quando ambos estao atualizados.'
   }
 };
-var TOWER_INFO_CONTEXT = {ultima:'-', origem:'Planilha mensal + ClickUp Sync quando dispon&iacute;vel'};
+var TOWER_INFO_CONTEXT = {ultima:'-', origem:'Planilha mensal + ClickUp sync quando disponivel'};
 function towerInfoButton(key) {
   return '<button type="button" class="tower-info" title="Ver formula e fonte dos dados" onclick="event.stopPropagation();towerShowInfo(\''+key+'\')">i</button>';
 }
@@ -4981,11 +5492,11 @@ function towerAnaliseProjeto(p) {
   else if (diasSem !== null && diasSem > 15) penaliza(25, diasSem + ' dias sem update', 'r');
   else if (diasSem !== null && diasSem > 7) penaliza(15, diasSem + ' dias sem update', 'o');
   if (semContato15) penaliza(18, 'Sem contato 15d+', 'r');
-  if (!proximaAcao) penaliza(16, 'Sem próxima ação', 'o');
-  if (!faseEvoluindo) penaliza(12, 'Fase sem evolução clara', 'o');
-  if (!ownerAtivo) penaliza(22, 'Sem responsável ativo', 'r');
-  if (pendenciasVencidas) penaliza(18, 'Pendência vencida ou atraso', 'r');
-  if (pend >= 8) penaliza(8, pend + ' pendências abertas', 'o');
+  if (!proximaAcao) penaliza(16, 'Sem proxima acao', 'o');
+  if (!faseEvoluindo) penaliza(12, 'Fase sem evolucao clara', 'o');
+  if (!ownerAtivo) penaliza(22, 'Sem owner ativo', 'r');
+  if (pendenciasVencidas) penaliza(18, 'Pendencia vencida/atraso', 'r');
+  if (pend >= 8) penaliza(8, pend + ' pendencias abertas', 'o');
   score = Math.max(0, Math.min(100, Math.round(score)));
   var risco = score < 70 || pendenciasVencidas || semContato15 || (!proximaAcao && mrr >= 1000);
   return {
@@ -5027,34 +5538,29 @@ function towerConsultores(analises) {
 function towerBadge(texto, tipo) {
   return '<span class="tower-mini-badge '+(tipo || '')+'">'+texto+'</span>';
 }
-var _towerFocus = 'action';
-function setTowerFocus(key) {
-  _towerFocus = key || 'action';
-  initControlTower();
-}
-function towerKpi(icon, label, value, sub, trend, infoKey, focusKey) {
-  return '<div class="tower-kpi'+(_towerFocus === focusKey ? ' on' : '')+'" style="cursor:pointer" role="button" tabindex="0" onclick="setTowerFocus(\''+(focusKey || 'action')+'\')" onkeydown="if(event.key===\'Enter\'||event.key===\' \'){event.preventDefault();setTowerFocus(\''+(focusKey || 'action')+'\');}"><div class="tower-kpi-top"><div class="tower-kpi-icon">'+icon+'</div>'+(infoKey?towerInfoButton(infoKey):(trend?'<div class="tower-kpi-trend">'+trend+'</div>':''))+'</div><div class="tower-kpi-value">'+value+'</div><div class="tower-kpi-label">'+label+'</div>'+(sub?'<div class="tower-kpi-sub">'+sub+'</div>':'')+(trend&&infoKey?'<div class="tower-kpi-trend" style="display:inline-flex;margin-top:10px">'+trend+'</div>':'')+'</div>';
+function towerKpi(icon, label, value, sub, trend, infoKey) {
+  return '<div class="tower-kpi"><div class="tower-kpi-top"><div class="tower-kpi-icon">'+icon+'</div>'+(infoKey?towerInfoButton(infoKey):(trend?'<div class="tower-kpi-trend">'+trend+'</div>':''))+'</div><div class="tower-kpi-value">'+value+'</div><div class="tower-kpi-label">'+label+(infoKey?'':'')+'</div>'+(sub?'<div class="tower-kpi-sub">'+sub+'</div>':'')+(trend&&infoKey?'<div class="tower-kpi-trend" style="display:inline-flex;margin-top:10px">'+trend+'</div>':'')+'</div>';
 }
 function towerRiskRow(a) {
   var p = a.projeto;
   var sinais = a.sinais.slice(0,3).map(function(s){ return towerBadge(s.texto, s.tipo); }).join('');
-  if (!sinais) sinais = towerBadge('Sem risco cr&iacute;tico', 'g');
-  var acao = !a.ownerAtivo ? 'Definir respons&aacute;vel' : a.semProximaAcao ? 'Definir pr&oacute;xima a&ccedil;&atilde;o' : a.semContato ? 'Fazer contato hoje' : a.score < 70 ? 'Revisar PMO' : 'Monitorar';
-  var mrr = a.mrr ? towerBadge(towerMoney(a.mrr) + ' MRR', 'g') : towerBadge('MRR n&atilde;o localizado', 'o');
-  return '<div class="tower-risk-row" style="cursor:pointer" onclick="openProjectsView({search:'+JSON.stringify(p.cliente || '')+'})"><div class="tower-health '+a.classe+'">'+a.score+'</div><div style="min-width:0"><div class="tower-risk-name">'+p.cliente+towerInfoButton('riskList')+'</div><div class="tower-cons-meta">'+(p.consultor || 'Sem consultor')+' - '+(p.mes || '-')+' - '+sl(p.status || '')+'</div><div class="tower-risk-meta">'+mrr+sinais+'</div></div><div class="tower-action-tag">'+acao+'</div></div>';
+  if (!sinais) sinais = towerBadge('Sem risco critico', 'g');
+  var acao = !a.ownerAtivo ? 'Definir owner' : a.semProximaAcao ? 'Definir acao' : a.semContato ? 'Contato hoje' : a.score < 70 ? 'Revisao PMO' : 'Monitorar';
+  var mrr = a.mrr ? towerBadge(towerMoney(a.mrr) + ' MRR', 'g') : towerBadge('MRR nao localizado', 'o');
+  return '<div class="tower-risk-row"><div class="tower-health '+a.classe+'">'+a.score+'</div><div style="min-width:0"><div class="tower-risk-name">'+p.cliente+towerInfoButton('riskList')+'</div><div class="tower-cons-meta">'+(p.consultor || 'Sem consultor')+' - '+(p.mes || '-')+' - '+sl(p.status || '')+'</div><div class="tower-risk-meta">'+mrr+sinais+'</div></div><div class="tower-action-tag">'+acao+'</div></div>';
 }
 function towerConsultorRow(c, maxTotal) {
   var pct = maxTotal ? Math.round((c.total / maxTotal) * 100) : 0;
-  return '<div class="tower-cons-row" style="cursor:pointer" onclick="openProjectsView({consultor:'+JSON.stringify(c.nome || 'all')+'})"><div><div class="tower-cons-name" style="color:'+ccol(c.nome)+'">'+c.nome+towerInfoButton('consultantScore')+'</div><div class="tower-cons-meta">'+(c.alertaAbandono ? 'Carteira sem acompanhamento suficiente' : 'Carteira sob acompanhamento')+'</div><div class="tower-bar"><div class="tower-bar-fill" style="width:'+pct+'%;background:'+ccol(c.nome)+'"></div></div></div><div class="tower-metric"><strong>'+c.total+'</strong><span>Projetos</span></div><div class="tower-metric"><strong>'+c.esquecidos+'</strong><span>Sem acompanhamento</span></div><div class="tower-metric"><strong>'+towerMoney(c.receitaRisco)+'</strong><span>MRR em risco</span></div><div class="tower-metric"><strong>'+c.score+'</strong><span>Score</span></div></div>';
+  return '<div class="tower-cons-row"><div><div class="tower-cons-name" style="color:'+ccol(c.nome)+'">'+c.nome+towerInfoButton('consultantScore')+'</div><div class="tower-cons-meta">'+(c.alertaAbandono ? 'Carteira esquecida exige acao' : 'Carteira sob acompanhamento')+'</div><div class="tower-bar"><div class="tower-bar-fill" style="width:'+pct+'%;background:'+ccol(c.nome)+'"></div></div></div><div class="tower-metric"><strong>'+c.total+'</strong><span>Projetos</span></div><div class="tower-metric"><strong>'+c.esquecidos+'</strong><span>Esquecidos</span></div><div class="tower-metric"><strong>'+towerMoney(c.receitaRisco)+'</strong><span>MRR em risco</span></div><div class="tower-metric"><strong>'+c.score+'</strong><span>Health score</span></div></div>';
 }
 function towerProjectTable(analises) {
   if (!analises.length) return '<div class="tower-empty">Sem projetos para exibir</div>';
-  return '<table class="tower-table"><thead><tr><th>Cliente</th><th>Consultor</th><th>Health '+towerInfoButton('health')+'</th><th>A&ccedil;&atilde;o</th><th>CS '+towerInfoButton('csSignals')+'</th><th class="num">MRR '+towerInfoButton('ltvRisk')+'</th></tr></thead><tbody>'+analises.map(function(a){
+  return '<table class="tower-table"><thead><tr><th>Cliente</th><th>Consultor</th><th>Health '+towerInfoButton('health')+'</th><th>Acao</th><th>CS '+towerInfoButton('csSignals')+'</th><th class="num">MRR '+towerInfoButton('ltvRisk')+'</th></tr></thead><tbody>'+analises.map(function(a){
     var p = a.projeto;
     var dot = a.classe === 'bad' ? 'r' : a.classe === 'warn' ? 'o' : 'g';
-    var acao = !a.ownerAtivo ? 'Definir respons&aacute;vel' : a.semProximaAcao ? 'Definir pr&oacute;xima a&ccedil;&atilde;o' : a.semContato ? 'Contato 15d+' : a.semUpdate ? 'Atualizar status' : 'Monitorar';
-    var cs = a.semContato ? (a.diasSem + 'd sem contato') : (a.semProximaAcao ? 'sem pr&oacute;xima a&ccedil;&atilde;o' : 'cad&ecirc;ncia ok');
-    return '<tr style="cursor:pointer" onclick="openProjectsView({search:'+JSON.stringify(p.cliente || '')+'})"><td><strong>'+p.cliente+'</strong><div class="tower-cons-meta">'+(p.mes || '-')+' - '+sl(p.status || '')+'</div></td><td>'+towerBadge(p.consultor || 'Sem consultor', p.consultor ? '' : 'r')+'</td><td><div class="tower-stage"><span class="tower-stage-dot '+dot+'"></span><strong>'+a.score+'</strong> '+a.label+'</div></td><td>'+towerBadge(acao, a.actionToday ? 'o' : 'g')+'</td><td>'+cs+'</td><td class="num">'+(a.mrr ? towerMoney(a.mrr) : '-')+'</td></tr>';
+    var acao = !a.ownerAtivo ? 'Definir owner' : a.semProximaAcao ? 'Definir proxima acao' : a.semContato ? 'Contato 15d+' : a.semUpdate ? 'Atualizar status' : 'Monitorar';
+    var cs = a.semContato ? (a.diasSem + 'd sem contato') : (a.semProximaAcao ? 'sem proxima acao' : 'cadencia ok');
+    return '<tr><td><strong>'+p.cliente+'</strong><div class="tower-cons-meta">'+(p.mes || '-')+' - '+sl(p.status || '')+'</div></td><td>'+towerBadge(p.consultor || 'Sem consultor', p.consultor ? '' : 'r')+'</td><td><div class="tower-stage"><span class="tower-stage-dot '+dot+'"></span><strong>'+a.score+'</strong> '+a.label+'</div></td><td>'+towerBadge(acao, a.actionToday ? 'o' : 'g')+'</td><td>'+cs+'</td><td class="num">'+(a.mrr ? towerMoney(a.mrr) : '-')+'</td></tr>';
   }).join('')+'</tbody></table>';
 }
 function initControlTower() {
@@ -5063,7 +5569,7 @@ function initControlTower() {
   var projetos = filteredProj();
   var analises = projetos.map(towerAnaliseProjeto);
   var total = analises.length;
-  if (!total) { el.innerHTML = '<div class="empty">Sem dados para a Gest&atilde;o de Carteira</div>'; return; }
+  if (!total) { el.innerHTML = '<div class="empty">Sem dados para a Gest&atilde;o</div>'; return; }
   var riscos = analises.filter(function(a){ return a.risco; });
   var semUpdate = analises.filter(function(a){ return a.semUpdate; });
   var semContato = analises.filter(function(a){ return a.semContato; });
@@ -5084,31 +5590,11 @@ function initControlTower() {
   var listIds = analises.filter(function(a){ return !!(a.projeto.list_id || a.projeto.view_id || a.projeto.clickup_json); }).length;
   TOWER_INFO_CONTEXT = {
     ultima: datasUpdate.length ? datasUpdate.sort().slice(-1)[0] : ((document.getElementById('nav-date') || {}).textContent || '-'),
-    origem: 'Sheets e ClickUp em ' + listIds + ' de ' + total + ' projeto(s) + MRR ' + (CONTRACTS_MRR.loaded ? CONTRACTS_MRR.source : 'não carregado')
+    origem: 'Sheets/ClickUp em ' + listIds + ' de ' + total + ' projeto(s) + MRR ' + (CONTRACTS_MRR.loaded ? CONTRACTS_MRR.source : 'nao carregado')
   };
   var nTower = document.getElementById('n-tower'); if (nTower) nTower.textContent = riscos.length;
   var topRiscos = acaoHoje.slice().sort(function(a,b){ if (a.score !== b.score) return a.score - b.score; return b.mrr - a.mrr; }).slice(0,10);
   var clientesRisco = riscos.slice().sort(function(a,b){ return a.score - b.score || b.mrr - a.mrr; }).slice(0,12);
-  var consultoresSobrecarregados = {};
-  sobrecarga.forEach(function(c){ consultoresSobrecarregados[c.nome] = true; });
-  var focoMap = {
-    action: acaoHoje.slice().sort(function(a,b){ return a.score - b.score || b.mrr - a.mrr; }),
-    stale: semUpdate.slice().sort(function(a,b){ return b.diasSem - a.diasSem || a.score - b.score; }),
-    next: semProximaAcao.slice().sort(function(a,b){ return a.score - b.score || b.mrr - a.mrr; }),
-    revenueRisk: premiumRisco.slice().sort(function(a,b){ return b.mrr - a.mrr || a.score - b.score; }),
-    monitoredRevenue: analises.filter(function(a){ return a.mrr > 0; }).slice().sort(function(a,b){ return b.mrr - a.mrr; }),
-    capacity: analises.filter(function(a){ return consultoresSobrecarregados[a.projeto.consultor || '']; }).slice().sort(function(a,b){ return b.mrr - a.mrr || a.score - b.score; })
-  };
-  if (!focoMap[_towerFocus] || !focoMap[_towerFocus].length) _towerFocus = 'action';
-  var focoTitulos = {
-    action: 'Projetos para agir hoje',
-    stale: 'Projetos sem atualiza&ccedil;&atilde;o recente',
-    next: 'Projetos sem pr&oacute;xima a&ccedil;&atilde;o definida',
-    revenueRisk: 'Clientes premium com receita em risco',
-    monitoredRevenue: 'Clientes com MRR monitorado',
-    capacity: 'Projetos dos consultores sobrecarregados'
-  };
-  var projetosFoco = focoMap[_towerFocus] || topRiscos;
   var maxCons = consultores.reduce(function(m,c){ return Math.max(m,c.total); }, 0);
   var consultoresHtml = consultores.slice(0,8).map(function(c){ return towerConsultorRow(c, maxCons); }).join('');
   var receitaPorConsultor = consultores.slice().sort(function(a,b){ return b.receitaRisco - a.receitaRisco; }).slice(0,6);
@@ -5117,21 +5603,21 @@ function initControlTower() {
     return '<div class="stat-row"><div class="stat-info"><span style="font-size:12px;font-weight:800;color:'+ccol(c.nome)+'">'+c.nome+'</span><span style="font-size:12px;font-weight:900;color:var(--red)">'+towerMoney(c.receitaRisco)+'</span></div><div class="stat-bar-bg"><div class="stat-bar-fill" style="width:'+pct+'%;background:var(--red)"></div></div></div>';
   }).join('') || '<div class="tower-empty">Sem receita em risco relevante</div>';
   var abandonoHtml = consultores.filter(function(c){ return c.alertaAbandono; }).slice(0,6).map(function(c){
-    return '<div class="tower-risk-row" style="grid-template-columns:1fr auto"><div><div class="tower-risk-name" style="color:'+ccol(c.nome)+'">'+c.nome+'</div><div class="tower-risk-meta">'+towerBadge(c.esquecidos+' sem acompanhamento','r')+towerBadge(c.novos30+' novo(s) em 30d','o')+towerBadge(towerMoney(c.receitaRisco)+' MRR em risco','r')+'</div></div><div class="tower-action-tag">Rebalancear carteira</div></div>';
+    return '<div class="tower-risk-row" style="grid-template-columns:1fr auto"><div><div class="tower-risk-name" style="color:'+ccol(c.nome)+'">'+c.nome+'</div><div class="tower-risk-meta">'+towerBadge(c.esquecidos+' esquecidos','r')+towerBadge(c.novos30+' novo(s) 30d','o')+towerBadge(towerMoney(c.receitaRisco)+' MRR em risco','r')+'</div></div><div class="tower-action-tag">Rebalancear</div></div>';
   }).join('') || '<div class="tower-empty">Nenhum sinal forte de abandono de carteira</div>';
   el.innerHTML =
-    '<div class="tower-hero"><div class="tower-hero-row"><div><div class="tower-eyebrow">Gest&atilde;o de Carteira '+towerInfoButton('source')+'</div><div class="tower-title">Onde agir hoje para proteger clientes e MRR</div><div class="tower-sub">Vis&atilde;o executiva enxuta: cliente sem acompanhamento, falta de pr&oacute;xima a&ccedil;&atilde;o, consultor sobrecarregado e receita recorrente em risco.</div></div><div class="tower-hero-score"><div class="tower-score-num">'+health+towerInfoButton('health')+'</div><div class="tower-score-label">Health Score m&eacute;dio</div><div class="tower-score-bar"><div class="tower-score-fill" style="width:'+health+'%"></div></div></div></div></div>'+
+    '<div class="tower-hero"><div class="tower-hero-row"><div><div class="tower-eyebrow">Gest&atilde;o de Reten&ccedil;&atilde;o '+towerInfoButton('source')+'</div><div class="tower-title">Onde agir hoje para proteger clientes e MRR</div><div class="tower-sub">Vis&atilde;o enxuta: cliente esquecido, falta de pr&oacute;xima a&ccedil;&atilde;o, consultor sobrecarregado e receita recorrente em risco. Sem burocracia, s&oacute; comando operacional.</div></div><div class="tower-hero-score"><div class="tower-score-num">'+health+towerInfoButton('health')+'</div><div class="tower-score-label">Health score m&eacute;dio</div><div class="tower-score-bar"><div class="tower-score-fill" style="width:'+health+'%"></div></div></div></div></div>'+
     '<div class="tower-kpis">'+
-      towerKpi('&#127919;','A&ccedil;&atilde;o hoje',acaoHoje.length,'sem atualiza&ccedil;&atilde;o, contato ou pr&oacute;xima a&ccedil;&atilde;o','agora','riskList','action')+
-      towerKpi('&#9201;','Sem atualiza&ccedil;&atilde;o 7d',semUpdate.length,'fora do SLA de acompanhamento','opera&ccedil;&atilde;o','stale','stale')+
-      towerKpi('&#129517;','Sem pr&oacute;xima a&ccedil;&atilde;o',semProximaAcao.length,'projetos sem comando claro','CS','training','next')+
-      towerKpi('&#128176;','MRR em risco',towerMoney(receitaRisco),premiumRisco.length+' cliente(s) premium em risco','receita','ltvRisk','revenueRisk')+
-      towerKpi('&#128200;','MRR monitorado',towerMoney(receitaTotal),contratosLocalizados+' projeto(s) com contrato localizado','contratos','protectedRevenue','monitoredRevenue')+
-      towerKpi('&#129489;','Consultores sobrecarregados',sobrecarga.length,'carteira com risco de abandono','capacidade','capacity','capacity')+
+      towerKpi('&#127919;','A&ccedil;&atilde;o hoje',acaoHoje.length,'sem update, contato ou pr&oacute;xima a&ccedil;&atilde;o','agora','riskList')+
+      towerKpi('&#9201;','Sem update 7d',semUpdate.length,'SLA de acompanhamento','operacao','stale')+
+      towerKpi('&#129517;','Sem pr&oacute;xima a&ccedil;&atilde;o',semProximaAcao.length,'projetos sem comando claro','CS','training')+
+      towerKpi('&#128176;','MRR em risco',towerMoney(receitaRisco),premiumRisco.length+' cliente(s) premium em risco','receita','ltvRisk')+
+      towerKpi('&#128200;','MRR monitorado',towerMoney(receitaTotal),contratosLocalizados+' projeto(s) com contrato localizado','contratos','protectedRevenue')+
+      towerKpi('&#129489;','Consultores sobrecarregados',sobrecarga.length,'capacidade e carteira esquecida','capacity','capacity')+
     '</div>'+
-    '<div class="tower-grid"><div class="tower-panel"><div class="tower-panel-head"><div class="tower-panel-title">Prioridades operacionais '+towerInfoButton('riskList')+'</div><div class="tower-panel-note">'+topRiscos.length+' prioridades</div></div><div class="tower-panel-body"><div class="tower-risk-list">'+(topRiscos.length ? topRiscos.map(towerRiskRow).join('') : '<div class="tower-empty">Nenhuma a&ccedil;&atilde;o urgente hoje</div>')+'</div></div></div><div class="tower-panel"><div class="tower-panel-head"><div class="tower-panel-title">Performance dos consultores '+towerInfoButton('consultantScore')+'</div><div class="tower-panel-note">projetos, carteira esquecida e MRR</div></div><div class="tower-panel-body">'+consultoresHtml+'</div></div></div>'+
-    '<div class="tower-grid-3"><div class="tower-panel"><div class="tower-panel-head"><div class="tower-panel-title">Quem est&aacute; esquecendo cliente '+towerInfoButton('capacity')+'</div></div><div class="tower-panel-body"><div class="tower-risk-list">'+abandonoHtml+'</div></div></div><div class="tower-panel"><div class="tower-panel-head"><div class="tower-panel-title">Receita recorrente protegida '+towerInfoButton('protectedRevenue')+'</div><div class="tower-panel-note">MRR real</div></div><div class="tower-panel-body"><div class="tower-score-num" style="font-size:38px">'+towerMoney(receitaProtegida)+towerInfoButton('protectedRevenue')+'</div><div class="tower-score-label">MRR fora do risco imediato</div><div class="tower-bar" style="height:10px;margin:14px 0"><div class="tower-bar-fill" style="width:'+nrrProxy+'%;background:linear-gradient(90deg,#6b836a,#9bae97)"></div></div><div class="tower-risk-meta">'+towerBadge(nrrProxy+'% protegido','g')+towerBadge(towerMoney(receitaRisco)+' em risco', receitaRisco ? 'r' : 'g')+'</div>'+receitaHtml+'</div></div><div class="tower-panel"><div class="tower-panel-head"><div class="tower-panel-title">Sinais CS m&iacute;nimos '+towerInfoButton('csSignals')+'</div></div><div class="tower-panel-body"><div class="stat-row"><div class="stat-info"><span>Sem contato 15d '+towerInfoButton('csSignals')+'</span><strong>'+semContato.length+'</strong></div><div class="stat-bar-bg"><div class="stat-bar-fill" style="width:'+towerPct((semContato.length/total)*100)+';background:var(--orange)"></div></div></div><div class="stat-row"><div class="stat-info"><span>Sem pr&oacute;xima a&ccedil;&atilde;o '+towerInfoButton('training')+'</span><strong>'+semProximaAcao.length+'</strong></div><div class="stat-bar-bg"><div class="stat-bar-fill" style="width:'+towerPct((semProximaAcao.length/total)*100)+';background:var(--blue)"></div></div></div><div class="stat-row"><div class="stat-info"><span>Cliente premium em risco '+towerInfoButton('churn')+'</span><strong>'+premiumRisco.length+'</strong></div><div class="stat-bar-bg"><div class="stat-bar-fill" style="width:'+towerPct((premiumRisco.length/total)*100)+';background:var(--red)"></div></div></div></div></div></div>'+
-    '<div class="tower-panel"><div class="tower-panel-head"><div class="tower-panel-title">'+(focoTitulos[_towerFocus] || 'Projetos acompanhados')+' '+towerInfoButton('projectTable')+'</div><div class="tower-panel-note">'+projetosFoco.length+' projeto(s) na sele&ccedil;&atilde;o atual</div></div><div class="tower-panel-body table-scroll">'+towerProjectTable(projetosFoco)+'</div></div>';
+    '<div class="tower-grid"><div class="tower-panel"><div class="tower-panel-head"><div class="tower-panel-title">A&ccedil;&atilde;o hoje '+towerInfoButton('riskList')+'</div><div class="tower-panel-note">'+topRiscos.length+' prioridades</div></div><div class="tower-panel-body"><div class="tower-risk-list">'+(topRiscos.length ? topRiscos.map(towerRiskRow).join('') : '<div class="tower-empty">Nenhuma a&ccedil;&atilde;o urgente hoje</div>')+'</div></div></div><div class="tower-panel"><div class="tower-panel-head"><div class="tower-panel-title">Performance dos consultores '+towerInfoButton('consultantScore')+'</div><div class="tower-panel-note">projetos, esquecidos e MRR</div></div><div class="tower-panel-body">'+consultoresHtml+'</div></div></div>'+
+    '<div class="tower-grid-3"><div class="tower-panel"><div class="tower-panel-head"><div class="tower-panel-title">Quem est&aacute; esquecendo cliente '+towerInfoButton('capacity')+'</div></div><div class="tower-panel-body"><div class="tower-risk-list">'+abandonoHtml+'</div></div></div><div class="tower-panel"><div class="tower-panel-head"><div class="tower-panel-title">Receita recorrente protegida '+towerInfoButton('protectedRevenue')+'</div><div class="tower-panel-note">MRR localizado</div></div><div class="tower-panel-body"><div class="tower-score-num" style="font-size:38px">'+towerMoney(receitaProtegida)+towerInfoButton('protectedRevenue')+'</div><div class="tower-score-label">MRR fora do risco imediato</div><div class="tower-bar" style="height:10px;margin:14px 0"><div class="tower-bar-fill" style="width:'+nrrProxy+'%;background:linear-gradient(90deg,#6b836a,#9bae97)"></div></div><div class="tower-risk-meta">'+towerBadge(nrrProxy+'% protegido','g')+towerBadge(towerMoney(receitaRisco)+' em risco', receitaRisco ? 'r' : 'g')+'</div>'+receitaHtml+'</div></div><div class="tower-panel"><div class="tower-panel-head"><div class="tower-panel-title">Sinais CS m&iacute;nimos '+towerInfoButton('csSignals')+'</div></div><div class="tower-panel-body"><div class="stat-row"><div class="stat-info"><span>Sem contato 15d '+towerInfoButton('csSignals')+'</span><strong>'+semContato.length+'</strong></div><div class="stat-bar-bg"><div class="stat-bar-fill" style="width:'+towerPct((semContato.length/total)*100)+';background:var(--orange)"></div></div></div><div class="stat-row"><div class="stat-info"><span>Sem pr&oacute;xima a&ccedil;&atilde;o '+towerInfoButton('training')+'</span><strong>'+semProximaAcao.length+'</strong></div><div class="stat-bar-bg"><div class="stat-bar-fill" style="width:'+towerPct((semProximaAcao.length/total)*100)+';background:var(--blue)"></div></div></div><div class="stat-row"><div class="stat-info"><span>Cliente premium em risco '+towerInfoButton('churn')+'</span><strong>'+premiumRisco.length+'</strong></div><div class="stat-bar-bg"><div class="stat-bar-fill" style="width:'+towerPct((premiumRisco.length/total)*100)+';background:var(--red)"></div></div></div></div></div></div>'+
+    '<div class="tower-panel"><div class="tower-panel-head"><div class="tower-panel-title">Projetos em acompanhamento: health, acao e MRR '+towerInfoButton('projectTable')+'</div><div class="tower-panel-note">'+(clientesRisco.length || topRiscos.length)+' contas em foco</div></div><div class="tower-panel-body table-scroll">'+towerProjectTable(clientesRisco.length ? clientesRisco : topRiscos)+'</div></div>';
 }
 
 // ---- Alertas ----
@@ -5141,11 +5627,11 @@ function initAlert(){
   var exc=p.filter(function(x){return x.diarias_rest!==null&&x.diarias_rest<0;});
   var n=document.getElementById('n-alert');if(n)n.textContent=atr.length+exc.length;
   document.getElementById('kpis-alert').innerHTML=
-    kpiAction('Atrasados',atr.length,'r',"openProjectsView({status:'atrasado'})",false)+
-    kpiAction('Di&aacute;rias Excedidas',exc.length,'o',"openProjectsView({status:'excedido'})",false)+
-    kpiAction('Total Alertas',atr.length+exc.length,'r',"openProjectsView({status:'all'})",false);
-  document.getElementById('rows-atr').innerHTML=buildMonthGroupedRows(atr,'alr-','Nenhum projeto atrasado encontrado');
-  document.getElementById('rows-exc').innerHTML=buildMonthGroupedRows(exc,'exc-','Nenhum projeto com Di&aacute;rias Excedidas');
+    kpi('Projetos Atrasados',atr.length,'r','onclick="abrirAlertasComFiltro(\'atrasados\')"','Clique para visualizar')+
+    kpi('Di&aacute;rias Excedidas',exc.length,'o','onclick="abrirAlertasComFiltro(\'excedidos\')"','Clique para visualizar')+
+    kpi('Total de Alertas',atr.length+exc.length,'r','onclick="abrirAlertasComFiltro(\'all\')"','Clique para visualizar');
+  document.getElementById('rows-atr').innerHTML=buildMonthGroupedRows(atr,'alr-');
+  document.getElementById('rows-exc').innerHTML=buildMonthGroupedRows(exc,'exc-');
 }
 
 // ---- Google Sheets JSONP loader ----
@@ -5222,22 +5708,6 @@ function temResumoManualProjeto(proj) {
   var keyLink = chaveResumoManualProjeto(proj, 'link');
   var keyCliente = chaveResumoManualProjeto(proj, 'cliente');
   return !!(map[keyLink] || map[keyCliente]);
-}
-function removerResumoManualProjeto(proj) {
-  var map = carregarResumosManuais();
-  var keyLink = chaveResumoManualProjeto(proj, 'link');
-  var keyCliente = chaveResumoManualProjeto(proj, 'cliente');
-  var changed = false;
-  if (map[keyLink]) {
-    delete map[keyLink];
-    changed = true;
-  }
-  if (map[keyCliente]) {
-    delete map[keyCliente];
-    changed = true;
-  }
-  if (changed) persistirResumosManuais();
-  return changed;
 }
 function normalizarNomeResumoManual(v, fallback) {
   var nome = String(v || '').trim();
@@ -5480,13 +5950,13 @@ function abrirModalImportacaoResumo(keyPreferencial) {
   byId('clickup-import-clear').onclick = function(){ byId('clickup-import-text').value = ''; };
   byId('clickup-import-paste').onclick = function(){
     if (!navigator.clipboard || !navigator.clipboard.readText) {
-      showToast('Clipboard indisponível neste navegador', 'err');
+      showToast('Clipboard indisponivel neste navegador', 'err');
       return;
     }
     navigator.clipboard.readText().then(function(txt){
       byId('clickup-import-text').value = txt || '';
     }).catch(function(){
-      showToast('Não foi possível ler o clipboard', 'err');
+      showToast('Nao foi possivel ler o clipboard', 'err');
     });
   };
   byId('clickup-import-confirm').onclick = function(){
@@ -5532,7 +6002,7 @@ window.sincronizarClickupProjeto = function(key, btn) {
     return String(item && item._key || '') === chave;
   })[0];
   if (!projeto) {
-    showToast('Projeto não encontrado para sincronizar', 'err');
+    showToast('Projeto nao encontrado para sincronizar', 'err');
     return false;
   }
   var projectKey = montarProjectKeyClickup(projeto);
@@ -5559,25 +6029,9 @@ window.sincronizarClickupProjeto = function(key, btn) {
       return;
     }
     try { storageSet(PANEL_CACHE_KEY, ''); } catch(e) {}
-    removerResumoManualProjeto(projeto);
-    _metricasPromise = null;
-    _metricasProjetoMap = {};
-    _projectLinkPromise = null;
-    _projectLinkMap = {};
-    _clickupResumoManualMap = null;
-    var resumoSync = [];
-    if (resp.tasks_total !== undefined && resp.tasks_total !== null) resumoSync.push(String(resp.tasks_total) + ' atividades');
-    if (resp.marcos_total !== undefined && resp.marcos_total !== null) resumoSync.push(String(resp.marcos_total) + ' marcos');
-    showToast('ClickUp sincronizado' + (resumoSync.length ? ': ' + resumoSync.join(' / ') : '') + '. Atualizando painel...', 'ok');
-    if (btn) btn.textContent = 'Atualizando painel...';
-    setTimeout(function(){ loadAll('manual'); }, 1800);
-    setTimeout(function(){ loadAll('manual'); }, 5200);
-    setTimeout(function(){
-      if (btn) {
-        btn.disabled = false;
-        btn.textContent = labelOriginal || 'Sincronizar ClickUp';
-      }
-    }, 6200);
+    showToast(resp.warning ? ('ClickUp sincronizado com fallback: ' + resp.warning) : 'ClickUp sincronizado. Recarregando painel...', 'ok');
+    if (btn) btn.textContent = 'Sincronizado';
+    setTimeout(function(){ loadAll('manual'); }, 900);
   }).catch(function(error) {
     showToast('Erro ao sincronizar ClickUp: ' + (error && error.message || 'tente novamente'), 'err');
     if (btn) {
@@ -6490,7 +6944,7 @@ function _finalizarLoad(projetos, isRefresh, motivo, tipoAtualizacao) {
     var labelAtualizacao = 'Planilha: ' + data + ' ' + hora;
     if (nd) nd.textContent = labelAtualizacao;
     var entradaHistorico = registrarHistoricoAtualizacao({tipo: tipoAtualizacao || 'auto', resultado: 'ok', motivo: motivo, projetos: DATA.projetos.length});
-    persistirPainelCache(DATA.projetos, {label: labelAtualizacao, fonte: motivo, historico: entradaHistorico, force: (tipoAtualizacao || '') === 'manual'});
+    persistirPainelCache(DATA.projetos, {label: labelAtualizacao, fonte: motivo, historico: entradaHistorico});
     if (isRefresh) showToast(projetos.length + ' projetos atualizados \u2714', 'ok');
     } else {
       var fallback = obterProjetosFallback();
@@ -6522,11 +6976,11 @@ function _finalizarLoad(projetos, isRefresh, motivo, tipoAtualizacao) {
     var pageAtiva = document.querySelector('.page.on');
     var snbAtivo  = document.querySelector('.snb.on');
     var pageId    = pageAtiva ? pageAtiva.id.replace('page-','') : 'dash';
-    activePeriod='all'; fS='all'; fC='all'; fM='all'; fQ=''; _openId=null;
+    activePeriod='all'; fS='all'; fC='all'; fM='all'; _openId=null;
     renderAll();
     goTab(pageId, snbAtivo);
   } else {
-    activePeriod='all'; fS='all'; fC='all'; fM='all'; fQ=''; _openId=null;
+    activePeriod='all'; fS='all'; fC='all'; fM='all'; _openId=null;
     renderAll();
     var snbDash = document.querySelector('.snb');
     if (snbDash) goTab('dash', snbDash);
@@ -6558,7 +7012,7 @@ function inicializarPainel() {
       try {
         var baseCache = carregarBaseProjetos(lerDadosPlanilhaConsolidados(cacheInicial.projetos).projetos);
         DATA.projetos = baseCache.projetos;
-        activePeriod='all'; fS='all'; fC='all'; fM='all'; fQ=''; _openId=null;
+        activePeriod='all'; fS='all'; fC='all'; fM='all'; _openId=null;
         renderAll();
         var snbDash = document.querySelector('.snb');
         if (snbDash) goTab('dash', snbDash);
