@@ -6730,12 +6730,13 @@ window.removerResumoClickupProjeto = function(key) {
 };
 function buildResumoActions(p) {
   var chave = chaveResumoManualProjeto(p, 'link');
+  var chaveSyncAttr = encodeURIComponent(String(chave || ''));
   var abrirHtml = p && p.projeto_link
     ? '<a class="project-link project-link-btn" href="'+p.projeto_link+'" target="_blank" rel="noopener noreferrer" onclick="event.stopPropagation()">Abrir Projeto</a>'
     : '<span style="color:var(--muted)">Sem link</span>';
   var botoes = [
     abrirHtml,
-    '<button type="button" class="project-link-btn alt" onclick="event.stopPropagation();sincronizarClickupProjeto('+JSON.stringify(chave)+',this)">Sincronizar ClickUp</button>'
+    '<button type="button" class="project-link-btn alt" data-sync-key="'+chaveSyncAttr+'" onclick="event.stopPropagation();sincronizarClickupProjeto(decodeURIComponent(this.dataset.syncKey||\'\'),this)">Sincronizar ClickUp</button>'
   ];
   return '<div class="project-actions">'+botoes.join('')+'</div>';
 }
