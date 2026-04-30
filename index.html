@@ -4407,135 +4407,183 @@ function dashApplyInfoContext(list) {
 }
 
 function initDash() {
-  var dc = document.getElementById('dash-content');
-  if (!dc) return;
-  var base = dashProjectsFiltered();
-  var allBase = filteredProj();
-  var analyses = base.map(towerAnaliseProjeto);
-  var dataHealth = dashDataHealth(base);
-  var execution = dashExecution(base);
-  var funnel = dashFunnel(base);
-  var cohort = dashCohort(base);
-  var operation = dashOperation(base, analyses);
-  var funnelMissing = dashMissingFields(base, [
-    {label:'data de venda', aliases:['data_venda']},
-    {label:'data de kickoff', aliases:['data_kick','kickoff_data']},
-    {label:'data de 1º treinamento', aliases:['data_inicio','data_primeiro_treinamento']}
-  ]);
-  var cohortMissing = dashMissingFields(base, [
-    {label:'mês', aliases:['mes']},
-    {label:'data de venda', aliases:['data_venda']}
-  ]);
-  var ativos = base.filter(function(p){ return dashStatusKey(p.status) !== 'concluido'; }).length;
-  var emRisco = analyses.filter(function(a){ return a.risco; }).length;
-  var semUpdate = analyses.filter(function(a){ return a.semUpdate; }).length;
-  var saldoDiarias = execution.unavailable ? null : execution.saldo;
-  var ativacaoPct = funnelMissing.length ? null : funnel.convGeral;
-  var totalDiariasSaldoPositivo = execution.unavailable ? null : base.reduce(function(sum, p){ return sum + Math.max(0, Number(p.diarias_rest || 0)); }, 0);
-  var statusOptions = ['all','andamento','aguardando','parado','atrasado','concluido'];
-  var tipoOptions = ['all','venda','avulso'];
-  var topMonths = activePeriod === 'all' ? 'Todos os meses' : activePeriod;
-  dashApplyInfoContext(base);
+  var p = filteredProj();
+  var total = p.length;
+  var and = 0, ag = 0, atr = 0, exc = 0;
+  p.forEach(function(x) {
+    if (x.status.indexOf('Atrasado') >= 0) atr++;
+    else if (x.status.indexOf('Andamento') >= 0) and++;
+    else if (x.status.indexOf('Aguardando') >= 0) ag++;
+    if (x.diarias_rest !== null && x.diarias_rest < 0) exc++;
+  });
 
-  var topGrid = [
-    dashKpiCard('Projetos Ativos', ativos, ativos ? 'Carteira operacional no filtro atual' : 'Sem projetos no filtro', ativos ? 'good' : 'neutral', 'activeProjects', '<span class="dashx-card-alert '+dashMetricClass(ativos,1,1,false)+'">'+base.length+' no recorte</span>'),
-    dashKpiCard('Projetos em Risco', emRisco, emRisco ? 'Clientes que exigem a&ccedil;&atilde;o imediata' : 'Nenhum risco cr&iacute;tico no recorte', dashMetricClass(emRisco, 0, Math.max(1, Math.round(base.length * 0.08)), true), 'projectRisk', '<span class="dashx-card-alert '+dashMetricClass(emRisco, 0, Math.max(1, Math.round(base.length * 0.08)), true)+'">'+dashPct(base.length ? (emRisco/base.length)*100 : 0)+' da carteira</span>'),
-    dashKpiCard('Projetos sem Update', semUpdate, semUpdate ? 'Acima do SLA m&iacute;nimo de 7 dias' : 'Atualiza&ccedil;&atilde;o recente em toda a carteira', dashMetricClass(semUpdate, 0, Math.max(1, Math.round(base.length * 0.12)), true), 'stale', '<span class="dashx-card-alert '+dashMetricClass(semUpdate, 0, Math.max(1, Math.round(base.length * 0.12)), true)+'">'+dashPct(base.length ? (semUpdate/base.length)*100 : 0)+' da carteira</span>'),
-    execution.unavailable ? dashKpiCard('Di&aacute;rias em Saldo', '-', 'KPI indispon&iacute;vel no recorte atual', 'neutral', 'dailyBalance') : dashKpiCard('Di&aacute;rias em Saldo', fn(totalDiariasSaldoPositivo), totalDiariasSaldoPositivo > 0 ? 'Saldo positivo ainda dispon&iacute;vel para execu&ccedil;&atilde;o' : 'Sem saldo positivo restante', dashMetricClass(totalDiariasSaldoPositivo, 1, 1, false), 'dailyBalance', '<span class="dashx-card-alert '+(execution.saldo < 0 ? 'bad' : execution.percent >= 80 ? 'warn' : 'good')+'">'+(execution.percent !== null ? dashPct(execution.percent) + ' consumido' : 'sem base')+'</span>'),
-    funnelMissing.length ? dashKpiCard('Taxa de Ativa&ccedil;&atilde;o', '-', 'KPI indispon&iacute;vel — campo necess&aacute;rio n&atilde;o encontrado', 'neutral', 'activationRate', '<span class="dashx-card-alert neutral">'+funnelMissing.join(', ')+'</span>') : dashKpiCard('Taxa de Ativa&ccedil;&atilde;o', funnel.totalVendas ? dashPct(ativacaoPct) : '-', funnel.totalVendas ? (funnel.explicitActivation ? 'Convers&atilde;o real at&eacute; ativa&ccedil;&atilde;o' : 'Convers&atilde;o estimada at&eacute; ativa&ccedil;&atilde;o') : 'KPI indispon&iacute;vel — sem vendas com data', dashMetricClass(ativacaoPct, 45, 75, false), 'activationRate', '<span class="dashx-card-alert '+dashMetricClass(ativacaoPct, 45, 75, false)+'">'+(funnel.explicitActivation ? 'real' : 'estimado')+'</span>'),
-    dashKpiCard('Sa&uacute;de dos Dados', dataHealth.completude !== null ? dashPct(dataHealth.completude) : '-', dataHealth.completude !== null ? dataHealth.inconsistencias.length+' projeto(s) com inconsist&ecirc;ncia' : 'KPI indispon&iacute;vel', dashMetricClass(dataHealth.completude, 70, 90, false), 'dataHealthSummary', '<span class="dashx-card-alert '+dashMetricClass(dataHealth.completude, 70, 90, false)+'">'+(dataHealth.syncOkPct !== null ? dashPct(dataHealth.syncOkPct)+' sync ok' : 'sem sync')+'</span>')
-  ].join('');
+  var allP = DATA.projetos.filter(function(x) { return x.cliente; });
+  var mActive = ['JAN','FEV','MAR','ABR','MAI','JUN'].filter(function(m) {
+    return allP.some(function(x) { return x.mes === m; });
+  });
 
-  var filterRows = '' +
-    '<div class="dashx-filter-row"><div class="dashx-filter-label">Per&iacute;odo global</div><div class="dashx-filter-options"><span class="dashx-filter-chip muted">M&ecirc;s analisado: '+topMonths+'</span><button type="button" class="dashx-filter-chip '+(activePeriod === 'all' ? 'on' : '')+'" onclick="setPeriod(\'all\',this)">Todos</button>'+['JAN','FEV','MAR','ABR','MAI','JUN','JUL','AGO','SET','OUT','NOV','DEZ'].map(function(m){ return '<button type="button" class="dashx-filter-chip '+(activePeriod === m ? 'on' : '')+'" onclick="setPeriod(\''+m+'\',this)">'+m+'</button>'; }).join('')+'</div></div>'+
-    '<div class="dashx-filter-row"><div class="dashx-filter-label">Consultor</div><div class="dashx-filter-options">'+dashFilterChip('Todos','consultor','all',DASH_FILTERS.consultor === 'all')+dashDistinct(allBase,'consultor').map(function(c){ return dashFilterChip(c,'consultor',c,DASH_FILTERS.consultor === c); }).join('')+'</div></div>'+
-    '<div class="dashx-filter-row"><div class="dashx-filter-label">Vendedor</div><div class="dashx-filter-options">'+dashFilterChip('Todos','vendedor','all',DASH_FILTERS.vendedor === 'all')+dashDistinct(allBase,'vendedor').map(function(v){ return dashFilterChip(v,'vendedor',v,DASH_FILTERS.vendedor === v); }).join('')+'</div></div>'+
-    '<div class="dashx-filter-row"><div class="dashx-filter-label">Status</div><div class="dashx-filter-options">'+statusOptions.map(function(s){ var lbl = s === 'all' ? 'Todos' : sl(s); return dashFilterChip(lbl,'status',s,DASH_FILTERS.status === s); }).join('')+'</div></div>'+
-    '<div class="dashx-filter-row"><div class="dashx-filter-label">Tipo de projeto</div><div class="dashx-filter-options">'+tipoOptions.map(function(t){ var lbl = t === 'all' ? 'Todos' : (t === 'venda' ? 'Venda Nova' : 'Avulso'); return dashFilterChip(lbl,'tipo',t,DASH_FILTERS.tipo === t); }).join('')+'<button type="button" class="dashx-filter-chip" onclick="dashResetFilters()">Limpar filtros</button></div></div>';
+  var prevM = null;
+  if (activePeriod !== 'all') {
+    var mi = mActive.indexOf(activePeriod);
+    if (mi > 0) prevM = mActive[mi - 1];
+  }
+  function cFor(mes, fn2) {
+    return allP.filter(function(x) { return x.mes === mes && fn2(x); }).length;
+  }
+  function trendHtml(cur, prev, isBad) {
+    if (!prev && prev !== 0) return '';
+    var d = cur - prev;
+    if (d === 0) return '<div class="dash-trend neu">igual ao mes anterior</div>';
+    var cls = isBad ? (d > 0 ? 'bad' : 'good') : (d > 0 ? 'good' : 'bad');
+    return '<div class="dash-trend '+cls+'">'+(d > 0 ? '+' : '')+d+' vs mes anterior</div>';
+  }
+  var pAnd = prevM ? cFor(prevM, function(x){return x.status.indexOf('Andamento')>=0;}) : null;
+  var pAtr = prevM ? cFor(prevM, function(x){return x.status.indexOf('Atrasado')>=0;})  : null;
+  var pExc = prevM ? cFor(prevM, function(x){return x.diarias_rest!==null&&x.diarias_rest<0;}) : null;
 
-  var inconsistRows = dataHealth.inconsistencias.length ? dataHealth.inconsistencias.slice(0,10).map(function(item){
-    return '<tr><td><strong>'+item.cliente+'</strong><div class="dashx-list-sub">'+item.consultor+' • '+item.status+'</div></td><td>'+item.faltas.join(', ')+'</td></tr>';
-  }).join('') : '<tr class="empty-row"><td colspan="2">Nenhuma inconsist&ecirc;ncia encontrada no recorte.</td></tr>';
-  var healthSection =
-    '<div class="dashx-section">'+
-      '<div class="dashx-section-head"><div><div class="dashx-section-kicker">Se&ccedil;&atilde;o 1</div><div class="dashx-section-title">Sa&uacute;de dos Dados</div><div class="dashx-section-sub">Posso confiar neste painel? Aqui est&atilde;o completude, integridade, status de sync e sinais de lat&ecirc;ncia da origem.</div></div><div class="dashx-section-answer"><span class="dashx-answer-chip">Confian&ccedil;a operacional</span></div></div>'+
-      '<div class="dashx-section-body">'+
-        '<div class="dashx-grid-2">'+
-          '<div class="dashx-stack"><div class="dashx-mini-grid">'+
-            dashMiniCard('Completude dos campos', dataHealth.completude !== null ? dashPct(dataHealth.completude) : '-', 'Campos obrigat&oacute;rios preenchidos no recorte atual.', 'neutral', 'dataCompleteness')+
-            dashMiniCard('Projetos com inconsist&ecirc;ncia', String(dataHealth.inconsistencias.length), 'Projetos com ao menos um campo obrigat&oacute;rio vazio.', 'neutral', 'dataInconsistencies')+
-            dashMiniCard('Sync atualizado', dataHealth.syncOkPct !== null ? dashPct(dataHealth.syncOkPct) : '-', dataHealth.syncOk+' projeto(s) at&eacute; 24h, '+dataHealth.syncAttention+' em aten&ccedil;&atilde;o e '+dataHealth.syncCritical+' cr&iacute;tico(s).', 'neutral', 'syncFreshness')+
-            (dataHealth.syncCandidates ? dashMiniCard('Erro/timeout de sync', dataHealth.syncErrorRate !== null ? dashPct(dataHealth.syncErrorRate) : '-', dataHealth.syncErrors+' erro(s) em '+dataHealth.syncCandidates+' projeto(s) com rastreio de sync.', 'neutral', 'syncErrors') : dashUnavailableCard('Erro/timeout de sync', ['sync_status_clickup / sync_error_clickup']))+
-            (dataHealth.latencyHours !== null ? dashMiniCard('Lat&ecirc;ncia da origem', dataHealth.latencyHours < 24 ? Math.round(dataHealth.latencyHours)+'h' : Math.round(dataHealth.latencyHours/24)+'d', 'Agora - &uacute;ltima atualiza&ccedil;&atilde;o conhecida da origem.', 'neutral', 'sourceLatency') : dashUnavailableCard('Lat&ecirc;ncia da origem', ['data_ultima_atualizacao']))+
-          '</div>'+(dataHealth.leadTimeAvg !== null ? '<div class="dashx-mini-card"><div class="dashx-mini-label">Lead time ap&oacute;s sync'+towerInfoButton('syncLeadTime')+'</div><div class="dashx-mini-value">'+(dataHealth.leadTimeAvg < 1 ? Math.round(dataHealth.leadTimeAvg * 60)+' min' : fn(dataHealth.leadTimeAvg)+' h')+'</div><div class="dashx-mini-sub">Diferen&ccedil;a m&eacute;dia entre a origem sincronizada e o dado persistido na planilha.</div></div>' : dashUnavailableCard('Lead time ap&oacute;s sync', ['ultima_sync_clickup', 'data_ultima_atualizacao']))+'</div>'+
-          '<div class="dashx-table-wrap"><table class="dashx-table"><thead><tr><th>Projeto</th><th>Campos faltando</th></tr></thead><tbody>'+inconsistRows+'</tbody></table></div>'+
+  var kgrid = '<div class="dash-grid">'+
+    '<div class="dash-kpi c-b" onclick="abrirProjetosComFiltro(\'all\')" style="cursor:pointer"><div class="dash-kpi-icon">📋</div><div class="dash-kpi-v">'+total+'</div><div class="dash-kpi-l">Total de Projetos</div></div>'+
+    '<div class="dash-kpi c-o" onclick="abrirProjetosComFiltro(\'andamento\')" style="cursor:pointer"><div class="dash-kpi-icon">⚙</div><div class="dash-kpi-v">'+and+'</div><div class="dash-kpi-l">Em Andamento</div>'+trendHtml(and,pAnd,false)+'</div>'+
+    '<div class="dash-kpi c-b" onclick="abrirProjetosComFiltro(\'aguardando\')" style="cursor:pointer"><div class="dash-kpi-icon">⏳</div><div class="dash-kpi-v">'+ag+'</div><div class="dash-kpi-l">Aguardando In&iacute;cio</div></div>'+
+    '<div class="dash-kpi c-r" onclick="abrirAlertasComFiltro(\'atrasados\')" style="cursor:pointer"><div class="dash-kpi-icon">🚨</div><div class="dash-kpi-v">'+atr+'</div><div class="dash-kpi-l">Projetos Atrasados</div>'+trendHtml(atr,pAtr,true)+'</div>'+
+    '<div class="dash-kpi c-o" onclick="abrirAlertasComFiltro(\'excedidos\')" style="cursor:pointer"><div class="dash-kpi-icon">💰</div><div class="dash-kpi-v">'+exc+'</div><div class="dash-kpi-l">Di&aacute;rias Excedidas</div>'+trendHtml(exc,pExc,true)+'</div>'+
+    '<div class="dash-kpi c-g" onclick="abrirProjetosComFiltro(\'andamento\')" style="cursor:pointer"><div class="dash-kpi-icon">📈</div><div class="dash-kpi-v">'+(total>0?Math.round(and/total*100):0)+'%</div><div class="dash-kpi-l">Carteira em Andamento</div></div>'+
+  '</div>';
+
+  var criticos = p.filter(function(x) {
+    return x.status.indexOf('Atrasado') >= 0 || (x.diarias_rest !== null && x.diarias_rest < 0);
+  }).sort(function(a,b) {
+    var sa = (a.status.indexOf('Atrasado')>=0?4:0) + (a.diarias_rest!==null&&a.diarias_rest<0?2:0);
+    var sb = (b.status.indexOf('Atrasado')>=0?4:0) + (b.diarias_rest!==null&&b.diarias_rest<0?2:0);
+    return sb - sa;
+  }).slice(0, 10);
+
+  var critHtml = criticos.length ? criticos.map(function(x) {
+    var isA = x.status.indexOf('Atrasado') >= 0;
+    var isE = x.diarias_rest !== null && x.diarias_rest < 0;
+    var dotCol  = isA ? 'var(--red)' : 'var(--orange)';
+    var urgClr  = isA ? 'var(--red)' : 'var(--orange)';
+    var urgBg   = isA ? 'var(--red-s)' : 'var(--orange-s)';
+    var urgLbl  = (isA && isE) ? 'Critico' : isA ? 'Atrasado' : 'Excedido';
+    var reasons = [];
+    if (isA) reasons.push('Projeto marcado como Atrasado');
+    if (isE) reasons.push('Di&aacute;rias excedidas: usou ' + fn(x.diarias_real) + ' de ' + fn(x.diarias_cont) + ' contratadas (+' + fn(Math.abs(x.diarias_rest)) + 'd)');
+    var dV = parseD(x.data_venda), dK = parseD(x.data_kick), dT = parseD(x.data_inicio);
+    var vk = diffD(dV, dK), vt = diffD(dV, dT), kt = diffD(dK, dT);
+    if (vk !== null && vk > 7)  reasons.push('Kickoff ' + vk + ' dias ap&oacute;s a venda (limite 7d)');
+    if (vt !== null && vt > 15) reasons.push('1&ordm; Treinamento ' + vt + ' dias ap&oacute;s a venda (limite 15d)');
+    if (kt !== null && kt > 15) reasons.push('1&ordm; Treinamento ' + kt + ' dias ap&oacute;s o Kickoff (limite 15d)');
+    var reasonsHtml = reasons.length ? '<div style="display:flex;flex-wrap:wrap;gap:5px;margin-top:2px">'+
+      reasons.map(function(r) {
+        return '<span style="font-size:10px;color:'+urgClr+';background:rgba(255,255,255,.5);border:1px solid '+(isA?'rgba(192,57,43,.2)':'rgba(184,92,0,.2)')+';border-radius:4px;padding:2px 8px;font-weight:600">'+r+'</span>';
+      }).join('')+'</div>' : '';
+    var pillStyle = 'display:inline-flex;align-items:center;gap:3px;background:var(--surf2);border:1px solid var(--border);border-radius:20px;padding:2px 9px;font-size:10px;white-space:nowrap;';
+    var dStyle = 'font-size:9px;font-weight:600;text-transform:uppercase;letter-spacing:.4px;color:var(--muted);margin-right:2px;';
+    var pills =
+      '<span style="'+pillStyle+'"><span style="'+dStyle+'">Consultor</span><span style="font-weight:700;color:'+ccol(x.consultor||'')+'">'+(x.consultor||'—')+'</span></span>'+
+      (x.vendedor ? '<span style="'+pillStyle+'"><span style="'+dStyle+'">Vendedor</span><span style="font-weight:600;color:var(--text2)">'+x.vendedor+'</span></span>' : '')+
+      '<span style="'+pillStyle+'"><span style="'+dStyle+'">'+x.mes+'/2026</span></span>'+
+      (x.formato ? '<span style="'+pillStyle+'"><span style="font-weight:600;color:var(--text2)">'+x.formato+'</span></span>' : '');
+    var dates = [];
+    if (x.data_venda)  dates.push('<span style="'+dStyle+'">Venda</span> <span style="font-size:11px;font-weight:600;color:var(--text2)">'+fd(x.data_venda)+'</span>');
+    if (x.data_kick)   dates.push('<span style="'+dStyle+'">Kickoff</span> <span style="font-size:11px;font-weight:600;color:var(--text2)">'+fd(x.data_kick)+'</span>');
+    if (x.data_inicio) dates.push('<span style="'+dStyle+'">1&ordm; Treinamento</span> <span style="font-size:11px;font-weight:600;color:var(--text2)">'+fd(x.data_inicio)+'</span>');
+    var datesHtml = dates.length ? '<div style="display:flex;gap:12px;flex-wrap:wrap;padding-left:14px;margin-top:4px">'+dates.join('')+'</div>' : '';
+
+    return '<div style="padding:10px 14px;border-radius:8px;margin-bottom:6px;background:'+urgBg+';border:1px solid '+(isA?'rgba(192,57,43,.15)':'rgba(184,92,0,.15)')+'" >'+
+      '<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:5px">'+
+        '<div style="display:flex;align-items:center;gap:7px;min-width:0;flex:1">'+
+          '<div style="width:8px;height:8px;border-radius:50%;background:'+dotCol+';flex-shrink:0"></div>'+
+          '<div style="font-size:13px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+x.cliente+'</div>'+
         '</div>'+
+        '<span style="font-size:9px;font-weight:800;padding:2px 7px;border-radius:10px;background:'+dotCol+';color:#fff;flex-shrink:0;white-space:nowrap">'+urgLbl+'</span>'+
+      '</div>'+
+      '<div style="display:flex;gap:5px;flex-wrap:wrap;margin-bottom:4px">'+pills+'</div>'+
+      datesHtml+
+      '<div style="margin-top:5px">'+reasonsHtml+'</div>'+
+    '</div>';
+  }).join('') :
+  '<div style="padding:20px;text-align:center;color:var(--green);font-weight:600">Nenhum projeto cr&iacute;tico</div>';
+
+  var byC = {};
+  p.forEach(function(x) {
+    var c = x.consultor || 'Sem consultor';
+    if (!byC[c]) byC[c] = {t:0, atr:0, exc:0};
+    byC[c].t++;
+    if (x.status.indexOf('Atrasado') >= 0) byC[c].atr++;
+    if (x.diarias_rest !== null && x.diarias_rest < 0) byC[c].exc++;
+  });
+  var maxT = 0;
+  Object.keys(byC).forEach(function(k) { if (byC[k].t > maxT) maxT = byC[k].t; });
+  var rankHtml = Object.keys(byC).sort(function(a,b) { return byC[b].t - byC[a].t; }).map(function(c) {
+    var d = byC[c], col = ccol(c), pct = maxT > 0 ? Math.round((d.t/maxT)*100) : 0;
+    var prob = d.atr + d.exc;
+    var statCol = prob > 2 ? 'var(--red)' : prob > 0 ? 'var(--orange)' : 'var(--green)';
+    var parts = [];
+    if (d.atr > 0) parts.push(d.atr + ' atrasado'+(d.atr>1?'s':''));
+    if (d.exc > 0) parts.push(d.exc + ' di&aacute;ria'+(d.exc>1?'s':'')+' excedida'+(d.exc>1?'s':''));
+    var probText = parts.length ? parts.join(' e ') : 'Tudo OK';
+    return '<div style="margin-bottom:12px">'+
+      '<div style="display:flex;align-items:center;gap:8px;margin-bottom:3px">'+
+        '<div style="font-size:12px;font-weight:700;min-width:80px;color:'+col+'">'+c+'</div>'+
+        '<div style="flex:1;background:var(--border);height:7px;border-radius:3px;overflow:hidden">'+
+          '<div style="width:'+pct+'%;height:100%;background:'+col+';border-radius:3px"></div>'+
+        '</div>'+
+        '<div style="font-size:11px;font-weight:700;min-width:20px;text-align:right">'+d.t+'</div>'+
+      '</div>'+
+      '<div style="padding-left:88px;font-size:10px;color:'+statCol+';font-weight:600">'+
+        (prob > 0 ? '! ' : '')+probText+
       '</div>'+
     '</div>';
-
-  var rankRows = operation.ranking.length ? operation.ranking.slice(0,8).map(function(c){
-    var pctCarga = operation.mediaProjetos ? Math.round((c.projetos / operation.mediaProjetos) * 100) : 0;
-    var classe = c.classe === 'bad' ? 'bad' : c.classe === 'warn' ? 'warn' : 'good';
-    return '<div class="dashx-list-item"><div class="dashx-list-main"><div class="dashx-list-title" style="color:'+ccol(c.nome)+'">'+c.nome+'</div><div class="dashx-list-sub">'+c.projetos+' projeto(s) • '+fn(c.diariasContr)+' contratadas • '+fn(c.diariasReal)+' realizadas • saldo '+fn(c.saldo)+'</div><div class="dashx-list-tags"><span class="dashx-card-alert '+classe+'">'+pctCarga+'% da m&eacute;dia da equipe</span><span class="dashx-card-alert '+(c.riscos ? 'warn' : 'good')+'">'+c.riscos+' em risco</span><span class="dashx-card-alert '+(c.esquecidos ? 'bad' : 'good')+'">'+c.esquecidos+' sem cad&ecirc;ncia</span></div></div><div class="dashx-score-pill '+classe+'">'+c.score+' health</div></div>';
-  }).join('') : '<div class="dashx-unavailable"><strong>Nenhum consultor encontrado</strong><span>O filtro atual n&atilde;o retornou consultores com carteira atribu&iacute;da.</span></div>';
-  var monthsForHeat = ORDEM_MESES.filter(function(m){ return allBase.some(function(p){ return String(p.mes || '').toUpperCase() === m; }); });
-  var heatRows = operation.ranking.slice(0,8).map(function(c){
-    return '<div class="dashx-heatmap-row"><div class="dashx-heatmap-name">'+c.nome+'</div>'+monthsForHeat.map(function(m){
-      var cell = operation.heatMap[c.nome] && operation.heatMap[c.nome][m] ? operation.heatMap[c.nome][m] : {projetos:0,diariasContr:0,diariasReal:0, riscos:0};
-      var cls = cell.projetos === 0 ? 'zero' : cell.projetos <= 2 ? 'low' : cell.projetos <= 4 ? 'med' : 'high';
-      return '<div class="dashx-heatmap-cell '+cls+'" title="'+c.nome+' | '+m+' | '+cell.projetos+' projeto(s) | '+fn(cell.diariasContr)+' contratadas | '+fn(cell.diariasReal)+' realizadas | '+cell.riscos+' em risco">'+cell.projetos+'</div>';
-    }).join('')+'</div>';
   }).join('');
-  var maxBin = Math.max.apply(null, Object.keys(operation.bins).map(function(k){ return operation.bins[k]; }).concat([1]));
-  var agingBars = Object.keys(operation.bins).map(function(k){
-    var value = operation.bins[k];
-    var pct = Math.round((value / maxBin) * 100);
-    var col = k === '30+' ? 'var(--red)' : k === '16–30' ? 'var(--orange)' : k === '8–15' ? 'var(--blue)' : 'var(--green)';
-    return '<div class="dashx-bar-row"><div class="dashx-bar-label">'+k+' dias</div><div class="dashx-bar-track"><div class="dashx-bar-fill" style="width:'+pct+'%;background:'+col+'"></div></div><div class="dashx-bar-value">'+value+'</div></div>';
+
+  var trendMonths = mActive.slice(-6);
+  var maxV = 1;
+  var tData = trendMonths.map(function(m) {
+    var totalM = allP.filter(function(x){return x.mes===m&&x.cliente;}).length;
+    var and_n  = cFor(m, function(x){return x.status.indexOf('Andamento')>=0;});
+    var ag_n   = cFor(m, function(x){return x.status.indexOf('Aguardando')>=0;});
+    var atr_n  = cFor(m, function(x){return x.status.indexOf('Atrasado')>=0;});
+    var exc_n  = cFor(m, function(x){return x.diarias_rest!==null&&x.diarias_rest<0;});
+    if (totalM > maxV) maxV = totalM;
+    return {m:m, total:totalM, and:and_n, ag:ag_n, a:atr_n, e:exc_n};
+  });
+
+  var statRows = [
+    {l:'Em Andamento', n:and, col:'var(--orange)'},
+    {l:'Aguardando In&iacute;cio', n:ag, col:'var(--blue)'},
+    {l:'Atrasado', n:atr, col:'var(--red)'}
+  ].filter(function(s){return s.n>0;}).map(function(s){
+    var pct = total > 0 ? Math.round((s.n/total)*100) : 0;
+    return '<div class="stat-row">'+
+      '<div class="stat-info"><span style="font-size:12px;font-weight:600">'+s.l+'</span><span style="font-size:12px;font-weight:700;color:'+s.col+'">'+s.n+' ('+pct+'%)</span></div>'+
+      '<div class="stat-bar-bg"><div class="stat-bar-fill" style="width:'+pct+'%;background:'+s.col+'"></div></div>'+
+    '</div>';
   }).join('');
-  var agingRows = operation.agingList.length ? operation.agingList.map(function(a){
-    return '<tr><td><strong>'+a.projeto.cliente+'</strong></td><td>'+towerBadge(a.projeto.consultor || 'Sem consultor', a.projeto.consultor ? '' : 'r')+'</td><td>'+sl(a.projeto.status || '-')+'</td><td class="num">'+(a.diasSem !== null ? a.diasSem : '-')+'</td><td><a class="project-link-btn" href="'+(a.projeto.projeto_link || '#')+'" target="_blank" rel="noopener noreferrer">'+(a.projeto.projeto_link ? 'Abrir projeto' : 'Sem link')+'</a></td></tr>';
-  }).join('') : '<tr class="empty-row"><td colspan="5">Nenhum projeto com aging relevante no recorte.</td></tr>';
-  var opSection =
-    '<div class="dashx-section">'+
-      '<div class="dashx-section-head"><div><div class="dashx-section-kicker">Se&ccedil;&atilde;o 2</div><div class="dashx-section-title">Opera&ccedil;&atilde;o / Sobrecarga</div><div class="dashx-section-sub">Quem est&aacute; sobrecarregado, em qual m&ecirc;s a carteira apertou e quantos projetos est&atilde;o envelhecendo sem update.</div></div><div class="dashx-section-answer"><span class="dashx-answer-chip">Quem est&aacute; sobrecarregado?</span></div></div>'+
-      '<div class="dashx-section-body"><div class="dashx-grid-2"><div class="dashx-stack"><div class="dashx-mini-card"><div class="dashx-mini-label">Ranking de consultores'+towerInfoButton('operationLoad')+'</div><div class="dashx-list">'+rankRows+'</div></div><div class="dashx-mini-card"><div class="dashx-mini-label">Aging de projetos sem update'+towerInfoButton('aging')+'</div><div class="dashx-bars">'+agingBars+'</div></div></div><div class="dashx-stack"><div class="dashx-mini-card"><div class="dashx-mini-label">Heatmap consultor x m&ecirc;s'+towerInfoButton('heatmapLoad')+'</div><div class="dashx-heatmap"><div class="dashx-heatmap-header"><div></div>'+monthsForHeat.map(function(m){ return '<div class="dashx-heatmap-head">'+m+'</div>'; }).join('')+'</div>'+heatRows+'</div></div><div class="dashx-table-wrap"><table class="dashx-table"><thead><tr><th>Cliente</th><th>Consultor</th><th>Status</th><th class="num">Dias sem update</th><th>Link</th></tr></thead><tbody>'+agingRows+'</tbody></table></div></div></div></div>'+
+
+  var dc = document.getElementById('dash-content');
+  if (!dc) return;
+  dc.innerHTML = kgrid +
+    '<div class="dash-row">'+
+      '<div class="dash-panel">'+
+        '<div class="dash-ph"><span class="dash-ph-title">Projetos Criticos</span><span style="font-size:10px;color:var(--muted)">'+criticos.length+' de '+total+'</span></div>'+
+        '<div class="dash-pb" style="padding:0 16px">'+critHtml+'</div>'+
+      '</div>'+
+      '<div class="dash-panel">'+
+        '<div class="dash-ph"><span class="dash-ph-title">Tend&ecirc;ncia por M&ecirc;s</span></div>'+
+        '<div class="dash-pb">'+buildTrend(tData, maxV, mActive)+'</div>'+
+      '</div>'+
+    '</div>'+
+    '<div class="dash-row2">'+
+      '<div class="dash-panel">'+
+        '<div class="dash-ph"><span class="dash-ph-title">Ranking Consultores</span></div>'+
+        '<div class="dash-pb">'+rankHtml+'</div>'+
+      '</div>'+
+      '<div class="dash-panel">'+
+        '<div class="dash-ph"><span class="dash-ph-title">Status dos Projetos</span></div>'+
+        '<div class="dash-pb">'+statRows+'</div>'+
+      '</div>'+
     '</div>';
-
-  var execSection = execution.unavailable ?
-    '<div class="dashx-section"><div class="dashx-section-head"><div><div class="dashx-section-kicker">Se&ccedil;&atilde;o 3</div><div class="dashx-section-title">Execu&ccedil;&atilde;o / Di&aacute;rias</div><div class="dashx-section-sub">KPI indispon&iacute;vel — campo necess&aacute;rio n&atilde;o encontrado.</div></div></div><div class="dashx-section-body">'+dashUnavailableCard('Burndown de di&aacute;rias', execution.unavailable)+'</div></div>' :
-    '<div class="dashx-section">'+
-      '<div class="dashx-section-head"><div><div class="dashx-section-kicker">Se&ccedil;&atilde;o 3</div><div class="dashx-section-title">Execu&ccedil;&atilde;o / Di&aacute;rias</div><div class="dashx-section-sub">As di&aacute;rias est&atilde;o sendo consumidas corretamente? Aqui fica o contratado, o realizado, o saldo e os excessos.</div></div><div class="dashx-section-answer"><span class="dashx-answer-chip">Consumo vs saldo</span></div></div>'+
-      '<div class="dashx-section-body"><div class="dashx-burndown"><div class="dashx-burndown-hero"><div class="dashx-burndown-box"><div class="label">Burndown consolidado'+towerInfoButton('dailyBurn')+'</div><div class="value">'+fn(execution.totalReal)+' / '+fn(execution.totalContr)+'</div><div class="sub">'+dashPct(execution.percent)+' consumido • saldo '+fn(execution.saldo)+' di&aacute;rias</div><div class="dashx-bar-track" style="margin-top:12px"><div class="dashx-bar-fill" style="width:'+Math.min(100, execution.percent || 0)+'%;background:'+(execution.percent > 100 ? 'var(--red)' : execution.percent >= 80 ? 'var(--orange)' : 'var(--green)')+'"></div></div></div><div class="dashx-burndown-box"><div class="label">Di&aacute;rias contratadas</div><div class="value">'+fn(execution.totalContr)+'</div><div class="sub">Soma das di&aacute;rias vendidas/contratadas no recorte.</div></div><div class="dashx-burndown-box"><div class="label">Saldo dispon&iacute;vel</div><div class="value">'+fn(execution.saldo)+'</div><div class="sub">'+(execution.negativos.length ? execution.negativos.length+' projeto(s) com saldo negativo.' : 'Nenhum projeto excedido no recorte.')+'</div></div></div><div class="dashx-grid-2"><div class="dashx-mini-card"><div class="dashx-mini-label">Contratado x realizado por consultor'+towerInfoButton('dailyBalance')+'</div><div class="dashx-bars">'+execution.ranking.slice(0,8).map(function(c){ var pct = c.contratadas > 0 ? Math.round((c.realizadas / c.contratadas) * 100) : 0; return '<div class="dashx-bar-row"><div class="dashx-bar-label">'+c.nome+'</div><div class="dashx-bar-track"><div class="dashx-bar-fill" style="width:'+Math.min(100,pct)+'%;background:'+(pct > 100 ? 'var(--red)' : pct >= 80 ? 'var(--orange)' : 'var(--green)')+'"></div></div><div class="dashx-bar-value">'+fn(c.realizadas)+' / '+fn(c.contratadas)+'</div></div>'; }).join('')+'</div></div><div class="dashx-table-wrap"><table class="dashx-table"><thead><tr><th>Cliente</th><th>Consultor</th><th class="num">Contratadas</th><th class="num">Realizadas</th><th class="num">Saldo</th><th class="num">% consumo</th><th>Status</th></tr></thead><tbody>'+(execution.negativos.length ? execution.negativos.map(function(p){ var pct = Number(p.diarias_cont || 0) > 0 ? Math.round((Number(p.diarias_real || 0) / Number(p.diarias_cont || 0)) * 100) : 0; return '<tr><td><strong>'+p.cliente+'</strong></td><td>'+towerBadge(p.consultor || 'Sem consultor', p.consultor ? '' : 'r')+'</td><td class="num">'+fn(p.diarias_cont)+'</td><td class="num">'+fn(p.diarias_real)+'</td><td class="num">'+fn(p.diarias_rest)+'</td><td class="num">'+pct+'%</td><td><span class="dashx-card-alert bad">Di&aacute;rias excedidas</span></td></tr>'; }).join('') : '<tr class="empty-row"><td colspan="7">Nenhum projeto com saldo negativo.</td></tr>')+'</tbody></table></div></div></div></div>'+
-    '</div>';
-
-  var stalledRows = funnel.stalled.length ? funnel.stalled.map(function(item){
-    var p = item.projeto;
-    var stageLabel = item.stage.stage === 'kickoff' ? 'Kickoff' : item.stage.stage === 'treinamento' ? '1&ordm; Treinamento' : 'Venda';
-    return '<tr><td><strong>'+p.cliente+'</strong></td><td>'+stageLabel+'</td><td>'+towerBadge(p.consultor || 'Sem consultor', p.consultor ? '' : 'r')+'</td><td class="num">'+(item.stage.daysInStage !== null ? item.stage.daysInStage : '-')+'</td><td>'+(p.acompanhamento ? String(p.acompanhamento).slice(0, 72) : 'Revisar manualmente')+'</td></tr>';
-  }).join('') : '<tr class="empty-row"><td colspan="5">Nenhum projeto parado por etapa no recorte.</td></tr>';
-  var funnelSection = funnelMissing.length ?
-    '<div class="dashx-section"><div class="dashx-section-head"><div><div class="dashx-section-kicker">Se&ccedil;&atilde;o 4</div><div class="dashx-section-title">Funil de Implanta&ccedil;&atilde;o</div><div class="dashx-section-sub">KPI indispon&iacute;vel — campo necess&aacute;rio n&atilde;o encontrado.</div></div></div><div class="dashx-section-body">'+dashUnavailableCard('Funil Venda → Kickoff → 1º Treinamento → Ativa&ccedil;&atilde;o', funnelMissing)+'</div></div>' :
-    '<div class="dashx-section">'+
-      '<div class="dashx-section-head"><div><div class="dashx-section-kicker">Se&ccedil;&atilde;o 4</div><div class="dashx-section-title">Funil de Implanta&ccedil;&atilde;o</div><div class="dashx-section-sub">O cliente est&aacute; avan&ccedil;ando ou travando? Aqui ficam as convers&otilde;es da venda at&eacute; a ativa&ccedil;&atilde;o.</div></div><div class="dashx-section-answer"><span class="dashx-answer-chip">Cliente avan&ccedil;a ou trava?</span></div></div>'+
-      '<div class="dashx-section-body"><div class="dashx-funnel"><div class="dashx-funnel-step"><div class="dashx-funnel-label">1. Venda'+towerInfoButton('funnel')+'</div><div class="dashx-funnel-value">'+funnel.totalVendas+'</div><div class="dashx-funnel-sub">Base de entrada do funil no recorte atual.</div></div><div class="dashx-funnel-step"><div class="dashx-funnel-label">2. Kickoff</div><div class="dashx-funnel-value">'+funnel.totalKick+'</div><div class="dashx-funnel-conv">'+dashPct(funnel.convVK)+' de convers&atilde;o</div><div class="dashx-funnel-sub">Projetos que j&aacute; passaram da etapa comercial para kickoff.</div></div><div class="dashx-funnel-step"><div class="dashx-funnel-label">3. 1&ordm; Treinamento</div><div class="dashx-funnel-value">'+funnel.totalTrein+'</div><div class="dashx-funnel-conv">'+dashPct(funnel.convKT)+' de convers&atilde;o</div><div class="dashx-funnel-sub">Projetos com data de in&iacute;cio/trilha j&aacute; registrada.</div></div><div class="dashx-funnel-step"><div class="dashx-funnel-label">4. Ativa&ccedil;&atilde;o</div><div class="dashx-funnel-value">'+funnel.totalAtiv+'</div><div class="dashx-funnel-conv">'+dashPct(funnel.convTA)+' de convers&atilde;o</div><div class="dashx-funnel-sub">'+(funnel.explicitActivation ? 'Ativa&ccedil;&atilde;o por campo real.' : 'Ativa&ccedil;&atilde;o estimada por status/data de treinamento.')+'</div></div></div><div class="dashx-table-wrap" style="margin-top:16px"><table class="dashx-table"><thead><tr><th>Cliente</th><th>Etapa atual</th><th>Consultor</th><th class="num">Dias na etapa</th><th>Pr&oacute;xima a&ccedil;&atilde;o</th></tr></thead><tbody>'+stalledRows+'</tbody></table></div></div>'+
-    '</div>';
-
-  var cohortRows = cohort.length ? cohort.map(function(row){
-    function pill(pct){ var cls = pct === null ? 'neutral' : pct >= 70 ? 'good' : pct >= 40 ? 'warn' : 'bad'; return '<span class="dashx-score-pill '+cls+'">'+dashPct(pct)+'</span>'; }
-    return '<tr><td><strong>'+row.mes+'</strong></td><td class="num">'+row.vendidos+'</td><td class="num">'+pill(row.kickoffPct)+'</td><td class="num">'+pill(row.treinoPct)+'</td><td class="num">'+pill(row.ativPct)+'</td><td class="num">'+(row.tempoAtiv !== null ? row.tempoAtiv+' dias' : 'KPI indispon&iacute;vel')</td></tr>';
-  }).join('') : '<tr class="empty-row"><td colspan="6">Sem coortes no recorte atual.</td></tr>';
-  var cohortSection = cohortMissing.length ?
-    '<div class="dashx-section"><div class="dashx-section-head"><div><div class="dashx-section-kicker">Se&ccedil;&atilde;o 5</div><div class="dashx-section-title">Cohort Mensal</div><div class="dashx-section-sub">KPI indispon&iacute;vel — campo necess&aacute;rio n&atilde;o encontrado.</div></div></div><div class="dashx-section-body">'+dashUnavailableCard('Matriz mensal de evolu&ccedil;&atilde;o', cohortMissing)+'</div></div>' :
-    '<div class="dashx-section">'+
-      '<div class="dashx-section-head"><div><div class="dashx-section-kicker">Se&ccedil;&atilde;o 5</div><div class="dashx-section-title">Cohort Mensal</div><div class="dashx-section-sub">Os clientes vendidos em cada m&ecirc;s est&atilde;o evoluindo? Esta matriz mostra kickoff, treinamento, ativa&ccedil;&atilde;o e tempo m&eacute;dio at&eacute; a ativa&ccedil;&atilde;o.</div></div><div class="dashx-section-answer"><span class="dashx-answer-chip">Evolu&ccedil;&atilde;o por m&ecirc;s de venda</span></div></div>'+
-      '<div class="dashx-section-body"><div class="dashx-matrix"><table><thead><tr><th>M&ecirc;s venda</th><th class="num">Vendidos</th><th class="num">Kickoff %</th><th class="num">1&ordm; Treinamento %</th><th class="num">Ativa&ccedil;&atilde;o %</th><th class="num">Tempo m&eacute;dio at&eacute; ativa&ccedil;&atilde;o</th></tr></thead><tbody>'+cohortRows+'</tbody></table></div></div>'+
-    '</div>';
-
-  var hero =
-    '<div class="dashx-hero"><div class="dashx-hero-top"><div class="dashx-title-wrap"><div class="dashx-eyebrow">Dashboard principal</div><div class="dashx-title">Dashboard Executivo CSI</div><div class="dashx-sub">Vis&atilde;o consolidada de sa&uacute;de, opera&ccedil;&atilde;o, execu&ccedil;&atilde;o e evolu&ccedil;&atilde;o dos projetos. O foco aqui &eacute; resposta gerencial r&aacute;pida, n&atilde;o s&oacute; volume de m&eacute;tricas.</div></div><div class="dashx-meta"><span class="dashx-meta-chip"><b>Projetos</b> '+base.length+'</span><span class="dashx-meta-chip"><b>Per&iacute;odo</b> '+topMonths+'</span><span class="dashx-meta-chip"><b>Atualizado</b> '+(((document.getElementById('nav-date') || {}).textContent) || '-')+'</span></div></div><div class="dashx-filters">'+filterRows+'</div></div>';
-
-  dc.innerHTML = '<div class="dashx-shell">'+hero+'<div class="dashx-top-grid">'+topGrid+'</div>'+healthSection+opSection+execSection+funnelSection+cohortSection+'</div>';
 }
 
 function buildTrend(tData, maxV, mActive) {
