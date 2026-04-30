@@ -6667,18 +6667,24 @@ function montarProjectKeyClickup(p) {
   var cliente = normalizeClienteKey(p.cliente || p.nome_cliente || '');
   return mes && cliente ? (mes + '|' + cliente) : '';
 }
+function encontrarProjetoPorChaveSync(key) {
+  var chave = String(key || '').trim();
+  if (!chave) return null;
+  return (DATA.projetos || []).filter(function(item) {
+    if (!item || typeof item !== 'object') return false;
+    var keyInterna = String(item._key || '').trim();
+    var keyProjeto = montarProjectKeyClickup(item);
+    var keyLink = chaveResumoManualProjeto(item, 'link');
+    var keyCliente = chaveResumoManualProjeto(item, 'cliente');
+    return keyInterna === chave || keyProjeto === chave || keyLink === chave || keyCliente === chave;
+  })[0] || null;
+}
 window.sincronizarClickupProjeto = function(key, btn) {
   var chave = String(key || '').trim();
-  var projeto = (DATA.projetos || []).filter(function(item) {
-    return String(item && item._key || '') === chave;
-  })[0];
-  if (!projeto) {
-    showToast('Projeto nao encontrado para sincronizar', 'err');
-    return false;
-  }
-  var projectKey = montarProjectKeyClickup(projeto);
+  var projeto = encontrarProjetoPorChaveSync(chave);
+  var projectKey = projeto ? montarProjectKeyClickup(projeto) : (chave.indexOf('|') > 0 ? chave : '');
   if (!projectKey) {
-    showToast('Projeto sem chave ClickUp configurada', 'err');
+    showToast('Projeto nao encontrado para sincronizar', 'err');
     return false;
   }
   var labelOriginal = btn ? btn.textContent : '';
@@ -6686,7 +6692,7 @@ window.sincronizarClickupProjeto = function(key, btn) {
     btn.disabled = true;
     btn.textContent = 'Sincronizando...';
   }
-  showToast('Sincronizando ClickUp: ' + (projeto.cliente || 'projeto'), 'ok');
+  showToast('Sincronizando ClickUp: ' + ((projeto && projeto.cliente) || projectKey || 'projeto'), 'ok');
   chamarAppsScriptJsonp('syncProject', {
     project_key: projectKey
   }, 60000).then(function(resp) {
@@ -6702,7 +6708,7 @@ window.sincronizarClickupProjeto = function(key, btn) {
     resetarCachesDerivadosPainel({ limparCachePainel: true });
     showToast(resp.warning ? ('ClickUp sincronizado com fallback: ' + resp.warning) : 'ClickUp sincronizado. Validando atualizacao no painel...', 'ok');
     if (btn) btn.textContent = 'Atualizando painel...';
-    aguardarReflexoSyncClickup(chave, resp.synced_at).then(function(refletiu){
+    aguardarReflexoSyncClickup(projectKey, resp.synced_at).then(function(refletiu){
       resetarCachesDerivadosPainel({ limparCachePainel: true });
       loadAll('manual');
       showToast(refletiu ? 'ClickUp atualizado no painel.' : 'ClickUp sincronizado; painel recarregado com a versao mais recente disponivel.', refletiu ? 'ok' : 'warn');
@@ -6729,7 +6735,7 @@ window.removerResumoClickupProjeto = function(key) {
   return true;
 };
 function buildResumoActions(p) {
-  var chave = chaveResumoManualProjeto(p, 'link');
+  var chave = montarProjectKeyClickup(p) || String(p && p._key || '').trim() || chaveResumoManualProjeto(p, 'cliente');
   var chaveSyncAttr = encodeURIComponent(String(chave || ''));
   var abrirHtml = p && p.projeto_link
     ? '<a class="project-link project-link-btn" href="'+p.projeto_link+'" target="_blank" rel="noopener noreferrer" onclick="event.stopPropagation()">Abrir Projeto</a>'
