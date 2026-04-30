@@ -5780,14 +5780,14 @@ var DASH_TOWER_INFO = {
     real:'Valor real quando a planilha já traz saldo/calcula saldo corretamente.',
     confidence:'Alta'
   },
-  activationRate: {
-    title:'Taxa de ativação',
-    sub:'Conversão geral da venda até a ativação.',
-    calc:['Fórmula: total_ativados / total_vendas * 100.','Depende de data_venda, data_kick e data_inicio, com ativação real ou estimada.'],
-    fields:['data_venda','data_kick','data_inicio','data_ativacao','status','diarias_real'],
-    real:'Real quando existe data de ativação; estimado quando a base só indica treinamento/status.'],
-    confidence:'Média'
-  },
+    activationRate: {
+      title:'Taxa de ativação',
+      sub:'Conversão geral da venda até a ativação.',
+      calc:['Fórmula: total_ativados / total_vendas * 100.','Depende de data_venda, data_kick e data_inicio, com ativação real ou estimada.'],
+      fields:['data_venda','data_kick','data_inicio','data_ativacao','status','diarias_real'],
+      real:'Real quando existe data de ativação; estimado quando a base só indica treinamento/status.',
+      confidence:'Média'
+    },
   funnel: {
     title:'Funil de implantação',
     sub:'Evolução da venda até ativação.',
