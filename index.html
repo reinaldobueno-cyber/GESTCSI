@@ -4263,25 +4263,25 @@ function dashDataHealth(list) {
   var completude = expected ? Math.round((filled / expected) * 100) : null;
   var updates = list.map(dashLastUpdateDate).filter(function(d){ return !!d; });
   var syncDates = list.map(dashLastSyncDate).filter(function(d){ return !!d; });
-  var syncOk = list.filter(function(p){
-    var d = dashLastUpdateDate(p);
-    var h = dashHoursSince(d);
-    return h !== null && h <= 24;
-  }).length;
-  var syncAttention = list.filter(function(p){
-    var d = dashLastUpdateDate(p);
-    var h = dashHoursSince(d);
-    return h !== null && h > 24 && h <= 48;
-  }).length;
-  var syncCritical = list.filter(function(p){
-    var d = dashLastUpdateDate(p);
-    var h = dashHoursSince(d);
-    return h !== null && h > 48;
-  }).length;
-  var syncOkPct = list.length ? Math.round((syncOk / list.length) * 100) : null;
   var syncCandidates = list.filter(function(p){
     return dashFieldPresent(p, ['list_id','view_id']) || dashHasRawValue((p && p.clickup_json) || '') || dashHasRawValue(dashProjectSyncStatus(p)) || dashHasRawValue(dashProjectSyncError(p));
   });
+  var syncOk = syncCandidates.filter(function(p){
+    var d = dashLastSyncDate(p);
+    var h = dashHoursSince(d);
+    return h !== null && h <= 24;
+  }).length;
+  var syncAttention = syncCandidates.filter(function(p){
+    var d = dashLastSyncDate(p);
+    var h = dashHoursSince(d);
+    return h !== null && h > 24 && h <= 48;
+  }).length;
+  var syncCritical = syncCandidates.filter(function(p){
+    var d = dashLastSyncDate(p);
+    var h = dashHoursSince(d);
+    return h === null || h > 48;
+  }).length;
+  var syncOkPct = syncCandidates.length ? Math.round((syncOk / syncCandidates.length) * 100) : null;
   var syncErrors = syncCandidates.filter(function(p){
     return /error|falha/.test(dashProjectSyncStatus(p)) || !!dashProjectSyncError(p);
   }).length;
@@ -4490,8 +4490,8 @@ function dashRenderHealthSection(health) {
   var mini = [
     dashMiniCard('Completude', dashPct(health.completude), health.completude === null ? 'Base sem projetos no filtro.' : 'Campos obrigatórios preenchidos no recorte atual.', dashMetricClass(health.completude, 70, 90, false), 'dataCompleteness'),
     dashMiniCard('Projetos com inconsistência', health.inconsistencias.length, health.inconsistencias.length ? 'Há campos obrigatórios faltando em parte da carteira.' : 'Nenhuma inconsistência encontrada.', health.inconsistencias.length ? (health.inconsistencias.length > Math.max(3, Math.round(health.syncOk / 2)) ? 'bad' : 'warn') : 'good', 'dataInconsistencies'),
-    dashMiniCard('Sync atualizado', dashPct(health.syncOkPct), (health.syncOk || 0)+' projeto(s) em até 24h, '+(health.syncAttention || 0)+' em atenção e '+(health.syncCritical || 0)+' críticos.', dashMetricClass(health.syncOkPct, 70, 90, false), 'syncFreshness'),
-    dashMiniCard('Erro / timeout de sync', health.syncCandidates ? dashPct(health.syncErrorRate) : '-', health.syncCandidates ? (health.syncErrors+' erro(s) em '+health.syncCandidates+' projeto(s) com rastreio técnico.') : 'Sem projetos com rastreio de sincronização no recorte.', dashMetricClass(health.syncErrorRate, 2, 10, true), 'syncErrors'),
+    dashMiniCard('Sync ClickUp recente', dashPct(health.syncOkPct), health.syncCandidates ? ((health.syncOk || 0)+' projeto(s) sincronizados em até 24h, '+(health.syncAttention || 0)+' em atenção e '+(health.syncCritical || 0)+' sem sync recente.') : 'Sem projetos com rastreio de sincronização no recorte.', dashMetricClass(health.syncOkPct, 70, 90, false), 'syncFreshness'),
+    dashMiniCard('Erro / timeout de sync', health.syncCandidates ? dashPct(health.syncErrorRate) : '-', health.syncCandidates ? (health.syncErrors+' erro(s) em '+health.syncCandidates+' projeto(s) monitorados pelo ClickUp.') : 'Sem projetos com rastreio de sincronização no recorte.', dashMetricClass(health.syncErrorRate, 2, 10, true), 'syncErrors'),
     dashMiniCard('Latência da origem', dashHourLabel(health.latencyHours), health.latestSource ? ('Última origem conhecida em '+fd(health.latestSource.toISOString())) : 'Data de origem indisponível.', dashMetricClass(health.latencyHours, 24, 48, true), 'sourceLatency')
   ].join('');
   var rows = health.inconsistencias.length ? health.inconsistencias.slice(0, 12).map(function(item){
