@@ -2025,6 +2025,9 @@ nav{
 .dashx-sub{font-size:13px;line-height:1.55;color:#5b685f;max-width:780px;}
 .dashx-meta{display:flex;align-items:center;gap:8px;flex-wrap:wrap;justify-content:flex-end;}
 .dashx-meta-chip,.dashx-filter-chip,.dashx-table-chip,.dashx-mini-chip{display:inline-flex;align-items:center;gap:6px;border-radius:999px;border:1px solid #d5dfd4;background:#fff;padding:6px 12px;font-size:11px;font-weight:800;color:#455347;}
+.dashx-mini-chip{cursor:pointer;}
+button.dashx-mini-chip{appearance:none;-webkit-appearance:none;font-family:inherit;line-height:1;border-color:#cfd9ce;}
+button.dashx-mini-chip:hover{background:#f3f8f3;border-color:#b9c9b8;}
 .dashx-meta-chip b{color:#809084;font-weight:900;letter-spacing:.08em;text-transform:uppercase;font-size:10px;}
 .dashx-filters{display:flex;flex-direction:column;gap:10px;padding-top:2px;}
 .dashx-filter-row{display:flex;align-items:flex-start;gap:12px;flex-wrap:wrap;}
@@ -2087,6 +2090,8 @@ nav{
 .dashx-info,.tower-info{display:inline-flex;align-items:center;justify-content:center;width:18px;height:18px;border-radius:999px;border:1px solid #d3ddd2;background:#fff;color:#607066;font-size:11px;font-weight:900;cursor:pointer;flex-shrink:0;transition:.16s ease;}
 .dashx-info:hover,.tower-info:hover{background:#eff5ee;color:#1f4129;border-color:#bfcebf;}
 .dashx-table-wrap{overflow:auto;border:1px solid #e3ebe3;border-radius:16px;}
+.dashx-table tbody tr[onclick]{cursor:pointer;}
+.dashx-table tbody tr.is-active td{background:#f4f9f4;border-bottom-color:#dce8dc;}
 .dashx-table{width:100%;border-collapse:collapse;min-width:720px;}
 .dashx-table th{background:#f7faf7;color:#809084;font-size:10px;font-weight:900;letter-spacing:.14em;text-transform:uppercase;padding:12px 14px;border-bottom:1px solid #e3ebe3;text-align:left;vertical-align:middle;}
 .dashx-table td{padding:12px 14px;border-bottom:1px solid #edf2ed;font-size:12px;color:#203027;vertical-align:top;}
@@ -2123,10 +2128,12 @@ nav{
 .dashx-funnel-conv{margin-top:10px;font-size:11px;font-weight:800;color:#33563d;}
 .dashx-funnel-sub{margin-top:6px;font-size:11px;color:#69766c;line-height:1.4;}
 .dashx-matrix{overflow:auto;border:1px solid #e3ebe3;border-radius:16px;}
-.dashx-matrix table{width:100%;border-collapse:collapse;min-width:760px;}
-.dashx-matrix th,.dashx-matrix td{padding:12px 14px;border-bottom:1px solid #edf2ed;font-size:12px;}
+.dashx-matrix table{width:100%;border-collapse:collapse;min-width:760px;table-layout:fixed;}
+.dashx-matrix th,.dashx-matrix td{padding:12px 14px;border-bottom:1px solid #edf2ed;font-size:12px;vertical-align:middle;}
 .dashx-matrix th{background:#f7faf7;color:#809084;font-size:10px;font-weight:900;letter-spacing:.14em;text-transform:uppercase;text-align:left;}
-.dashx-matrix td.num{text-align:right;font-variant-numeric:tabular-nums;}
+.dashx-matrix th.center,.dashx-matrix td.center{text-align:center;font-variant-numeric:tabular-nums;}
+.dashx-matrix th.tempo,.dashx-matrix td.tempo{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap;}
+.dashx-matrix td .dashx-score-pill{min-width:74px;}
 .dashx-score-pill{display:inline-flex;align-items:center;justify-content:center;min-width:76px;border-radius:999px;padding:5px 10px;font-size:10px;font-weight:900;}
 .dashx-score-pill.good{background:#e8f1e8;color:#31563b;}
 .dashx-score-pill.warn{background:#f4ead9;color:#8f622f;}
@@ -2165,6 +2172,8 @@ nav{
 .dashx-action-group-title{font-size:11px;font-weight:900;letter-spacing:.12em;text-transform:uppercase;color:#7f8d82;}
 .dashx-action-list{display:flex;flex-direction:column;gap:8px;}
 .dashx-action-item{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:10px;align-items:flex-start;padding:12px 13px;border-radius:14px;border:1px solid #e5ece4;background:#fbfcfa;}
+.dashx-action-item[role="button"]{cursor:pointer;}
+.dashx-action-item.is-active{border-color:#c8d8c6;background:#f4f9f4;}
 .dashx-action-main{min-width:0;display:flex;flex-direction:column;gap:4px;}
 .dashx-action-name{font-size:12px;font-weight:900;color:#14231b;line-height:1.35;}
 .dashx-action-reason{font-size:11px;line-height:1.45;color:#67756b;}
@@ -2175,9 +2184,15 @@ nav{
 .dashx-action-score.bad{background:#f9e1dd;color:#b45445;}
 .dashx-inline-note{padding:12px 14px;border-radius:14px;background:#f8fbf7;border:1px solid #dfe7de;font-size:12px;line-height:1.55;color:#5e6d62;}
 .dashx-inline-note strong{color:#203027;}
+.dashx-focus-note{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;flex-wrap:wrap;padding:12px 14px;border-radius:14px;background:#f8fbf7;border:1px solid #dfe7de;font-size:12px;line-height:1.55;color:#5e6d62;}
+.dashx-focus-note strong{color:#203027;}
+.dashx-focus-hint{font-size:10px;font-weight:900;letter-spacing:.08em;text-transform:uppercase;color:#6f7e73;}
 .dashx-health-toolbar{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-bottom:12px;}
 .dashx-health-title{font-size:12px;font-weight:900;color:#23332b;letter-spacing:.04em;}
 .dashx-health-sub{font-size:11px;color:#6c7a70;line-height:1.45;}
+.dashx-health-actions{display:flex;gap:8px;flex-wrap:wrap;align-items:center;}
+.dashx-health-link{display:inline-flex;align-items:center;justify-content:center;border-radius:999px;border:1px solid #c8d6c8;background:#fff;padding:5px 10px;font-size:10px;font-weight:900;color:#2d4b36;text-decoration:none;transition:.16s ease;}
+.dashx-health-link:hover{background:#eff5ee;border-color:#b5c9b4;color:#1f4129;}
 @media(max-width:1180px){
   .dashx-top-grid,.dashx-mini-grid,.dashx-health-grid,.dashx-burndown-hero,.dashx-funnel,.dashx-chart-grid{grid-template-columns:repeat(2,minmax(0,1fr));}
   .dashx-grid-2,.dashx-grid-3,.dashx-exec-grid{grid-template-columns:1fr;}
@@ -2321,6 +2336,9 @@ var activePeriod = 'all';
 var fS='all', fC='all', fM='all', fQ='';
 var DASH_FILTERS = { consultor:'all', vendedor:'all', status:'all', tipo:'all' };
 var DASH_HEALTH_VIEW = 'issues';
+var DASH_CLICKUP_CONSULTOR = '';
+var DASH_ACTION_CONSULTOR = '';
+var DASH_ACTION_MODE = 'projetos';
 var _openId = null;
 var ORDEM_MESES = ['JAN','FEV','MAR','ABR','MAI','JUN','JUL','AGO','SET','OUT','NOV','DEZ'];
 
@@ -4176,6 +4194,41 @@ function dashLastUpdateDate(p) {
   var direct = dashParseDate(raw);
   return direct || dashLastSyncDate(p);
 }
+function dashProjectHasClickUpTrace(p) {
+  return dashFieldPresent(p, ['list_id','view_id']) || dashHasRawValue((p && p.clickup_json) || '');
+}
+function dashLastClickUpUpdateDate(p) {
+  if (!dashProjectHasClickUpTrace(p)) return null;
+  var parsed = parseJsonSeguro((p && p.clickup_json) || '');
+  var raw = null;
+  if (parsed) {
+    raw =
+      (parsed.resumo && parsed.resumo.data_ultima_atualizacao) ||
+      parsed.data_ultima_atualizacao ||
+      parsed.updated_at ||
+      parsed.last_update ||
+      null;
+    if (!raw) {
+      var latestTs = 0;
+      function absorb(items) {
+        if (!Array.isArray(items)) return;
+        items.forEach(function(item) {
+          var d = dashParseDate(item && (item.updated_at || item.data_ultima_atualizacao || item.last_update));
+          if (d && d.getTime() > latestTs) latestTs = d.getTime();
+        });
+      }
+      absorb(parsed.tasks);
+      absorb(parsed.marcos);
+      if (latestTs) raw = new Date(latestTs).toISOString();
+    }
+  }
+  if (!raw) raw = dashValue(p, ['data_ultima_atualizacao','ultima_atualizacao_real','ultima_atualizacao','last_update']);
+  return dashParseDate(raw);
+}
+function dashClickUpAgingDays(p) {
+  var d = dashLastClickUpUpdateDate(p);
+  return d ? Math.max(0, diffD(d, new Date())) : null;
+}
 function dashProjectLink(p) {
   return String(dashValue(p, ['projeto_link','link_projeto','url_projeto','link']) || '').trim();
 }
@@ -4254,6 +4307,26 @@ function dashSetHealthView(view) {
   DASH_HEALTH_VIEW = view || 'issues';
   initDash();
 }
+function dashSetClickUpConsultor(nome) {
+  DASH_CLICKUP_CONSULTOR = nome || '';
+  initDash();
+  setTimeout(function(){ dashScrollToAuditBlock('dashx-clickup-audit'); }, 40);
+}
+function dashScrollToAuditBlock(id) {
+  var el = document.getElementById(id || '');
+  if (!el) return;
+  try {
+    el.scrollIntoView({ behavior:'smooth', block:'center' });
+  } catch (e) {
+    el.scrollIntoView();
+  }
+}
+function dashSetActionConsultor(nome, mode) {
+  DASH_ACTION_CONSULTOR = nome || '';
+  DASH_ACTION_MODE = mode || 'projetos';
+  initDash();
+  setTimeout(function(){ dashScrollToAuditBlock('dashx-action-audit'); }, 40);
+}
 function dashMetricClass(v, warnAt, badAt, inverse) {
   if (v === null || v === undefined || isNaN(v)) return 'neutral';
   if (inverse) {
@@ -4321,6 +4394,7 @@ function dashDataHealth(list) {
       }
     });
     if (faltas.length) inconsistencias.push({
+      projeto: p,
       cliente: p.cliente || '-',
       consultor: p.consultor || '-',
       status: sl(p.status || '-'),
@@ -4361,6 +4435,7 @@ function dashDataHealth(list) {
     var error = dashProjectSyncError(p);
     if (error || /error|falha/.test(status)) {
       syncErrorItems.push({
+        projeto: p,
         cliente: p.cliente || '-',
         consultor: p.consultor || '-',
         status: sl(p.status || '-'),
@@ -4370,6 +4445,7 @@ function dashDataHealth(list) {
     }
     if (syncHours === null || syncHours > 48) {
       syncCriticalItems.push({
+        projeto: p,
         cliente: p.cliente || '-',
         consultor: p.consultor || '-',
         status: sl(p.status || '-'),
@@ -4383,6 +4459,7 @@ function dashDataHealth(list) {
     var hours = dashHoursSince(updateDate);
     if (hours !== null && hours > 24 * 7) {
       staleItems.push({
+        projeto: p,
         cliente: p.cliente || '-',
         consultor: p.consultor || '-',
         status: sl(p.status || '-'),
@@ -4438,17 +4515,80 @@ function dashOperation(list, analyses) {
       riscos: c.riscos,
       esquecidos: c.esquecidos,
       score: c.score,
-      classe: c.total >= mediaProjetos * 1.5 ? 'bad' : c.total >= mediaProjetos * 1.2 ? 'warn' : 'good'
+      classe: c.total >= mediaProjetos * 1.5 ? 'bad' : c.total >= mediaProjetos * 1.2 ? 'warn' : 'good',
+      entries: (c.projetos || []).slice()
     };
   });
-  var bins = {'0–7':0,'8–15':0,'16–30':0,'30+':0};
-  var agingList = analyses.filter(function(a){ return a.diasSem !== null; }).sort(function(a,b){ return (b.diasSem || 0) - (a.diasSem || 0); }).slice(0,12);
+  var bins = {'0–7':0,'8–15':0,'16–30':0,'31–45':0,'45+':0};
+  var agingByConsultor = {};
+  var trackedTotal = 0;
+  var untrackedTotal = 0;
+  var agingList = analyses.filter(function(a){
+    return dashClickUpAgingDays(a.projeto) !== null;
+  }).map(function(a){
+    return Object.assign({}, a, { diasSemClickUp: dashClickUpAgingDays(a.projeto) });
+  }).sort(function(a,b){ return (b.diasSemClickUp || 0) - (a.diasSemClickUp || 0); }).slice(0,12);
   analyses.forEach(function(a){
-    var d = Number(a.diasSem || 0);
-    if (d <= 7) bins['0–7'] += 1;
-    else if (d <= 15) bins['8–15'] += 1;
-    else if (d <= 30) bins['16–30'] += 1;
-    else bins['30+'] += 1;
+    var d = dashClickUpAgingDays(a.projeto);
+    var nomeConsultor = (a.projeto && a.projeto.consultor) || 'Sem consultor';
+    if (!agingByConsultor[nomeConsultor]) {
+      agingByConsultor[nomeConsultor] = {
+        nome: nomeConsultor,
+        carteiraTotal: 0,
+        rastreados: 0,
+        semClickUp: 0,
+        '0–7': 0,
+        '8–15': 0,
+        '16–30': 0,
+        '31–45': 0,
+        '45+': 0,
+        projetos: []
+      };
+    }
+    agingByConsultor[nomeConsultor].carteiraTotal += 1;
+    if (d === null || d === undefined || isNaN(d)) {
+      agingByConsultor[nomeConsultor].semClickUp += 1;
+      untrackedTotal += 1;
+      agingByConsultor[nomeConsultor].projetos.push({
+        projeto: a.projeto,
+        rastreado: false,
+        dias: null,
+        bucket: 'Sem ClickUp',
+        motivo: 'Projeto sem list_id/view_id ou sem resumo sincronizado do ClickUp.'
+      });
+      return;
+    }
+    d = Number(d || 0);
+    trackedTotal += 1;
+    agingByConsultor[nomeConsultor].rastreados += 1;
+    var bucket = '45+';
+    if (d <= 7) {
+      bins['0–7'] += 1;
+      agingByConsultor[nomeConsultor]['0–7'] += 1;
+      bucket = '0–7';
+    } else if (d <= 15) {
+      bins['8–15'] += 1;
+      agingByConsultor[nomeConsultor]['8–15'] += 1;
+      bucket = '8–15';
+    } else if (d <= 30) {
+      bins['16–30'] += 1;
+      agingByConsultor[nomeConsultor]['16–30'] += 1;
+      bucket = '16–30';
+    } else if (d <= 45) {
+      bins['31–45'] += 1;
+      agingByConsultor[nomeConsultor]['31–45'] += 1;
+      bucket = '31–45';
+    } else {
+      bins['45+'] += 1;
+      agingByConsultor[nomeConsultor]['45+'] += 1;
+    }
+    agingByConsultor[nomeConsultor].projetos.push({
+      projeto: a.projeto,
+      rastreado: true,
+      dias: d,
+      bucket: bucket,
+      motivo: a.sinais && a.sinais.length ? a.sinais.slice(0, 2).map(function(s){ return s.texto; }).join(' • ') : 'Sem sinal de risco adicional.'
+    });
   });
   var heatMap = {};
   list.forEach(function(p){
@@ -4465,7 +4605,14 @@ function dashOperation(list, analyses) {
     var m = String(a.projeto.mes || '').toUpperCase() || 'SEM';
     if (heatMap[c] && heatMap[c][m] && a.risco) heatMap[c][m].riscos += 1;
   });
-  return { ranking: ranking, mediaProjetos: mediaProjetos, bins: bins, agingList: agingList, heatMap: heatMap };
+  var agingRows = Object.keys(agingByConsultor).map(function(k){ return agingByConsultor[k]; }).sort(function(a, b){
+    if (b['45+'] !== a['45+']) return b['45+'] - a['45+'];
+    if (b['31–45'] !== a['31–45']) return b['31–45'] - a['31–45'];
+    if (b['16–30'] !== a['16–30']) return b['16–30'] - a['16–30'];
+    if (b['8–15'] !== a['8–15']) return b['8–15'] - a['8–15'];
+    return String(a.nome || '').localeCompare(String(b.nome || ''));
+  });
+  return { ranking: ranking, mediaProjetos: mediaProjetos, bins: bins, agingList: agingList, heatMap: heatMap, agingByConsultor: agingRows, trackedTotal: trackedTotal, untrackedTotal: untrackedTotal };
 }
 function dashExecution(list) {
   var required = dashMissingFields(list, [
@@ -4571,6 +4718,17 @@ function dashHourLabel(hours) {
   if (hours < 24) return fn(hours) + ' h';
   return fn(hours / 24) + ' dia(s)';
 }
+function dashCritRank(label) {
+  var txt = normalizarTextoProjeto(label || '');
+  if (txt.indexOf('crit') >= 0) return 3;
+  if (txt.indexOf('atenc') >= 0) return 2;
+  return 1;
+}
+function dashProjectActionCell(p) {
+  var href = dashProjectLink(p);
+  if (!href) return '<span class="dashx-table-chip">Sem link</span>';
+  return '<a href="'+href+'" target="_blank" rel="noopener" class="dashx-health-link">Abrir projeto</a>';
+}
 function dashFilterListByDashboard(list) {
   return (list || []).filter(function(p){
     if (DASH_FILTERS.consultor !== 'all' && String((p && p.consultor) || '') !== DASH_FILTERS.consultor) return false;
@@ -4601,11 +4759,13 @@ function dashMetricSnapshot(list) {
   var stale = analyses.filter(function(a){ return !!a.semUpdate; }).length;
   var excedidos = (list || []).filter(function(p){ return Number((p && p.diarias_rest) || 0) < 0; }).length;
   var capacidade = null;
+  var saldoDiarias = null;
   var health = dashDataHealth(list).completude;
   if (total) {
     var contratadas = list.reduce(function(sum, p){ return sum + Number((p && p.diarias_cont) || 0); }, 0);
     var realizadas = list.reduce(function(sum, p){ return sum + Number((p && p.diarias_real) || 0); }, 0);
     capacidade = contratadas > 0 ? Math.round((realizadas / contratadas) * 100) : null;
+    saldoDiarias = contratadas - realizadas;
   }
   return {
     total: total,
@@ -4615,6 +4775,7 @@ function dashMetricSnapshot(list) {
     stalePct: total ? Math.round((stale / total) * 100) : null,
     excedidosCount: excedidos,
     excedidosPct: total ? Math.round((excedidos / total) * 100) : null,
+    saldoDiarias: saldoDiarias,
     capacidadePct: capacidade,
     healthPct: health
   };
@@ -4793,14 +4954,36 @@ function dashRenderActionNow(analyses, operation) {
     if (a.receitaRisco) tags.push('<span class="dashx-mini-chip">MRR em risco '+fn(a.receitaRisco)+'</span>');
     return item(a.projeto.cliente || '-', a.sinais.slice(0, 2).map(function(s){ return s.texto; }).join(' • ') || 'Sem próxima ação clara.', tags, a.score, a.classe);
   }).join('') : '<div class="dashx-unavailable"><strong>Nenhum projeto crítico no recorte atual</strong><span>A carteira filtrada está sem riscos materiais no momento.</span></div>';
+  var selectedConsultor = consultores.filter(function(c){ return c.nome === DASH_ACTION_CONSULTOR; })[0] || consultores[0] || null;
+  if (!DASH_ACTION_CONSULTOR && selectedConsultor) DASH_ACTION_CONSULTOR = selectedConsultor.nome;
   var consultoresHtml = consultores.length ? consultores.map(function(c){
-    var tags = [
-      '<span class="dashx-mini-chip">'+c.projetos+' projetos</span>',
-      '<span class="dashx-mini-chip">'+c.riscos+' em risco</span>',
-      '<span class="dashx-mini-chip">'+c.esquecidos+' esquecidos</span>'
-    ];
-    return item(c.nome, c.classe === 'bad' ? 'Carga acima do limite seguro da equipe.' : 'Carteira pedindo atenção antes de escalar.', tags, c.score, c.classe);
+    var active = selectedConsultor && selectedConsultor.nome === c.nome;
+    var onKey = "if(event.key==='Enter'||event.key===' '){event.preventDefault();dashSetActionConsultor("+JSON.stringify(c.nome)+", "+JSON.stringify(DASH_ACTION_MODE || 'projetos')+")}";
+    var consultorBtn = '<div class="dashx-action-item'+(active ? ' is-active' : '')+'" role="button" tabindex="0" onclick="dashSetActionConsultor('+JSON.stringify(c.nome)+', '+JSON.stringify(DASH_ACTION_MODE || 'projetos')+')" onkeydown="'+onKey+'"><div class="dashx-action-main"><div class="dashx-action-name">'+c.nome+'</div><div class="dashx-action-reason">'+(c.classe === 'bad' ? 'Carga acima do limite seguro da equipe.' : 'Carteira pedindo atenção antes de escalar.')+'</div><div class="dashx-action-meta">'+
+      '<button type="button" class="dashx-mini-chip" onclick="event.stopPropagation();dashSetActionConsultor('+JSON.stringify(c.nome)+',\'projetos\')">'+c.projetos+' projetos</button>'+
+      '<button type="button" class="dashx-mini-chip" onclick="event.stopPropagation();dashSetActionConsultor('+JSON.stringify(c.nome)+',\'risco\')">'+c.riscos+' em risco</button>'+
+      '<button type="button" class="dashx-mini-chip" onclick="event.stopPropagation();dashSetActionConsultor('+JSON.stringify(c.nome)+',\'esquecidos\')">'+c.esquecidos+' esquecidos</button>'+
+    '</div></div><span class="dashx-action-score '+c.classe+'">'+c.score+'</span></div>';
+    return consultorBtn;
   }).join('') : '<div class="dashx-unavailable"><strong>Nenhum consultor sobrecarregado</strong><span>A distribuição da carteira está equilibrada no recorte atual.</span></div>';
+  var actionRows = [];
+  if (selectedConsultor && Array.isArray(selectedConsultor.entries)) {
+    actionRows = selectedConsultor.entries.filter(function(a){
+      if (DASH_ACTION_MODE === 'risco') return a.risco;
+      if (DASH_ACTION_MODE === 'esquecidos') return a.semUpdate || a.semContato || a.semProximaAcao;
+      return true;
+    }).sort(function(a, b){
+      if ((b.diasSem || 0) !== (a.diasSem || 0)) return (b.diasSem || 0) - (a.diasSem || 0);
+      if ((b.pendencias || 0) !== (a.pendencias || 0)) return (b.pendencias || 0) - (a.pendencias || 0);
+      return String((a.projeto && a.projeto.cliente) || '').localeCompare(String((b.projeto && b.projeto.cliente) || ''));
+    });
+  }
+  var actionModeLabel = DASH_ACTION_MODE === 'risco' ? 'em risco' : DASH_ACTION_MODE === 'esquecidos' ? 'esquecidos' : 'na carteira';
+  var actionTable = actionRows.length ? actionRows.map(function(a){
+    var motivo = a.sinais && a.sinais.length ? a.sinais.slice(0, 3).map(function(s){ return s.texto; }).join(' • ') : 'Sem sinal crítico adicional.';
+    return '<tr><td><strong>'+((a.projeto && a.projeto.cliente) || '-')+'</strong></td><td>'+sl(((a.projeto && a.projeto.status) || '-'))+'</td><td class="num">'+(a.diasSem !== null && a.diasSem !== undefined ? a.diasSem : '-')+'</td><td class="num">'+(a.pendencias || 0)+'</td><td>'+motivo+'</td><td>'+dashProjectActionCell(a.projeto || null)+'</td></tr>';
+  }).join('') : '<tr class="empty-row"><td colspan="6">Nenhum projeto encontrado neste recorte para '+actionModeLabel+'.</td></tr>';
+  var consultorAudit = selectedConsultor ? '<div id="dashx-action-audit"><div class="dashx-focus-note" style="margin-top:12px"><div><strong>Auditoria do consultor:</strong> '+selectedConsultor.nome+' • '+selectedConsultor.projetos+' projeto(s) na carteira, '+selectedConsultor.riscos+' em risco e '+selectedConsultor.esquecidos+' esquecidos. Clique nos chips acima para alternar a auditoria.</div><div class="dashx-focus-hint">Lista atual: '+actionModeLabel+'</div></div><div class="dashx-table-wrap" style="margin-top:12px"><table class="dashx-table"><thead><tr><th>Projeto</th><th>Status</th><th class="num">Dias sem update</th><th class="num">Pendências</th><th>Motivo</th><th>Ação</th></tr></thead><tbody>'+actionTable+'</tbody></table></div></div>' : '';
   var contasHtml = contas.length ? contas.map(function(a){
     var tags = [];
     if (a.receitaRisco) tags.push('<span class="dashx-mini-chip">MRR '+fn(a.receitaRisco)+'</span>');
@@ -4808,23 +4991,23 @@ function dashRenderActionNow(analyses, operation) {
     if (a.semProximaAcao) tags.push('<span class="dashx-mini-chip">Sem próxima ação</span>');
     return item(a.projeto.cliente || '-', a.sinais.slice(0, 2).map(function(s){ return s.texto; }).join(' • ') || 'Conta sensível pela exposição operacional.', tags, a.score, a.classe);
   }).join('') : '<div class="dashx-unavailable"><strong>Nenhuma conta em risco material</strong><span>Não há clientes prioritários em risco no recorte atual.</span></div>';
-  return '<div class="dashx-action-card"><div class="dashx-action-top"><div><div class="dashx-action-title">Ação hoje '+towerInfoButton('projectRisk')+'</div><div class="dashx-action-sub">Em até 30 segundos, a liderança sabe o que precisa atacar agora.</div></div></div><div class="dashx-action-group"><div class="dashx-action-group-head"><div class="dashx-action-group-title">Top 10 projetos críticos</div></div><div class="dashx-action-list">'+criticosHtml+'</div></div><div class="dashx-action-group"><div class="dashx-action-group-head"><div class="dashx-action-group-title">Top 5 consultores sobrecarregados</div></div><div class="dashx-action-list">'+consultoresHtml+'</div></div><div class="dashx-action-group"><div class="dashx-action-group-head"><div class="dashx-action-group-title">Top 5 contas em risco</div></div><div class="dashx-action-list">'+contasHtml+'</div></div></div>';
+  return '<div class="dashx-action-card"><div class="dashx-action-top"><div><div class="dashx-action-title">Ação hoje '+towerInfoButton('projectRisk')+'</div><div class="dashx-action-sub">Em até 30 segundos, a liderança sabe o que precisa atacar agora.</div></div></div><div class="dashx-action-group"><div class="dashx-action-group-head"><div class="dashx-action-group-title">Top 10 projetos críticos</div></div><div class="dashx-action-list">'+criticosHtml+'</div></div><div class="dashx-action-group"><div class="dashx-action-group-head"><div class="dashx-action-group-title">Top 5 consultores sobrecarregados</div></div><div class="dashx-action-list">'+consultoresHtml+'</div>'+consultorAudit+'</div><div class="dashx-action-group"><div class="dashx-action-group-head"><div class="dashx-action-group-title">Top 5 contas em risco</div></div><div class="dashx-action-list">'+contasHtml+'</div></div></div>';
 }
 function dashRenderFilters(baseList) {
   var consultores = dashDistinct(baseList, 'consultor').length;
   var vendedores = dashDistinct(baseList, 'vendedor').length;
-  var atrasados = baseList.filter(function(p){ return dashStatusKey(p && p.status) === 'atrasado'; }).length;
+  var riscos = baseList.map(towerAnaliseProjeto).filter(function(a){ return a.risco; }).length;
   var semSync = baseList.filter(function(p){
     return dashFieldPresent(p, ['list_id','view_id']) && !dashLastSyncDate(p);
   }).length;
-  return '<div class="dashx-inline-note">'+
-    '<strong>Leitura gerencial consolidada:</strong> esta visão considera <strong>todos os meses</strong> da base e não depende dos filtros operacionais das outras abas. '+
-    'Hoje a carteira soma <strong>'+baseList.length+' projetos</strong>, com <strong>'+consultores+' consultor(es)</strong>, <strong>'+vendedores+' vendedor(es)</strong>, <strong>'+atrasados+' projeto(s) em atraso</strong> e <strong>'+semSync+' projeto(s) com ClickUp mapeado sem data de sync</strong>.'+
+  return '<div class="dashx-focus-note">'+
+    '<div><strong>Leitura consolidada de todos os meses.</strong> Esta página resume a carteira inteira para decisão gerencial, sem depender dos filtros operacionais das outras abas.</div>'+
+    '<div class="dashx-focus-hint">'+baseList.length+' projetos • '+consultores+' consultor(es) • '+vendedores+' vendedor(es) • '+riscos+' em risco • '+semSync+' sem sync ClickUp</div>'+
   '</div>';
 }
 function dashRenderHealthSection(health) {
   var views = [
-    { key:'issues', label:'Completude', value:dashPct(health.completude), sub:health.completude === null ? 'Base sem projetos.' : 'Campos obrigatórios realmente preenchidos.', cls:dashMetricClass(health.completude, 70, 90, false), info:'dataCompleteness', foot:(health.views.issues.length ? health.views.issues.length+' projeto(s) com problema de cadastro' : 'Nenhum problema estrutural') },
+    { key:'issues', label:'Completude da base', value:dashPct(health.completude), sub:health.completude === null ? 'Base consolidada sem projetos.' : 'Campos obrigatórios preenchidos na planilha consolidada do painel.', cls:dashMetricClass(health.completude, 70, 90, false), info:'dataCompleteness', foot:(health.views.issues.length ? health.views.issues.length+' projeto(s) com problema de cadastro' : 'Sem problema estrutural na base do painel') },
     { key:'issues', label:'Projetos com problema', value:health.inconsistencias.length, sub:health.inconsistencias.length ? 'Projetos com campo obrigatório faltando.' : 'Nenhuma inconsistência encontrada.', cls:health.inconsistencias.length ? (health.inconsistencias.length > Math.max(3, Math.round(health.syncOk / 2)) ? 'bad' : 'warn') : 'good', info:'dataInconsistencies', foot:'Clique para abrir a lista crítica' },
     { key:'syncCritical', label:'Sync ClickUp 24h', value:dashPct(health.syncOkPct), sub:health.syncCandidates ? ((health.syncCandidates || 0)+' projeto(s) mapeados no ClickUp.') : 'Sem projetos mapeados no ClickUp.', cls:dashMetricClass(health.syncOkPct, 70, 90, false), info:'syncFreshness', foot:(health.views.syncCritical.length ? health.views.syncCritical.length+' projeto(s) sem sync recente' : 'Sincronização sob controle') },
     { key:'syncErrors', label:'Falha de sync', value:health.syncCandidates ? dashPct(health.syncErrorRate) : '-', sub:health.syncCandidates ? (health.syncErrors+' falha(s) entre '+health.syncCandidates+' projeto(s) monitorados.') : 'Sem rastreio de sincronização disponível.', cls:dashMetricClass(health.syncErrorRate, 2, 10, true), info:'syncErrors', foot:'Clique para listar os projetos com erro' },
@@ -4844,13 +5027,18 @@ function dashRenderHealthSection(health) {
   var activeRows = health.views[DASH_HEALTH_VIEW] || health.inconsistencias || [];
   var activeTitle = DASH_HEALTH_VIEW === 'syncErrors' ? 'Projetos com falha de sincronização' : DASH_HEALTH_VIEW === 'syncCritical' ? 'Projetos com sync antigo ou ausente' : DASH_HEALTH_VIEW === 'stale' ? 'Projetos críticos por falta de atualização' : 'Projetos com problema de cadastro';
   var activeSub = DASH_HEALTH_VIEW === 'syncErrors' ? 'Ataque primeiro os projetos cujo sync falhou explicitamente.' : DASH_HEALTH_VIEW === 'syncCritical' ? 'Estes projetos têm ClickUp mapeado, mas não sincronizam recentemente ou não possuem data válida de sync.' : DASH_HEALTH_VIEW === 'stale' ? 'Estes projetos estão com update operacional antigo e merecem ação prioritária.' : 'Estes projetos têm campos obrigatórios ausentes e reduzem a confiabilidade do painel.';
+  activeRows = activeRows.slice().sort(function(a, b){
+    var rank = dashCritRank(b.criticidade) - dashCritRank(a.criticidade);
+    if (rank) return rank;
+    return String(a.cliente || '').localeCompare(String(b.cliente || ''));
+  });
   var rows = activeRows.length ? activeRows.slice(0, 18).map(function(item){
     var detalhe = item.faltas ? item.faltas.join(', ') : (item.detalhe || '-');
-    return '<tr><td><strong>'+item.cliente+'</strong></td><td>'+(item.consultor || '-')+'</td><td>'+item.status+'</td><td><span class="dashx-score-pill '+((item.criticidade || '').toLowerCase().indexOf('crít') >= 0 || (item.criticidade || '').toLowerCase().indexOf('crit') >= 0 ? 'bad' : 'warn')+'">'+(item.criticidade || '-').replace('Atenção','Em atenção')+'</span></td><td>'+detalhe+'</td></tr>';
-  }).join('') : '<tr class="empty-row"><td colspan="5">Nenhum projeto encontrado para esta visão de saúde dos dados.</td></tr>';
+    return '<tr><td><strong>'+item.cliente+'</strong></td><td>'+(item.consultor || '-')+'</td><td>'+item.status+'</td><td><span class="dashx-score-pill '+((item.criticidade || '').toLowerCase().indexOf('crít') >= 0 || (item.criticidade || '').toLowerCase().indexOf('crit') >= 0 ? 'bad' : 'warn')+'">'+(item.criticidade || '-').replace('Atenção','Em atenção')+'</span></td><td>'+detalhe+'</td><td>'+dashProjectActionCell(item.projeto || null)+'</td></tr>';
+  }).join('') : '<tr class="empty-row"><td colspan="6">Nenhum projeto encontrado para esta visão de saúde dos dados.</td></tr>';
   return '<div class="dashx-grid-2">'+
-    '<div class="dashx-stack"><div class="dashx-health-grid">'+mini+'</div></div>'+
-    '<div class="dashx-stack"><div class="dashx-health-toolbar"><div><div class="dashx-health-title">'+activeTitle+'</div><div class="dashx-health-sub">'+activeSub+'</div></div></div><div class="dashx-table-wrap"><table class="dashx-table"><thead><tr><th>Cliente</th><th>Consultor</th><th>Status</th><th>Criticidade</th><th>Detalhe</th></tr></thead><tbody>'+rows+'</tbody></table></div></div>'+
+    '<div class="dashx-stack"><div class="dashx-inline-note"><strong>Clique em um card</strong> para listar os projetos com problema. <strong>Completude da base</strong> mede a planilha consolidada do painel; não é um indicador de qualidade operacional do ClickUp.</div><div class="dashx-health-grid">'+mini+'</div></div>'+
+    '<div class="dashx-stack"><div class="dashx-health-toolbar"><div><div class="dashx-health-title">'+activeTitle+'</div><div class="dashx-health-sub">'+activeSub+'</div></div><div class="dashx-health-actions"><span class="dashx-table-chip">'+activeRows.length+' projeto(s)</span></div></div><div class="dashx-table-wrap"><table class="dashx-table"><thead><tr><th>Cliente</th><th>Consultor</th><th>Status</th><th>Criticidade</th><th>Detalhe</th><th>Ação</th></tr></thead><tbody>'+rows+'</tbody></table></div></div>'+
   '</div>';
 }
 function dashRenderHeatmap(map) {
@@ -4879,9 +5067,38 @@ function dashRenderAgingBars(bins) {
 }
 function dashRenderAgingTable(items) {
   var rows = items.length ? items.map(function(a){
-    return '<tr><td><strong>'+a.projeto.cliente+'</strong></td><td>'+(a.projeto.consultor || '-')+'</td><td>'+sl(a.projeto.status || '-')+'</td><td class="num">'+a.diasSem+'</td><td><a href="'+dashProjectLink(a.projeto)+'" target="_blank" rel="noopener">Abrir projeto</a></td></tr>';
+    var dias = a.diasSemClickUp !== null && a.diasSemClickUp !== undefined ? a.diasSemClickUp : a.diasSem;
+    return '<tr><td><strong>'+a.projeto.cliente+'</strong></td><td>'+(a.projeto.consultor || '-')+'</td><td>'+sl(a.projeto.status || '-')+'</td><td class="num">'+dias+'</td><td><a href="'+dashProjectLink(a.projeto)+'" target="_blank" rel="noopener">Abrir projeto</a></td></tr>';
   }).join('') : '<tr class="empty-row"><td colspan="5">Nenhum projeto com aging de atualização no filtro atual.</td></tr>';
-  return '<div class="dashx-table-wrap"><table class="dashx-table"><thead><tr><th>Cliente</th><th>Consultor</th><th>Status</th><th class="num">Dias sem update</th><th>Link</th></tr></thead><tbody>'+rows+'</tbody></table></div>';
+  return '<div class="dashx-table-wrap"><table class="dashx-table"><thead><tr><th>Cliente</th><th>Consultor</th><th>Status</th><th class="num">Dias sem update no ClickUp</th><th>Link</th></tr></thead><tbody>'+rows+'</tbody></table></div>';
+}
+function dashRenderConsultorAgingTable(rows) {
+  var body = rows.length ? rows.map(function(item){
+    var active = DASH_CLICKUP_CONSULTOR === item.nome;
+    return '<tr class="'+(active ? 'is-active' : '')+'" onclick="dashSetClickUpConsultor('+JSON.stringify(item.nome)+')"><td><strong>'+item.nome+'</strong><div class="dashx-list-sub">'+item.carteiraTotal+' projeto(s) na carteira</div></td><td class="num">'+item.rastreados+'</td><td class="num">'+item.semClickUp+'</td><td class="num">'+item['0–7']+'</td><td class="num">'+item['8–15']+'</td><td class="num">'+item['16–30']+'</td><td class="num">'+item['31–45']+'</td><td class="num">'+item['45+']+'</td></tr>';
+  }).join('') : '<tr class="empty-row"><td colspan="8">Nenhum consultor encontrado no recorte atual.</td></tr>';
+  return '<div class="dashx-table-wrap"><table class="dashx-table"><thead><tr><th>Consultor</th><th class="num">Rastreados</th><th class="num">Sem ClickUp</th><th class="num">&lt; 7 dias</th><th class="num">7–15</th><th class="num">15–30</th><th class="num">30–45</th><th class="num">45+</th></tr></thead><tbody>'+body+'</tbody></table></div>';
+}
+function dashRenderClickUpTracker(operation, totalProjetos) {
+  var rows = operation.agingByConsultor || [];
+  var selected = rows.filter(function(item){ return item.nome === DASH_CLICKUP_CONSULTOR; })[0] || rows[0] || null;
+  if (!DASH_CLICKUP_CONSULTOR && selected) DASH_CLICKUP_CONSULTOR = selected.nome;
+  var totalTracked = Number(operation.trackedTotal || 0);
+  var totalUntracked = Number(operation.untrackedTotal || 0);
+  var critical = Number((operation.bins['16–30'] || 0) + (operation.bins['31–45'] || 0) + (operation.bins['45+'] || 0));
+  var details = selected && Array.isArray(selected.projetos) ? selected.projetos.slice().sort(function(a, b){
+    var ad = a.rastreado ? -(a.dias || 0) : Number.NEGATIVE_INFINITY;
+    var bd = b.rastreado ? -(b.dias || 0) : Number.NEGATIVE_INFINITY;
+    if (ad !== bd) return ad - bd;
+    return String((a.projeto && a.projeto.cliente) || '').localeCompare(String((b.projeto && b.projeto.cliente) || ''));
+  }) : [];
+  var detailRows = details.length ? details.map(function(item){
+    var p = item.projeto || {};
+    var faixa = item.rastreado ? (item.bucket + ' dias') : 'Sem ClickUp';
+    var motivo = item.rastreado ? (item.motivo || 'Sem detalhe adicional.') : 'Sem list_id/view_id ou sem resumo sincronizado.';
+    return '<tr><td><strong>'+String(p.cliente || '-')+'</strong></td><td>'+sl(String(p.status || '-'))+'</td><td class="num">'+(item.rastreado ? item.dias : '-')+'</td><td>'+faixa+'</td><td>'+motivo+'</td><td>'+dashProjectActionCell(p)+'</td></tr>';
+  }).join('') : '<tr class="empty-row"><td colspan="6">Nenhum projeto rastreado para este consultor.</td></tr>';
+  return '<div class="dashx-chart-card"><div class="dashx-chart-head"><div><div class="dashx-chart-title">Rastreio ClickUp por consultor '+towerInfoButton('aging')+'</div><div class="dashx-chart-sub">Base total: <strong>'+totalProjetos+'</strong> projeto(s). Destes, <strong>'+totalTracked+'</strong> têm rastreio ClickUp e <strong>'+totalUntracked+'</strong> ainda estão sem rastreio técnico.</div></div></div><div class="dashx-chart-legend"><span class="dashx-legend-item"><span class="dashx-legend-swatch" style="background:#6d8e72"></span>'+totalTracked+' rastreados</span><span class="dashx-legend-item"><span class="dashx-legend-swatch" style="background:#9aa59d"></span>'+totalUntracked+' sem ClickUp</span><span class="dashx-legend-item"><span class="dashx-legend-swatch" style="background:#c96c5f"></span>'+critical+' com 15+ dias</span></div>'+dashRenderConsultorAgingTable(rows)+'<div id="dashx-clickup-audit"><div class="dashx-focus-note" style="margin-top:12px"><div><strong>Auditoria ClickUp:</strong> '+((selected && selected.nome) || 'Consultor')+'. Clique em um consultor para listar os projetos, abrir o link e entender o motivo do atraso ou da falta de rastreio.</div><div class="dashx-focus-hint">'+(selected ? (selected.rastreados+' rastreado(s) • '+selected.semClickUp+' sem ClickUp') : 'nenhum consultor selecionado')+'</div></div><div class="dashx-table-wrap" style="margin-top:12px"><table class="dashx-table"><thead><tr><th>Projeto</th><th>Status</th><th class="num">Dias</th><th>Faixa</th><th>Motivo</th><th>Ação</th></tr></thead><tbody>'+detailRows+'</tbody></table></div></div></div>';
 }
 function dashRenderExecution(execution) {
   if (execution.unavailable) return dashUnavailableCard('Burndown de diárias', execution.unavailable);
@@ -4933,9 +5150,9 @@ function dashRenderCohort(cohort, list) {
   if (required.length) return dashUnavailableCard('Cohort mensal', required);
   var rows = cohort.length ? cohort.map(function(item){
     function cls(v) { return v >= 70 ? 'good' : v >= 40 ? 'warn' : 'bad'; }
-    return '<tr><td><strong>'+item.mes+'</strong></td><td class="num">'+item.vendidos+'</td><td class="num"><span class="dashx-score-pill '+cls(item.kickoffPct || 0)+'">'+dashPct(item.kickoffPct)+'</span></td><td class="num"><span class="dashx-score-pill '+cls(item.treinoPct || 0)+'">'+dashPct(item.treinoPct)+'</span></td><td class="num"><span class="dashx-score-pill '+cls(item.ativPct || 0)+'">'+dashPct(item.ativPct)+'</span></td><td class="num">'+(item.tempoAtiv === null ? '-' : item.tempoAtiv+' dias')+'</td></tr>';
+    return '<tr><td><strong>'+item.mes+'</strong></td><td class="center">'+item.vendidos+'</td><td class="center"><span class="dashx-score-pill '+cls(item.kickoffPct || 0)+'">'+dashPct(item.kickoffPct)+'</span></td><td class="center"><span class="dashx-score-pill '+cls(item.treinoPct || 0)+'">'+dashPct(item.treinoPct)+'</span></td><td class="center"><span class="dashx-score-pill '+cls(item.ativPct || 0)+'">'+dashPct(item.ativPct)+'</span></td><td class="tempo">'+(item.tempoAtiv === null ? '-' : item.tempoAtiv+' dias')+'</td></tr>';
   }).join('') : '<tr class="empty-row"><td colspan="6">Sem cohort disponível para o recorte atual.</td></tr>';
-  return '<div class="dashx-matrix"><table><thead><tr><th>Mês da venda</th><th class="num">Vendidos</th><th class="num">Kickoff %</th><th class="num">1º Treinamento %</th><th class="num">Ativação %</th><th class="num">Tempo médio até ativação</th></tr></thead><tbody>'+rows+'</tbody></table></div>';
+  return '<div class="dashx-matrix"><table><colgroup><col style="width:16%"><col style="width:12%"><col style="width:18%"><col style="width:18%"><col style="width:18%"><col style="width:18%"></colgroup><thead><tr><th>Mês da venda</th><th class="center">Vendidos</th><th class="center">Kickoff %</th><th class="center">1º Treinamento %</th><th class="center">Ativação %</th><th class="tempo">Tempo médio até ativação</th></tr></thead><tbody>'+rows+'</tbody></table></div>';
 }
 
 function initDash() {
@@ -4977,23 +5194,24 @@ function initDash() {
   var previousSnap = dashMetricSnapshot(previousMonthList);
   var compareLabel = currentMonth && previousMonth ? (currentMonth + ' vs ' + previousMonth) : 'Sem comparativo mensal';
   var topCards = '<div class="dashx-top-grid">'+
-    dashKpiCard('Projetos ativos', total, 'Como estamos hoje: total da carteira visível para gestão.', 'good', 'activeProjects', dashDeltaChip(total, previousSnap.total, false, 'num'))+
-    dashKpiCard('% atrasados', total ? dashPct(Math.round((delayedCount / total) * 100)) : '-', delayedCount ? (delayedCount+' projeto(s) com atraso ou pendência vencida.') : 'Nenhum projeto atrasado no recorte.', dashMetricClass(total ? Math.round((delayedCount / total) * 100) : null, 8, 18, true), 'projectRisk', dashDeltaChip(total ? Math.round((delayedCount / total) * 100) : null, previousSnap.atrasadosPct, true, 'pct'))+
-    dashKpiCard('% sem atualização > 7 dias', total ? dashPct(Math.round((semUpdate.length / total) * 100)) : '-', semUpdate.length ? semUpdate.length+' projeto(s) fora do SLA de atualização.' : 'Toda a carteira está dentro do SLA de atualização.', dashMetricClass(total ? Math.round((semUpdate.length / total) * 100) : null, 12, 22, true), 'stale', dashDeltaChip(total ? Math.round((semUpdate.length / total) * 100) : null, previousSnap.stalePct, true, 'pct'))+
-    dashKpiCard('Diárias excedidas', exceededCount+(total ? ' / '+dashPct(Math.round((exceededCount / total) * 100)) : ''), execution.unavailable ? 'Campo necessário não encontrado.' : (exceededCount ? exceededCount+' projeto(s) consumindo acima do contratado.' : 'Nenhum projeto com diárias excedidas no recorte.'), execution.unavailable ? 'neutral' : dashMetricClass(exceededCount, 1, 3, true), 'dailyBalance', dashDeltaChip(exceededCount, previousSnap.excedidosCount, true, 'num', 'proj.'))+
-    dashKpiCard('Capacidade utilizada', execution.unavailable ? '-' : dashPct(execution.percent), execution.unavailable ? 'Campo necessário não encontrado.' : 'Uso consolidado das diárias contratadas na carteira filtrada.', execution.unavailable ? 'neutral' : dashMetricClass(execution.percent, 70, 90, true), 'dailyBurn', dashDeltaChip(execution.percent, previousSnap.capacidadePct, true, 'pct'))+
-    dashKpiCard('Saúde dos dados', health.completude === null ? '-' : dashPct(health.completude), health.completude === null ? 'Não há base suficiente neste recorte.' : (health.inconsistencias.length+' projeto(s) com inconsistência e '+(health.syncCandidates || 0)+' com ClickUp mapeado.'), dashMetricClass(health.completude, 70, 90, false), 'dataHealthSummary', dashDeltaChip(health.completude, previousSnap.healthPct, false, 'pct'))+
+    dashKpiCard('Projetos ativos', total, 'Carteira total hoje.', 'good', 'activeProjects', dashDeltaChip(total, previousSnap.total, false, 'num'))+
+    dashKpiCard('Projetos em risco', total ? dashPct(Math.round((riscos.length / total) * 100)) : '-', riscos.length ? (riscos.length+' projeto(s) exigem atenção imediata.') : 'Nenhum projeto materialmente em risco.', dashMetricClass(total ? Math.round((riscos.length / total) * 100) : null, 12, 25, true), 'projectRisk', dashDeltaChip(total ? Math.round((riscos.length / total) * 100) : null, previousSnap.atrasadosPct, true, 'pct'))+
+    dashKpiCard('Projetos sem update', total ? dashPct(Math.round((semUpdate.length / total) * 100)) : '-', semUpdate.length ? semUpdate.length+' projeto(s) acima de 7 dias sem atualização.' : 'Toda a carteira está dentro do SLA de atualização.', dashMetricClass(total ? Math.round((semUpdate.length / total) * 100) : null, 12, 22, true), 'stale', dashDeltaChip(total ? Math.round((semUpdate.length / total) * 100) : null, previousSnap.stalePct, true, 'pct'))+
+    dashKpiCard('Saldo de diárias', execution.unavailable ? '-' : fn(saldoDiarias), execution.unavailable ? 'Campo necessário não encontrado.' : (saldoDiarias < 0 ? 'Há consumo acima do contratado.' : 'Saldo disponível para execução.'), execution.unavailable ? 'neutral' : dashMetricClass(saldoDiarias, 0, 0, false), 'dailyBalance', dashDeltaChip(saldoDiarias, previousSnap.saldoDiarias, false, 'num'))+
+    dashKpiCard('Taxa de ativação', activeRate === null ? '-' : dashPct(activeRate), activeRate === null ? 'Conversão indisponível.' : 'Conversão da jornada venda → ativação.', dashMetricClass(activeRate, 40, 70, false), 'funnel', dashDeltaChip(activeRate, null, false, 'pct'))+
+    dashKpiCard('Saúde dos dados', health.completude === null ? '-' : dashPct(health.completude), health.completude === null ? 'Não há base suficiente.' : (health.inconsistencias.length+' problema(s) de cadastro e '+health.views.syncErrors.length+' falha(s) de sync.'), dashMetricClass(health.completude, 70, 90, false), 'dataHealthSummary', dashDeltaChip(health.completude, previousSnap.healthPct, false, 'pct'))+
   '</div>';
-  var hero = '<div class="dashx-hero"><div class="dashx-hero-top"><div class="dashx-title-wrap"><div class="dashx-eyebrow">Dashboard Executivo CSI</div><div class="dashx-title">Visão principal de comando</div><div class="dashx-sub">Em até 10 segundos, a liderança entende saúde da operação, tendência, risco e ação prioritária. Em até 30 segundos, sabe o que atacar hoje.</div></div><div class="dashx-meta"><span class="dashx-meta-chip"><b>Período</b> Todos os meses</span><span class="dashx-meta-chip"><b>Projetos</b> '+total+'</span><span class="dashx-meta-chip"><b>Última base</b> '+(TOWER_INFO_CONTEXT.ultima || '-')+'</span><span class="dashx-meta-chip"><b>Comparativo</b> '+compareLabel+'</span></div></div>'+dashRenderFilters(base)+'</div>';
+  var hero = '<div class="dashx-hero"><div class="dashx-hero-top"><div class="dashx-title-wrap"><div class="dashx-eyebrow">Dashboard Executivo CSI</div><div class="dashx-title">Visão principal de comando</div><div class="dashx-sub">Primeira leitura executiva da carteira inteira: confiança dos dados, risco operacional, execução e evolução do cliente.</div></div><div class="dashx-meta"><span class="dashx-meta-chip"><b>Período</b> Todos os meses</span><span class="dashx-meta-chip"><b>Projetos</b> '+total+'</span><span class="dashx-meta-chip"><b>Última base</b> '+(TOWER_INFO_CONTEXT.ultima || '-')+'</span></div></div>'+dashRenderFilters(base)+'</div>';
   var trendSection = '<div class="dashx-exec-grid"><div class="dashx-stack"><div class="dashx-chart-grid">'+
     dashRenderTrendLine(weeklyTrend, 'Evolução do risco operacional', 'Leitura semanal dos projetos que estariam em risco pelo conjunto atraso + excesso + sem atualização.', 'risco', '#c96c5f', 'projectRisk', 'Últimas 8 semanas')+
     dashRenderBacklogThroughput(weeklyTrend)+
-  '</div>'+dashRenderStatusStack(statusByMonth)+'</div>'+dashRenderActionNow(analyses, operation)+'</div>';
-  var healthSection = '<div class="dashx-section"><div class="dashx-section-head"><div><div class="dashx-section-kicker">Seção 1</div><div class="dashx-section-title">Saúde dos Dados '+towerInfoButton('dataHealthSummary')+'</div><div class="dashx-section-sub">Pergunta respondida: Posso confiar nesse painel?</div></div><div class="dashx-section-answer"><span class="dashx-answer-chip">'+(health.completude === null ? 'Base indisponível' : (health.completude >= 90 ? 'Base confiável' : health.completude >= 70 ? 'Base em atenção' : 'Base crítica'))+'</span></div></div><div class="dashx-section-body">'+dashRenderHealthSection(health)+'</div></div>';
+  '</div>'+dashRenderStatusStack(statusByMonth)+dashRenderClickUpTracker(operation, total)+'</div>'+dashRenderActionNow(analyses, operation)+'</div>';
+  var healthSection = '<div class="dashx-section"><div class="dashx-section-head"><div><div class="dashx-section-kicker">Seção 1</div><div class="dashx-section-title">Saúde dos Dados '+towerInfoButton('dataHealthSummary')+'</div><div class="dashx-section-sub">Pergunta respondida: Posso confiar na base consolidada do painel e no reflexo da sync do ClickUp?</div></div><div class="dashx-section-answer"><span class="dashx-answer-chip">'+(health.completude === null ? 'Base indisponível' : (health.completude >= 90 ? 'Base confiável' : health.completude >= 70 ? 'Base em atenção' : 'Base crítica'))+'</span></div></div><div class="dashx-section-body">'+dashRenderHealthSection(health)+'</div></div>';
   var opRanking = operation.ranking.length ? '<div class="dashx-list">'+operation.ranking.slice(0, 8).map(function(item){
     return '<div class="dashx-list-item"><div class="dashx-list-main"><div class="dashx-list-title">'+item.nome+'</div><div class="dashx-list-sub">'+item.projetos+' projeto(s), '+fn(item.diariasContr)+' diárias contratadas, '+fn(item.diariasReal)+' realizadas e '+item.riscos+' em risco.</div><div class="dashx-list-tags"><span class="dashx-mini-chip">'+fn(item.saldo)+' de saldo</span><span class="dashx-mini-chip">'+item.esquecidos+' esquecidos</span><span class="dashx-mini-chip">'+item.score+' health</span></div></div><span class="dashx-score-pill '+item.classe+'">'+(item.classe === 'bad' ? 'Sobrecarga crítica' : item.classe === 'warn' ? 'Sobrecarga em atenção' : 'Equilibrado')+'</span></div>';
   }).join('')+'</div>' : dashUnavailableCard('Ranking de consultores por carga', ['consultor']);
-  var operationSection = '<div class="dashx-section"><div class="dashx-section-head"><div><div class="dashx-section-kicker">Seção 2</div><div class="dashx-section-title">Carga da equipe e gargalos '+towerInfoButton('operationLoad')+'</div><div class="dashx-section-sub">À esquerda, quem está mais pressionado. À direita, em quais meses a carga ficou concentrada. Abaixo, onde a carteira está envelhecendo.</div></div><div class="dashx-section-answer"><span class="dashx-answer-chip">'+operation.ranking.filter(function(r){ return r.classe !== 'good'; }).length+' consultor(es) em atenção</span></div></div><div class="dashx-section-body"><div class="dashx-grid-2"><div class="dashx-stack"><div class="dashx-health-grid">'+dashMiniCard('Carga média por consultor', fn(operation.mediaProjetos), 'Referência de equilíbrio da equipe.', 'neutral', 'operationLoad')+dashMiniCard('Atualizados (0–7 dias)', operation.bins['0–7'], 'Carteira respirando bem.', 'good', 'aging')+dashMiniCard('Em atenção (8–15 dias)', operation.bins['8–15'], 'Projetos pedindo revisão de atualização.', 'warn', 'aging')+dashMiniCard('Críticos (16+ dias)', operation.bins['16–30'] + operation.bins['30+'], 'Projetos com update envelhecido.', 'bad', 'aging')+dashMiniCard('Consultores com carteira em risco', operation.ranking.filter(function(r){ return r.riscos > 0; }).length, 'Consultores com projetos marcados como risco.', 'warn', 'operationLoad')+dashMiniCard('Projetos esquecidos', analyses.filter(function(a){ return a.semUpdate; }).length, 'Projetos acima do SLA de atualização.', analyses.filter(function(a){ return a.semUpdate; }).length ? 'bad' : 'good', 'stale')+'</div><div class="dashx-inline-note"><strong>Como ler:</strong> cada consultor mostra volume da carteira, saldo operacional e nível de risco. Quanto maior o saldo e o número de esquecidos, maior a necessidade de ação.</div>'+opRanking+'</div><div class="dashx-stack"><div class="dashx-inline-note"><strong>Como ler:</strong> cada célula mostra quantos projetos aquele consultor recebeu no mês. Quanto mais quente a cor, maior a concentração de carga e o risco de gargalo.</div>'+dashRenderHeatmap(operation.heatMap)+'</div></div><div class="dashx-grid-2" style="margin-top:16px"><div><div class="dashx-inline-note"><strong>Aging de atualização:</strong> mostra em qual faixa de envelhecimento a carteira está concentrada.</div>'+dashRenderAgingBars(operation.bins)+'</div><div><div class="dashx-inline-note"><strong>Projetos que pedem ação:</strong> lista os casos com maior tempo sem update para priorização imediata.</div>'+dashRenderAgingTable(operation.agingList)+'</div></div></div></div>';
+  var consultoresAtencao = operation.ranking.filter(function(r){ return r.classe !== 'good'; }).length;
+  var operationSection = '<div class="dashx-section"><div class="dashx-section-head"><div><div class="dashx-section-kicker">Seção 2</div><div class="dashx-section-title">Operação e gargalos '+towerInfoButton('operationLoad')+'</div><div class="dashx-section-sub">Pergunta respondida: quem está mais pressionado, em qual faixa de atualização do ClickUp a carteira está concentrada e quais projetos pedem ação agora.</div></div><div class="dashx-section-answer"><span class="dashx-answer-chip">'+consultoresAtencao+' consultor(es) pedindo intervenção</span></div></div><div class="dashx-section-body"><div class="dashx-grid-2"><div class="dashx-stack"><div class="dashx-health-grid">'+dashMiniCard('Carga média da equipe', fn(operation.mediaProjetos), 'Base de equilíbrio por consultor.', 'neutral', 'operationLoad')+dashMiniCard('Consultores em atenção', consultoresAtencao, consultoresAtencao ? 'Carteiras acima do ponto confortável.' : 'Equipe equilibrada no momento.', consultoresAtencao ? 'warn' : 'good', 'operationLoad')+dashMiniCard('ClickUp até 7 dias', operation.bins['0–7'], 'Projetos com atualização recente no ClickUp.', 'good', 'aging')+dashMiniCard('ClickUp 15+ dias', operation.bins['16–30'] + operation.bins['31–45'] + operation.bins['45+'], 'Projetos envelhecidos no ClickUp.', 'bad', 'aging')+dashMiniCard('Projetos esquecidos', analyses.filter(function(a){ return a.semUpdate; }).length, 'Projetos acima do SLA de atualização.', analyses.filter(function(a){ return a.semUpdate; }).length ? 'bad' : 'good', 'stale')+dashMiniCard('Carteiras com risco', operation.ranking.filter(function(r){ return r.riscos > 0; }).length, 'Consultores com pelo menos um projeto em risco.', 'warn', 'operationLoad')+'</div><div class="dashx-focus-note"><div><strong>Quem está mais pressionado.</strong> Use esta lista para redistribuir atenção, revisar carteira e atuar primeiro em quem carrega mais risco.</div><div class="dashx-focus-hint">ranking por volume, risco e projetos esquecidos</div></div>'+opRanking+'</div><div class="dashx-stack"><div class="dashx-focus-note"><div><strong>Onde a carga se concentrou.</strong> Cada célula mostra quantos projetos aquele consultor recebeu no mês. Quanto mais quente a cor, maior o risco de gargalo.</div><div class="dashx-focus-hint">heatmap mensal por consultor</div></div>'+dashRenderHeatmap(operation.heatMap)+'</div></div><div style="margin-top:16px"><div class="dashx-focus-note"><div><strong>Projetos que pedem ação agora.</strong> Lista os casos com maior tempo sem update no ClickUp para priorização imediata.</div><div class="dashx-focus-hint">agir hoje</div></div>'+dashRenderAgingTable(operation.agingList)+'</div></div></div>';
   var executionSection = '<div class="dashx-section"><div class="dashx-section-head"><div><div class="dashx-section-kicker">Seção 3</div><div class="dashx-section-title">Execução / Diárias '+towerInfoButton('dailyBurn')+'</div><div class="dashx-section-sub">Pergunta respondida: As diárias estão sendo consumidas corretamente?</div></div><div class="dashx-section-answer"><span class="dashx-answer-chip">'+(execution.unavailable ? 'KPI indisponível' : ((execution.percent || 0)+'% consumido'))+'</span></div></div><div class="dashx-section-body">'+dashRenderExecution(execution)+'</div></div>';
   var funnelSection = '<div class="dashx-section"><div class="dashx-section-head"><div><div class="dashx-section-kicker">Seção 4</div><div class="dashx-section-title">Funil de Implantação '+towerInfoButton('funnel')+'</div><div class="dashx-section-sub">Pergunta respondida: O cliente está avançando ou travando?</div></div><div class="dashx-section-answer"><span class="dashx-answer-chip">'+(activeRate === null ? 'Conversão indisponível' : (activeRate+'% de ativação geral'))+'</span></div></div><div class="dashx-section-body">'+dashRenderFunnel(funnel, list)+'</div></div>';
   var cohortSection = '<div class="dashx-section"><div class="dashx-section-head"><div><div class="dashx-section-kicker">Seção 5</div><div class="dashx-section-title">Cohort Mensal '+towerInfoButton('cohort')+'</div><div class="dashx-section-sub">Pergunta respondida: Os clientes vendidos em cada mês estão evoluindo?</div></div><div class="dashx-section-answer"><span class="dashx-answer-chip">'+cohort.length+' cohort(s) no recorte</span></div></div><div class="dashx-section-body">'+dashRenderCohort(cohort, list)+'</div></div>';
