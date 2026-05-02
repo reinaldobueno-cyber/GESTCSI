@@ -2062,10 +2062,15 @@ nav{
 .dashx-grid-3{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px;}
 .dashx-stack{display:flex;flex-direction:column;gap:14px;}
 .dashx-mini-grid{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:12px;}
+.dashx-health-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;}
 .dashx-mini-card{background:#fbfcfa;border:1px solid #e3ebe2;border-radius:16px;padding:14px 14px 12px;min-height:112px;}
+.dashx-mini-card.clickable{cursor:pointer;transition:.18s ease;}
+.dashx-mini-card.clickable:hover{transform:translateY(-1px);box-shadow:0 10px 22px rgba(29,49,37,.08);border-color:#c9d6c8;}
+.dashx-mini-card.active{border-color:#9fba9d;background:#f7fbf6;box-shadow:0 0 0 2px rgba(124,157,121,.12);}
 .dashx-mini-label{font-size:10px;font-weight:900;letter-spacing:.14em;text-transform:uppercase;color:#809084;margin-bottom:10px;display:flex;align-items:center;justify-content:space-between;gap:8px;}
 .dashx-mini-value{font-family:'Manrope','Inter',sans-serif;font-size:30px;font-weight:900;letter-spacing:-.05em;color:#14231b;}
 .dashx-mini-sub{margin-top:8px;font-size:11px;line-height:1.45;color:#65736a;}
+.dashx-mini-foot{margin-top:10px;font-size:10px;font-weight:800;color:#7b897e;}
 .dashx-unavailable{display:flex;flex-direction:column;gap:7px;border-radius:14px;border:1px dashed #d9e1d9;background:#fafcfa;padding:14px;}
 .dashx-unavailable strong{font-size:12px;color:#415045;}
 .dashx-unavailable span{font-size:11px;color:#748179;line-height:1.5;}
@@ -2126,18 +2131,67 @@ nav{
 .dashx-score-pill.good{background:#e8f1e8;color:#31563b;}
 .dashx-score-pill.warn{background:#f4ead9;color:#8f622f;}
 .dashx-score-pill.bad{background:#f6e0db;color:#af5046;}
+.dashx-exec-grid{display:grid;grid-template-columns:1.2fr .9fr;gap:16px;}
+.dashx-chart-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px;}
+.dashx-chart-card{background:#fff;border:1px solid #dfe6dd;border-radius:18px;padding:18px;box-shadow:var(--soft-shadow);}
+.dashx-chart-head{display:flex;align-items:flex-start;justify-content:space-between;gap:10px;margin-bottom:14px;flex-wrap:wrap;}
+.dashx-chart-title{font-size:15px;font-weight:900;letter-spacing:-.02em;color:#14231b;}
+.dashx-chart-sub{font-size:11px;line-height:1.45;color:#67756b;margin-top:4px;max-width:440px;}
+.dashx-chart-meta{display:inline-flex;align-items:center;gap:6px;flex-wrap:wrap;}
+.dashx-chart-note{font-size:11px;font-weight:800;color:#758379;}
+.dashx-kpi-delta{display:inline-flex;align-items:center;gap:5px;border-radius:999px;padding:4px 8px;font-size:10px;font-weight:900;letter-spacing:.04em;}
+.dashx-kpi-delta.good{background:#eaf4e9;color:#31563b;}
+.dashx-kpi-delta.warn{background:#f6ead9;color:#91612b;}
+.dashx-kpi-delta.bad{background:#f9e1dd;color:#b45445;}
+.dashx-kpi-delta.neutral{background:#eef3ed;color:#6c7a70;}
+.dashx-line-svg{display:block;width:100%;height:220px;}
+.dashx-axis-label{font-size:10px;font-weight:800;fill:#819085;}
+.dashx-value-label{font-size:10px;font-weight:900;fill:#203027;}
+.dashx-chart-legend{display:flex;gap:10px;flex-wrap:wrap;margin-top:10px;}
+.dashx-legend-item{display:inline-flex;align-items:center;gap:6px;font-size:11px;font-weight:800;color:#607066;}
+.dashx-legend-swatch{width:10px;height:10px;border-radius:999px;display:inline-block;}
+.dashx-status-stack{display:flex;flex-direction:column;gap:12px;}
+.dashx-status-row{display:grid;grid-template-columns:130px 1fr 44px;gap:10px;align-items:center;}
+.dashx-status-name{font-size:11px;font-weight:800;color:#304036;}
+.dashx-status-track{height:16px;border-radius:999px;background:#eef3ee;overflow:hidden;display:flex;}
+.dashx-status-seg{height:100%;}
+.dashx-status-total{font-size:11px;font-weight:900;color:#2a3930;text-align:right;}
+.dashx-action-card{background:#fff;border:1px solid #dfe6dd;border-radius:18px;padding:18px;box-shadow:var(--soft-shadow);display:flex;flex-direction:column;gap:14px;}
+.dashx-action-top{display:flex;align-items:flex-start;justify-content:space-between;gap:10px;flex-wrap:wrap;}
+.dashx-action-title{font-size:15px;font-weight:900;letter-spacing:-.02em;color:#14231b;}
+.dashx-action-sub{font-size:11px;line-height:1.45;color:#68756c;margin-top:4px;max-width:360px;}
+.dashx-action-group{display:flex;flex-direction:column;gap:8px;}
+.dashx-action-group-head{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;}
+.dashx-action-group-title{font-size:11px;font-weight:900;letter-spacing:.12em;text-transform:uppercase;color:#7f8d82;}
+.dashx-action-list{display:flex;flex-direction:column;gap:8px;}
+.dashx-action-item{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:10px;align-items:flex-start;padding:12px 13px;border-radius:14px;border:1px solid #e5ece4;background:#fbfcfa;}
+.dashx-action-main{min-width:0;display:flex;flex-direction:column;gap:4px;}
+.dashx-action-name{font-size:12px;font-weight:900;color:#14231b;line-height:1.35;}
+.dashx-action-reason{font-size:11px;line-height:1.45;color:#67756b;}
+.dashx-action-meta{display:flex;gap:6px;flex-wrap:wrap;margin-top:1px;}
+.dashx-action-score{display:inline-flex;align-items:center;justify-content:center;min-width:54px;border-radius:999px;padding:6px 9px;font-size:11px;font-weight:900;}
+.dashx-action-score.good{background:#eaf4e9;color:#31563b;}
+.dashx-action-score.warn{background:#f6ead9;color:#91612b;}
+.dashx-action-score.bad{background:#f9e1dd;color:#b45445;}
+.dashx-inline-note{padding:12px 14px;border-radius:14px;background:#f8fbf7;border:1px solid #dfe7de;font-size:12px;line-height:1.55;color:#5e6d62;}
+.dashx-inline-note strong{color:#203027;}
+.dashx-health-toolbar{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-bottom:12px;}
+.dashx-health-title{font-size:12px;font-weight:900;color:#23332b;letter-spacing:.04em;}
+.dashx-health-sub{font-size:11px;color:#6c7a70;line-height:1.45;}
 @media(max-width:1180px){
-  .dashx-top-grid,.dashx-mini-grid,.dashx-burndown-hero,.dashx-funnel{grid-template-columns:repeat(2,minmax(0,1fr));}
-  .dashx-grid-2,.dashx-grid-3{grid-template-columns:1fr;}
+  .dashx-top-grid,.dashx-mini-grid,.dashx-health-grid,.dashx-burndown-hero,.dashx-funnel,.dashx-chart-grid{grid-template-columns:repeat(2,minmax(0,1fr));}
+  .dashx-grid-2,.dashx-grid-3,.dashx-exec-grid{grid-template-columns:1fr;}
   .dashx-heatmap-header,.dashx-heatmap-row{grid-template-columns:120px repeat(12,minmax(32px,1fr));}
 }
 @media(max-width:820px){
   .dashx-hero{padding:18px 16px 16px;border-radius:18px;}
   .dashx-title{font-size:24px;}
-  .dashx-top-grid,.dashx-mini-grid,.dashx-burndown-hero,.dashx-funnel{grid-template-columns:1fr;}
+  .dashx-top-grid,.dashx-mini-grid,.dashx-health-grid,.dashx-burndown-hero,.dashx-funnel,.dashx-chart-grid{grid-template-columns:1fr;}
   .dashx-filter-label{min-width:100%;padding-top:0;}
   .dashx-section-head,.dashx-section-body{padding-left:14px;padding-right:14px;}
   .dashx-heatmap-header,.dashx-heatmap-row{grid-template-columns:100px repeat(12,minmax(28px,1fr));gap:6px;}
+  .dashx-status-row{grid-template-columns:1fr;}
+  .dashx-action-item{grid-template-columns:1fr;}
 }
 </style>
 </head>
@@ -2266,6 +2320,7 @@ var CONTRACTS_MRR = {
 var activePeriod = 'all';
 var fS='all', fC='all', fM='all', fQ='';
 var DASH_FILTERS = { consultor:'all', vendedor:'all', status:'all', tipo:'all' };
+var DASH_HEALTH_VIEW = 'issues';
 var _openId = null;
 var ORDEM_MESES = ['JAN','FEV','MAR','ABR','MAI','JUN','JUL','AGO','SET','OUT','NOV','DEZ'];
 
@@ -4195,6 +4250,10 @@ function dashResetFilters() {
   DASH_FILTERS = { consultor:'all', vendedor:'all', status:'all', tipo:'all' };
   initDash();
 }
+function dashSetHealthView(view) {
+  DASH_HEALTH_VIEW = view || 'issues';
+  initDash();
+}
 function dashMetricClass(v, warnAt, badAt, inverse) {
   if (v === null || v === undefined || isNaN(v)) return 'neutral';
   if (inverse) {
@@ -4225,8 +4284,13 @@ function dashKpiCard(label, value, note, statusClass, infoKey, alertHtml) {
     '<div class="dashx-card-meta">'+(alertHtml || '')+(note ? '<div class="dashx-card-note">'+note+'</div>' : '')+'</div>'+
   '</div>';
 }
-function dashMiniCard(label, value, sub, statusClass, infoKey) {
-  return '<div class="dashx-mini-card"><div class="dashx-mini-label">'+label+towerInfoButton(infoKey || 'source')+'</div><div class="dashx-mini-value">'+value+'</div><div class="dashx-mini-sub">'+sub+'</div></div>';
+function dashMiniCard(label, value, sub, statusClass, infoKey, opts) {
+  opts = opts || {};
+  var classes = ['dashx-mini-card'];
+  if (opts.clickable) classes.push('clickable');
+  if (opts.active) classes.push('active');
+  var attr = opts.onClick ? ' onclick="'+opts.onClick+'"' : '';
+  return '<div class="'+classes.join(' ')+'"'+attr+'><div class="dashx-mini-label">'+label+towerInfoButton(infoKey || 'source')+'</div><div class="dashx-mini-value">'+value+'</div><div class="dashx-mini-sub">'+sub+'</div>'+(opts.foot ? '<div class="dashx-mini-foot">'+opts.foot+'</div>' : '')+'</div>';
 }
 function dashDataHealth(list) {
   var defs = [
@@ -4243,6 +4307,9 @@ function dashDataHealth(list) {
   var filled = 0;
   var counts = {};
   var inconsistencias = [];
+  var syncCriticalItems = [];
+  var syncErrorItems = [];
+  var staleItems = [];
   defs.forEach(function(def){ counts[def.key] = 0; });
   list.forEach(function(p){
     var faltas = [];
@@ -4257,7 +4324,8 @@ function dashDataHealth(list) {
       cliente: p.cliente || '-',
       consultor: p.consultor || '-',
       status: sl(p.status || '-'),
-      faltas: faltas
+      faltas: faltas,
+      criticidade: faltas.length >= 3 ? 'Crítico' : 'Atenção'
     });
   });
   var completude = expected ? Math.round((filled / expected) * 100) : null;
@@ -4286,6 +4354,43 @@ function dashDataHealth(list) {
     return /error|falha/.test(dashProjectSyncStatus(p)) || !!dashProjectSyncError(p);
   }).length;
   var syncErrorRate = syncCandidates.length ? Math.round((syncErrors / syncCandidates.length) * 100) : null;
+  syncCandidates.forEach(function(p){
+    var syncDate = dashLastSyncDate(p);
+    var syncHours = dashHoursSince(syncDate);
+    var status = dashProjectSyncStatus(p);
+    var error = dashProjectSyncError(p);
+    if (error || /error|falha/.test(status)) {
+      syncErrorItems.push({
+        cliente: p.cliente || '-',
+        consultor: p.consultor || '-',
+        status: sl(p.status || '-'),
+        detalhe: error || status || 'Falha de sincronização',
+        criticidade: 'Crítico'
+      });
+    }
+    if (syncHours === null || syncHours > 48) {
+      syncCriticalItems.push({
+        cliente: p.cliente || '-',
+        consultor: p.consultor || '-',
+        status: sl(p.status || '-'),
+        detalhe: syncHours === null ? 'Sem data de sync ClickUp' : ('Última sync há ' + dashHourLabel(syncHours)),
+        criticidade: syncHours === null || syncHours > 72 ? 'Crítico' : 'Atenção'
+      });
+    }
+  });
+  list.forEach(function(p){
+    var updateDate = dashLastUpdateDate(p);
+    var hours = dashHoursSince(updateDate);
+    if (hours !== null && hours > 24 * 7) {
+      staleItems.push({
+        cliente: p.cliente || '-',
+        consultor: p.consultor || '-',
+        status: sl(p.status || '-'),
+        detalhe: Math.round(hours / 24) + ' dia(s) sem atualização',
+        criticidade: hours > 24 * 15 ? 'Crítico' : 'Atenção'
+      });
+    }
+  });
   var leadTimes = list.map(function(p){
     var s = dashLastSyncDate(p);
     var u = dashParseDate(dashValue(p, ['data_ultima_atualizacao','ultima_atualizacao_real','ultima_atualizacao']));
@@ -4308,7 +4413,13 @@ function dashDataHealth(list) {
     syncCandidates: syncCandidates.length,
     leadTimeAvg: leadTimeAvg,
     latencyHours: latencyHours,
-    latestSource: latestSource
+    latestSource: latestSource,
+    views: {
+      issues: inconsistencias,
+      syncCritical: syncCriticalItems,
+      syncErrors: syncErrorItems,
+      stale: staleItems
+    }
   };
 }
 function dashOperation(list, analyses) {
@@ -4460,46 +4571,286 @@ function dashHourLabel(hours) {
   if (hours < 24) return fn(hours) + ' h';
   return fn(hours / 24) + ' dia(s)';
 }
-function dashRenderFilters(baseList) {
-  var consultores = dashDistinct(baseList, 'consultor');
-  var vendedores = dashDistinct(baseList, 'vendedor');
-  var statusMap = {};
-  var tipoMap = {};
-  baseList.forEach(function(p){
-    var sk = dashStatusKey(p && p.status);
-    var tk = dashTipoKey(p && p.tipo);
-    if (sk && !statusMap[sk]) {
-      statusMap[sk] = sk === 'andamento' ? 'Em andamento' : sk === 'aguardando' ? 'Aguardando Início' : sk === 'atrasado' ? 'Atrasado' : sk === 'concluido' ? 'Concluído' : sk === 'parado' ? 'Parado' : sl(p.status || sk);
-    }
-    if (tk && !tipoMap[tk]) {
-      tipoMap[tk] = tk === 'venda' ? 'Venda Nova' : tk === 'avulso' ? 'Avulso' : sl(p.tipo || tk);
-    }
+function dashFilterListByDashboard(list) {
+  return (list || []).filter(function(p){
+    if (DASH_FILTERS.consultor !== 'all' && String((p && p.consultor) || '') !== DASH_FILTERS.consultor) return false;
+    if (DASH_FILTERS.vendedor !== 'all' && String((p && p.vendedor) || '') !== DASH_FILTERS.vendedor) return false;
+    if (DASH_FILTERS.status !== 'all' && dashStatusKey(p && p.status) !== DASH_FILTERS.status) return false;
+    if (DASH_FILTERS.tipo !== 'all' && dashTipoKey(p && p.tipo) !== DASH_FILTERS.tipo) return false;
+    return true;
   });
-  function row(label, chips) {
-    return '<div class="dashx-filter-row"><div class="dashx-filter-label">'+label+'</div><div class="dashx-filter-options">'+chips+'</div></div>';
+}
+function dashMonthsInList(list) {
+  var seen = {};
+  (list || []).forEach(function(p){
+    var m = String((p && p.mes) || '').toUpperCase().trim();
+    if (m) seen[m] = true;
+  });
+  return ORDEM_MESES.filter(function(m){ return seen[m]; });
+}
+function dashPreviousMonthKey(month) {
+  var idx = ORDEM_MESES.indexOf(month);
+  return idx > 0 ? ORDEM_MESES[idx - 1] : null;
+}
+function dashMetricSnapshot(list) {
+  var analyses = (list || []).map(towerAnaliseProjeto);
+  var total = list.length;
+  var atrasados = analyses.filter(function(a){
+    return a.pendenciasVencidas || dashStatusKey(a.projeto && a.projeto.status) === 'atrasado';
+  }).length;
+  var stale = analyses.filter(function(a){ return !!a.semUpdate; }).length;
+  var excedidos = (list || []).filter(function(p){ return Number((p && p.diarias_rest) || 0) < 0; }).length;
+  var capacidade = null;
+  var health = dashDataHealth(list).completude;
+  if (total) {
+    var contratadas = list.reduce(function(sum, p){ return sum + Number((p && p.diarias_cont) || 0); }, 0);
+    var realizadas = list.reduce(function(sum, p){ return sum + Number((p && p.diarias_real) || 0); }, 0);
+    capacidade = contratadas > 0 ? Math.round((realizadas / contratadas) * 100) : null;
   }
-  return '<div class="dashx-filters">'+
-    row('Período', '<span class="dashx-filter-chip muted">Período global: '+(activePeriod === 'all' ? 'Todos os meses' : activePeriod)+'</span><button type="button" class="dashx-filter-chip" onclick="dashResetFilters()">Limpar filtros internos</button>')+
-    row('Consultor', dashFilterChip('Todos', 'consultor', 'all', DASH_FILTERS.consultor === 'all') + consultores.map(function(v){ return dashFilterChip(v, 'consultor', v, DASH_FILTERS.consultor === v); }).join(''))+
-    row('Vendedor', dashFilterChip('Todos', 'vendedor', 'all', DASH_FILTERS.vendedor === 'all') + vendedores.map(function(v){ return dashFilterChip(v, 'vendedor', v, DASH_FILTERS.vendedor === v); }).join(''))+
-    row('Status', dashFilterChip('Todos', 'status', 'all', DASH_FILTERS.status === 'all') + Object.keys(statusMap).map(function(k){ return dashFilterChip(statusMap[k], 'status', k, DASH_FILTERS.status === k); }).join(''))+
-    row('Tipo de projeto', dashFilterChip('Todos', 'tipo', 'all', DASH_FILTERS.tipo === 'all') + Object.keys(tipoMap).map(function(k){ return dashFilterChip(tipoMap[k], 'tipo', k, DASH_FILTERS.tipo === k); }).join(''))+
+  return {
+    total: total,
+    atrasadosCount: atrasados,
+    atrasadosPct: total ? Math.round((atrasados / total) * 100) : null,
+    staleCount: stale,
+    stalePct: total ? Math.round((stale / total) * 100) : null,
+    excedidosCount: excedidos,
+    excedidosPct: total ? Math.round((excedidos / total) * 100) : null,
+    capacidadePct: capacidade,
+    healthPct: health
+  };
+}
+function dashDeltaChip(current, previous, inverse, mode, unitLabel) {
+  if (current === null || current === undefined || isNaN(current) || previous === null || previous === undefined || isNaN(previous)) {
+    return '<span class="dashx-kpi-delta neutral">Sem comparativo</span>';
+  }
+  var diff = Number(current) - Number(previous);
+  var abs = Math.abs(diff);
+  var better = inverse ? diff <= 0 : diff >= 0;
+  var cls = abs < 0.5 ? 'neutral' : (better ? 'good' : 'bad');
+  var arrow = abs < 0.5 ? '•' : (diff > 0 ? '↑' : '↓');
+  var suffix = mode === 'pct' ? '%' : (unitLabel ? ' ' + unitLabel : '');
+  return '<span class="dashx-kpi-delta '+cls+'">'+arrow+' '+fn(abs)+suffix+' vs período anterior</span>';
+}
+function dashStartOfWeek(date) {
+  if (!date) return null;
+  var d = new Date(date.getTime());
+  d.setHours(0,0,0,0);
+  var day = d.getDay();
+  var diff = day === 0 ? -6 : 1 - day;
+  d.setDate(d.getDate() + diff);
+  return d;
+}
+function dashBuildWeeklyTrend(list) {
+  var now = new Date();
+  var currentWeek = dashStartOfWeek(now);
+  var weeks = [];
+  for (var i = 7; i >= 0; i--) {
+    var start = new Date(currentWeek.getTime());
+    start.setDate(start.getDate() - (i * 7));
+    var end = new Date(start.getTime());
+    end.setDate(end.getDate() + 6);
+    end.setHours(23,59,59,999);
+    weeks.push({
+      key: start.toISOString().slice(0,10),
+      label: ('0' + start.getDate()).slice(-2) + '/' + ('0' + (start.getMonth() + 1)).slice(-2),
+      start: start,
+      end: end
+    });
+  }
+  return weeks.map(function(week){
+    var active = (list || []).filter(function(p){
+      var venda = dashParseDate((p && p.data_venda) || null);
+      return !venda || venda.getTime() <= week.end.getTime();
+    });
+    var risco = 0;
+    var backlog = 0;
+    var throughput = 0;
+    active.forEach(function(p){
+      var lastUpdate = dashLastUpdateDate(p);
+      var stale = lastUpdate ? Math.max(0, diffD(lastUpdate, week.end)) > 7 : true;
+      var pend = Number((p && p.tasks_pendentes) || 0) + Number((p && p.marcos_pendentes) || 0);
+      var diariasRest = Number((p && p.diarias_rest) || 0);
+      var score = 100;
+      if (stale) score -= 30;
+      if (pend >= 8) score -= 20;
+      else if (pend >= 4) score -= 10;
+      if (diariasRest < 0) score -= 25;
+      if (Number((p && p.marcos_pendentes) || 0) > 0) score -= 10;
+      if (score < 70) risco += 1;
+      if (pend > 0) backlog += 1;
+      if (lastUpdate && lastUpdate.getTime() >= week.start.getTime() && lastUpdate.getTime() <= week.end.getTime()) throughput += 1;
+    });
+    return { label: week.label, risco: risco, backlog: backlog, throughput: throughput };
+  });
+}
+function dashBuildStatusByMonth(list) {
+  return dashMonthsInList(list).map(function(mes){
+    var items = (list || []).filter(function(p){ return String((p && p.mes) || '').toUpperCase() === mes; });
+    var counts = { andamento:0, aguardando:0, parado:0, concluido:0, cancelado:0, outro:0 };
+    items.forEach(function(p){
+      var key = dashStatusKey(p && p.status);
+      if (counts.hasOwnProperty(key)) counts[key] += 1;
+      else counts.outro += 1;
+    });
+    return { mes: mes, total: items.length, counts: counts };
+  });
+}
+function dashRenderTrendLine(series, title, sub, lineKey, color, infoKey, note) {
+  if (!(series || []).length) return dashUnavailableCard(title, ['dados insuficientes']);
+  var width = 560;
+  var height = 220;
+  var padX = 26;
+  var padY = 24;
+  var innerW = width - padX * 2;
+  var innerH = height - padY * 2;
+  var maxVal = 1;
+  series.forEach(function(item){ if (Number(item[lineKey] || 0) > maxVal) maxVal = Number(item[lineKey] || 0); });
+  var pts = series.map(function(item, idx){
+    var x = padX + (innerW * (series.length === 1 ? 0.5 : idx / (series.length - 1)));
+    var y = padY + innerH - ((Number(item[lineKey] || 0) / maxVal) * innerH);
+    return { x:x, y:y, value:Number(item[lineKey] || 0), label:item.label };
+  });
+  var path = pts.map(function(pt, idx){ return (idx ? 'L' : 'M') + pt.x + ' ' + pt.y; }).join(' ');
+  var labels = pts.map(function(pt){
+    return '<text x="'+pt.x+'" y="'+(pt.y - 8)+'" class="dashx-value-label" text-anchor="middle">'+pt.value+'</text><circle cx="'+pt.x+'" cy="'+pt.y+'" r="4" fill="'+color+'"></circle><text x="'+pt.x+'" y="'+(height - 6)+'" class="dashx-axis-label" text-anchor="middle">'+pt.label+'</text>';
+  }).join('');
+  return '<div class="dashx-chart-card"><div class="dashx-chart-head"><div><div class="dashx-chart-title">'+title+' '+towerInfoButton(infoKey || 'source')+'</div><div class="dashx-chart-sub">'+sub+'</div></div><div class="dashx-chart-meta"><span class="dashx-chart-note">'+(note || '')+'</span></div></div><svg viewBox="0 0 '+width+' '+height+'" class="dashx-line-svg" role="img" aria-label="'+title+'"><line x1="'+padX+'" y1="'+(height - padY)+'" x2="'+(width - padX)+'" y2="'+(height - padY)+'" stroke="#dfe7de" stroke-width="1"></line><path d="'+path+'" fill="none" stroke="'+color+'" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"></path>'+labels+'</svg></div>';
+}
+function dashRenderBacklogThroughput(series) {
+  if (!(series || []).length) return dashUnavailableCard('Backlog e throughput', ['dados insuficientes']);
+  var width = 560;
+  var height = 220;
+  var padX = 22;
+  var padY = 24;
+  var innerW = width - padX * 2;
+  var innerH = height - padY * 2;
+  var maxVal = 1;
+  series.forEach(function(item){
+    maxVal = Math.max(maxVal, Number(item.backlog || 0), Number(item.throughput || 0));
+  });
+  var colWidth = innerW / series.length;
+  var bars = series.map(function(item, idx){
+    var x = padX + idx * colWidth + 6;
+    var bw = Math.max(18, (colWidth - 16) / 2);
+    var hBack = (Number(item.backlog || 0) / maxVal) * innerH;
+    var hThr = (Number(item.throughput || 0) / maxVal) * innerH;
+    return '<rect x="'+x+'" y="'+(height - padY - hBack)+'" width="'+bw+'" height="'+hBack+'" rx="8" fill="#d9b57e"></rect>'+
+      '<rect x="'+(x + bw + 6)+'" y="'+(height - padY - hThr)+'" width="'+bw+'" height="'+hThr+'" rx="8" fill="#6d8e72"></rect>'+
+      '<text x="'+(x + bw/2)+'" y="'+(height - padY - hBack - 8)+'" class="dashx-value-label" text-anchor="middle">'+Number(item.backlog || 0)+'</text>'+
+      '<text x="'+(x + bw + 6 + bw/2)+'" y="'+(height - padY - hThr - 8)+'" class="dashx-value-label" text-anchor="middle">'+Number(item.throughput || 0)+'</text>'+
+      '<text x="'+(x + bw + 3)+'" y="'+(height - 6)+'" class="dashx-axis-label" text-anchor="middle">'+item.label+'</text>';
+  }).join('');
+  return '<div class="dashx-chart-card"><div class="dashx-chart-head"><div><div class="dashx-chart-title">Backlog x throughput por semana '+towerInfoButton('dailyBurn')+'</div><div class="dashx-chart-sub">Backlog mostra projetos com pendências abertas. Throughput mostra quantos projetos receberam atualização na semana.</div></div></div><svg viewBox="0 0 '+width+' '+height+'" class="dashx-line-svg" role="img" aria-label="Backlog e throughput por semana"><line x1="'+padX+'" y1="'+(height - padY)+'" x2="'+(width - padX)+'" y2="'+(height - padY)+'" stroke="#dfe7de" stroke-width="1"></line>'+bars+'</svg><div class="dashx-chart-legend"><span class="dashx-legend-item"><span class="dashx-legend-swatch" style="background:#d9b57e"></span>Backlog</span><span class="dashx-legend-item"><span class="dashx-legend-swatch" style="background:#6d8e72"></span>Throughput</span></div></div>';
+}
+function dashRenderStatusStack(items) {
+  if (!(items || []).length) return dashUnavailableCard('Status por período', ['mes']);
+  var labels = {
+    andamento:'Em andamento',
+    aguardando:'Aguardando início',
+    parado:'Parado',
+    concluido:'Concluído',
+    cancelado:'Cancelado',
+    outro:'Outros'
+  };
+  var colors = {
+    andamento:'#d9b57e',
+    aguardando:'#6f95c0',
+    parado:'#9aa59d',
+    concluido:'#6d8e72',
+    cancelado:'#c96c5f',
+    outro:'#dfe7de'
+  };
+  var rows = items.map(function(item){
+    var total = item.total || 1;
+    var order = ['andamento','aguardando','parado','concluido','cancelado','outro'];
+    var segs = order.map(function(key){
+      var count = Number((item.counts && item.counts[key]) || 0);
+      if (!count) return '';
+      return '<span class="dashx-status-seg" style="width:'+((count / total) * 100)+'%;background:'+colors[key]+'" title="'+labels[key]+': '+count+'"></span>';
+    }).join('');
+    return '<div class="dashx-status-row"><div class="dashx-status-name">'+item.mes+'</div><div class="dashx-status-track">'+segs+'</div><div class="dashx-status-total">'+item.total+'</div></div>';
+  }).join('');
+  return '<div class="dashx-chart-card"><div class="dashx-chart-head"><div><div class="dashx-chart-title">Status dos projetos por período '+towerInfoButton('projectRisk')+'</div><div class="dashx-chart-sub">Distribuição mensal do portfólio para entender concentração de projetos em andamento, aguardando, parados e concluídos.</div></div></div><div class="dashx-status-stack">'+rows+'</div><div class="dashx-chart-legend"><span class="dashx-legend-item"><span class="dashx-legend-swatch" style="background:#d9b57e"></span>Em andamento</span><span class="dashx-legend-item"><span class="dashx-legend-swatch" style="background:#6f95c0"></span>Aguardando início</span><span class="dashx-legend-item"><span class="dashx-legend-swatch" style="background:#9aa59d"></span>Parado</span><span class="dashx-legend-item"><span class="dashx-legend-swatch" style="background:#6d8e72"></span>Concluído</span><span class="dashx-legend-item"><span class="dashx-legend-swatch" style="background:#c96c5f"></span>Cancelado</span></div></div>';
+}
+function dashRenderActionNow(analyses, operation) {
+  var criticos = (analyses || []).filter(function(a){ return a.actionToday || a.risco; }).sort(function(a, b){
+    if (a.score !== b.score) return a.score - b.score;
+    if ((b.pendencias || 0) !== (a.pendencias || 0)) return (b.pendencias || 0) - (a.pendencias || 0);
+    return (b.diasSem || 0) - (a.diasSem || 0);
+  }).slice(0, 10);
+  var consultores = (operation && operation.ranking ? operation.ranking : []).filter(function(c){ return c.classe !== 'good' || c.riscos > 0 || c.esquecidos > 0; }).slice(0, 5);
+  var contas = (analyses || []).filter(function(a){ return a.risco || a.premium || a.semContato; }).sort(function(a, b){
+    if ((b.receitaRisco || 0) !== (a.receitaRisco || 0)) return (b.receitaRisco || 0) - (a.receitaRisco || 0);
+    return a.score - b.score;
+  }).slice(0, 5);
+  function item(nome, reason, tags, score, cls) {
+    return '<div class="dashx-action-item"><div class="dashx-action-main"><div class="dashx-action-name">'+nome+'</div><div class="dashx-action-reason">'+reason+'</div><div class="dashx-action-meta">'+tags.join('')+'</div></div><span class="dashx-action-score '+cls+'">'+score+'</span></div>';
+  }
+  var criticosHtml = criticos.length ? criticos.map(function(a){
+    var tags = [];
+    if (a.diasSem !== null) tags.push('<span class="dashx-mini-chip">'+a.diasSem+'d sem update</span>');
+    if (a.pendencias) tags.push('<span class="dashx-mini-chip">'+a.pendencias+' pendências</span>');
+    if (a.receitaRisco) tags.push('<span class="dashx-mini-chip">MRR em risco '+fn(a.receitaRisco)+'</span>');
+    return item(a.projeto.cliente || '-', a.sinais.slice(0, 2).map(function(s){ return s.texto; }).join(' • ') || 'Sem próxima ação clara.', tags, a.score, a.classe);
+  }).join('') : '<div class="dashx-unavailable"><strong>Nenhum projeto crítico no recorte atual</strong><span>A carteira filtrada está sem riscos materiais no momento.</span></div>';
+  var consultoresHtml = consultores.length ? consultores.map(function(c){
+    var tags = [
+      '<span class="dashx-mini-chip">'+c.projetos+' projetos</span>',
+      '<span class="dashx-mini-chip">'+c.riscos+' em risco</span>',
+      '<span class="dashx-mini-chip">'+c.esquecidos+' esquecidos</span>'
+    ];
+    return item(c.nome, c.classe === 'bad' ? 'Carga acima do limite seguro da equipe.' : 'Carteira pedindo atenção antes de escalar.', tags, c.score, c.classe);
+  }).join('') : '<div class="dashx-unavailable"><strong>Nenhum consultor sobrecarregado</strong><span>A distribuição da carteira está equilibrada no recorte atual.</span></div>';
+  var contasHtml = contas.length ? contas.map(function(a){
+    var tags = [];
+    if (a.receitaRisco) tags.push('<span class="dashx-mini-chip">MRR '+fn(a.receitaRisco)+'</span>');
+    if (a.diasSem !== null) tags.push('<span class="dashx-mini-chip">'+a.diasSem+'d sem update</span>');
+    if (a.semProximaAcao) tags.push('<span class="dashx-mini-chip">Sem próxima ação</span>');
+    return item(a.projeto.cliente || '-', a.sinais.slice(0, 2).map(function(s){ return s.texto; }).join(' • ') || 'Conta sensível pela exposição operacional.', tags, a.score, a.classe);
+  }).join('') : '<div class="dashx-unavailable"><strong>Nenhuma conta em risco material</strong><span>Não há clientes prioritários em risco no recorte atual.</span></div>';
+  return '<div class="dashx-action-card"><div class="dashx-action-top"><div><div class="dashx-action-title">Ação hoje '+towerInfoButton('projectRisk')+'</div><div class="dashx-action-sub">Em até 30 segundos, a liderança sabe o que precisa atacar agora.</div></div></div><div class="dashx-action-group"><div class="dashx-action-group-head"><div class="dashx-action-group-title">Top 10 projetos críticos</div></div><div class="dashx-action-list">'+criticosHtml+'</div></div><div class="dashx-action-group"><div class="dashx-action-group-head"><div class="dashx-action-group-title">Top 5 consultores sobrecarregados</div></div><div class="dashx-action-list">'+consultoresHtml+'</div></div><div class="dashx-action-group"><div class="dashx-action-group-head"><div class="dashx-action-group-title">Top 5 contas em risco</div></div><div class="dashx-action-list">'+contasHtml+'</div></div></div>';
+}
+function dashRenderFilters(baseList) {
+  var consultores = dashDistinct(baseList, 'consultor').length;
+  var vendedores = dashDistinct(baseList, 'vendedor').length;
+  var atrasados = baseList.filter(function(p){ return dashStatusKey(p && p.status) === 'atrasado'; }).length;
+  var semSync = baseList.filter(function(p){
+    return dashFieldPresent(p, ['list_id','view_id']) && !dashLastSyncDate(p);
+  }).length;
+  return '<div class="dashx-inline-note">'+
+    '<strong>Leitura gerencial consolidada:</strong> esta visão considera <strong>todos os meses</strong> da base e não depende dos filtros operacionais das outras abas. '+
+    'Hoje a carteira soma <strong>'+baseList.length+' projetos</strong>, com <strong>'+consultores+' consultor(es)</strong>, <strong>'+vendedores+' vendedor(es)</strong>, <strong>'+atrasados+' projeto(s) em atraso</strong> e <strong>'+semSync+' projeto(s) com ClickUp mapeado sem data de sync</strong>.'+
   '</div>';
 }
 function dashRenderHealthSection(health) {
+  var views = [
+    { key:'issues', label:'Completude', value:dashPct(health.completude), sub:health.completude === null ? 'Base sem projetos.' : 'Campos obrigatórios realmente preenchidos.', cls:dashMetricClass(health.completude, 70, 90, false), info:'dataCompleteness', foot:(health.views.issues.length ? health.views.issues.length+' projeto(s) com problema de cadastro' : 'Nenhum problema estrutural') },
+    { key:'issues', label:'Projetos com problema', value:health.inconsistencias.length, sub:health.inconsistencias.length ? 'Projetos com campo obrigatório faltando.' : 'Nenhuma inconsistência encontrada.', cls:health.inconsistencias.length ? (health.inconsistencias.length > Math.max(3, Math.round(health.syncOk / 2)) ? 'bad' : 'warn') : 'good', info:'dataInconsistencies', foot:'Clique para abrir a lista crítica' },
+    { key:'syncCritical', label:'Sync ClickUp 24h', value:dashPct(health.syncOkPct), sub:health.syncCandidates ? ((health.syncCandidates || 0)+' projeto(s) mapeados no ClickUp.') : 'Sem projetos mapeados no ClickUp.', cls:dashMetricClass(health.syncOkPct, 70, 90, false), info:'syncFreshness', foot:(health.views.syncCritical.length ? health.views.syncCritical.length+' projeto(s) sem sync recente' : 'Sincronização sob controle') },
+    { key:'syncErrors', label:'Falha de sync', value:health.syncCandidates ? dashPct(health.syncErrorRate) : '-', sub:health.syncCandidates ? (health.syncErrors+' falha(s) entre '+health.syncCandidates+' projeto(s) monitorados.') : 'Sem rastreio de sincronização disponível.', cls:dashMetricClass(health.syncErrorRate, 2, 10, true), info:'syncErrors', foot:'Clique para listar os projetos com erro' },
+    { key:'stale', label:'Projetos críticos', value:health.views.stale.length, sub:'Projetos com update operacional acima do SLA.', cls:health.views.stale.length ? (health.views.stale.length >= 10 ? 'bad' : 'warn') : 'good', info:'stale', foot:(health.views.stale.length ? 'Clique para ver os projetos sem update' : 'Nenhum projeto crítico') },
+    { key:'syncCritical', label:'Latência da base', value:dashHourLabel(health.latencyHours), sub:health.latestSource ? ('Última origem conhecida em '+fd(health.latestSource.toISOString())) : 'Data de origem indisponível.', cls:dashMetricClass(health.latencyHours, 24, 48, true), info:'sourceLatency', foot:(health.leadTimeAvg === null ? 'Lead time indisponível' : 'Lead time médio: '+dashHourLabel(health.leadTimeAvg)) }
+  ];
   var mini = [
-    dashMiniCard('Completude', dashPct(health.completude), health.completude === null ? 'Base sem projetos no filtro.' : 'Campos obrigatórios preenchidos no recorte atual.', dashMetricClass(health.completude, 70, 90, false), 'dataCompleteness'),
-    dashMiniCard('Projetos com inconsistência', health.inconsistencias.length, health.inconsistencias.length ? 'Há campos obrigatórios faltando em parte da carteira.' : 'Nenhuma inconsistência encontrada.', health.inconsistencias.length ? (health.inconsistencias.length > Math.max(3, Math.round(health.syncOk / 2)) ? 'bad' : 'warn') : 'good', 'dataInconsistencies'),
-    dashMiniCard('Sync ClickUp recente', dashPct(health.syncOkPct), health.syncCandidates ? ((health.syncOk || 0)+' projeto(s) sincronizados em até 24h, '+(health.syncAttention || 0)+' em atenção e '+(health.syncCritical || 0)+' sem sync recente.') : 'Sem projetos com rastreio de sincronização no recorte.', dashMetricClass(health.syncOkPct, 70, 90, false), 'syncFreshness'),
-    dashMiniCard('Erro / timeout de sync', health.syncCandidates ? dashPct(health.syncErrorRate) : '-', health.syncCandidates ? (health.syncErrors+' erro(s) em '+health.syncCandidates+' projeto(s) monitorados pelo ClickUp.') : 'Sem projetos com rastreio de sincronização no recorte.', dashMetricClass(health.syncErrorRate, 2, 10, true), 'syncErrors'),
-    dashMiniCard('Latência da origem', dashHourLabel(health.latencyHours), health.latestSource ? ('Última origem conhecida em '+fd(health.latestSource.toISOString())) : 'Data de origem indisponível.', dashMetricClass(health.latencyHours, 24, 48, true), 'sourceLatency')
+    views.map(function(card){
+      return dashMiniCard(card.label, card.value, card.sub, card.cls, card.info, {
+        clickable:true,
+        active:DASH_HEALTH_VIEW === card.key,
+        onClick:"dashSetHealthView('"+card.key+"')",
+        foot:card.foot
+      });
+    }).join('')
   ].join('');
-  var rows = health.inconsistencias.length ? health.inconsistencias.slice(0, 12).map(function(item){
-    return '<tr><td><strong>'+item.cliente+'</strong></td><td>'+(item.consultor || '-')+'</td><td>'+item.status+'</td><td>'+item.faltas.join(', ')+'</td></tr>';
-  }).join('') : '<tr class="empty-row"><td colspan="4">Nenhuma inconsistência encontrada no filtro atual.</td></tr>';
+  var activeRows = health.views[DASH_HEALTH_VIEW] || health.inconsistencias || [];
+  var activeTitle = DASH_HEALTH_VIEW === 'syncErrors' ? 'Projetos com falha de sincronização' : DASH_HEALTH_VIEW === 'syncCritical' ? 'Projetos com sync antigo ou ausente' : DASH_HEALTH_VIEW === 'stale' ? 'Projetos críticos por falta de atualização' : 'Projetos com problema de cadastro';
+  var activeSub = DASH_HEALTH_VIEW === 'syncErrors' ? 'Ataque primeiro os projetos cujo sync falhou explicitamente.' : DASH_HEALTH_VIEW === 'syncCritical' ? 'Estes projetos têm ClickUp mapeado, mas não sincronizam recentemente ou não possuem data válida de sync.' : DASH_HEALTH_VIEW === 'stale' ? 'Estes projetos estão com update operacional antigo e merecem ação prioritária.' : 'Estes projetos têm campos obrigatórios ausentes e reduzem a confiabilidade do painel.';
+  var rows = activeRows.length ? activeRows.slice(0, 18).map(function(item){
+    var detalhe = item.faltas ? item.faltas.join(', ') : (item.detalhe || '-');
+    return '<tr><td><strong>'+item.cliente+'</strong></td><td>'+(item.consultor || '-')+'</td><td>'+item.status+'</td><td><span class="dashx-score-pill '+((item.criticidade || '').toLowerCase().indexOf('crít') >= 0 || (item.criticidade || '').toLowerCase().indexOf('crit') >= 0 ? 'bad' : 'warn')+'">'+(item.criticidade || '-').replace('Atenção','Em atenção')+'</span></td><td>'+detalhe+'</td></tr>';
+  }).join('') : '<tr class="empty-row"><td colspan="5">Nenhum projeto encontrado para esta visão de saúde dos dados.</td></tr>';
   return '<div class="dashx-grid-2">'+
-    '<div class="dashx-stack"><div class="dashx-mini-grid">'+mini+'</div>'+dashUnavailableCard('Lead time após sync', health.leadTimeAvg === null ? ['ultima_sync_clickup / data_ultima_atualizacao'] : [])+'</div>'+
-    '<div class="dashx-table-wrap"><table class="dashx-table"><thead><tr><th>Cliente</th><th>Consultor</th><th>Status</th><th>Campos faltando</th></tr></thead><tbody>'+rows+'</tbody></table></div>'+
+    '<div class="dashx-stack"><div class="dashx-health-grid">'+mini+'</div></div>'+
+    '<div class="dashx-stack"><div class="dashx-health-toolbar"><div><div class="dashx-health-title">'+activeTitle+'</div><div class="dashx-health-sub">'+activeSub+'</div></div></div><div class="dashx-table-wrap"><table class="dashx-table"><thead><tr><th>Cliente</th><th>Consultor</th><th>Status</th><th>Criticidade</th><th>Detalhe</th></tr></thead><tbody>'+rows+'</tbody></table></div></div>'+
   '</div>';
 }
 function dashRenderHeatmap(map) {
@@ -4588,16 +4939,18 @@ function dashRenderCohort(cohort, list) {
 }
 
 function initDash() {
-  var base = filteredProj();
-  var list = dashProjectsFiltered();
+  var sourceAll = Array.isArray(DATA.projetos) ? DATA.projetos.slice() : [];
+  var list = ordenarProjetosPainel(sourceAll);
+  var base = list.slice();
   var dc = document.getElementById('dash-content');
   if (!dc) return;
   if (!list.length) {
-    dc.innerHTML = '<div class="dashx-shell"><div class="dashx-hero"><div class="dashx-title-wrap"><div class="dashx-eyebrow">Dashboard Executivo CSI</div><div class="dashx-title">Sem projetos no recorte atual</div><div class="dashx-sub">Ajuste os filtros globais ou internos para visualizar a carteira consolidada.</div></div></div></div>';
+    dc.innerHTML = '<div class="dashx-shell"><div class="dashx-hero"><div class="dashx-title-wrap"><div class="dashx-eyebrow">Dashboard Executivo CSI</div><div class="dashx-title">Sem projetos disponíveis</div><div class="dashx-sub">A base consolidada ainda não trouxe projetos para a leitura gerencial.</div></div></div></div>';
     return;
   }
 
   dashApplyInfoContext(list);
+  var allInternal = list.slice();
   var analyses = list.map(towerAnaliseProjeto);
   var total = list.length;
   var riscos = analyses.filter(function(a){ return a.risco; });
@@ -4607,26 +4960,44 @@ function initDash() {
   var execution = dashExecution(list);
   var funnel = dashFunnel(list);
   var cohort = dashCohort(list);
+  var weeklyTrend = dashBuildWeeklyTrend(list);
+  var statusByMonth = dashBuildStatusByMonth(list);
   var activeRate = funnel.convGeral;
   var saldoDiarias = execution.unavailable ? null : execution.saldo;
+  var delayedCount = analyses.filter(function(a){
+    return a.pendenciasVencidas || dashStatusKey(a.projeto && a.projeto.status) === 'atrasado';
+  }).length;
+  var exceededCount = execution.unavailable ? 0 : execution.negativos.length;
+  var latestMonths = dashMonthsInList(allInternal);
+  var currentMonth = activePeriod !== 'all' ? activePeriod : (latestMonths.length ? latestMonths[latestMonths.length - 1] : null);
+  var previousMonth = currentMonth ? dashPreviousMonthKey(currentMonth) : null;
+  var currentMonthList = currentMonth ? allInternal.filter(function(p){ return String((p && p.mes) || '').toUpperCase() === currentMonth; }) : [];
+  var previousMonthList = previousMonth ? allInternal.filter(function(p){ return String((p && p.mes) || '').toUpperCase() === previousMonth; }) : [];
+  var currentSnap = dashMetricSnapshot(currentMonthList);
+  var previousSnap = dashMetricSnapshot(previousMonthList);
+  var compareLabel = currentMonth && previousMonth ? (currentMonth + ' vs ' + previousMonth) : 'Sem comparativo mensal';
   var topCards = '<div class="dashx-top-grid">'+
-    dashKpiCard('Projetos ativos', total, 'Carteira filtrada pronta para gestão executiva.', 'good', 'activeProjects', dashAlertPill('Recorte atual', 'good'))+
-    dashKpiCard('Projetos em risco', riscos.length, riscos.length ? (fn((riscos.length/total)*100)+'% da carteira exige atenção.') : 'Nenhum projeto crítico no filtro atual.', dashMetricClass(riscos.length, Math.max(1, Math.round(total*0.08)), Math.max(2, Math.round(total*0.18)), true), 'projectRisk', dashAlertPill(riscos.length ? 'Atenção' : 'Saudável', riscos.length ? (riscos.length > Math.max(2, Math.round(total*0.18)) ? 'bad' : 'warn') : 'good'))+
-    dashKpiCard('Projetos sem update', semUpdate.length, semUpdate.length ? semUpdate.length+' projeto(s) acima de 7 dias sem atualização.' : 'Toda a carteira está dentro do SLA de update.', dashMetricClass(semUpdate.length, Math.max(1, Math.round(total*0.12)), Math.max(2, Math.round(total*0.22)), true), 'stale', dashAlertPill(semUpdate.length ? 'Fora do SLA' : 'Dentro do SLA', semUpdate.length ? (semUpdate.length > Math.max(2, Math.round(total*0.22)) ? 'bad' : 'warn') : 'good'))+
-    dashKpiCard('Diárias em saldo', saldoDiarias === null ? '-' : fn(saldoDiarias), execution.unavailable ? 'Campo necessário não encontrado.' : (saldoDiarias < 0 ? 'Saldo consolidado negativo: consumo acima do contratado.' : 'Saldo restante disponível para execução.'), execution.unavailable ? 'neutral' : (saldoDiarias < 0 ? 'bad' : saldoDiarias === 0 ? 'warn' : 'good'), 'dailyBalance', execution.unavailable ? '' : dashAlertPill(saldoDiarias < 0 ? 'Excedido' : 'Sob controle', saldoDiarias < 0 ? 'bad' : saldoDiarias === 0 ? 'warn' : 'good'))+
-    dashKpiCard('Taxa de ativação', activeRate === null ? '-' : dashPct(activeRate), funnel.explicitActivation ? 'Com data de ativação explícita ou estimada por estágio real.' : 'Estimativa baseada na jornada disponível na base.', dashMetricClass(activeRate, 40, 70, false), 'activationRate', dashAlertPill(activeRate >= 70 ? 'Boa conversão' : activeRate >= 40 ? 'Parcial' : 'Baixa', activeRate >= 70 ? 'good' : activeRate >= 40 ? 'warn' : 'bad'))+
-    dashKpiCard('Saúde dos dados', health.completude === null ? '-' : dashPct(health.completude), health.completude === null ? 'Não há base suficiente neste recorte.' : (health.inconsistencias.length+' projeto(s) com inconsistência e '+(health.syncCandidates || 0)+' com rastreio técnico.'), dashMetricClass(health.completude, 70, 90, false), 'dataHealthSummary', dashAlertPill(health.completude >= 90 ? 'Confiável' : health.completude >= 70 ? 'Atenção' : 'Crítico', health.completude >= 90 ? 'good' : health.completude >= 70 ? 'warn' : 'bad'))+
+    dashKpiCard('Projetos ativos', total, 'Como estamos hoje: total da carteira visível para gestão.', 'good', 'activeProjects', dashDeltaChip(total, previousSnap.total, false, 'num'))+
+    dashKpiCard('% atrasados', total ? dashPct(Math.round((delayedCount / total) * 100)) : '-', delayedCount ? (delayedCount+' projeto(s) com atraso ou pendência vencida.') : 'Nenhum projeto atrasado no recorte.', dashMetricClass(total ? Math.round((delayedCount / total) * 100) : null, 8, 18, true), 'projectRisk', dashDeltaChip(total ? Math.round((delayedCount / total) * 100) : null, previousSnap.atrasadosPct, true, 'pct'))+
+    dashKpiCard('% sem atualização > 7 dias', total ? dashPct(Math.round((semUpdate.length / total) * 100)) : '-', semUpdate.length ? semUpdate.length+' projeto(s) fora do SLA de atualização.' : 'Toda a carteira está dentro do SLA de atualização.', dashMetricClass(total ? Math.round((semUpdate.length / total) * 100) : null, 12, 22, true), 'stale', dashDeltaChip(total ? Math.round((semUpdate.length / total) * 100) : null, previousSnap.stalePct, true, 'pct'))+
+    dashKpiCard('Diárias excedidas', exceededCount+(total ? ' / '+dashPct(Math.round((exceededCount / total) * 100)) : ''), execution.unavailable ? 'Campo necessário não encontrado.' : (exceededCount ? exceededCount+' projeto(s) consumindo acima do contratado.' : 'Nenhum projeto com diárias excedidas no recorte.'), execution.unavailable ? 'neutral' : dashMetricClass(exceededCount, 1, 3, true), 'dailyBalance', dashDeltaChip(exceededCount, previousSnap.excedidosCount, true, 'num', 'proj.'))+
+    dashKpiCard('Capacidade utilizada', execution.unavailable ? '-' : dashPct(execution.percent), execution.unavailable ? 'Campo necessário não encontrado.' : 'Uso consolidado das diárias contratadas na carteira filtrada.', execution.unavailable ? 'neutral' : dashMetricClass(execution.percent, 70, 90, true), 'dailyBurn', dashDeltaChip(execution.percent, previousSnap.capacidadePct, true, 'pct'))+
+    dashKpiCard('Saúde dos dados', health.completude === null ? '-' : dashPct(health.completude), health.completude === null ? 'Não há base suficiente neste recorte.' : (health.inconsistencias.length+' projeto(s) com inconsistência e '+(health.syncCandidates || 0)+' com ClickUp mapeado.'), dashMetricClass(health.completude, 70, 90, false), 'dataHealthSummary', dashDeltaChip(health.completude, previousSnap.healthPct, false, 'pct'))+
   '</div>';
-  var hero = '<div class="dashx-hero"><div class="dashx-hero-top"><div class="dashx-title-wrap"><div class="dashx-eyebrow">Dashboard Executivo CSI</div><div class="dashx-title">Visão principal de comando</div><div class="dashx-sub">Visão consolidada de saúde, operação, execução e evolução dos projetos. Cada bloco responde uma pergunta de gestão para acelerar decisão e reduzir risco operacional.</div></div><div class="dashx-meta"><span class="dashx-meta-chip"><b>Período</b> '+(activePeriod === 'all' ? 'Todos os meses' : activePeriod)+'</span><span class="dashx-meta-chip"><b>Projetos</b> '+total+'</span><span class="dashx-meta-chip"><b>Última base</b> '+(TOWER_INFO_CONTEXT.ultima || '-')+'</span></div></div>'+dashRenderFilters(base)+'</div>';
+  var hero = '<div class="dashx-hero"><div class="dashx-hero-top"><div class="dashx-title-wrap"><div class="dashx-eyebrow">Dashboard Executivo CSI</div><div class="dashx-title">Visão principal de comando</div><div class="dashx-sub">Em até 10 segundos, a liderança entende saúde da operação, tendência, risco e ação prioritária. Em até 30 segundos, sabe o que atacar hoje.</div></div><div class="dashx-meta"><span class="dashx-meta-chip"><b>Período</b> Todos os meses</span><span class="dashx-meta-chip"><b>Projetos</b> '+total+'</span><span class="dashx-meta-chip"><b>Última base</b> '+(TOWER_INFO_CONTEXT.ultima || '-')+'</span><span class="dashx-meta-chip"><b>Comparativo</b> '+compareLabel+'</span></div></div>'+dashRenderFilters(base)+'</div>';
+  var trendSection = '<div class="dashx-exec-grid"><div class="dashx-stack"><div class="dashx-chart-grid">'+
+    dashRenderTrendLine(weeklyTrend, 'Evolução do risco operacional', 'Leitura semanal dos projetos que estariam em risco pelo conjunto atraso + excesso + sem atualização.', 'risco', '#c96c5f', 'projectRisk', 'Últimas 8 semanas')+
+    dashRenderBacklogThroughput(weeklyTrend)+
+  '</div>'+dashRenderStatusStack(statusByMonth)+'</div>'+dashRenderActionNow(analyses, operation)+'</div>';
   var healthSection = '<div class="dashx-section"><div class="dashx-section-head"><div><div class="dashx-section-kicker">Seção 1</div><div class="dashx-section-title">Saúde dos Dados '+towerInfoButton('dataHealthSummary')+'</div><div class="dashx-section-sub">Pergunta respondida: Posso confiar nesse painel?</div></div><div class="dashx-section-answer"><span class="dashx-answer-chip">'+(health.completude === null ? 'Base indisponível' : (health.completude >= 90 ? 'Base confiável' : health.completude >= 70 ? 'Base em atenção' : 'Base crítica'))+'</span></div></div><div class="dashx-section-body">'+dashRenderHealthSection(health)+'</div></div>';
   var opRanking = operation.ranking.length ? '<div class="dashx-list">'+operation.ranking.slice(0, 8).map(function(item){
     return '<div class="dashx-list-item"><div class="dashx-list-main"><div class="dashx-list-title">'+item.nome+'</div><div class="dashx-list-sub">'+item.projetos+' projeto(s), '+fn(item.diariasContr)+' diárias contratadas, '+fn(item.diariasReal)+' realizadas e '+item.riscos+' em risco.</div><div class="dashx-list-tags"><span class="dashx-mini-chip">'+fn(item.saldo)+' de saldo</span><span class="dashx-mini-chip">'+item.esquecidos+' esquecidos</span><span class="dashx-mini-chip">'+item.score+' health</span></div></div><span class="dashx-score-pill '+item.classe+'">'+(item.classe === 'bad' ? 'Sobrecarga crítica' : item.classe === 'warn' ? 'Sobrecarga em atenção' : 'Equilibrado')+'</span></div>';
   }).join('')+'</div>' : dashUnavailableCard('Ranking de consultores por carga', ['consultor']);
-  var operationSection = '<div class="dashx-section"><div class="dashx-section-head"><div><div class="dashx-section-kicker">Seção 2</div><div class="dashx-section-title">Operação / Sobrecarga '+towerInfoButton('operationLoad')+'</div><div class="dashx-section-sub">Pergunta respondida: Quem está sobrecarregado e onde estão os gargalos?</div></div><div class="dashx-section-answer"><span class="dashx-answer-chip">'+operation.ranking.filter(function(r){ return r.classe !== 'good'; }).length+' consultor(es) em atenção</span></div></div><div class="dashx-section-body"><div class="dashx-grid-2"><div class="dashx-stack"><div class="dashx-mini-grid">'+dashMiniCard('Média de projetos por consultor', fn(operation.mediaProjetos), 'Referência de equilíbrio operacional da equipe.', 'neutral', 'operationLoad')+dashMiniCard('0–7 dias', operation.bins['0–7'], 'Projetos atualizados recentemente.', 'good', 'aging')+dashMiniCard('8–15 dias', operation.bins['8–15'], 'Projetos em atenção para atualização.', 'warn', 'aging')+dashMiniCard('16–30 dias', operation.bins['16–30'] + operation.bins['30+'], 'Projetos com envelhecimento crítico de update.', 'bad', 'aging')+dashMiniCard('Consultores com risco', operation.ranking.filter(function(r){ return r.riscos > 0; }).length, 'Consultores com projetos marcados como risco.', 'warn', 'operationLoad')+'</div>'+opRanking+'</div><div class="dashx-stack">'+dashRenderHeatmap(operation.heatMap)+'</div></div><div class="dashx-grid-2" style="margin-top:16px"><div>'+dashRenderAgingBars(operation.bins)+'</div><div>'+dashRenderAgingTable(operation.agingList)+'</div></div></div></div>';
+  var operationSection = '<div class="dashx-section"><div class="dashx-section-head"><div><div class="dashx-section-kicker">Seção 2</div><div class="dashx-section-title">Carga da equipe e gargalos '+towerInfoButton('operationLoad')+'</div><div class="dashx-section-sub">À esquerda, quem está mais pressionado. À direita, em quais meses a carga ficou concentrada. Abaixo, onde a carteira está envelhecendo.</div></div><div class="dashx-section-answer"><span class="dashx-answer-chip">'+operation.ranking.filter(function(r){ return r.classe !== 'good'; }).length+' consultor(es) em atenção</span></div></div><div class="dashx-section-body"><div class="dashx-grid-2"><div class="dashx-stack"><div class="dashx-health-grid">'+dashMiniCard('Carga média por consultor', fn(operation.mediaProjetos), 'Referência de equilíbrio da equipe.', 'neutral', 'operationLoad')+dashMiniCard('Atualizados (0–7 dias)', operation.bins['0–7'], 'Carteira respirando bem.', 'good', 'aging')+dashMiniCard('Em atenção (8–15 dias)', operation.bins['8–15'], 'Projetos pedindo revisão de atualização.', 'warn', 'aging')+dashMiniCard('Críticos (16+ dias)', operation.bins['16–30'] + operation.bins['30+'], 'Projetos com update envelhecido.', 'bad', 'aging')+dashMiniCard('Consultores com carteira em risco', operation.ranking.filter(function(r){ return r.riscos > 0; }).length, 'Consultores com projetos marcados como risco.', 'warn', 'operationLoad')+dashMiniCard('Projetos esquecidos', analyses.filter(function(a){ return a.semUpdate; }).length, 'Projetos acima do SLA de atualização.', analyses.filter(function(a){ return a.semUpdate; }).length ? 'bad' : 'good', 'stale')+'</div><div class="dashx-inline-note"><strong>Como ler:</strong> cada consultor mostra volume da carteira, saldo operacional e nível de risco. Quanto maior o saldo e o número de esquecidos, maior a necessidade de ação.</div>'+opRanking+'</div><div class="dashx-stack"><div class="dashx-inline-note"><strong>Como ler:</strong> cada célula mostra quantos projetos aquele consultor recebeu no mês. Quanto mais quente a cor, maior a concentração de carga e o risco de gargalo.</div>'+dashRenderHeatmap(operation.heatMap)+'</div></div><div class="dashx-grid-2" style="margin-top:16px"><div><div class="dashx-inline-note"><strong>Aging de atualização:</strong> mostra em qual faixa de envelhecimento a carteira está concentrada.</div>'+dashRenderAgingBars(operation.bins)+'</div><div><div class="dashx-inline-note"><strong>Projetos que pedem ação:</strong> lista os casos com maior tempo sem update para priorização imediata.</div>'+dashRenderAgingTable(operation.agingList)+'</div></div></div></div>';
   var executionSection = '<div class="dashx-section"><div class="dashx-section-head"><div><div class="dashx-section-kicker">Seção 3</div><div class="dashx-section-title">Execução / Diárias '+towerInfoButton('dailyBurn')+'</div><div class="dashx-section-sub">Pergunta respondida: As diárias estão sendo consumidas corretamente?</div></div><div class="dashx-section-answer"><span class="dashx-answer-chip">'+(execution.unavailable ? 'KPI indisponível' : ((execution.percent || 0)+'% consumido'))+'</span></div></div><div class="dashx-section-body">'+dashRenderExecution(execution)+'</div></div>';
   var funnelSection = '<div class="dashx-section"><div class="dashx-section-head"><div><div class="dashx-section-kicker">Seção 4</div><div class="dashx-section-title">Funil de Implantação '+towerInfoButton('funnel')+'</div><div class="dashx-section-sub">Pergunta respondida: O cliente está avançando ou travando?</div></div><div class="dashx-section-answer"><span class="dashx-answer-chip">'+(activeRate === null ? 'Conversão indisponível' : (activeRate+'% de ativação geral'))+'</span></div></div><div class="dashx-section-body">'+dashRenderFunnel(funnel, list)+'</div></div>';
   var cohortSection = '<div class="dashx-section"><div class="dashx-section-head"><div><div class="dashx-section-kicker">Seção 5</div><div class="dashx-section-title">Cohort Mensal '+towerInfoButton('cohort')+'</div><div class="dashx-section-sub">Pergunta respondida: Os clientes vendidos em cada mês estão evoluindo?</div></div><div class="dashx-section-answer"><span class="dashx-answer-chip">'+cohort.length+' cohort(s) no recorte</span></div></div><div class="dashx-section-body">'+dashRenderCohort(cohort, list)+'</div></div>';
-  dc.innerHTML = '<div class="dashx-shell">'+hero+topCards+healthSection+operationSection+executionSection+funnelSection+cohortSection+'</div>';
+  dc.innerHTML = '<div class="dashx-shell">'+hero+topCards+trendSection+healthSection+operationSection+executionSection+funnelSection+cohortSection+'</div>';
 }
 
 function buildTrend(tData, maxV, mActive) {
@@ -5061,6 +5432,33 @@ function getUF(cidade) {
 
 function getRegiao(uf) { return REGIOES[uf] || 'Outro'; }
 
+function normalizeFormatoLogistica(formato) {
+  var raw = String(formato || '').toUpperCase().trim();
+  raw = raw
+    .replace(/[\u00C1\u00C0\u00C2\u00C3]/g, 'A')
+    .replace(/[\u00C9\u00C8\u00CA]/g, 'E')
+    .replace(/[\u00CD\u00CC\u00CE]/g, 'I')
+    .replace(/[\u00D3\u00D2\u00D4\u00D5]/g, 'O')
+    .replace(/[\u00DA\u00D9\u00DB]/g, 'U')
+    .replace(/Ç/g, 'C')
+    .replace(/[^A-Z\s-]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+  if (raw.indexOf('LOCO') >= 0) return 'loco';
+  if (raw.indexOf('ONLINE') >= 0 || raw.indexOf('ON LINE') >= 0 || raw.indexOf('ON-LINE') >= 0) return 'online';
+  return 'outro';
+}
+
+function cidadeValidaLogistica(cidade) {
+  var raw = String(cidade || '').trim();
+  if (!raw) return false;
+  var norm = normalizeMapText(raw);
+  if (!norm) return false;
+  if (['-', 'N A', 'NA', 'N/D', 'ND', 'N D', 'SEM CIDADE', 'SEM LOCAL', 'A DEFINIR', 'PENDENTE', 'NULL'].indexOf(norm) >= 0) return false;
+  var info = parseCidadeInfo(raw);
+  return !!(info.cidadeNorm || info.uf);
+}
+
 function initLog() {
   var all = filteredProj();
 
@@ -5068,32 +5466,45 @@ function initLog() {
   all.forEach(function(x) {
     // Mantem a data real intacta; a logística usa _data_log apenas como campo auxiliar.
     x._data_log = parseD(x.data_inicio) ? x.data_inicio : (x.data_estimada || x.data_inicio || '');
+    x._fmt_log = normalizeFormatoLogistica(x.formato);
+    x._cidade_valida_log = cidadeValidaLogistica(x.cidade);
   });
 
-  var comCidade  = all.filter(function(x){ return x.cidade; });
-  var semCidade  = all.filter(function(x){ return !x.cidade; }).length;
-  var inLoco     = all.filter(function(x){ return x.formato && x.formato.toUpperCase().indexOf('LOCO') >= 0; });
-  var online     = all.filter(function(x){ return x.formato && x.formato.toUpperCase().indexOf('ONLINE') >= 0; });
+  var inLoco     = all.filter(function(x){ return x._fmt_log === 'loco'; });
+  var online     = all.filter(function(x){ return x._fmt_log === 'online'; });
+  var semFormato = all.filter(function(x){ return x._fmt_log === 'outro'; });
+  var totalClassificados = online.length + inLoco.length;
+  var totalBruto = all.length;
+  var comCidade  = inLoco.filter(function(x){ return x._cidade_valida_log; });
+  var semCidade  = inLoco.filter(function(x){ return !x._cidade_valida_log; }).length;
   var ufsSet     = {};
   comCidade.forEach(function(x){ var u=getUF(x.cidade); if(u) ufsSet[u]=1; });
 
   var n = document.getElementById('n-log');
-  if (n) n.textContent = all.length;
+  if (n) n.textContent = totalBruto;
 
   document.getElementById('kpis-log').innerHTML =
-    kpi('Total projetos', all.length, 'g') +
-    kpi('Com cidade no mapa', comCidade.length, 'o') +
-    kpi('Sem cidade', semCidade, semCidade>0?'r':'g') +
-    kpi('Estados cobertos', Object.keys(ufsSet).length, 'g');
+    kpi('Total projetos', totalBruto, 'g', '', 'Online + In Loco + sem formato') +
+    kpi('Online', online.length, 'b') +
+    kpi('In Loco', inLoco.length, 'o') +
+    kpi('Sem formato', semFormato.length, semFormato.length>0?'r':'g', '', 'fora de Online/In Loco') +
+    kpi('In Loco sem cidade', semCidade, semCidade>0?'r':'g', '', 'já incluídos no In Loco') +
+    kpi('Estados cobertos', Object.keys(ufsSet).length, 'g', '', 'somente In Loco');
 
   window._logTodos   = all;
-  window._logInLoco  = all; // compatibilidade
-  window._logOnline  = [];  // ja incluido em todos
+  window._logInLoco  = inLoco;
+  window._logOnline  = online;
   renderLog();
 }
 
 function renderLog() {
   var todos     = window._logTodos || window._logInLoco || [];
+  var onlineBase = todos.filter(function(x){ return x._fmt_log === 'online'; });
+  var inLocoBase = todos.filter(function(x){ return x._fmt_log === 'loco'; });
+  var semFormatoBase = todos.filter(function(x){ return x._fmt_log === 'outro'; });
+  var totalOnlineBase = todos.filter(function(x){ return x._fmt_log === 'online'; }).length;
+  var totalInLocoBase = todos.filter(function(x){ return x._fmt_log === 'loco'; }).length;
+  var totalProjetosBase = totalOnlineBase + totalInLocoBase + semFormatoBase.length;
   var today     = new Date(); today.setHours(0,0,0,0);
   var dias      = parseInt(window._logPeriodo, 10) || 28;
   var limite    = new Date(today); limite.setDate(limite.getDate()+dias);
@@ -5106,8 +5517,8 @@ function renderLog() {
 
   // Aplicar filtro de formato
   var base = todos.filter(function(x) {
-    if (fmtFiltro === 'loco')   return x.formato && x.formato.toUpperCase().indexOf('LOCO') >= 0;
-    if (fmtFiltro === 'online') return x.formato && x.formato.toUpperCase().indexOf('ONLINE') >= 0;
+    if (fmtFiltro === 'loco')   return x._fmt_log === 'loco';
+    if (fmtFiltro === 'online') return x._fmt_log === 'online';
     return true;
   });
 
@@ -5125,9 +5536,11 @@ function renderLog() {
     return da-db;
   });
 
-  // No geral o mapa mostra todos; nos filtros de data, mostra apenas o recorte selecionado.
+  // No geral o mapa mostra todos do formato selecionado; nos filtros de data, mostra apenas o recorte selecionado.
   var baseMapa = modoGeral ? base : filtrado;
-  var paraOMapa = baseMapa.filter(function(x){ return x.cidade; });
+  var paraOMapa = baseMapa.filter(function(x){
+    return x._fmt_log === 'loco' && x._cidade_valida_log;
+  });
 
   // Blocos de decis\u00e3o por status
   var aguardando  = filtrado.filter(function(x){ return x.status && x.status.indexOf('Aguardando')>=0; });
@@ -5138,7 +5551,7 @@ function renderLog() {
   });
 
   var byUF = {};
-  filtrado.forEach(function(x){
+  paraOMapa.forEach(function(x){
     var uf = getUF(x.cidade) || '__SEM_UF__';
     if (!byUF[uf]) byUF[uf] = [];
     byUF[uf].push(x);
@@ -5168,7 +5581,12 @@ function renderLog() {
         btnFmt('loco',   '\uD83C\uDFE0 In Loco')+
         btnFmt('online', '\uD83D\uDCBB Online')+
       '</div>'+
-      '<span class="log-count">'+filtrado.length+' projeto(s)</span>'+
+      '<span class="log-count">'+filtrado.length+' projeto(s) <span style="opacity:.75">| base log\u00edstica: '+totalOnlineBase+' online + '+totalInLocoBase+' in loco + '+semFormatoBase.length+' sem formato</span></span>'+
+    '</div>';
+  var validacaoHtml =
+    '<div style="display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;margin-bottom:12px;background:var(--surf);border:1px solid var(--border);border-radius:8px;padding:8px 12px;font-size:11px;color:var(--text2)">'+
+      '<span><strong>Validação:</strong> Total Projetos = Online + In Loco + Sem formato</span>'+
+      '<span><strong>'+totalProjetosBase+'</strong> = <strong>'+totalOnlineBase+'</strong> online + <strong>'+totalInLocoBase+'</strong> in loco + <strong>'+semFormatoBase.length+'</strong> sem formato</span>'+
     '</div>';
 
   // Proximas semanas
@@ -5190,10 +5608,12 @@ function renderLog() {
     '</div>' : '');
 
   // Warning
-  var semCidadeList = baseMapa.filter(function(x){return !x.cidade;});
+  var semCidadeList = baseMapa.filter(function(x){
+    return x._fmt_log === 'loco' && !x._cidade_valida_log;
+  });
   var warnHtml = semCidadeList.length ?
     '<div style="background:var(--orange-s);border:1px solid rgba(184,92,0,.25);border-radius:8px;padding:10px 14px;margin-bottom:14px;font-size:12px;color:var(--orange)">'+
-      '<b>'+semCidadeList.length+' projeto(s) sem cidade preenchida.</b> Preencha CIDADE no formato <b>Goi\u00e2nia - GO</b> para aparecer no mapa.'+
+      '<b>'+semCidadeList.length+' projeto(s) IN LOCO sem cidade preenchida.</b> Preencha CIDADE no formato <b>Goi\u00e2nia - GO</b> para aparecer no mapa.'+
     '</div>' : '';
 
   var mapHtml = buildBrazilMap(paraOMapa);
@@ -5214,7 +5634,7 @@ function renderLog() {
               '<span style="color:'+ccol(x.consultor||'')+';font-weight:700">'+(x.consultor||'Sem consultor')+'</span>'+
               (x.cidade?' &bull; '+x.cidade:'')+
               (fmt2&&fmt2!=='-'?' &bull; <b>'+fmt2+'</b>':'')+
-              (x.formato?' &bull; '+(x.formato.toUpperCase().indexOf('LOCO')>=0?'\uD83C\uDFE0':'\uD83D\uDCBB'):'') +
+            (x._fmt_log==='loco'?' &bull; \uD83C\uDFE0':x._fmt_log==='online'?' &bull; \uD83D\uDCBB':'') +
             '</div>'+
           '</div>';
         }).join('')+
@@ -5247,7 +5667,7 @@ function renderLog() {
           '<div style="font-size:10px;margin-top:2px">'+
             '<span style="color:'+ccol(x.consultor||'')+';font-weight:700">'+(x.consultor||'-')+'</span>'+
             (x.cidade?' &bull; <span style="color:var(--muted)">'+x.cidade+'</span>':'')+
-            (x.formato?' &bull; '+(x.formato.toUpperCase().indexOf('LOCO')>=0?'\uD83C\uDFE0 In Loco':'\uD83D\uDCBB Online'):'')+
+            (x._fmt_log==='loco'?' &bull; \uD83C\uDFE0 In Loco':x._fmt_log==='online'?' &bull; \uD83D\uDCBB Online':'')+
           '</div>'+
           (x.pacote||x.vendedor||x.status?
             '<div style="font-size:10px;color:var(--muted)">'+(x.pacote?x.pacote:'')+(x.vendedor?' &bull; Vend: <b>'+x.vendedor+'</b>':'')+(x.status?' &bull; <span style="color:'+(x.status.indexOf('Atrasado')>=0?'var(--red)':x.status.indexOf('Andamento')>=0?'var(--orange)':'var(--muted)')+'">'+sl(x.status)+'</span>':'')+'</div>'
@@ -5263,7 +5683,7 @@ function renderLog() {
       '<div style="display:flex;align-items:center;gap:10px;padding:12px 14px;background:var(--surf2);border-bottom:1px solid var(--border)">'+
         '<div style="width:40px;height:40px;background:var(--nav);border-radius:8px;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:13px;color:#fff;flex-shrink:0">'+uf+'</div>'+
         '<div style="flex:1"><div style="font-size:14px;font-weight:800">'+uf+' <span style="font-size:11px;font-weight:600;color:var(--muted)">'+reg+'</span></div>'+
-        '<div style="font-size:10px;color:var(--muted)">'+list.length+' projeto'+(list.length>1?'s':'')+' no filtro atual</div></div>'+
+        '<div style="font-size:10px;color:var(--muted)">'+list.length+' projeto'+(list.length>1?'s':'')+' IN LOCO no mapa</div></div>'+
         (hasOpp?'<span style="font-size:9px;font-weight:800;background:var(--green-s);color:var(--green);border:1px solid rgba(45,110,78,.3);border-radius:10px;padding:3px 10px">\u2705 Log\u00edstica compartilhada</span>':'')+
       '</div>'+
       '<div style="padding:0 14px">'+projRows+'</div>'+
@@ -5272,12 +5692,12 @@ function renderLog() {
 
   var semUFcard = byUF['__SEM_UF__']?
     '<div style="background:var(--red-s);border:1px solid rgba(192,57,43,.2);border-radius:10px;padding:12px 14px;margin-bottom:12px">'+
-      '<div style="font-size:12px;font-weight:700;color:var(--red);margin-bottom:8px">Cidade sem UF identificada</div>'+
+      '<div style="font-size:12px;font-weight:700;color:var(--red);margin-bottom:8px">Projeto(s) IN LOCO com cidade sem UF identificada</div>'+
       byUF['__SEM_UF__'].map(function(x){return '<div style="font-size:12px;color:var(--text2);margin-bottom:4px">'+x.cliente+' &bull; '+(x.cidade||'sem cidade')+'</div>';}).join('')+
     '</div>':'';
 
   document.getElementById('log-content').innerHTML =
-    subTabs + periodoHtml + warnHtml + mapHtml + decisaoHtml +
+    subTabs + validacaoHtml + periodoHtml + warnHtml + mapHtml + decisaoHtml +
     '<div style="margin-top:16px">'+stateCards+semUFcard+'</div>';
 
   initLeafletMap(paraOMapa);
@@ -5482,8 +5902,7 @@ function buildMarkerHtml(total, color, aproximado) {
 function getGroupColor(group, aproximado) {
   if (aproximado) return '#6f7f75';
   if (group.length >= 2) return '#2d6e4e';
-  var first = group[0] || {};
-  return first.formato && first.formato.toUpperCase().indexOf('ONLINE') >= 0 ? '#1a5276' : '#b85c00';
+  return '#b85c00';
 }
 
 function buildTooltipHtml(group, info, loc) {
@@ -5530,7 +5949,6 @@ function buildBrazilMap(projList) {
     '<div style="display:flex;gap:14px;margin-bottom:10px;flex-wrap:wrap">' +
       '<span style="display:flex;align-items:center;gap:5px;font-size:11px;font-weight:600;color:var(--green)"><span style="width:10px;height:10px;border-radius:50%;background:#2d6e4e;display:inline-block"></span>2+ visitas agrupadas</span>' +
       '<span style="display:flex;align-items:center;gap:5px;font-size:11px;font-weight:600;color:var(--orange)"><span style="width:10px;height:10px;border-radius:50%;background:#b85c00;display:inline-block"></span>In Loco</span>' +
-      '<span style="display:flex;align-items:center;gap:5px;font-size:11px;font-weight:600;color:var(--blue)"><span style="width:10px;height:10px;border-radius:50%;background:#1a5276;display:inline-block"></span>Online</span>' +
       '<span style="display:flex;align-items:center;gap:5px;font-size:11px;font-weight:600;color:#6f7f75"><span style="width:10px;height:10px;border-radius:50%;background:#6f7f75;border:1px dashed #fff;display:inline-block"></span>Fallback por UF</span>' +
     '</div>' +
     '<div id="log-map" style="height:500px;border-radius:10px;border:1px solid var(--border);overflow:hidden;"></div>' +
