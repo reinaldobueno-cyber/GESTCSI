@@ -4327,6 +4327,47 @@ function dashSetActionConsultor(nome, mode) {
   initDash();
   setTimeout(function(){ dashScrollToAuditBlock('dashx-action-audit'); }, 40);
 }
+function dashBindDashboardInteractions(root) {
+  if (!root || root.__dashInteractionsBound) return;
+  root.addEventListener('click', function(event) {
+    var actionTarget = event.target.closest('[data-dash-action-consultor]');
+    if (actionTarget && root.contains(actionTarget)) {
+      event.preventDefault();
+      event.stopPropagation();
+      dashSetActionConsultor(
+        actionTarget.getAttribute('data-dash-action-consultor') || '',
+        actionTarget.getAttribute('data-dash-action-mode') || 'projetos'
+      );
+      return;
+    }
+    var clickupTarget = event.target.closest('[data-dash-clickup-consultor]');
+    if (clickupTarget && root.contains(clickupTarget)) {
+      event.preventDefault();
+      event.stopPropagation();
+      dashSetClickUpConsultor(clickupTarget.getAttribute('data-dash-clickup-consultor') || '');
+      return;
+    }
+  });
+  root.addEventListener('keydown', function(event) {
+    if (event.key !== 'Enter' && event.key !== ' ') return;
+    var actionTarget = event.target.closest('[data-dash-action-consultor]');
+    if (actionTarget && root.contains(actionTarget)) {
+      event.preventDefault();
+      dashSetActionConsultor(
+        actionTarget.getAttribute('data-dash-action-consultor') || '',
+        actionTarget.getAttribute('data-dash-action-mode') || 'projetos'
+      );
+      return;
+    }
+    var clickupTarget = event.target.closest('[data-dash-clickup-consultor]');
+    if (clickupTarget && root.contains(clickupTarget)) {
+      event.preventDefault();
+      dashSetClickUpConsultor(clickupTarget.getAttribute('data-dash-clickup-consultor') || '');
+      return;
+    }
+  });
+  root.__dashInteractionsBound = true;
+}
 function dashMetricClass(v, warnAt, badAt, inverse) {
   if (v === null || v === undefined || isNaN(v)) return 'neutral';
   if (inverse) {
@@ -4958,11 +4999,10 @@ function dashRenderActionNow(analyses, operation) {
   if (!DASH_ACTION_CONSULTOR && selectedConsultor) DASH_ACTION_CONSULTOR = selectedConsultor.nome;
   var consultoresHtml = consultores.length ? consultores.map(function(c){
     var active = selectedConsultor && selectedConsultor.nome === c.nome;
-    var onKey = "if(event.key==='Enter'||event.key===' '){event.preventDefault();dashSetActionConsultor("+JSON.stringify(c.nome)+", "+JSON.stringify(DASH_ACTION_MODE || 'projetos')+")}";
-    var consultorBtn = '<div class="dashx-action-item'+(active ? ' is-active' : '')+'" role="button" tabindex="0" onclick="dashSetActionConsultor('+JSON.stringify(c.nome)+', '+JSON.stringify(DASH_ACTION_MODE || 'projetos')+')" onkeydown="'+onKey+'"><div class="dashx-action-main"><div class="dashx-action-name">'+c.nome+'</div><div class="dashx-action-reason">'+(c.classe === 'bad' ? 'Carga acima do limite seguro da equipe.' : 'Carteira pedindo atenção antes de escalar.')+'</div><div class="dashx-action-meta">'+
-      '<button type="button" class="dashx-mini-chip" onclick="event.stopPropagation();dashSetActionConsultor('+JSON.stringify(c.nome)+',\'projetos\')">'+c.projetos+' projetos</button>'+
-      '<button type="button" class="dashx-mini-chip" onclick="event.stopPropagation();dashSetActionConsultor('+JSON.stringify(c.nome)+',\'risco\')">'+c.riscos+' em risco</button>'+
-      '<button type="button" class="dashx-mini-chip" onclick="event.stopPropagation();dashSetActionConsultor('+JSON.stringify(c.nome)+',\'esquecidos\')">'+c.esquecidos+' esquecidos</button>'+
+    var consultorBtn = '<div class="dashx-action-item'+(active ? ' is-active' : '')+'" role="button" tabindex="0" data-dash-action-consultor="'+escapeHtml(c.nome)+'" data-dash-action-mode="'+escapeHtml(DASH_ACTION_MODE || 'projetos')+'"><div class="dashx-action-main"><div class="dashx-action-name">'+c.nome+'</div><div class="dashx-action-reason">'+(c.classe === 'bad' ? 'Carga acima do limite seguro da equipe.' : 'Carteira pedindo atenção antes de escalar.')+'</div><div class="dashx-action-meta">'+
+      '<button type="button" class="dashx-mini-chip" data-dash-action-consultor="'+escapeHtml(c.nome)+'" data-dash-action-mode="projetos">'+c.projetos+' projetos</button>'+
+      '<button type="button" class="dashx-mini-chip" data-dash-action-consultor="'+escapeHtml(c.nome)+'" data-dash-action-mode="risco">'+c.riscos+' em risco</button>'+
+      '<button type="button" class="dashx-mini-chip" data-dash-action-consultor="'+escapeHtml(c.nome)+'" data-dash-action-mode="esquecidos">'+c.esquecidos+' esquecidos</button>'+
     '</div></div><span class="dashx-action-score '+c.classe+'">'+c.score+'</span></div>';
     return consultorBtn;
   }).join('') : '<div class="dashx-unavailable"><strong>Nenhum consultor sobrecarregado</strong><span>A distribuição da carteira está equilibrada no recorte atual.</span></div>';
@@ -5075,7 +5115,7 @@ function dashRenderAgingTable(items) {
 function dashRenderConsultorAgingTable(rows) {
   var body = rows.length ? rows.map(function(item){
     var active = DASH_CLICKUP_CONSULTOR === item.nome;
-    return '<tr class="'+(active ? 'is-active' : '')+'" onclick="dashSetClickUpConsultor('+JSON.stringify(item.nome)+')"><td><strong>'+item.nome+'</strong><div class="dashx-list-sub">'+item.carteiraTotal+' projeto(s) na carteira</div></td><td class="num">'+item.rastreados+'</td><td class="num">'+item.semClickUp+'</td><td class="num">'+item['0–7']+'</td><td class="num">'+item['8–15']+'</td><td class="num">'+item['16–30']+'</td><td class="num">'+item['31–45']+'</td><td class="num">'+item['45+']+'</td></tr>';
+    return '<tr class="'+(active ? 'is-active' : '')+'" tabindex="0" role="button" data-dash-clickup-consultor="'+escapeHtml(item.nome)+'"><td><strong>'+item.nome+'</strong><div class="dashx-list-sub">'+item.carteiraTotal+' projeto(s) na carteira</div></td><td class="num">'+item.rastreados+'</td><td class="num">'+item.semClickUp+'</td><td class="num">'+item['0–7']+'</td><td class="num">'+item['8–15']+'</td><td class="num">'+item['16–30']+'</td><td class="num">'+item['31–45']+'</td><td class="num">'+item['45+']+'</td></tr>';
   }).join('') : '<tr class="empty-row"><td colspan="8">Nenhum consultor encontrado no recorte atual.</td></tr>';
   return '<div class="dashx-table-wrap"><table class="dashx-table"><thead><tr><th>Consultor</th><th class="num">Rastreados</th><th class="num">Sem ClickUp</th><th class="num">&lt; 7 dias</th><th class="num">7–15</th><th class="num">15–30</th><th class="num">30–45</th><th class="num">45+</th></tr></thead><tbody>'+body+'</tbody></table></div>';
 }
@@ -5216,6 +5256,7 @@ function initDash() {
   var funnelSection = '<div class="dashx-section"><div class="dashx-section-head"><div><div class="dashx-section-kicker">Seção 4</div><div class="dashx-section-title">Funil de Implantação '+towerInfoButton('funnel')+'</div><div class="dashx-section-sub">Pergunta respondida: O cliente está avançando ou travando?</div></div><div class="dashx-section-answer"><span class="dashx-answer-chip">'+(activeRate === null ? 'Conversão indisponível' : (activeRate+'% de ativação geral'))+'</span></div></div><div class="dashx-section-body">'+dashRenderFunnel(funnel, list)+'</div></div>';
   var cohortSection = '<div class="dashx-section"><div class="dashx-section-head"><div><div class="dashx-section-kicker">Seção 5</div><div class="dashx-section-title">Cohort Mensal '+towerInfoButton('cohort')+'</div><div class="dashx-section-sub">Pergunta respondida: Os clientes vendidos em cada mês estão evoluindo?</div></div><div class="dashx-section-answer"><span class="dashx-answer-chip">'+cohort.length+' cohort(s) no recorte</span></div></div><div class="dashx-section-body">'+dashRenderCohort(cohort, list)+'</div></div>';
   dc.innerHTML = '<div class="dashx-shell">'+hero+topCards+trendSection+healthSection+operationSection+executionSection+funnelSection+cohortSection+'</div>';
+  dashBindDashboardInteractions(dc);
 }
 
 function buildTrend(tData, maxV, mActive) {
