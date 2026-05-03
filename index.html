@@ -2339,6 +2339,8 @@ var DASH_HEALTH_VIEW = 'issues';
 var DASH_CLICKUP_CONSULTOR = '';
 var DASH_ACTION_CONSULTOR = '';
 var DASH_ACTION_MODE = 'projetos';
+var DASH_AUDIT_MODAL_HTML = '';
+var DASH_AUDIT_MODAL_TITLE = '';
 var _openId = null;
 var ORDEM_MESES = ['JAN','FEV','MAR','ABR','MAI','JUN','JUL','AGO','SET','OUT','NOV','DEZ'];
 
@@ -4321,6 +4323,49 @@ function dashScrollToAuditBlock(id) {
     el.scrollIntoView();
   }
 }
+function dashCloseAuditModal() {
+  var wrap = document.getElementById('dash-audit-modal');
+  if (wrap && wrap.parentNode) wrap.parentNode.removeChild(wrap);
+}
+function dashOpenAuditModal(title, html) {
+  dashCloseAuditModal();
+  DASH_AUDIT_MODAL_TITLE = title || 'Auditoria';
+  DASH_AUDIT_MODAL_HTML = html || '<div class="dashx-unavailable"><strong>Nenhum dado disponível</strong></div>';
+  var wrap = document.createElement('div');
+  wrap.id = 'dash-audit-modal';
+  wrap.className = 'history-backdrop';
+  wrap.innerHTML =
+    '<div class="history-modal" style="max-width:1120px;width:min(1120px,96vw);max-height:88vh;display:flex;flex-direction:column;">'+
+      '<div class="history-head" style="display:flex;align-items:flex-start;justify-content:space-between;gap:16px;">'+
+        '<div><div class="history-title">'+DASH_AUDIT_MODAL_TITLE+'</div><div class="history-sub">Auditoria detalhada para entender exatamente quais projetos compõem este número.</div></div>'+
+        '<button type="button" class="btn" onclick="dashCloseAuditModal()">Fechar</button>'+
+      '</div>'+
+      '<div class="history-body" style="overflow:auto;">'+DASH_AUDIT_MODAL_HTML+'</div>'+
+    '</div>';
+  wrap.addEventListener('click', function(event){
+    if (event.target === wrap) dashCloseAuditModal();
+  });
+  document.body.appendChild(wrap);
+}
+function dashOpenClickUpAudit(nome) {
+  dashSetClickUpConsultor(nome || '');
+  setTimeout(function(){
+    var block = document.getElementById('dashx-clickup-audit');
+    if (block) dashOpenAuditModal('Auditoria ClickUp — ' + (nome || 'Consultor'), block.innerHTML);
+  }, 20);
+  return false;
+}
+function dashOpenActionAudit(nome, mode) {
+  dashSetActionConsultor(nome || '', mode || 'projetos');
+  setTimeout(function(){
+    var block = document.getElementById('dashx-action-audit');
+    if (block) {
+      var label = mode === 'risco' ? 'Em risco' : mode === 'esquecidos' ? 'Esquecidos' : 'Carteira';
+      dashOpenAuditModal('Auditoria do consultor — ' + (nome || 'Consultor') + ' · ' + label, block.innerHTML);
+    }
+  }, 20);
+  return false;
+}
 function dashSetActionConsultor(nome, mode) {
   DASH_ACTION_CONSULTOR = nome || '';
   DASH_ACTION_MODE = mode || 'projetos';
@@ -4328,45 +4373,83 @@ function dashSetActionConsultor(nome, mode) {
   setTimeout(function(){ dashScrollToAuditBlock('dashx-action-audit'); }, 40);
 }
 function dashBindDashboardInteractions(root) {
-  if (!root || root.__dashInteractionsBound) return;
-  root.addEventListener('click', function(event) {
-    var actionTarget = event.target.closest('[data-dash-action-consultor]');
-    if (actionTarget && root.contains(actionTarget)) {
+  if (!root) return;
+  if (!root.__dashInteractionsBound) {
+    root.addEventListener('click', function(event) {
+      var actionTarget = event.target.closest('[data-dash-action-consultor]');
+      if (actionTarget && root.contains(actionTarget)) {
+        event.preventDefault();
+        event.stopPropagation();
+        dashOpenActionAudit(
+          actionTarget.getAttribute('data-dash-action-consultor') || '',
+          actionTarget.getAttribute('data-dash-action-mode') || 'projetos'
+        );
+        return;
+      }
+      var clickupTarget = event.target.closest('[data-dash-clickup-consultor]');
+      if (clickupTarget && root.contains(clickupTarget)) {
+        event.preventDefault();
+        event.stopPropagation();
+        dashOpenClickUpAudit(clickupTarget.getAttribute('data-dash-clickup-consultor') || '');
+        return;
+      }
+    });
+    root.addEventListener('keydown', function(event) {
+      if (event.key !== 'Enter' && event.key !== ' ') return;
+      var actionTarget = event.target.closest('[data-dash-action-consultor]');
+      if (actionTarget && root.contains(actionTarget)) {
+        event.preventDefault();
+        dashOpenActionAudit(
+          actionTarget.getAttribute('data-dash-action-consultor') || '',
+          actionTarget.getAttribute('data-dash-action-mode') || 'projetos'
+        );
+        return;
+      }
+      var clickupTarget = event.target.closest('[data-dash-clickup-consultor]');
+      if (clickupTarget && root.contains(clickupTarget)) {
+        event.preventDefault();
+        dashOpenClickUpAudit(clickupTarget.getAttribute('data-dash-clickup-consultor') || '');
+        return;
+      }
+    });
+    root.__dashInteractionsBound = true;
+  }
+
+  root.querySelectorAll('[data-dash-clickup-consultor]').forEach(function(node) {
+    node.onclick = function(event) {
+      if (event) {
+        event.preventDefault();
+        event.stopPropagation();
+      }
+      return dashOpenClickUpAudit(node.getAttribute('data-dash-clickup-consultor') || '');
+    };
+    node.onkeydown = function(event) {
+      if (!event || (event.key !== 'Enter' && event.key !== ' ')) return;
       event.preventDefault();
-      event.stopPropagation();
-      dashSetActionConsultor(
-        actionTarget.getAttribute('data-dash-action-consultor') || '',
-        actionTarget.getAttribute('data-dash-action-mode') || 'projetos'
-      );
-      return;
-    }
-    var clickupTarget = event.target.closest('[data-dash-clickup-consultor]');
-    if (clickupTarget && root.contains(clickupTarget)) {
-      event.preventDefault();
-      event.stopPropagation();
-      dashSetClickUpConsultor(clickupTarget.getAttribute('data-dash-clickup-consultor') || '');
-      return;
-    }
+      return dashOpenClickUpAudit(node.getAttribute('data-dash-clickup-consultor') || '');
+    };
   });
-  root.addEventListener('keydown', function(event) {
-    if (event.key !== 'Enter' && event.key !== ' ') return;
-    var actionTarget = event.target.closest('[data-dash-action-consultor]');
-    if (actionTarget && root.contains(actionTarget)) {
-      event.preventDefault();
-      dashSetActionConsultor(
-        actionTarget.getAttribute('data-dash-action-consultor') || '',
-        actionTarget.getAttribute('data-dash-action-mode') || 'projetos'
+
+  root.querySelectorAll('[data-dash-action-consultor]').forEach(function(node) {
+    node.onclick = function(event) {
+      if (event) {
+        event.preventDefault();
+        event.stopPropagation();
+      }
+      return dashOpenActionAudit(
+        node.getAttribute('data-dash-action-consultor') || '',
+        node.getAttribute('data-dash-action-mode') || 'projetos'
       );
-      return;
-    }
-    var clickupTarget = event.target.closest('[data-dash-clickup-consultor]');
-    if (clickupTarget && root.contains(clickupTarget)) {
+    };
+    node.onkeydown = function(event) {
+      if (!event || (event.key !== 'Enter' && event.key !== ' ')) return;
       event.preventDefault();
-      dashSetClickUpConsultor(clickupTarget.getAttribute('data-dash-clickup-consultor') || '');
-      return;
-    }
+      return dashOpenActionAudit(
+        node.getAttribute('data-dash-action-consultor') || '',
+        node.getAttribute('data-dash-action-mode') || 'projetos'
+      );
+    };
   });
-  root.__dashInteractionsBound = true;
 }
 function dashMetricClass(v, warnAt, badAt, inverse) {
   if (v === null || v === undefined || isNaN(v)) return 'neutral';
@@ -4390,6 +4473,13 @@ function escapeHtml(value) {
     .replace(/>/g, '&gt;')
     .replace(/"/g, '&quot;')
     .replace(/'/g, '&#39;');
+}
+function jsQuote(value) {
+  return String(value == null ? '' : value)
+    .replace(/\\/g, '\\\\')
+    .replace(/'/g, "\\'")
+    .replace(/\r/g, '\\r')
+    .replace(/\n/g, '\\n');
 }
 function dashMissingFields(list, defs) {
   return (defs || []).filter(function(def){
@@ -5007,11 +5097,10 @@ function dashRenderActionNow(analyses, operation) {
   if (!DASH_ACTION_CONSULTOR && selectedConsultor) DASH_ACTION_CONSULTOR = selectedConsultor.nome;
   var consultoresHtml = consultores.length ? consultores.map(function(c){
     var active = selectedConsultor && selectedConsultor.nome === c.nome;
-    var onKey = "if(event.key==='Enter'||event.key===' '){event.preventDefault();dashSetActionConsultor("+JSON.stringify(c.nome)+", "+JSON.stringify(DASH_ACTION_MODE || 'projetos')+")}";
-    var consultorBtn = '<div class="dashx-action-item'+(active ? ' is-active' : '')+'" role="button" tabindex="0" data-dash-action-consultor="'+escapeHtml(c.nome)+'" data-dash-action-mode="'+escapeHtml(DASH_ACTION_MODE || 'projetos')+'" onclick="dashSetActionConsultor('+JSON.stringify(c.nome)+', '+JSON.stringify(DASH_ACTION_MODE || 'projetos')+')" onkeydown="'+onKey+'"><div class="dashx-action-main"><div class="dashx-action-name">'+c.nome+'</div><div class="dashx-action-reason">'+(c.classe === 'bad' ? 'Carga acima do limite seguro da equipe.' : 'Carteira pedindo atenção antes de escalar.')+'</div><div class="dashx-action-meta">'+
-      '<button type="button" class="dashx-mini-chip" data-dash-action-consultor="'+escapeHtml(c.nome)+'" data-dash-action-mode="projetos" onclick="event.stopPropagation();dashSetActionConsultor('+JSON.stringify(c.nome)+',\'projetos\')">'+c.projetos+' projetos</button>'+
-      '<button type="button" class="dashx-mini-chip" data-dash-action-consultor="'+escapeHtml(c.nome)+'" data-dash-action-mode="risco" onclick="event.stopPropagation();dashSetActionConsultor('+JSON.stringify(c.nome)+',\'risco\')">'+c.riscos+' em risco</button>'+
-      '<button type="button" class="dashx-mini-chip" data-dash-action-consultor="'+escapeHtml(c.nome)+'" data-dash-action-mode="esquecidos" onclick="event.stopPropagation();dashSetActionConsultor('+JSON.stringify(c.nome)+',\'esquecidos\')">'+c.esquecidos+' esquecidos</button>'+
+    var consultorBtn = '<div class="dashx-action-item'+(active ? ' is-active' : '')+'" role="button" tabindex="0" data-dash-action-consultor="'+escapeHtml(c.nome)+'" data-dash-action-mode="'+escapeHtml(DASH_ACTION_MODE || 'projetos')+'" onclick="return dashOpenActionAudit(\''+jsQuote(c.nome)+'\', \''+jsQuote(DASH_ACTION_MODE || 'projetos')+'\')" onkeydown="if(event.key===\'Enter\'||event.key===\' \'){event.preventDefault();return dashOpenActionAudit(\''+jsQuote(c.nome)+'\', \''+jsQuote(DASH_ACTION_MODE || 'projetos')+'\');}"><div class="dashx-action-main"><div class="dashx-action-name">'+c.nome+'</div><div class="dashx-action-reason">'+(c.classe === 'bad' ? 'Carga acima do limite seguro da equipe.' : 'Carteira pedindo atenção antes de escalar.')+'</div><div class="dashx-action-meta">'+
+      '<button type="button" class="dashx-mini-chip" data-dash-action-consultor="'+escapeHtml(c.nome)+'" data-dash-action-mode="projetos" onclick="event.stopPropagation();return dashOpenActionAudit(\''+jsQuote(c.nome)+'\', \'projetos\')">'+c.projetos+' projetos</button>'+
+      '<button type="button" class="dashx-mini-chip" data-dash-action-consultor="'+escapeHtml(c.nome)+'" data-dash-action-mode="risco" onclick="event.stopPropagation();return dashOpenActionAudit(\''+jsQuote(c.nome)+'\', \'risco\')">'+c.riscos+' em risco</button>'+
+      '<button type="button" class="dashx-mini-chip" data-dash-action-consultor="'+escapeHtml(c.nome)+'" data-dash-action-mode="esquecidos" onclick="event.stopPropagation();return dashOpenActionAudit(\''+jsQuote(c.nome)+'\', \'esquecidos\')">'+c.esquecidos+' esquecidos</button>'+
     '</div></div><span class="dashx-action-score '+c.classe+'">'+c.score+'</span></div>';
     return consultorBtn;
   }).join('') : '<div class="dashx-unavailable"><strong>Nenhum consultor sobrecarregado</strong><span>A distribuição da carteira está equilibrada no recorte atual.</span></div>';
@@ -5124,7 +5213,7 @@ function dashRenderAgingTable(items) {
 function dashRenderConsultorAgingTable(rows) {
   var body = rows.length ? rows.map(function(item){
     var active = DASH_CLICKUP_CONSULTOR === item.nome;
-    return '<tr class="'+(active ? 'is-active' : '')+'" tabindex="0" role="button" data-dash-clickup-consultor="'+escapeHtml(item.nome)+'" onclick="dashSetClickUpConsultor('+JSON.stringify(item.nome)+')" onkeydown="if(event.key===\'Enter\'||event.key===\' \'){event.preventDefault();dashSetClickUpConsultor('+JSON.stringify(item.nome)+')}"><td><strong>'+item.nome+'</strong><div class="dashx-list-sub">'+item.carteiraTotal+' projeto(s) na carteira</div></td><td class="num">'+item.rastreados+'</td><td class="num">'+item.semClickUp+'</td><td class="num">'+item['0–7']+'</td><td class="num">'+item['8–15']+'</td><td class="num">'+item['16–30']+'</td><td class="num">'+item['31–45']+'</td><td class="num">'+item['45+']+'</td></tr>';
+    return '<tr class="'+(active ? 'is-active' : '')+'" tabindex="0" role="button" data-dash-clickup-consultor="'+escapeHtml(item.nome)+'" onclick="return dashOpenClickUpAudit(\''+jsQuote(item.nome)+'\')" onkeydown="if(event.key===\'Enter\'||event.key===\' \'){event.preventDefault();return dashOpenClickUpAudit(\''+jsQuote(item.nome)+'\');}"><td><strong>'+item.nome+'</strong><div class="dashx-list-sub">'+item.carteiraTotal+' projeto(s) na carteira</div></td><td class="num">'+item.rastreados+'</td><td class="num">'+item.semClickUp+'</td><td class="num">'+item['0–7']+'</td><td class="num">'+item['8–15']+'</td><td class="num">'+item['16–30']+'</td><td class="num">'+item['31–45']+'</td><td class="num">'+item['45+']+'</td></tr>';
   }).join('') : '<tr class="empty-row"><td colspan="8">Nenhum consultor encontrado no recorte atual.</td></tr>';
   return '<div class="dashx-table-wrap"><table class="dashx-table"><thead><tr><th>Consultor</th><th class="num">Rastreados</th><th class="num">Sem ClickUp</th><th class="num">&lt; 7 dias</th><th class="num">7–15</th><th class="num">15–30</th><th class="num">30–45</th><th class="num">45+</th></tr></thead><tbody>'+body+'</tbody></table></div>';
 }
