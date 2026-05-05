@@ -3247,6 +3247,10 @@ function initExec() {
   var atrasados  = proj.filter(function(x){ return x.status && x.status.indexOf('Atrasado')>=0; });
   var emAnd      = proj.filter(function(x){ return x.status && x.status.indexOf('Andamento')>=0; });
   var aguard     = proj.filter(function(x){ return x.status && x.status.indexOf('Aguardando')>=0; });
+  var concluidos  = proj.filter(function(x){ return x.status && x.status.indexOf('Conclu')>=0; });
+  var cancelados  = proj.filter(function(x){ return x.status && x.status.indexOf('Cancel')>=0; });
+  var parados     = proj.filter(function(x){ return x.status && x.status.indexOf('Parado')>=0; });
+  var outrosStatus = Math.max(0, total - emAnd.length - aguard.length - atrasados.length - concluidos.length - cancelados.length - parados.length);
   var encerrados = proj.filter(function(x){ return x.data_enc && x.data_enc.trim(); });
   var excDiar    = proj.filter(function(x){ return x.diarias_rest!==null && x.diarias_rest<-1; });
   var semKick    = proj.filter(function(x){ return x.kickoff && x.kickoff.toUpperCase()==='N\u00C3O'; });
@@ -3261,6 +3265,7 @@ function initExec() {
   var totalDiarCont = comDiarias.reduce(function(s,x){return s+(x.diarias_cont||0);},0);
   var totalDiarReal = comDiarias.reduce(function(s,x){return s+(x.diarias_real||0);},0);
   var eficiencia = totalDiarCont>0 ? Math.round((totalDiarReal/totalDiarCont)*100) : 0;
+  var eficienciaDesc = fn(totalDiarReal)+' realizadas / '+fn(totalDiarCont)+' contratadas';
 
   // Por consultor
   var porCons = {};
@@ -3278,10 +3283,16 @@ function initExec() {
 
   // Por vendedor
   var porVend = {};
-  vendaNova.forEach(function(x){
+  proj.forEach(function(x){
     var v = x.vendedor||'Sem vendedor';
-    if (!porVend[v]) porVend[v]=0;
-    porVend[v]++;
+    if (!porVend[v]) porVend[v]={total:0,vendas:0,and:0,aguard:0,atr:0,exc:0,diarias:0};
+    porVend[v].total++;
+    if (x.tipo && x.tipo.toUpperCase().indexOf('VENDA')>=0) porVend[v].vendas++;
+    if (x.status&&x.status.indexOf('Andamento')>=0) porVend[v].and++;
+    if (x.status&&x.status.indexOf('Aguardando')>=0) porVend[v].aguard++;
+    if (x.status&&x.status.indexOf('Atrasado')>=0) porVend[v].atr++;
+    if (x.diarias_rest!==null&&x.diarias_rest<-1) porVend[v].exc++;
+    porVend[v].diarias += (x.diarias_cont||0);
   });
 
   // Por mes
@@ -3317,6 +3328,8 @@ function initExec() {
     stLabel='Opera\u00E7\u00E3o Saud\u00E1vel'; stCor='#0f6e56'; stBg='#e1f5ee'; stIcon='\uD83D\uDFE2';
     stDesc='Indicadores dentro dos par\u00E2metros esperados. Manter ritmo atual.';
   }
+  var stRule = 'Saudável: atraso < 8%, diárias excedidas < 10% e aguardando início < 40%. Atenção: atraso 8–14%, diárias excedidas 10–19% ou aguardando início >= 40%. Risco: atraso >= 15% ou diárias excedidas >= 20%.';
+  var stWhy = 'Hoje: '+pctAtr+'% em atraso, '+pctExc+'% com diárias excedidas e '+pctAgu+'% aguardando início.';
 
   // KPIs executivos
   var kpiExec = function(label, val, sub, cor, onclickJs) {
@@ -3326,6 +3339,19 @@ function initExec() {
       (sub?'<div style="font-size:10px;color:var(--muted);margin-top:2px">'+sub+'</div>':'')+
     '</div>';
   };
+
+  var statusResumoHtml = [
+    ['Em andamento', emAnd.length, '#0f6e56'],
+    ['Aguardando início', aguard.length, '#854f0b'],
+    ['Em atraso', atrasados.length, pctAtr>=8?'#a32d2d':'#0f6e56'],
+    ['Parado', parados.length, '#6b7280'],
+    ['Concluído', concluidos.length, '#0f6e56'],
+    ['Cancelado', cancelados.length, '#a32d2d'],
+    ['Outros', outrosStatus, '#6b7280']
+  ].filter(function(item){ return item[1] > 0; }).map(function(item){
+    var pct = total ? Math.round((item[1]/total)*100) : 0;
+    return '<span class="dashx-mini-chip" style="border-color:#d5dfd4"><b style="color:'+item[2]+'">'+item[1]+'</b> '+item[0]+' · '+pct+'%</span>';
+  }).join('');
 
   // Tendencia mensal sparkline
   var maxN = Math.max.apply(null, tendencia.map(function(t){return t.n;})||[1]);
@@ -3364,13 +3390,21 @@ function initExec() {
   }
 
   // Top vendedores
-  var topVend = Object.keys(porVend).sort(function(a,b){return porVend[b]-porVend[a];}).slice(0,5)
+  var topVend = Object.keys(porVend).sort(function(a,b){
+      if (porVend[b].total !== porVend[a].total) return porVend[b].total-porVend[a].total;
+      return porVend[b].vendas-porVend[a].vendas;
+    }).slice(0,5)
     .map(function(v){
+      var d = porVend[v];
       return '<div style="display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-bottom:1px solid var(--border)">'+
-        '<span style="font-size:12px;font-weight:600">'+v+'</span>'+
-        '<span style="font-size:13px;font-weight:800;color:var(--nav)">'+porVend[v]+' venda'+(porVend[v]>1?'s':'')+'</span>'+
+        '<div style="min-width:0">'+
+          '<div style="font-size:12px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+v+'</div>'+
+          '<div style="font-size:10px;color:var(--muted)">'+d.total+' proj &bull; '+d.vendas+' venda(s) &bull; '+d.and+' and. &bull; '+d.atr+' atr. &bull; '+d.exc+' exc.</div>'+
+        '</div>'+
+        '<span style="font-size:13px;font-weight:800;color:var(--nav);margin-left:10px">'+fn(d.diarias)+'d</span>'+
       '</div>';
     }).join('');
+  if (!topVend) topVend = '<div style="font-size:12px;color:var(--muted);line-height:1.5">Sem vendedor preenchido neste recorte. O ranking depende da coluna vendedor nos projetos.</div>';
 
   // Ranking consultores
   var topCons = ranking.map(function(c){
@@ -3403,8 +3437,8 @@ function initExec() {
   if (limpos.length) dest.push('<b>'+limpos.map(function(c){return c.nome;}).join(', ')+'</b> com carteira sem atrasos ou di\u00E1rias excedidas.');
   if (ranking[0]&&ranking[0].score>=80) dest.push('<b>'+ranking[0].nome+'</b> lidera a performance com '+ranking[0].score+'% dos projetos em andamento.');
   if (pctAnd>=50) dest.push(pctAnd+'% da carteira em execu\u00E7\u00E3o ativa \u2014 boa cad\u00EAncia operacional.');
-  var topVendNome = Object.keys(porVend).sort(function(a,b){return porVend[b]-porVend[a];})[0];
-  if (topVendNome) dest.push('<b>'+topVendNome+'</b> lidera em novas vendas com '+porVend[topVendNome]+' contrato'+(porVend[topVendNome]>1?'s':'')+' no per\u00EDodo.');
+  var topVendNome = Object.keys(porVend).sort(function(a,b){return porVend[b].total-porVend[a].total;})[0];
+  if (topVendNome) dest.push('<b>'+topVendNome+'</b> lidera a carteira comercial com '+porVend[topVendNome].total+' projeto'+(porVend[topVendNome].total>1?'s':'')+' no per\u00EDodo.');
 
   // Recomendacoes
   var recs = [];
@@ -3422,6 +3456,7 @@ function initExec() {
         '<div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1.2px;color:'+stCor+';margin-bottom:3px">Classifica\u00E7\u00E3o da Opera\u00E7\u00E3o</div>'+
         '<div style="font-size:22px;font-weight:800;color:'+stCor+'">'+stLabel+'</div>'+
         '<div style="font-size:12px;color:'+stCor+';opacity:.85;margin-top:4px">'+stDesc+'</div>'+
+        '<div style="font-size:10px;color:'+stCor+';opacity:.78;margin-top:6px">'+stWhy+' '+stRule+'</div>'+
       '</div>'+
       '<div style="text-align:right;flex-shrink:0">'+
         '<div style="font-size:11px;color:'+stCor+';font-weight:600;margin-bottom:4px">Per\u00EDodo analisado</div>'+
@@ -3437,6 +3472,10 @@ function initExec() {
       kpiExec('Em Atraso', atrasados.length, pctAtr+'% da carteira', pctAtr>=8?'#a32d2d':'#0f6e56', 'abrirAlertasComFiltro(\'atrasados\')') +
       kpiExec('Di\u00E1rias Excedidas', excDiar.length, pctExc+'% da carteira', pctExc>=10?'#a32d2d':'#0f6e56', 'abrirAlertasComFiltro(\'excedidos\')') +
     '</div>'+
+    '<div style="background:var(--surf);border:1px solid var(--border);border-radius:10px;padding:10px 14px;margin-top:-8px;margin-bottom:18px;display:flex;gap:8px;align-items:center;flex-wrap:wrap">'+
+      '<span style="font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:1px;color:var(--muted);margin-right:4px">Status do recorte</span>'+
+      statusResumoHtml+
+    '</div>'+
 
     // Grid: resumo + tendencia
     '<div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:14px">'+
@@ -3447,7 +3486,7 @@ function initExec() {
           '<div><div style="font-size:11px;color:var(--muted)">Avulso</div><div style="font-size:18px;font-weight:800">'+avulso.length+'</div></div>'+
           '<div><div style="font-size:11px;color:var(--muted)">In Loco</div><div style="font-size:18px;font-weight:800">'+inLoco.length+'</div></div>'+
           '<div><div style="font-size:11px;color:var(--muted)">Online</div><div style="font-size:18px;font-weight:800">'+online.length+'</div></div>'+
-          '<div><div style="font-size:11px;color:var(--muted)">Efic. Di\u00E1rias</div><div style="font-size:18px;font-weight:800;color:'+(eficiencia>110?'#a32d2d':eficiencia>=80?'#0f6e56':'#854f0b')+'">'+eficiencia+'%</div></div>'+
+          '<div><div style="font-size:11px;color:var(--muted)">Efic. Di\u00E1rias</div><div style="font-size:18px;font-weight:800;color:'+(eficiencia>110?'#a32d2d':eficiencia>=80?'#0f6e56':'#854f0b')+'">'+eficiencia+'%</div><div style="font-size:10px;color:var(--muted);margin-top:2px">'+eficienciaDesc+'</div></div>'+
           '<div><div style="font-size:11px;color:var(--muted)">Sem Consultor</div><div style="font-size:18px;font-weight:800;color:'+(semCons.length?'#a32d2d':'#0f6e56')+'">'+semCons.length+'</div></div>'+
         '</div>'+
       '</div>'+
