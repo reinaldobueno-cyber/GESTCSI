@@ -2141,6 +2141,10 @@ button.dashx-mini-chip:hover{background:#f3f8f3;border-color:#b9c9b8;}
 .dashx-score-pill.good{background:#e8f1e8;color:#31563b;}
 .dashx-score-pill.warn{background:#f4ead9;color:#8f622f;}
 .dashx-score-pill.bad{background:#f6e0db;color:#af5046;}
+.dashx-score-pill.action{border:0;cursor:pointer;font-family:inherit;}
+.dashx-score-pill.action:hover{filter:brightness(.96);box-shadow:0 0 0 2px rgba(45,110,78,.12);}
+.dashx-cohort-note{margin-top:12px;font-size:11px;line-height:1.5;color:#617066;}
+.dashx-cohort-note strong{color:#253229;}
 .dashx-exec-grid{display:grid;grid-template-columns:1.2fr .9fr;gap:16px;}
 .dashx-chart-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px;}
 .dashx-chart-card{background:#fff;border:1px solid #dfe6dd;border-radius:18px;padding:18px;box-shadow:var(--soft-shadow);}
@@ -4778,6 +4782,32 @@ function dashOpenActionAudit(nome, mode) {
   }, 20);
   return false;
 }
+function dashOpenCohortAudit(mes, etapa) {
+  mes = String(mes || '').toUpperCase();
+  etapa = String(etapa || '');
+  var list = ordenarProjetosPainel(Array.isArray(DATA.projetos) ? DATA.projetos.slice() : []).filter(function(p){
+    if (String((p && p.mes) || '').toUpperCase() !== mes) return false;
+    var s = dashProjectStageInfo(p);
+    if (etapa === 'kickoff') return !(s.stage === 'kickoff' || s.stage === 'treinamento' || s.stage === 'ativacao');
+    if (etapa === 'treinamento') return !(s.stage === 'treinamento' || s.stage === 'ativacao');
+    if (etapa === 'ativacao') return s.stage !== 'ativacao';
+    return false;
+  });
+  var labels = { kickoff:'sem Kickoff', treinamento:'sem 1º treinamento', ativacao:'sem ativação' };
+  var rows = list.length ? list.map(function(p){
+    var s = dashProjectStageInfo(p);
+    var etapaAtual = dashStageLabel(s.stage);
+    var datas = [];
+    if (s.kickDate) datas.push('Kickoff: '+fd(s.kickDate.toISOString()));
+    if (s.trainDate) datas.push('1º treino: '+fd(s.trainDate.toISOString()));
+    if (s.activationDate) datas.push('Ativação: '+fd(s.activationDate.toISOString()));
+    if (s.activationEstimated) datas.push('Ativação estimada');
+    return '<tr><td><strong>'+String(p.cliente || '-')+'</strong></td><td>'+(p.consultor || '-')+'</td><td>'+sl(String(p.status || '-'))+'</td><td>'+etapaAtual+'</td><td>'+(datas.length ? datas.join(' • ') : 'Sem data registrada')+'</td><td>'+dashProjectActionCell(p)+'</td></tr>';
+  }).join('') : '<tr class="empty-row"><td colspan="6">Nenhum projeto pendente nesta etapa.</td></tr>';
+  var html = '<div class="dashx-focus-note"><div><strong>Cohort '+mes+':</strong> projetos '+(labels[etapa] || 'pendentes')+'.</div><div class="dashx-focus-hint">'+list.length+' projeto(s)</div></div><div class="dashx-table-wrap" style="margin-top:12px"><table class="dashx-table"><thead><tr><th>Projeto</th><th>Consultor</th><th>Status</th><th>Etapa atual</th><th>Datas</th><th>Ação</th></tr></thead><tbody>'+rows+'</tbody></table></div>';
+  dashOpenAuditModal('Cohort '+mes+' — '+(labels[etapa] || 'Pendências'), html);
+  return false;
+}
 function dashSetActionConsultor(nome, mode) {
   DASH_ACTION_CONSULTOR = nome || '';
   DASH_ACTION_MODE = mode || 'projetos';
@@ -5239,6 +5269,9 @@ function dashCohort(list) {
     var kickoff = stages.filter(function(s){ return s.stage === 'kickoff' || s.stage === 'treinamento' || s.stage === 'ativacao'; }).length;
     var treino = stages.filter(function(s){ return s.stage === 'treinamento' || s.stage === 'ativacao'; }).length;
     var ativados = stages.filter(function(s){ return s.stage === 'ativacao'; }).length;
+    var semKickoff = stages.filter(function(s){ return !(s.stage === 'kickoff' || s.stage === 'treinamento' || s.stage === 'ativacao'); }).length;
+    var semTreino = stages.filter(function(s){ return !(s.stage === 'treinamento' || s.stage === 'ativacao'); }).length;
+    var semAtivacao = stages.filter(function(s){ return s.stage !== 'ativacao'; }).length;
     var temposAtiv = stages.map(function(s){
       if (!s.vendaDate || !s.stageDate || s.stage !== 'ativacao') return null;
       return Math.max(0, diffD(s.vendaDate, s.stageDate));
@@ -5250,6 +5283,9 @@ function dashCohort(list) {
       kickoffPct: vendidos ? Math.round((kickoff / vendidos) * 100) : null,
       treinoPct: vendidos ? Math.round((treino / vendidos) * 100) : null,
       ativPct: vendidos ? Math.round((ativados / vendidos) * 100) : null,
+      semKickoff: semKickoff,
+      semTreino: semTreino,
+      semAtivacao: semAtivacao,
       tempoAtiv: avgAtiv
     };
   });
@@ -5724,9 +5760,13 @@ function dashRenderCohort(cohort, list) {
   if (required.length) return dashUnavailableCard('Cohort mensal', required);
   var rows = cohort.length ? cohort.map(function(item){
     function cls(v) { return v >= 70 ? 'good' : v >= 40 ? 'warn' : 'bad'; }
-    return '<tr><td><strong>'+item.mes+'</strong></td><td class="center">'+item.vendidos+'</td><td class="center"><span class="dashx-score-pill '+cls(item.kickoffPct || 0)+'">'+dashPct(item.kickoffPct)+'</span></td><td class="center"><span class="dashx-score-pill '+cls(item.treinoPct || 0)+'">'+dashPct(item.treinoPct)+'</span></td><td class="center"><span class="dashx-score-pill '+cls(item.ativPct || 0)+'">'+dashPct(item.ativPct)+'</span></td><td class="tempo">'+(item.tempoAtiv === null ? '-' : item.tempoAtiv+' dias')+'</td></tr>';
+    function cohortBtn(kind, pct, pendentes) {
+      var title = pendentes ? (pendentes+' pendente(s)') : 'Sem pendências';
+      return '<button type="button" class="dashx-score-pill action '+cls(pct || 0)+'" title="'+title+'" onclick="return dashOpenCohortAudit(\''+jsQuote(item.mes)+'\', \''+kind+'\')">'+dashPct(pct)+'</button><div class="dashx-list-sub">'+pendentes+' pend.</div>';
+    }
+    return '<tr><td><strong>'+item.mes+'</strong></td><td class="center">'+item.vendidos+'</td><td class="center">'+cohortBtn('kickoff', item.kickoffPct, item.semKickoff)+'</td><td class="center">'+cohortBtn('treinamento', item.treinoPct, item.semTreino)+'</td><td class="center">'+cohortBtn('ativacao', item.ativPct, item.semAtivacao)+'</td><td class="tempo">'+(item.tempoAtiv === null ? '-' : item.tempoAtiv+' dias')+'</td></tr>';
   }).join('') : '<tr class="empty-row"><td colspan="6">Sem cohort disponível para o recorte atual.</td></tr>';
-  return '<div class="dashx-matrix"><table><colgroup><col style="width:16%"><col style="width:12%"><col style="width:18%"><col style="width:18%"><col style="width:18%"><col style="width:18%"></colgroup><thead><tr><th>Mês da venda</th><th class="center">Vendidos</th><th class="center">Kickoff %</th><th class="center">1º Treinamento %</th><th class="center">Ativação %</th><th class="tempo">Tempo médio até ativação</th></tr></thead><tbody>'+rows+'</tbody></table></div>';
+  return '<div class="dashx-matrix"><table><colgroup><col style="width:16%"><col style="width:12%"><col style="width:18%"><col style="width:18%"><col style="width:18%"><col style="width:18%"></colgroup><thead><tr><th>Mês da venda</th><th class="center">Vendidos</th><th class="center">Kickoff %</th><th class="center">1º Treinamento %</th><th class="center">Ativação %</th><th class="tempo">Tempo médio até ativação</th></tr></thead><tbody>'+rows+'</tbody></table></div><div class="dashx-cohort-note"><strong>Ativação:</strong> usa a data explícita de ativação quando ela existe. Quando não existe, o painel estima como ativado se o projeto já tem 1º treinamento e sinal operacional de andamento/conclusão ou diárias realizadas. Clique nos percentuais para auditar os projetos pendentes de cada mês.</div>';
 }
 
 function initDash() {
