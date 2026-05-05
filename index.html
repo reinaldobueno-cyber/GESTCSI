@@ -255,6 +255,11 @@ nav{background:var(--nav);height:58px;display:flex;align-items:center;justify-co
 .history-foot{padding:12px 20px;border-top:1px solid var(--border);display:flex;justify-content:flex-end;background:var(--surf2);}
 .history-close{background:var(--green);border:1px solid var(--green);color:#fff;font-family:'Inter',sans-serif;font-size:12px;font-weight:800;padding:8px 22px;border-radius:8px;cursor:pointer;}
 .history-close:hover{background:var(--green2);border-color:var(--green2);}
+.history-modal{background:#fff;border:1px solid var(--border);border-radius:14px;box-shadow:0 18px 60px rgba(0,0,0,.28);overflow:hidden;}
+#dash-audit-modal .history-head,#dash-audit-modal .history-body{background:#fff!important;}
+#dash-audit-modal .history-body{white-space:normal;}
+#dash-audit-modal .dashx-table-wrap,#dash-audit-modal .dashx-table,#dash-audit-modal .dashx-table td{background:#fff;}
+#dash-audit-modal .dashx-table th{background:#f7faf7;}
 #log-map{height:420px;border-radius:8px;border:1px solid var(--border);z-index:1;background:#eef3ef;}
 #log-map .leaflet-container{background:#eef3ef;}
 
@@ -2170,6 +2175,20 @@ button.dashx-mini-chip:hover{background:#f3f8f3;border-color:#b9c9b8;}
 .dashx-status-track{height:16px;border-radius:999px;background:#eef3ee;overflow:hidden;display:flex;}
 .dashx-status-seg{height:100%;}
 .dashx-status-total{font-size:11px;font-weight:900;color:#2a3930;text-align:right;}
+.dashx-delivery-panel{display:grid;gap:12px;}
+.dashx-delivery-tabs{display:flex;gap:8px;flex-wrap:wrap;}
+.dashx-delivery-tab{border:1px solid #d5dfd4;background:#fff;border-radius:999px;padding:6px 12px;font-size:10px;font-weight:900;color:#536154;}
+.dashx-delivery-tab.is-active{background:#e8f1e8;color:#31563b;border-color:#c6d8c5;}
+.dashx-delivery-list{display:grid;gap:10px;}
+.dashx-delivery-row{display:grid;grid-template-columns:minmax(145px,220px) 1fr 70px;gap:12px;align-items:center;border-radius:12px;padding:4px 6px;margin:0 -6px;cursor:pointer;transition:background .16s ease;}
+.dashx-delivery-row:hover{background:#f7faf6;}
+.dashx-delivery-name{font-size:12px;font-weight:900;color:#18241d;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.dashx-delivery-sub{font-size:10px;color:#77857a;margin-top:2px;}
+.dashx-delivery-track{height:22px;border-radius:999px;background:#edf3ec;overflow:hidden;display:flex;}
+.dashx-delivery-seg{height:100%;cursor:pointer;transition:filter .16s ease;}
+.dashx-delivery-seg:hover{filter:brightness(.94);}
+.dashx-delivery-total{text-align:right;font-size:14px;font-weight:900;color:#18241d;}
+.dashx-delivery-legend{display:flex;gap:10px;align-items:center;flex-wrap:wrap;font-size:10px;font-weight:800;color:#536154;}
 .dashx-action-card{background:#fff;border:1px solid #dfe6dd;border-radius:18px;padding:18px;box-shadow:var(--soft-shadow);display:flex;flex-direction:column;gap:14px;}
 .dashx-action-top{display:flex;align-items:flex-start;justify-content:space-between;gap:10px;flex-wrap:wrap;}
 .dashx-action-title{font-size:15px;font-weight:900;letter-spacing:-.02em;color:#14231b;}
@@ -2631,6 +2650,7 @@ var DASH_ACTION_CONSULTOR = '';
 var DASH_ACTION_MODE = 'projetos';
 var DASH_AUDIT_MODAL_HTML = '';
 var DASH_AUDIT_MODAL_TITLE = '';
+var DASH_DELIVERY_MONTH = '';
 var _openId = null;
 var ORDEM_MESES = ['JAN','FEV','MAR','ABR','MAI','JUN','JUL','AGO','SET','OUT','NOV','DEZ'];
 
@@ -4872,6 +4892,85 @@ function dashOpenCohortAudit(mes, etapa) {
   dashOpenAuditModal('Cohort '+mes+' — '+(labels[etapa] || 'Pendências'), html);
   return false;
 }
+function dashProjectDeliveryItems(p) {
+  var payload = parseJsonSeguro((p && p.clickup_json) || '') || {};
+  var out = [];
+  (Array.isArray(payload.fases) ? payload.fases : []).forEach(function(fase) {
+    var status = String((fase && fase.status_original) || '').toLowerCase();
+    var done = Number((fase && fase.progresso) || 0) >= 100 || status.indexOf('closed') >= 0 || status.indexOf('conclu') >= 0;
+    if (!done) return;
+    out.push({
+      tipo: 'fase',
+      nome: fase.nome || '-',
+      fase: fase.nome || '',
+      status: fase.status_original || '',
+      projeto: p,
+      id: fase.id || '',
+      updated_at: fase.updated_at || ''
+    });
+  });
+  (Array.isArray(payload.tasks) ? payload.tasks : []).forEach(function(task) {
+    if (!task || !task.concluida) return;
+    out.push({
+      tipo: 'task',
+      nome: task.nome || '-',
+      fase: task.fase_nome || '',
+      status: task.status_original || '',
+      projeto: p,
+      id: task.id || '',
+      updated_at: task.updated_at || ''
+    });
+  });
+  (Array.isArray(payload.marcos) ? payload.marcos : []).forEach(function(marco) {
+    if (!marco || !marco.concluido) return;
+    out.push({
+      tipo: 'marco',
+      nome: marco.nome || '-',
+      fase: marco.fase_nome || '',
+      status: marco.status_original || '',
+      projeto: p,
+      id: marco.id || '',
+      updated_at: marco.updated_at || ''
+    });
+  });
+  return out;
+}
+function dashOpenDeliveryAudit(mes, consultor, tipo) {
+  mes = String(mes || '').toUpperCase();
+  consultor = String(consultor || '');
+  tipo = String(tipo || 'todos');
+  var list = ordenarProjetosPainel(Array.isArray(DATA.projetos) ? DATA.projetos.slice() : []).filter(function(p) {
+    return String((p && p.mes) || '').toUpperCase() === mes && String((p && p.consultor) || 'Sem consultor') === consultor;
+  });
+  var items = [];
+  list.forEach(function(p) {
+    dashProjectDeliveryItems(p).forEach(function(item) {
+      if (tipo !== 'todos' && item.tipo !== tipo) return;
+      items.push(item);
+    });
+  });
+  items.sort(function(a, b) {
+    var ap = String((a.projeto && a.projeto.cliente) || '');
+    var bp = String((b.projeto && b.projeto.cliente) || '');
+    if (ap !== bp) return ap.localeCompare(bp);
+    return String(a.tipo || '').localeCompare(String(b.tipo || '')) || String(a.nome || '').localeCompare(String(b.nome || ''));
+  });
+  var tipoLabel = tipo === 'fase' ? 'fases' : tipo === 'task' ? 'tasks' : tipo === 'marco' ? 'marcos' : 'entregas';
+  var rows = items.length ? items.map(function(item) {
+    var p = item.projeto || {};
+    var tipoTxt = item.tipo === 'fase' ? 'Fase' : item.tipo === 'marco' ? 'Marco' : 'Task';
+    var link = item.id && item.tipo !== 'fase' ? '<a class="dashx-health-link" href="https://app.clickup.com/t/'+escapeHtml(item.id)+'" target="_blank" rel="noopener">Abrir</a>' : dashProjectActionCell(p);
+    return '<tr><td><strong>'+escapeHtml(p.cliente || '-')+'</strong></td><td>'+tipoTxt+'</td><td>'+escapeHtml(item.nome || '-')+'</td><td>'+escapeHtml(item.fase || '-')+'</td><td>'+escapeHtml(item.status || '-')+'</td><td>'+(item.updated_at ? formatarDataHoraProjeto(item.updated_at) : '-')+'</td><td>'+link+'</td></tr>';
+  }).join('') : '<tr class="empty-row"><td colspan="7">Nenhuma entrega concluída encontrada para este recorte.</td></tr>';
+  var html = '<div class="dashx-focus-note"><div><strong>'+consultor+' • '+mes+':</strong> auditoria de '+tipoLabel+' concluídas por projeto.</div><div class="dashx-focus-hint">'+items.length+' item(ns) • '+list.length+' projeto(s)</div></div><div class="dashx-table-wrap" style="margin-top:12px"><table class="dashx-table"><thead><tr><th>Projeto</th><th>Tipo</th><th>Item</th><th>Fase</th><th>Status</th><th>Última alteração</th><th>Ação</th></tr></thead><tbody>'+rows+'</tbody></table></div>';
+  dashOpenAuditModal('Produtividade ClickUp — '+consultor+' · '+mes, html);
+  return false;
+}
+function dashSetDeliveryMonth(mes) {
+  DASH_DELIVERY_MONTH = String(mes || '').toUpperCase();
+  initDash();
+  return false;
+}
 function dashSetActionConsultor(nome, mode) {
   DASH_ACTION_CONSULTOR = nome || '';
   DASH_ACTION_MODE = mode || 'projetos';
@@ -5519,6 +5618,88 @@ function dashBuildStatusByMonth(list) {
     return { mes: mes, total: items.length, counts: counts };
   });
 }
+function dashProjectDeliveryMetrics(p) {
+  var payload = parseJsonSeguro((p && p.clickup_json) || '') || {};
+  var fases = Array.isArray(payload.fases) ? payload.fases : [];
+  var fasesConcluidas = fases.filter(function(fase) {
+    var status = String((fase && fase.status_original) || '').toLowerCase();
+    return Number((fase && fase.progresso) || 0) >= 100 || status.indexOf('closed') >= 0 || status.indexOf('conclu') >= 0;
+  }).length;
+  if (!fasesConcluidas && Number((p && p.progresso) || 0) >= 100) fasesConcluidas = Number((p && p.fases_total) || 0);
+  return {
+    fases: fasesConcluidas,
+    tasks: Math.max(0, Number((p && p.tasks_concluidas) || (payload.resumo && payload.resumo.tasks_concluidas) || 0)),
+    marcos: Math.max(0, Number((p && p.marcos_concluidos) || (payload.resumo && payload.resumo.marcos_concluidos) || 0))
+  };
+}
+function dashBuildConsultorDelivery(list) {
+  var byMonth = {};
+  (list || []).forEach(function(p) {
+    var mes = String((p && p.mes) || 'SEM').toUpperCase();
+    var consultor = (p && p.consultor) || 'Sem consultor';
+    var m = dashProjectDeliveryMetrics(p);
+    if (!byMonth[mes]) byMonth[mes] = {};
+    if (!byMonth[mes][consultor]) byMonth[mes][consultor] = { nome: consultor, mes: mes, projetos: 0, fases: 0, tasks: 0, marcos: 0 };
+    byMonth[mes][consultor].projetos += 1;
+    byMonth[mes][consultor].fases += m.fases;
+    byMonth[mes][consultor].tasks += m.tasks;
+    byMonth[mes][consultor].marcos += m.marcos;
+  });
+  var months = ordenarMesesPainel(Object.keys(byMonth));
+  return months.map(function(mes) {
+    var rows = Object.keys(byMonth[mes]).map(function(k) {
+      var row = byMonth[mes][k];
+      row.total = row.fases + row.tasks + row.marcos;
+      return row;
+    }).sort(function(a, b) {
+      if (b.total !== a.total) return b.total - a.total;
+      return a.nome.localeCompare(b.nome);
+    });
+    return { mes: mes, rows: rows };
+  });
+}
+function dashRenderConsultorDelivery(delivery) {
+  if (!(delivery || []).length) return dashUnavailableCard('Produtividade técnica ClickUp', ['tasks_concluidas', 'marcos_concluidos', 'clickup_json.fases']);
+  var availableMonths = delivery.map(function(item) { return item.mes; });
+  var defaultMonth = availableMonths.length ? availableMonths[availableMonths.length - 1] : '';
+  var selectedKey = activePeriod && activePeriod !== 'all'
+    ? activePeriod
+    : (DASH_DELIVERY_MONTH && (DASH_DELIVERY_MONTH === 'ALL' || availableMonths.indexOf(DASH_DELIVERY_MONTH) >= 0) ? DASH_DELIVERY_MONTH : defaultMonth);
+  var selectedMonths = selectedKey === 'ALL' ? delivery : delivery.filter(function(item) { return item.mes === selectedKey; });
+  if (!selectedMonths.length) selectedMonths = [delivery[0]];
+  var tabs = '<button type="button" class="dashx-delivery-tab'+(selectedKey === 'ALL' ? ' is-active' : '')+'" onclick="return dashSetDeliveryMonth(\'ALL\')">Todos</button>' + delivery.map(function(item) {
+    var activeCls = selectedKey === item.mes ? ' is-active' : '';
+    return '<button type="button" class="dashx-delivery-tab'+activeCls+'" onclick="return dashSetDeliveryMonth(\''+jsQuote(item.mes)+'\')">'+item.mes+'</button>';
+  }).join('');
+  var sections = selectedMonths.map(function(month) {
+    var max = 1;
+    month.rows.forEach(function(row) { if (row.total > max) max = row.total; });
+    var rows = month.rows.map(function(row) {
+      var pct = row.total ? Math.max(4, Math.round((row.total / max) * 100)) : 0;
+      var fasesPct = row.total ? Math.round((row.fases / row.total) * pct) : 0;
+      var tasksPct = row.total ? Math.round((row.tasks / row.total) * pct) : 0;
+      var marcosPct = row.total ? Math.max(0, pct - fasesPct - tasksPct) : 0;
+      var auditAll = "return dashOpenDeliveryAudit('"+jsQuote(month.mes)+"','"+jsQuote(row.nome)+"','todos')";
+      function segHtml(value, width, color, tipo, label) {
+        if (!value || !width) return '';
+        var auditTipo = "event.stopPropagation();return dashOpenDeliveryAudit('"+jsQuote(month.mes)+"','"+jsQuote(row.nome)+"','"+tipo+"')";
+        return '<span class="dashx-delivery-seg" title="'+escapeHtml(value+' '+label+' de '+row.nome)+'" onclick="'+escapeHtml(auditTipo)+'" style="width:'+width+'%;background:'+color+'"></span>';
+      }
+      return '<div class="dashx-delivery-row" role="button" tabindex="0" onclick="'+escapeHtml(auditAll)+'" onkeydown="'+escapeHtml("if(event.key==='Enter'||event.key===' '){event.preventDefault();"+auditAll+";}")+'">'+
+        '<div><div class="dashx-delivery-name">'+escapeHtml(row.nome)+'</div><div class="dashx-delivery-sub">'+row.projetos+' projeto(s)</div></div>'+
+        '<div class="dashx-delivery-track" title="'+escapeHtml(row.nome+' | '+row.fases+' fases, '+row.tasks+' tasks, '+row.marcos+' marcos')+'">'+
+          segHtml(row.fases, fasesPct, '#6f95c0', 'fase', 'fase(s) concluída(s)')+
+          segHtml(row.tasks, tasksPct, '#6d8e72', 'task', 'task(s) concluída(s)')+
+          segHtml(row.marcos, marcosPct, '#d9b57e', 'marco', 'marco(s) concluído(s)')+
+        '</div>'+
+        '<div class="dashx-delivery-total">'+row.total+'</div>'+
+      '</div>';
+    }).join('') || '<div class="dashx-empty">Nenhum consultor encontrado neste recorte.</div>';
+    return '<div><div class="dashx-chart-sub" style="font-weight:900;color:#304036;margin-bottom:8px">'+month.mes+'</div><div class="dashx-delivery-list">'+rows+'</div></div>';
+  }).join('');
+  var note = selectedKey === 'ALL' ? 'Todos os meses' : ('Mês: '+(selectedMonths[0] && selectedMonths[0].mes ? selectedMonths[0].mes : selectedKey));
+  return '<div class="dashx-chart-card" style="grid-column:1 / -1"><div class="dashx-chart-head"><div><div class="dashx-chart-title">Produtividade técnica ClickUp por consultor '+towerInfoButton('dailyBurn')+'</div><div class="dashx-chart-sub">Entregas concluídas nos projetos do mês: fases, tasks e marcos. Clique no consultor para auditar tudo; clique na cor para auditar só fases, tasks ou marcos.</div></div><div class="dashx-chart-meta"><span class="dashx-chart-note">'+note+'</span></div></div><div class="dashx-delivery-panel"><div class="dashx-delivery-tabs">'+tabs+'</div>'+sections+'<div class="dashx-delivery-legend"><span><span class="dashx-legend-swatch" style="background:#6f95c0"></span> Fases concluídas</span><span><span class="dashx-legend-swatch" style="background:#6d8e72"></span> Tasks concluídas</span><span><span class="dashx-legend-swatch" style="background:#d9b57e"></span> Marcos concluídos</span></div></div></div>';
+}
 function dashRenderTrendLine(series, title, sub, lineKey, color, infoKey, note) {
   if (!(series || []).length) return dashUnavailableCard(title, ['dados insuficientes']);
   var width = 560;
@@ -5857,6 +6038,7 @@ function initDash() {
   var cohort = dashCohort(list);
   var weeklyTrend = dashBuildWeeklyTrend(list);
   var statusByMonth = dashBuildStatusByMonth(list);
+  var consultorDelivery = dashBuildConsultorDelivery(list);
   var activeRate = funnel.convGeral;
   var saldoDiarias = execution.unavailable ? null : execution.saldo;
   var delayedCount = analyses.filter(function(a){
@@ -5881,9 +6063,8 @@ function initDash() {
   '</div>';
   var hero = '<div class="dashx-hero"><div class="dashx-hero-top"><div class="dashx-title-wrap"><div class="dashx-eyebrow">Dashboard Executivo CSI</div><div class="dashx-title">Visão principal de comando</div><div class="dashx-sub">Primeira leitura executiva da carteira inteira: confiança dos dados, risco operacional, execução e evolução do cliente.</div></div><div class="dashx-meta"><span class="dashx-meta-chip"><b>Período</b> Todos os meses</span><span class="dashx-meta-chip"><b>Projetos</b> '+total+'</span><span class="dashx-meta-chip"><b>Última base</b> '+(TOWER_INFO_CONTEXT.ultima || '-')+'</span></div></div>'+dashRenderFilters(base)+'</div>';
   var trendSection = '<div class="dashx-exec-grid"><div class="dashx-stack"><div class="dashx-chart-grid">'+
-    dashRenderTrendLine(weeklyTrend, 'Evolução do risco operacional', 'Leitura semanal dos projetos que estariam em risco pelo conjunto atraso + excesso + sem atualização.', 'risco', '#c96c5f', 'projectRisk', 'Últimas 8 semanas')+
-    dashRenderBacklogThroughput(weeklyTrend)+
-  '</div>'+dashRenderStatusStack(statusByMonth)+dashRenderClickUpTracker(operation, total)+dashRenderUntrackedClickUpList(operation.untrackedProjects || [], operation.untrackedTotal)+'</div>'+dashRenderActionNow(analyses, operation)+'</div>';
+    dashRenderConsultorDelivery(consultorDelivery)+
+    '</div>'+dashRenderStatusStack(statusByMonth)+dashRenderClickUpTracker(operation, total)+dashRenderUntrackedClickUpList(operation.untrackedProjects || [], operation.untrackedTotal)+'</div>'+dashRenderActionNow(analyses, operation)+'</div>';
   var healthSection = '<div class="dashx-section"><div class="dashx-section-head"><div><div class="dashx-section-kicker">Seção 1</div><div class="dashx-section-title">Saúde dos Dados '+towerInfoButton('dataHealthSummary')+'</div><div class="dashx-section-sub">Pergunta respondida: Posso confiar na base consolidada do painel e no reflexo da sync do ClickUp?</div></div><div class="dashx-section-answer"><span class="dashx-answer-chip">'+(health.completude === null ? 'Base indisponível' : (health.completude >= 90 ? 'Base confiável' : health.completude >= 70 ? 'Base em atenção' : 'Base crítica'))+'</span></div></div><div class="dashx-section-body">'+dashRenderHealthSection(health)+'</div></div>';
   var opRanking = operation.ranking.length ? '<div class="dashx-list">'+operation.ranking.slice(0, 8).map(function(item){
     return '<div class="dashx-list-item"><div class="dashx-list-main"><div class="dashx-list-title">'+item.nome+'</div><div class="dashx-list-sub">'+item.projetos+' projeto(s), '+fn(item.diariasContr)+' diárias contratadas, '+fn(item.diariasReal)+' realizadas e '+item.riscos+' em risco.</div><div class="dashx-list-tags"><span class="dashx-mini-chip">'+fn(item.saldo)+' de saldo</span><span class="dashx-mini-chip">'+item.esquecidos+' esquecidos</span><span class="dashx-mini-chip">'+item.score+' health</span></div></div><span class="dashx-score-pill '+item.classe+'">'+(item.classe === 'bad' ? 'Sobrecarga crítica' : item.classe === 'warn' ? 'Sobrecarga em atenção' : 'Equilibrado')+'</span></div>';
