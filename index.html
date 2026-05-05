@@ -4360,12 +4360,13 @@ function obterUltimaAlteracaoClickupProjeto(p) {
   if (tsConsolidado && (!tsItem || tsConsolidado > tsItem + 60000)) {
     return {
       tipo: 'resumo',
-      nome: melhorItem && melhorItem.nome ? melhorItem.nome : 'Última atualização consolidada do ClickUp',
-      fase: melhorItem && melhorItem.fase ? melhorItem.fase : '',
-      status: melhorItem && melhorItem.status ? melhorItem.status : '',
+      nome: 'Última atualização consolidada do ClickUp',
+      fase: '',
+      status: '',
       updated_at: dataConsolidada,
-      id: melhorItem && melhorItem.id ? melhorItem.id : '',
+      id: '',
       divergente: true,
+      detalhe_item_nome: melhorItem && melhorItem.nome ? melhorItem.nome : '',
       detalhe_data_item: melhorItem && melhorItem.updated_at ? melhorItem.updated_at : ''
     };
   }
@@ -4386,7 +4387,7 @@ function renderAuditoriaUltimaAlteracaoProjeto(p) {
   var tipoLabel = item.tipo === 'marco' ? 'Marco' : item.tipo === 'fase' ? 'Fase' : item.tipo === 'resumo' ? 'Resumo' : 'Task';
   var link = item.id ? '<a class="project-link-btn alt" href="https://app.clickup.com/t/'+escapeHtml(item.id)+'" target="_blank" rel="noopener noreferrer" onclick="event.stopPropagation()">Abrir '+tipoLabel.toLowerCase()+'</a>' : '';
   var avisoDivergencia = item.divergente ?
-    '<div style="margin-top:6px;font-size:10px;color:var(--orange);line-height:1.35">Data alinhada com a última atualização consolidada. O detalhe da task/marco no resumo antigo estava divergente'+(item.detalhe_data_item ? ' ('+escapeHtml(formatarDataHoraProjeto(item.detalhe_data_item))+')' : '')+'. Ressincronize com o Apps Script atualizado para gravar o item exato.</div>' :
+    '<div style="margin-top:6px;font-size:10px;color:var(--orange);line-height:1.35">Data alinhada com a última atualização consolidada. O resumo antigo não identifica com segurança qual task/marco gerou essa data'+(item.detalhe_item_nome ? '; o último item detalhado nele era "'+escapeHtml(item.detalhe_item_nome)+'"' : '')+(item.detalhe_data_item ? ' em '+escapeHtml(formatarDataHoraProjeto(item.detalhe_data_item)) : '')+'. Ressincronize com o Apps Script atualizado para gravar o item exato.</div>' :
     '';
   return ''+
     '<div style="margin-top:10px;padding:12px 14px;border:1px solid var(--border);border-radius:12px;background:var(--surf2)">'+
