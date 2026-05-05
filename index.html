@@ -4304,10 +4304,23 @@ function obterUltimaAlteracaoClickupProjeto(p) {
     parseJsonSeguro(p && p.estrutura_json) ||
     null;
   if (!payload || typeof payload !== 'object') return null;
+  var dataConsolidada = '';
+  [
+    payload.resumo && payload.resumo.data_ultima_atualizacao,
+    payload.data_ultima_atualizacao,
+    p && p.data_ultima_atualizacao
+  ].forEach(function(valor) {
+    if (!valor) return;
+    var ts = new Date(valor).getTime();
+    if (isNaN(ts)) return;
+    if (!dataConsolidada || ts > new Date(dataConsolidada).getTime()) dataConsolidada = valor;
+  });
+  var tsConsolidado = dataConsolidada ? new Date(dataConsolidada).getTime() : 0;
 
   var resumoItem = payload.resumo && payload.resumo.ultima_alteracao_item;
+  var melhorItem = null;
   if (resumoItem && resumoItem.updated_at) {
-    return {
+    melhorItem = {
       tipo: resumoItem.tipo || 'item',
       nome: resumoItem.nome || '-',
       fase: resumoItem.fase_nome || '',
@@ -4317,28 +4330,47 @@ function obterUltimaAlteracaoClickupProjeto(p) {
     };
   }
 
-  var itens = [];
-  function add(lista, tipo) {
-    if (!Array.isArray(lista)) return;
-    lista.forEach(function(item) {
-      if (!item || !item.updated_at) return;
-      itens.push({
-        tipo: tipo,
-        nome: item.nome || item.name || '-',
-        fase: item.fase_nome || '',
-        status: item.status_original || item.status || '',
-        updated_at: item.updated_at,
-        id: item.id || ''
+  if (!melhorItem) {
+    var itens = [];
+    function add(lista, tipo) {
+      if (!Array.isArray(lista)) return;
+      lista.forEach(function(item) {
+        if (!item || !item.updated_at) return;
+        itens.push({
+          tipo: tipo,
+          nome: item.nome || item.name || '-',
+          fase: item.fase_nome || '',
+          status: item.status_original || item.status || '',
+          updated_at: item.updated_at,
+          id: item.id || ''
+        });
       });
-    });
+    }
+    add(payload.tasks, 'task');
+    add(payload.marcos, 'marco');
+    if (itens.length) {
+      itens.sort(function(a, b) {
+        return new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime();
+      });
+      melhorItem = itens[0];
+    }
   }
-  add(payload.tasks, 'task');
-  add(payload.marcos, 'marco');
-  if (!itens.length) return null;
-  itens.sort(function(a, b) {
-    return new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime();
-  });
-  return itens[0];
+
+  var tsItem = melhorItem && melhorItem.updated_at ? new Date(melhorItem.updated_at).getTime() : 0;
+  if (tsConsolidado && (!tsItem || tsConsolidado > tsItem + 60000)) {
+    return {
+      tipo: 'resumo',
+      nome: melhorItem && melhorItem.nome ? melhorItem.nome : 'Última atualização consolidada do ClickUp',
+      fase: melhorItem && melhorItem.fase ? melhorItem.fase : '',
+      status: melhorItem && melhorItem.status ? melhorItem.status : '',
+      updated_at: dataConsolidada,
+      id: melhorItem && melhorItem.id ? melhorItem.id : '',
+      divergente: true,
+      detalhe_data_item: melhorItem && melhorItem.updated_at ? melhorItem.updated_at : ''
+    };
+  }
+
+  return melhorItem;
 }
 function renderAuditoriaUltimaAlteracaoProjeto(p) {
   var item = obterUltimaAlteracaoClickupProjeto(p || {});
@@ -4351,8 +4383,11 @@ function renderAuditoriaUltimaAlteracaoProjeto(p) {
   }
   var dataFmt = formatarDataHoraProjeto(item.updated_at);
   var dias = diasDesdeDataProjeto(item.updated_at);
-  var tipoLabel = item.tipo === 'marco' ? 'Marco' : 'Task';
+  var tipoLabel = item.tipo === 'marco' ? 'Marco' : item.tipo === 'fase' ? 'Fase' : item.tipo === 'resumo' ? 'Resumo' : 'Task';
   var link = item.id ? '<a class="project-link-btn alt" href="https://app.clickup.com/t/'+escapeHtml(item.id)+'" target="_blank" rel="noopener noreferrer" onclick="event.stopPropagation()">Abrir '+tipoLabel.toLowerCase()+'</a>' : '';
+  var avisoDivergencia = item.divergente ?
+    '<div style="margin-top:6px;font-size:10px;color:var(--orange);line-height:1.35">Data alinhada com a última atualização consolidada. O detalhe da task/marco no resumo antigo estava divergente'+(item.detalhe_data_item ? ' ('+escapeHtml(formatarDataHoraProjeto(item.detalhe_data_item))+')' : '')+'. Ressincronize com o Apps Script atualizado para gravar o item exato.</div>' :
+    '';
   return ''+
     '<div style="margin-top:10px;padding:12px 14px;border:1px solid var(--border);border-radius:12px;background:var(--surf2)">'+
       '<div style="display:flex;align-items:flex-start;justify-content:space-between;gap:10px;flex-wrap:wrap">'+
@@ -4362,6 +4397,7 @@ function renderAuditoriaUltimaAlteracaoProjeto(p) {
           '<div style="margin-top:5px;font-size:11px;color:var(--text2);line-height:1.45">'+
             '<b>'+tipoLabel+'</b>'+(item.fase ? ' • Fase: '+escapeHtml(item.fase) : '')+(item.status ? ' • Status: '+escapeHtml(item.status) : '')+
           '</div>'+
+          avisoDivergencia+
         '</div>'+
         '<div style="text-align:right;min-width:150px">'+
           '<div class="ef-l">Data registrada</div>'+
