@@ -5074,6 +5074,7 @@ function dashOperation(list, analyses) {
   var agingByConsultor = {};
   var trackedTotal = 0;
   var untrackedTotal = 0;
+  var untrackedProjects = [];
   var agingList = analyses.filter(function(a){
     return dashClickUpAgingDays(a.projeto) !== null;
   }).map(function(a){
@@ -5106,6 +5107,11 @@ function dashOperation(list, analyses) {
         dias: null,
         bucket: 'Sem ClickUp',
         motivo: 'Projeto sem list_id/view_id ou sem resumo sincronizado do ClickUp.'
+      });
+      untrackedProjects.push({
+        projeto: a.projeto,
+        consultor: nomeConsultor,
+        motivo: 'Sem list_id/view_id ou sem resumo sincronizado.'
       });
       return;
     }
@@ -5163,7 +5169,13 @@ function dashOperation(list, analyses) {
     if (b['8–15'] !== a['8–15']) return b['8–15'] - a['8–15'];
     return String(a.nome || '').localeCompare(String(b.nome || ''));
   });
-  return { ranking: ranking, mediaProjetos: mediaProjetos, bins: bins, agingList: agingList, heatMap: heatMap, agingByConsultor: agingRows, trackedTotal: trackedTotal, untrackedTotal: untrackedTotal };
+  untrackedProjects.sort(function(a, b){
+    var ac = String(a.consultor || '');
+    var bc = String(b.consultor || '');
+    if (ac !== bc) return ac.localeCompare(bc);
+    return String((a.projeto && a.projeto.cliente) || '').localeCompare(String((b.projeto && b.projeto.cliente) || ''));
+  });
+  return { ranking: ranking, mediaProjetos: mediaProjetos, bins: bins, agingList: agingList, heatMap: heatMap, agingByConsultor: agingRows, trackedTotal: trackedTotal, untrackedTotal: untrackedTotal, untrackedProjects: untrackedProjects };
 }
 function dashExecution(list) {
   var required = dashMissingFields(list, [
@@ -5629,6 +5641,19 @@ function dashRenderConsultorAgingTable(rows) {
   }).join('') : '<tr class="empty-row"><td colspan="8">Nenhum consultor encontrado no recorte atual.</td></tr>';
   return '<div class="dashx-table-wrap"><table class="dashx-table"><thead><tr><th>Consultor</th><th class="num">Rastreados</th><th class="num">Sem ClickUp</th><th class="num">&lt; 7 dias</th><th class="num">7–15</th><th class="num">15–30</th><th class="num">30–45</th><th class="num">45+</th></tr></thead><tbody>'+body+'</tbody></table></div>';
 }
+function dashRenderUntrackedClickUpList(items, totalUntracked) {
+  var total = Number(totalUntracked || 0);
+  if (!total) {
+    return '<div class="dashx-focus-note" style="margin-top:12px"><div><strong>Sem pendência de rastreio técnico.</strong> Todos os projetos do recorte atual possuem base ClickUp sincronizada.</div><div class="dashx-focus-hint">0 sem ClickUp</div></div>';
+  }
+  var list = (items || []).slice(0, 12);
+  var rows = list.length ? list.map(function(item){
+    var p = item.projeto || {};
+    return '<tr><td><strong>'+String(p.cliente || '-')+'</strong></td><td>'+(item.consultor || p.consultor || '-')+'</td><td>'+sl(String(p.status || '-'))+'</td><td>'+(item.motivo || 'Sem rastreio técnico.')+'</td><td>'+dashProjectActionCell(p)+'</td></tr>';
+  }).join('') : '<tr class="empty-row"><td colspan="5">Nenhum projeto sem rastreio técnico encontrado no recorte atual.</td></tr>';
+  var hint = list.length < total ? ('mostrando '+list.length+' de '+total) : (total+' projeto(s)');
+  return '<div class="dashx-focus-note" style="margin-top:12px"><div><strong>Projetos sem rastreio técnico.</strong> Lista os projetos que ainda precisam de list_id/view_id ou de resumo sincronizado para entrar na auditoria ClickUp.</div><div class="dashx-focus-hint">'+hint+'</div></div><div class="dashx-table-wrap" style="margin-top:12px"><table class="dashx-table"><thead><tr><th>Projeto</th><th>Consultor</th><th>Status</th><th>Motivo</th><th>Ação</th></tr></thead><tbody>'+rows+'</tbody></table></div>';
+}
 function dashRenderClickUpTracker(operation, totalProjetos) {
   var rows = operation.agingByConsultor || [];
   var selected = rows.filter(function(item){ return item.nome === DASH_CLICKUP_CONSULTOR; })[0] || rows[0] || null;
@@ -5648,7 +5673,7 @@ function dashRenderClickUpTracker(operation, totalProjetos) {
     var motivo = item.rastreado ? (item.motivo || 'Sem detalhe adicional.') : 'Sem list_id/view_id ou sem resumo sincronizado.';
     return '<tr><td><strong>'+String(p.cliente || '-')+'</strong></td><td>'+sl(String(p.status || '-'))+'</td><td class="num">'+(item.rastreado ? item.dias : '-')+'</td><td>'+faixa+'</td><td>'+motivo+'</td><td>'+dashProjectActionCell(p)+'</td></tr>';
   }).join('') : '<tr class="empty-row"><td colspan="6">Nenhum projeto rastreado para este consultor.</td></tr>';
-  return '<div class="dashx-chart-card"><div class="dashx-chart-head"><div><div class="dashx-chart-title">Rastreio ClickUp por consultor '+towerInfoButton('aging')+'</div><div class="dashx-chart-sub">Base total: <strong>'+totalProjetos+'</strong> projeto(s). Destes, <strong>'+totalTracked+'</strong> têm rastreio ClickUp e <strong>'+totalUntracked+'</strong> ainda estão sem rastreio técnico.</div></div></div><div class="dashx-chart-legend"><span class="dashx-legend-item"><span class="dashx-legend-swatch" style="background:#6d8e72"></span>'+totalTracked+' rastreados</span><span class="dashx-legend-item"><span class="dashx-legend-swatch" style="background:#9aa59d"></span>'+totalUntracked+' sem ClickUp</span><span class="dashx-legend-item"><span class="dashx-legend-swatch" style="background:#c96c5f"></span>'+critical+' com 15+ dias</span></div>'+dashRenderConsultorAgingTable(rows)+'<div id="dashx-clickup-audit"><div class="dashx-focus-note" style="margin-top:12px"><div><strong>Auditoria ClickUp:</strong> '+((selected && selected.nome) || 'Consultor')+'. Clique em um consultor para listar os projetos, abrir o link e entender o motivo do atraso ou da falta de rastreio.</div><div class="dashx-focus-hint">'+(selected ? (selected.rastreados+' rastreado(s) • '+selected.semClickUp+' sem ClickUp') : 'nenhum consultor selecionado')+'</div></div><div class="dashx-table-wrap" style="margin-top:12px"><table class="dashx-table"><thead><tr><th>Projeto</th><th>Status</th><th class="num">Dias</th><th>Faixa</th><th>Motivo</th><th>Ação</th></tr></thead><tbody>'+detailRows+'</tbody></table></div></div></div>';
+  return '<div class="dashx-chart-card"><div class="dashx-chart-head"><div><div class="dashx-chart-title">Rastreio ClickUp por consultor '+towerInfoButton('aging')+'</div><div class="dashx-chart-sub">Base total: <strong>'+totalProjetos+'</strong> projeto(s). Destes, <strong>'+totalTracked+'</strong> têm rastreio ClickUp e <strong>'+totalUntracked+'</strong> ainda estão sem rastreio técnico.</div></div></div><div class="dashx-chart-legend"><span class="dashx-legend-item"><span class="dashx-legend-swatch" style="background:#6d8e72"></span>'+totalTracked+' rastreados</span><span class="dashx-legend-item"><span class="dashx-legend-swatch" style="background:#9aa59d"></span>'+totalUntracked+' sem ClickUp</span><span class="dashx-legend-item"><span class="dashx-legend-swatch" style="background:#c96c5f"></span>'+critical+' com 15+ dias</span></div>'+dashRenderConsultorAgingTable(rows)+dashRenderUntrackedClickUpList(operation.untrackedProjects || [], totalUntracked)+'<div id="dashx-clickup-audit"><div class="dashx-focus-note" style="margin-top:12px"><div><strong>Auditoria ClickUp:</strong> '+((selected && selected.nome) || 'Consultor')+'. Clique em um consultor para listar os projetos, abrir o link e entender o motivo do atraso ou da falta de rastreio.</div><div class="dashx-focus-hint">'+(selected ? (selected.rastreados+' rastreado(s) • '+selected.semClickUp+' sem ClickUp') : 'nenhum consultor selecionado')+'</div></div><div class="dashx-table-wrap" style="margin-top:12px"><table class="dashx-table"><thead><tr><th>Projeto</th><th>Status</th><th class="num">Dias</th><th>Faixa</th><th>Motivo</th><th>Ação</th></tr></thead><tbody>'+detailRows+'</tbody></table></div></div></div>';
 }
 function dashRenderExecution(execution) {
   if (execution.unavailable) return dashUnavailableCard('Burndown de diárias', execution.unavailable);
