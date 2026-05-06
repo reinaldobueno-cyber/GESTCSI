@@ -5661,10 +5661,9 @@ function dashBuildConsultorDelivery(list) {
 function dashRenderConsultorDelivery(delivery) {
   if (!(delivery || []).length) return dashUnavailableCard('Produtividade técnica ClickUp', ['tasks_concluidas', 'marcos_concluidos', 'clickup_json.fases']);
   var availableMonths = delivery.map(function(item) { return item.mes; });
-  var defaultMonth = availableMonths.length ? availableMonths[availableMonths.length - 1] : '';
   var selectedKey = activePeriod && activePeriod !== 'all'
     ? activePeriod
-    : (DASH_DELIVERY_MONTH && (DASH_DELIVERY_MONTH === 'ALL' || availableMonths.indexOf(DASH_DELIVERY_MONTH) >= 0) ? DASH_DELIVERY_MONTH : defaultMonth);
+    : (DASH_DELIVERY_MONTH && (DASH_DELIVERY_MONTH === 'ALL' || availableMonths.indexOf(DASH_DELIVERY_MONTH) >= 0) ? DASH_DELIVERY_MONTH : 'ALL');
   var selectedMonths = selectedKey === 'ALL' ? delivery : delivery.filter(function(item) { return item.mes === selectedKey; });
   if (!selectedMonths.length) selectedMonths = [delivery[0]];
   var tabs = '<button type="button" class="dashx-delivery-tab'+(selectedKey === 'ALL' ? ' is-active' : '')+'" onclick="return dashSetDeliveryMonth(\'ALL\')">Todos</button>' + delivery.map(function(item) {
