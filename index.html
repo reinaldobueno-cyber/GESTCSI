@@ -7869,7 +7869,15 @@ var ABAS_GID_FIXAS = {
   JAN: '1979811921',
   FEV: '1661005461',
   MAR: '1789638674',
-  ABR: '1749991249'
+  ABR: '1749991249',
+  MAI: '1286769758',
+  JUN: '9327673',
+  JUL: '1345416011',
+  AGO: '663876019',
+  SET: '1947048448',
+  OUT: '1181527824',
+  NOV: '803878027',
+  DEZ: '1920500196'
 };
 var _resumoLinksPorAba = {};
 
@@ -8362,11 +8370,17 @@ function normalizarTabelaGviz(table) {
   var labelsVazios = cols.filter(function(c){ return !String((c && c.label) || '').trim(); }).length;
   if (rows.length && labelsVazios >= Math.max(1, Math.floor(cols.length * 0.8))) {
     var headerCells = rows[0].c || [];
-    cols = cols.map(function(c, idx){
-      var hv = headerCells[idx] && headerCells[idx].v ? String(headerCells[idx].v) : (c && c.label) || ('col_' + idx);
-      return { label: hv, id: c && c.id };
-    });
-    rows = rows.slice(1);
+    var headerScore = headerCells.reduce(function(acc, cell) {
+      var key = normalizeColunaKey(cell && cell.v);
+      return acc + (['data_da_venda','cliente','pacote','adicionais','tipo','vendedor','consultor','status','link_do_projeto'].indexOf(key) >= 0 ? 1 : 0);
+    }, 0);
+    if (headerScore >= 2) {
+      cols = cols.map(function(c, idx){
+        var hv = headerCells[idx] && headerCells[idx].v ? String(headerCells[idx].v) : (c && c.label) || ('col_' + idx);
+        return { label: hv, id: c && c.id };
+      });
+      rows = rows.slice(1);
+    }
   }
   return { cols: cols, rows: rows };
 }
@@ -8465,11 +8479,17 @@ function loadMetricasFromSheet() {
         var labelsVazios = (cols || []).filter(function(c){ return !String((c && c.label) || '').trim(); }).length;
         if (rows.length && labelsVazios >= Math.max(1, Math.floor(cols.length * 0.8))) {
           var headerCells = rows[0].c || [];
-          cols = cols.map(function(c, idx){
-            var hv = headerCells[idx] && headerCells[idx].v ? String(headerCells[idx].v) : (c && c.label) || ('col_' + idx);
-            return { label: hv, id: c && c.id };
-          });
-          rows = rows.slice(1);
+          var headerScore = headerCells.reduce(function(acc, cell) {
+            var key = normalizeColunaKey(cell && cell.v);
+            return acc + (['data_da_venda','cliente','pacote','adicionais','tipo','vendedor','consultor','status','link_do_projeto'].indexOf(key) >= 0 ? 1 : 0);
+          }, 0);
+          if (headerScore >= 2) {
+            cols = cols.map(function(c, idx){
+              var hv = headerCells[idx] && headerCells[idx].v ? String(headerCells[idx].v) : (c && c.label) || ('col_' + idx);
+              return { label: hv, id: c && c.id };
+            });
+            rows = rows.slice(1);
+          }
         }
         rows.forEach(function(row){
           var ro = mapearRow(cols, row);
