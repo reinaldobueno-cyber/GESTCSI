@@ -8428,6 +8428,23 @@ function mapearProjetoMensalPorIndice(row, abaTitle) {
     link_projeto: valorCelulaGviz(row, 22)
   };
 }
+function linhaProjetoMensalValida(ro) {
+  var cliente = String(valorRowAlias(ro, ['cliente','nome_cliente','nome_do_cliente']) || '').trim();
+  if (!cliente) return false;
+  var clienteKey = normalizeClienteKey(cliente);
+  if (!clienteKey || ['CLIENTE','NOME CLIENTE','NOME DO CLIENTE'].indexOf(clienteKey) >= 0) return false;
+  var dataVendaKey = normalizeClienteKey(valorRowAlias(ro, ['data_venda','data_da_venda']) || '');
+  if (dataVendaKey === 'DATA DA VENDA') return false;
+  var camposReais = [
+    'pacote','adicionais','tipo','vendedor','consultor','formato','cidade',
+    'data_venda','data_inicio','data_estimada','diarias_cont','status',
+    'projeto_link','link_projeto','acompanhamento'
+  ];
+  return camposReais.some(function(k) {
+    var v = ro[k];
+    return v !== undefined && v !== null && String(v).trim() !== '' && normalizeClienteKey(v) !== k.toUpperCase().replace(/_/g, ' ');
+  });
+}
 function carregarProjetosDiretoPlanilha() {
   var abas = Object.keys(ABAS_GID_FIXAS).map(function(m){ return {title:m, gid:ABAS_GID_FIXAS[m]}; });
   var projetos = [];
@@ -8440,7 +8457,7 @@ function carregarProjetosDiretoPlanilha() {
       (normalizada.rows || []).forEach(function(row){
         var ro = mapearGvizRow(normalizada.cols, row);
         ro = Object.assign(ro, mapearProjetoMensalPorIndice(row, aba.title));
-        if (!valorRowAlias(ro, ['cliente','nome_cliente','nome_do_cliente'])) return;
+        if (!linhaProjetoMensalValida(ro)) return;
         ro._aba_origem = aba.title;
         ro._sheet_order = seq++;
         projetos.push(ro);
