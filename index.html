@@ -7798,9 +7798,309 @@ function towerProjectTable(analises) {
     return '<tr><td><strong>'+p.cliente+'</strong><div class="tower-cons-meta">'+(p.mes || '-')+' - '+sl(p.status || '')+'</div></td><td>'+towerBadge(p.consultor || 'Sem consultor', p.consultor ? '' : 'r')+'</td><td><div class="tower-stage"><span class="tower-stage-dot '+dot+'"></span><strong>'+a.score+'</strong> '+a.label+'</div></td><td>'+towerBadge(acao, a.actionToday ? 'o' : 'g')+'</td><td>'+cs+'</td><td class="num">'+(a.mrr ? towerMoney(a.mrr) : '-')+'</td></tr>';
   }).join('')+'</tbody></table>';
 }
+function gestaoClickupProjectYear(p) {
+  if (String((p && p.mes) || '').toUpperCase() === 'HIST') return 2025;
+  var d = dashParseDate((p && (p.data_venda || p.data_inicio || p.data_kick)) || '');
+  if (d) return d.getFullYear();
+  var mes = String((p && p.mes) || '').toUpperCase();
+  return ORDEM_MESES.indexOf(mes) >= 0 ? 2026 : null;
+}
+function gestaoClickupBucketKey(p) {
+  var year = gestaoClickupProjectYear(p);
+  if (year && year <= 2025) return 'legacy';
+  if (year === 2026) return 'current';
+  return 'unknown';
+}
+function gestaoClickupTaskItems(p) {
+  var payload = parseJsonSeguro((p && p.clickup_json) || '') || {};
+  var out = [];
+  function add(item, tipo) {
+    if (!item) return;
+    out.push({
+      tipo: tipo,
+      nome: item.nome || '-',
+      fase: item.fase_nome || item.nome || '',
+      status: item.status_original || '',
+      concluido: tipo === 'marco' ? !!item.concluido : !!item.concluida,
+      due_date: item.due_date || '',
+      updated_at: item.updated_at || item.date_updated || ''
+    });
+  }
+  (Array.isArray(payload.tasks) ? payload.tasks : []).forEach(function(task){ add(task, 'task'); });
+  (Array.isArray(payload.marcos) ? payload.marcos : []).forEach(function(marco){ add(marco, 'marco'); });
+  return out;
+}
+function gestaoClickupOverdueItems(p) {
+  var today = new Date();
+  today = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+  return gestaoClickupTaskItems(p).filter(function(item) {
+    if (item.concluido || !item.due_date) return false;
+    var d = dashParseDate(item.due_date);
+    if (!d) return false;
+    var day = new Date(d.getFullYear(), d.getMonth(), d.getDate());
+    return day.getTime() < today.getTime();
+  });
+}
+function gestaoConsultorKey(nome) {
+  var key = normalizeClienteKey(nome || 'Sem consultor');
+  if (!key || key === 'SEM CONSULTOR') return 'SEM CONSULTOR';
+  return key.split(' ')[0] || key;
+}
+function gestaoConsultorLabel(atual, novo) {
+  atual = String(atual || '').trim();
+  novo = String(novo || '').trim();
+  if (!atual || atual === 'Sem consultor') return novo || atual || 'Sem consultor';
+  if (!novo) return atual;
+  return novo.length > atual.length ? novo : atual;
+}
+function gestaoBuildClickupProductivity(list) {
+  var base = ordenarProjetosPainel((list || []).filter(function(p){ return dashProjectHasClickUpTrace(p); }));
+  var buckets = {
+    legacy: { key:'legacy', label:'Projetos <= 2025', projetos:[], fasesConcluidas:0, tasksConcluidas:0, tasksPendentes:0, marcosConcluidos:0, marcosPendentes:0, atrasados:0, semUpdate:0 },
+    current: { key:'current', label:'Projetos 2026', projetos:[], fasesConcluidas:0, tasksConcluidas:0, tasksPendentes:0, marcosConcluidos:0, marcosPendentes:0, atrasados:0, semUpdate:0 },
+    total: { key:'total', label:'Total ClickUp', projetos:[], fasesConcluidas:0, tasksConcluidas:0, tasksPendentes:0, marcosConcluidos:0, marcosPendentes:0, atrasados:0, semUpdate:0 }
+  };
+  var byConsultor = {};
+  function emptyStats() {
+    return {projetos:0, fasesConcluidas:0, tasksConcluidas:0, tasksPendentes:0, marcosConcluidos:0, marcosPendentes:0, atrasados:0, semUpdate:0};
+  }
+  function resumo(p) {
+    var payload = parseJsonSeguro((p && p.clickup_json) || '') || {};
+    var r = payload.resumo || {};
+    return {
+      fasesConcluidas: dashProjectDeliveryItems(p).filter(function(item){ return item.tipo === 'fase'; }).length,
+      tasksConcluidas: Math.max(0, Number((p && p.tasks_concluidas) || r.tasks_concluidas || 0)),
+      tasksPendentes: Math.max(0, Number((p && p.tasks_pendentes) || r.tasks_pendentes || 0)),
+      marcosConcluidos: Math.max(0, Number((p && p.marcos_concluidos) || r.marcos_concluidos || 0)),
+      marcosPendentes: Math.max(0, Number((p && p.marcos_pendentes) || r.marcos_pendentes || 0))
+    };
+  }
+  base.forEach(function(p) {
+    var key = gestaoClickupBucketKey(p);
+    if (key === 'unknown') key = 'current';
+    var m = resumo(p);
+    var overdueItems = gestaoClickupOverdueItems(p);
+    var stale = dashClickUpAgingDays(p);
+    var statusKey = dashStatusKey(p && p.status);
+    var projectLate = overdueItems.length > 0 || statusKey === 'atrasado';
+    function absorbBucket(bucket) {
+      bucket.projetos.push(p);
+      bucket.fasesConcluidas += m.fasesConcluidas;
+      bucket.tasksConcluidas += m.tasksConcluidas;
+      bucket.tasksPendentes += m.tasksPendentes;
+      bucket.marcosConcluidos += m.marcosConcluidos;
+      bucket.marcosPendentes += m.marcosPendentes;
+      if (projectLate) bucket.atrasados += 1;
+      if (stale !== null && stale >= 7) bucket.semUpdate += 1;
+    }
+    absorbBucket(buckets[key]);
+    absorbBucket(buckets.total);
+    var consultorRaw = (p && p.consultor) || 'Sem consultor';
+    var consultorKey = gestaoConsultorKey(consultorRaw);
+    if (!byConsultor[consultorKey]) {
+      byConsultor[consultorKey] = {
+        key: consultorKey,
+        nome: consultorRaw,
+        legacy:emptyStats(),
+        current:emptyStats(),
+        total:emptyStats(),
+        exemplos:[]
+      };
+    }
+    byConsultor[consultorKey].nome = gestaoConsultorLabel(byConsultor[consultorKey].nome, consultorRaw);
+    ['total', key].forEach(function(bucketKey) {
+      byConsultor[consultorKey][bucketKey].projetos += 1;
+      byConsultor[consultorKey][bucketKey].fasesConcluidas += m.fasesConcluidas;
+      byConsultor[consultorKey][bucketKey].tasksConcluidas += m.tasksConcluidas;
+      byConsultor[consultorKey][bucketKey].tasksPendentes += m.tasksPendentes;
+      byConsultor[consultorKey][bucketKey].marcosConcluidos += m.marcosConcluidos;
+      byConsultor[consultorKey][bucketKey].marcosPendentes += m.marcosPendentes;
+      if (projectLate) byConsultor[consultorKey][bucketKey].atrasados += 1;
+      if (stale !== null && stale >= 7) byConsultor[consultorKey][bucketKey].semUpdate += 1;
+    });
+    if (projectLate || m.tasksConcluidas || m.marcosConcluidos || m.fasesConcluidas || (stale !== null && stale >= 7)) {
+      byConsultor[consultorKey].exemplos.push({
+        cliente: p.cliente || '-',
+        bucket: key === 'legacy' ? '<=2025' : '2026',
+        concluidos: m.fasesConcluidas + m.tasksConcluidas + m.marcosConcluidos,
+        atrasado: projectLate,
+        semUpdate: stale,
+        acao: dashProjectActionCell(p)
+      });
+    }
+  });
+  var rows = Object.keys(byConsultor).map(function(k){ return byConsultor[k]; }).sort(function(a,b){
+    if (b.total.projetos !== a.total.projetos) return b.total.projetos - a.total.projetos;
+    return a.nome.localeCompare(b.nome);
+  });
+  return { base: base, buckets: buckets, consultores: rows };
+}
+function gestaoMetricCell(obj) {
+  return '<div class="tower-metric"><strong>'+fn(obj.projetos)+'</strong><span>projetos</span></div>'+
+    '<div class="tower-metric"><strong>'+fn(obj.tasksConcluidas)+'</strong><span>tasks concl.</span></div>'+
+    '<div class="tower-metric"><strong>'+fn(obj.tasksPendentes)+'</strong><span>tasks pend.</span></div>'+
+    '<div class="tower-metric"><strong>'+fn(obj.marcosConcluidos)+'</strong><span>marcos concl.</span></div>'+
+    '<div class="tower-metric"><strong>'+fn(obj.marcosPendentes)+'</strong><span>marcos pend.</span></div>'+
+    '<div class="tower-metric"><strong>'+fn(obj.atrasados)+'</strong><span>atrasados</span></div>'+
+    '<div class="tower-metric"><strong>'+fn(obj.semUpdate)+'</strong><span>sem update</span></div>';
+}
+function gestaoTotalConcluidos(obj) {
+  return (obj.fasesConcluidas || 0) + (obj.tasksConcluidas || 0) + (obj.marcosConcluidos || 0);
+}
+function gestaoAuditButton(label, mode, bucket) {
+  return '<button type="button" class="dashx-health-link" onclick="return gestaoOpenAudit(\''+jsQuote(mode)+'\',\''+jsQuote(bucket || 'total')+'\')">'+label+'</button>';
+}
+function gestaoRenderClickupProductivity(list, meta) {
+  meta = meta || {};
+  var data = gestaoBuildClickupProductivity(Array.isArray(list) ? list : []);
+  var b = data.buckets;
+  var cards = [b.legacy, b.current, b.total].map(function(item) {
+    return '<div class="tower-kpi"><div class="tower-kpi-top"><div class="tower-kpi-icon">'+(item.key === 'legacy' ? '≤25' : item.key === 'current' ? '26' : 'Σ')+'</div><span class="tower-kpi-trend">ClickUp</span></div><div class="tower-kpi-value">'+item.projetos.length+'</div><div class="tower-kpi-label">'+item.label+'</div><div class="tower-kpi-sub">'+gestaoTotalConcluidos(item)+' concluídos • '+item.tasksPendentes+' tasks pend. • '+item.marcosPendentes+' marcos pend.</div><div class="tower-risk-meta" style="margin-top:10px">'+gestaoAuditButton(item.atrasados+' atrasados','atrasados',item.key)+gestaoAuditButton(item.semUpdate+' sem update','semUpdate',item.key)+'</div></div>';
+  }).join('');
+  var rows = data.consultores.map(function(c) {
+    var examples = c.exemplos.slice(0, 4).map(function(e) {
+      return '<div class="tower-risk-row" style="grid-template-columns:1fr auto"><div><div class="tower-risk-name">'+escapeHtml(e.cliente)+'</div><div class="tower-risk-meta">'+towerBadge(e.bucket, 'g')+towerBadge(e.concluidos+' concluído(s)', 'g')+(e.atrasado ? towerBadge('atrasado', 'r') : '')+(e.semUpdate !== null && e.semUpdate >= 7 ? towerBadge(e.semUpdate+'d sem update', 'o') : '')+'</div></div><div>'+e.acao+'</div></div>';
+    }).join('') || '<div class="tower-empty">Sem itens concluídos ou atrasados para destacar.</div>';
+    return '<div class="tower-panel"><div class="tower-panel-head"><div><button type="button" class="tower-panel-title" style="border:0;background:transparent;padding:0;cursor:pointer;text-align:left" onclick="return gestaoOpenConsultorAudit(\''+jsQuote(c.key || c.nome)+'\')">'+escapeHtml(c.nome)+'</button><div class="tower-panel-note">Clique no nome para auditar todos os projetos, histórico e 2026</div></div></div><div class="tower-panel-body"><div class="tower-cons-row" style="grid-template-columns:1fr repeat(7,76px)"><div><div class="tower-cons-name">Total</div><div class="tower-cons-meta">todos os projetos ClickUp carregados</div></div>'+gestaoMetricCell(c.total)+'</div><div class="tower-cons-row" style="grid-template-columns:1fr repeat(7,76px)"><div><div class="tower-cons-name">Histórico <= 2025</div><div class="tower-cons-meta">inventário ClickUp isolado</div></div>'+gestaoMetricCell(c.legacy)+'</div><div class="tower-cons-row" style="grid-template-columns:1fr repeat(7,76px)"><div><div class="tower-cons-name">Projetos 2026</div><div class="tower-cons-meta">carteira atual da Lais / ClickUp</div></div>'+gestaoMetricCell(c.current)+'</div><div class="tower-risk-list" style="margin-top:14px">'+examples+'</div></div></div>';
+  }).join('') || '<div class="tower-empty">Nenhum projeto com rastreio ClickUp encontrado.</div>';
+  var legacyNote = b.legacy.projetos.length ? '' : '<div class="dashx-focus-note" style="margin-bottom:14px"><div><strong>Atenção:</strong> nenhum projeto histórico foi encontrado no inventário ClickUp.</div><div class="dashx-focus-hint">Rode no Sheets: ClickUp Sync > Importar projetos dos spaces históricos e depois Sincronizar inventário ClickUp.</div></div>';
+  var erro = meta.erro ? '<div class="dashx-focus-note" style="margin-bottom:14px"><div><strong>Inventário indisponível:</strong> '+escapeHtml(meta.erro)+'</div><div class="dashx-focus-hint">A Gestão não usa a base mensal 2026 como fallback para evitar confusão no controle aprovado.</div></div>' : '';
+  return '<div class="dashx-shell"><div class="dashx-hero"><div class="dashx-hero-top"><div class="dashx-title-wrap"><div class="dashx-eyebrow">Gestão ClickUp</div><div class="dashx-title">Produtividade ClickUp por consultor</div><div class="dashx-sub">Visão isolada da Gestão: histórico vem do CLICKUP_INVENTARIO e 2026 vem da base mensal aprovada. Não altera Dashboard, Projetos ou Executivo.</div></div><div class="dashx-meta"><span class="dashx-meta-chip"><b>Fonte</b> Gestão isolada</span><span class="dashx-meta-chip"><b>Projetos</b> '+data.base.length+'</span></div></div></div>'+erro+legacyNote+'<div class="tower-kpis">'+cards+'</div><div class="dashx-stack">'+rows+'</div></div>';
+}
+var GESTAO_CLICKUP_INVENTORY = null;
+var GESTAO_CLICKUP_INVENTORY_LOADING = null;
+var GESTAO_CLICKUP_VIEW_DATA = [];
+function gestaoNormalizeInventoryProject(p) {
+  p = p || {};
+  var out = Object.assign({}, p);
+  out.mes = 'HIST';
+  out.cliente = out.cliente || out.projeto || out.nome || '-';
+  out.project_url = out.project_url || out.link_projeto || out.projeto_link || '';
+  out.link_projeto = out.link_projeto || out.project_url;
+  out.status = out.status || out.sync_status_clickup || '';
+  out.clickup_json = out.clickup_json || '';
+  return out;
+}
+function gestaoBuildViewData(inventory) {
+  var hist = (Array.isArray(inventory) ? inventory : []).map(gestaoNormalizeInventoryProject);
+  var current = (Array.isArray(DATA.projetos) ? DATA.projetos : []).filter(function(p) {
+    return dashProjectHasClickUpTrace(p) && gestaoClickupBucketKey(p) === 'current';
+  });
+  return hist.concat(current);
+}
+function gestaoLoadClickUpInventory() {
+  if (GESTAO_CLICKUP_INVENTORY) return Promise.resolve(GESTAO_CLICKUP_INVENTORY);
+  if (GESTAO_CLICKUP_INVENTORY_LOADING) return GESTAO_CLICKUP_INVENTORY_LOADING;
+  GESTAO_CLICKUP_INVENTORY_LOADING = chamarAppsScriptJsonp('getClickUpInventory', {}, 20000).then(function(resp) {
+    if (!resp || resp.ok === false) {
+      throw new Error((resp && (resp.error || resp.message)) || 'Apps Script nao retornou inventario ClickUp.');
+    }
+    if (!Array.isArray(resp.projetos)) {
+      throw new Error('Apps Script publicado ainda nao possui a action getClickUpInventory. Atualize e reimplante o Apps Script.');
+    }
+    var projetos = resp && Array.isArray(resp.projetos) ? resp.projetos.map(gestaoNormalizeInventoryProject) : [];
+    GESTAO_CLICKUP_INVENTORY = projetos;
+    return projetos;
+  });
+  return GESTAO_CLICKUP_INVENTORY_LOADING;
+}
+function gestaoBucketLabel(key) {
+  return key === 'legacy' ? 'Histórico <= 2025' : key === 'current' ? '2026' : 'Total';
+}
+function gestaoProjectBucket(p) {
+  var key = gestaoClickupBucketKey(p);
+  return key === 'legacy' ? 'legacy' : key === 'current' ? 'current' : 'total';
+}
+function gestaoProjectMetrics(p) {
+  var payload = parseJsonSeguro((p && p.clickup_json) || '') || {};
+  var r = payload.resumo || {};
+  return {
+    fasesConcluidas: dashProjectDeliveryItems(p).filter(function(item){ return item.tipo === 'fase'; }).length,
+    tasksConcluidas: Math.max(0, Number((p && p.tasks_concluidas) || r.tasks_concluidas || 0)),
+    tasksPendentes: Math.max(0, Number((p && p.tasks_pendentes) || r.tasks_pendentes || 0)),
+    marcosConcluidos: Math.max(0, Number((p && p.marcos_concluidos) || r.marcos_concluidos || 0)),
+    marcosPendentes: Math.max(0, Number((p && p.marcos_pendentes) || r.marcos_pendentes || 0))
+  };
+}
+function gestaoIsProjectLate(p) {
+  return gestaoClickupOverdueItems(p).length > 0 || dashStatusKey(p && p.status) === 'atrasado';
+}
+function gestaoProjectRow(p, extra) {
+  var m = gestaoProjectMetrics(p);
+  var stale = dashClickUpAgingDays(p);
+  var bucket = gestaoProjectBucket(p) === 'legacy' ? 'Histórico' : '2026';
+  return '<tr><td><strong>'+escapeHtml(p.cliente || '-')+'</strong><div class="tower-cons-meta">'+bucket+' • '+escapeHtml((p.consultor || 'Sem consultor'))+'</div></td>'+
+    '<td>'+escapeHtml(p.status || '-')+'</td>'+
+    '<td class="num">'+fn(m.fasesConcluidas)+'</td>'+
+    '<td class="num">'+fn(m.tasksConcluidas)+'</td>'+
+    '<td class="num">'+fn(m.tasksPendentes)+'</td>'+
+    '<td class="num">'+fn(m.marcosConcluidos)+'</td>'+
+    '<td class="num">'+fn(m.marcosPendentes)+'</td>'+
+    '<td>'+((stale !== null && stale !== undefined) ? stale+'d' : '-')+'</td>'+
+    '<td>'+escapeHtml(extra || '')+'</td>'+
+    '<td>'+dashProjectActionCell(p)+'</td></tr>';
+}
+function gestaoFilterProjects(mode, bucket, consultor) {
+  bucket = bucket || 'total';
+  var consultorKey = consultor ? gestaoConsultorKey(consultor) : '';
+  return ordenarProjetosPainel((GESTAO_CLICKUP_VIEW_DATA || []).filter(function(p) {
+    if (bucket !== 'total' && gestaoProjectBucket(p) !== bucket) return false;
+    if (consultorKey && gestaoConsultorKey(p.consultor || 'Sem consultor') !== consultorKey) return false;
+    if (mode === 'atrasados') return gestaoIsProjectLate(p);
+    if (mode === 'semUpdate') {
+      var stale = dashClickUpAgingDays(p);
+      return stale !== null && stale >= 7;
+    }
+    return true;
+  }));
+}
+function gestaoOpenAudit(mode, bucket) {
+  var list = gestaoFilterProjects(mode, bucket, '');
+  var label = mode === 'atrasados' ? 'Projetos em atraso' : mode === 'semUpdate' ? 'Projetos sem update' : 'Projetos';
+  var rows = list.length ? list.map(function(p) {
+    var detalhe = '';
+    if (mode === 'atrasados') detalhe = gestaoClickupOverdueItems(p).length+' item(ns) vencido(s)';
+    if (mode === 'semUpdate') {
+      var ultima = obterUltimaAlteracaoClickupProjeto(p);
+      detalhe = ultima ? (escapeHtml(ultima.nome || '-')+' • '+formatarDataHoraProjeto(ultima.updated_at)) : 'Sem última alteração localizada';
+    }
+    return gestaoProjectRow(p, detalhe);
+  }).join('') : '<tr class="empty-row"><td colspan="10">Nenhum projeto neste recorte.</td></tr>';
+  var html = '<div class="dashx-focus-note"><div><strong>'+label+' • '+gestaoBucketLabel(bucket)+':</strong> auditoria da Gestão ClickUp.</div><div class="dashx-focus-hint">'+list.length+' projeto(s)</div></div><div class="dashx-table-wrap" style="margin-top:12px"><table class="dashx-table"><thead><tr><th>Projeto</th><th>Status</th><th>Fases concl.</th><th>Tasks concl.</th><th>Tasks pend.</th><th>Marcos concl.</th><th>Marcos pend.</th><th>Sem update</th><th>Auditoria</th><th>Ação</th></tr></thead><tbody>'+rows+'</tbody></table></div>';
+  dashOpenAuditModal(label+' — '+gestaoBucketLabel(bucket), html);
+  return false;
+}
+function gestaoOpenConsultorAudit(consultor) {
+  var hist = gestaoFilterProjects('todos', 'legacy', consultor);
+  var cur = gestaoFilterProjects('todos', 'current', consultor);
+  var displayName = hist.concat(cur).reduce(function(best, p) {
+    return gestaoConsultorLabel(best, p && p.consultor);
+  }, consultor);
+  function section(title, list) {
+    var rows = list.length ? list.map(function(p){ return gestaoProjectRow(p, gestaoIsProjectLate(p) ? 'Atrasado' : ''); }).join('') : '<tr class="empty-row"><td colspan="10">Nenhum projeto.</td></tr>';
+    return '<div class="dashx-chart-title" style="font-size:14px;margin:16px 0 8px">'+title+' • '+list.length+' projeto(s)</div><div class="dashx-table-wrap"><table class="dashx-table"><thead><tr><th>Projeto</th><th>Status</th><th>Fases concl.</th><th>Tasks concl.</th><th>Tasks pend.</th><th>Marcos concl.</th><th>Marcos pend.</th><th>Sem update</th><th>Auditoria</th><th>Ação</th></tr></thead><tbody>'+rows+'</tbody></table></div>';
+  }
+  var html = '<div class="dashx-focus-note"><div><strong>'+escapeHtml(displayName)+':</strong> relação completa da Gestão ClickUp.</div><div class="dashx-focus-hint">'+hist.length+' histórico • '+cur.length+' em 2026</div></div>'+section('Histórico <= 2025', hist)+section('Projetos 2026', cur);
+  dashOpenAuditModal('Gestão ClickUp — '+displayName, html);
+  return false;
+}
 function initControlTower() {
   var el = document.getElementById('tower-content');
   if (!el) return;
+  el.innerHTML = '<div class="dashx-shell"><div class="tower-panel"><div class="tower-panel-body"><div class="tower-empty">Carregando inventário ClickUp histórico...</div></div></div></div>';
+  gestaoLoadClickUpInventory().then(function(projetos) {
+    var viewData = gestaoBuildViewData(projetos);
+    GESTAO_CLICKUP_VIEW_DATA = viewData;
+    el.innerHTML = gestaoRenderClickupProductivity(viewData);
+    var nTowerNew = document.getElementById('n-tower');
+    if (nTowerNew) nTowerNew.textContent = gestaoBuildClickupProductivity(viewData).buckets.total.atrasados;
+  }).catch(function(error) {
+    var msg = error && error.message ? error.message : String(error || 'Erro desconhecido');
+    el.innerHTML = gestaoRenderClickupProductivity([], { erro: msg });
+    var nTowerNew = document.getElementById('n-tower');
+    if (nTowerNew) nTowerNew.textContent = '0';
+  });
+  return;
   var projetos = filteredProj();
   var analises = projetos.map(towerAnaliseProjeto);
   var total = analises.length;
