@@ -183,6 +183,7 @@ nav{background:var(--nav);height:58px;display:flex;align-items:center;justify-co
 .acom-field{display:flex;flex-direction:column;gap:5px;}
 .acom-field label{font-size:10px;font-weight:900;color:var(--muted);letter-spacing:.7px;text-transform:uppercase;}
 .acom-field input,.acom-field select,.acom-field textarea{border:1px solid var(--border);border-radius:8px;background:var(--surf);color:var(--text);font:600 12px 'Inter',sans-serif;padding:9px 10px;min-height:40px;width:100%;}
+.acom-field select[size]{height:auto;min-height:110px;}
 .acom-field select optgroup{font-weight:900;color:var(--green);}
 .acom-field select option{font-weight:600;color:var(--text);}
 .acom-field-help{font-size:11px;font-weight:700;color:var(--muted);line-height:1.45;margin-top:6px;}
@@ -3663,6 +3664,9 @@ function acompProjectOptionLabel(x) {
   var prefix = data ? data + ' - ' : '';
   return prefix + ((x && x.mes) || '-') + ' - ' + ((x && x.cliente) || '-') + ' - ' + ((x && x.consultor) || '-');
 }
+function acompSearchText(value) {
+  return String(value || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+}
 function acompProjectOptions(list) {
   ACOMP_FORM_PROJECTS = (list || []).slice().sort(acompSortProjetosFormulario);
   var byMonth = {};
@@ -3681,13 +3685,13 @@ function acompProjectOptions(list) {
   }).join('');
 }
 function acompProjectOptionsFiltered(query) {
-  var q = String(query || '').trim().toLowerCase();
+  var q = acompSearchText(query).trim();
   var base = (ACOMP_FORM_PROJECTS || []).filter(function(x){
     if (!q) return true;
-    return acompProjectOptionLabel(x).toLowerCase().indexOf(q) >= 0 ||
-      String(x.cliente || '').toLowerCase().indexOf(q) >= 0 ||
-      String(x.consultor || '').toLowerCase().indexOf(q) >= 0 ||
-      String(x.mes || '').toLowerCase().indexOf(q) >= 0;
+    return acompSearchText(acompProjectOptionLabel(x)).indexOf(q) >= 0 ||
+      acompSearchText(x.cliente).indexOf(q) >= 0 ||
+      acompSearchText(x.consultor).indexOf(q) >= 0 ||
+      acompSearchText(x.mes).indexOf(q) >= 0;
   });
   var selected = (document.getElementById('acom-form-project') || {}).value || '';
   var byMonth = {};
@@ -3704,19 +3708,35 @@ function acompProjectOptionsFiltered(query) {
     }).join('');
     return '<optgroup label="'+escapeHtml(mes+' - '+byMonth[mes].length+' projeto(s)')+'">'+options+'</optgroup>';
   }).join('');
-  return html;
+  return {html:html, count:base.length};
 }
 function acompFilterProjectSelect() {
   var input = document.getElementById('acom-form-project-search');
   var select = document.getElementById('acom-form-project');
+  var help = document.getElementById('acom-form-project-help');
   if (!select) return;
   var previous = select.value;
-  select.innerHTML = acompProjectOptionsFiltered(input && input.value);
+  var query = String((input && input.value) || '').trim();
+  var result = acompProjectOptionsFiltered(query);
+  select.innerHTML = result.html;
   if (previous && Array.prototype.some.call(select.options, function(opt){ return opt.value === previous; })) {
     select.value = previous;
   }
+  if (query) {
+    select.setAttribute('size', String(Math.min(10, Math.max(3, result.count + 1))));
+    if (help) help.textContent = result.count ? (result.count + ' projeto(s) encontrado(s). Selecione abaixo para registrar.') : 'Nenhum projeto encontrado para esse texto.';
+  } else {
+    select.removeAttribute('size');
+    if (help) help.textContent = 'Digite para filtrar. A lista abaixo permanece agrupada por mes de entrada e data da venda.';
+  }
 }
 window.acompFilterProjectSelect = acompFilterProjectSelect;
+function acompProjectSelectChanged() {
+  var select = document.getElementById('acom-form-project');
+  if (!select) return;
+  if (select.value) select.removeAttribute('size');
+}
+window.acompProjectSelectChanged = acompProjectSelectChanged;
 function salvarAcompanhamentoProjeto(btn) {
   if (!authTokenParam()) { showToast('Entre no painel para salvar acompanhamento', 'err'); return false; }
   var form = document.getElementById('acom-form');
@@ -3991,7 +4011,7 @@ function initAcomp() {
         kpi('Cr&iacute;ticos', criticos, criticos ? 'r' : 'g', 'onclick="return setAcompFilter(\'pendentes\')"', 'sem registro ou acima de 30 dias')+
       '</div>'+
       '<div class="acom-panel"><div class="acom-panel-head"><div><div class="acom-panel-title">Registrar no site</div><div class="acom-panel-note">'+syncNote+'</div></div></div><div class="acom-panel-body"><form id="acom-form" class="acom-form" onsubmit="return salvarAcompanhamentoProjeto(this.querySelector(\'.acom-save\'))">'+
-        '<div class="acom-field"><label for="acom-form-project-search">Projeto</label><input id="acom-form-project-search" type="search" placeholder="Digite para filtrar cliente, consultor ou m&ecirc;s" autocomplete="off" oninput="acompFilterProjectSelect()"><select id="acom-form-project" required><option value="">Selecione o projeto</option>'+acompProjectOptions(list)+'</select><div class="acom-field-help">Digite para filtrar. A lista abaixo permanece agrupada por m&ecirc;s de entrada e data da venda.</div></div>'+
+        '<div class="acom-field"><label for="acom-form-project-search">Projeto</label><input id="acom-form-project-search" type="search" placeholder="Digite para filtrar cliente, consultor ou m&ecirc;s" autocomplete="off" oninput="acompFilterProjectSelect()"><select id="acom-form-project" required onchange="acomProjectSelectChanged()"><option value="">Selecione o projeto</option>'+acompProjectOptions(list)+'</select><div id="acom-form-project-help" class="acom-field-help">Digite para filtrar. A lista abaixo permanece agrupada por m&ecirc;s de entrada e data da venda.</div></div>'+
         '<div class="acom-field"><label for="acom-form-date">Data</label><input id="acom-form-date" type="date" value="'+acompTodayIso()+'" required></div>'+
     '<div class="acom-field"><label for="acom-form-owner">Respons&aacute;vel</label><input id="acom-form-owner" type="text" value="'+escapeHtml((AUTH_STATE.user && (AUTH_STATE.user.name || AUTH_STATE.user.username)) || getUpdateActor() || 'PMO')+'" readonly></div>'+
         '<div class="acom-field"><label for="acom-form-stage">Etapa no kanban</label><select id="acom-form-stage"><option value="pending">Acompanhamento pendente</option><option value="doing">Em processo de interfer&ecirc;ncia</option><option value="done">Acompanhamento mensal conclu&iacute;do</option></select></div>'+
