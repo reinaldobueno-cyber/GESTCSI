@@ -3661,7 +3661,7 @@ function acompSortProjetosFormulario(a, b) {
 }
 function acompProjectOptionLabel(x) {
   var data = acompDataEntradaLabel(x && x.projeto);
-  var prefix = data ? data + ' - ' : '';
+  var prefix = (data || 'Sem data') + ' - ';
   return prefix + ((x && x.mes) || '-') + ' - ' + ((x && x.cliente) || '-') + ' - ' + ((x && x.consultor) || '-');
 }
 function acompSearchText(value) {
@@ -3678,7 +3678,7 @@ function acompProjectOptions(list) {
   return ordenarMesesPainel(Object.keys(byMonth)).map(function(mes){
     var options = byMonth[mes].map(function(x){
       var data = acompDataEntradaLabel(x.projeto);
-      var prefix = data ? data + ' - ' : '';
+      var prefix = (data || 'Sem data') + ' - ';
       return '<option value="'+escapeHtml(x.projectKey)+'">'+escapeHtml(prefix + x.cliente+' - '+x.consultor)+'</option>';
     }).join('');
     return '<optgroup label="'+escapeHtml(mes+' - '+byMonth[mes].length+' projeto(s)')+'">'+options+'</optgroup>';
@@ -3703,7 +3703,7 @@ function acompProjectOptionsFiltered(query) {
   var html = '<option value="">Selecione o projeto</option>' + ordenarMesesPainel(Object.keys(byMonth)).map(function(mes){
     var options = byMonth[mes].map(function(x){
       var data = acompDataEntradaLabel(x.projeto);
-      var prefix = data ? data + ' - ' : '';
+      var prefix = (data || 'Sem data') + ' - ';
       return '<option value="'+escapeHtml(x.projectKey)+'" '+(x.projectKey === selected ? 'selected' : '')+'>'+escapeHtml(prefix + x.cliente+' - '+x.consultor)+'</option>';
     }).join('');
     return '<optgroup label="'+escapeHtml(mes+' - '+byMonth[mes].length+' projeto(s)')+'">'+options+'</optgroup>';
