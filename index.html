@@ -3665,33 +3665,62 @@ function acompProjectOptionLabel(x) {
 }
 function acompProjectOptions(list) {
   ACOMP_FORM_PROJECTS = (list || []).slice().sort(acompSortProjetosFormulario);
-  return ACOMP_FORM_PROJECTS.map(function(x){
-    return '<option value="'+escapeHtml(acompProjectOptionLabel(x))+'"></option>';
+  var byMonth = {};
+  ACOMP_FORM_PROJECTS.forEach(function(x){
+    var mes = String(x.mes || 'SEM').toUpperCase();
+    if (!byMonth[mes]) byMonth[mes] = [];
+    byMonth[mes].push(x);
+  });
+  return ordenarMesesPainel(Object.keys(byMonth)).map(function(mes){
+    var options = byMonth[mes].map(function(x){
+      var data = acompDataEntradaLabel(x.projeto);
+      var prefix = data ? data + ' - ' : '';
+      return '<option value="'+escapeHtml(x.projectKey)+'">'+escapeHtml(prefix + x.cliente+' - '+x.consultor)+'</option>';
+    }).join('');
+    return '<optgroup label="'+escapeHtml(mes+' - '+byMonth[mes].length+' projeto(s)')+'">'+options+'</optgroup>';
   }).join('');
 }
-function acompResolveProjectFromInput() {
-  var input = document.getElementById('acom-form-project-search');
-  var hidden = document.getElementById('acom-form-project');
-  var value = String((input && input.value) || '').trim().toLowerCase();
-  var found = (ACOMP_FORM_PROJECTS || []).filter(function(x){
-    return acompProjectOptionLabel(x).toLowerCase() === value;
-  })[0];
-  if (!found && value) {
-    found = (ACOMP_FORM_PROJECTS || []).filter(function(x){
-      return String(x.cliente || '').toLowerCase().indexOf(value) >= 0 ||
-        String(x.consultor || '').toLowerCase().indexOf(value) >= 0 ||
-        String(x.mes || '').toLowerCase().indexOf(value) >= 0;
-    })[0];
-  }
-  if (hidden) hidden.value = found ? found.projectKey : '';
-  return found || null;
+function acompProjectOptionsFiltered(query) {
+  var q = String(query || '').trim().toLowerCase();
+  var base = (ACOMP_FORM_PROJECTS || []).filter(function(x){
+    if (!q) return true;
+    return acompProjectOptionLabel(x).toLowerCase().indexOf(q) >= 0 ||
+      String(x.cliente || '').toLowerCase().indexOf(q) >= 0 ||
+      String(x.consultor || '').toLowerCase().indexOf(q) >= 0 ||
+      String(x.mes || '').toLowerCase().indexOf(q) >= 0;
+  });
+  var selected = (document.getElementById('acom-form-project') || {}).value || '';
+  var byMonth = {};
+  base.forEach(function(x){
+    var mes = String(x.mes || 'SEM').toUpperCase();
+    if (!byMonth[mes]) byMonth[mes] = [];
+    byMonth[mes].push(x);
+  });
+  var html = '<option value="">Selecione o projeto</option>' + ordenarMesesPainel(Object.keys(byMonth)).map(function(mes){
+    var options = byMonth[mes].map(function(x){
+      var data = acompDataEntradaLabel(x.projeto);
+      var prefix = data ? data + ' - ' : '';
+      return '<option value="'+escapeHtml(x.projectKey)+'" '+(x.projectKey === selected ? 'selected' : '')+'>'+escapeHtml(prefix + x.cliente+' - '+x.consultor)+'</option>';
+    }).join('');
+    return '<optgroup label="'+escapeHtml(mes+' - '+byMonth[mes].length+' projeto(s)')+'">'+options+'</optgroup>';
+  }).join('');
+  return html;
 }
-window.acompResolveProjectFromInput = acompResolveProjectFromInput;
+function acompFilterProjectSelect() {
+  var input = document.getElementById('acom-form-project-search');
+  var select = document.getElementById('acom-form-project');
+  if (!select) return;
+  var previous = select.value;
+  select.innerHTML = acompProjectOptionsFiltered(input && input.value);
+  if (previous && Array.prototype.some.call(select.options, function(opt){ return opt.value === previous; })) {
+    select.value = previous;
+  }
+}
+window.acompFilterProjectSelect = acompFilterProjectSelect;
 function salvarAcompanhamentoProjeto(btn) {
   if (!authTokenParam()) { showToast('Entre no painel para salvar acompanhamento', 'err'); return false; }
   var form = document.getElementById('acom-form');
   if (!form) return false;
-  var resolved = acompResolveProjectFromInput();
   var projectKey = (document.getElementById('acom-form-project') || {}).value || '';
   var item = (ACOMP_FORM_PROJECTS || []).filter(function(x){ return x.projectKey === projectKey; })[0];
   var data = (document.getElementById('acom-form-date') || {}).value || acompTodayIso();
@@ -3699,7 +3728,6 @@ function salvarAcompanhamentoProjeto(btn) {
   var proxima = String((document.getElementById('acom-form-next') || {}).value || '').trim();
   var responsavel = String((document.getElementById('acom-form-owner') || {}).value || getUpdateActor() || '').trim();
   var stage = String((document.getElementById('acom-form-stage') || {}).value || 'pending');
-  if (!item && resolved) item = resolved;
   if (!item) { showToast('Selecione um projeto para registrar', 'err'); return false; }
   if (!consideracao && !proxima) { showToast('Informe uma considera&ccedil;&atilde;o ou pr&oacute;xima a&ccedil;&atilde;o', 'err'); return false; }
   if (btn) { btn.disabled = true; btn.textContent = 'Salvando...'; }
@@ -3963,7 +3991,7 @@ function initAcomp() {
         kpi('Cr&iacute;ticos', criticos, criticos ? 'r' : 'g', 'onclick="return setAcompFilter(\'pendentes\')"', 'sem registro ou acima de 30 dias')+
       '</div>'+
       '<div class="acom-panel"><div class="acom-panel-head"><div><div class="acom-panel-title">Registrar no site</div><div class="acom-panel-note">'+syncNote+'</div></div></div><div class="acom-panel-body"><form id="acom-form" class="acom-form" onsubmit="return salvarAcompanhamentoProjeto(this.querySelector(\'.acom-save\'))">'+
-        '<div class="acom-field"><label for="acom-form-project-search">Projeto</label><input id="acom-form-project-search" list="acom-project-list" placeholder="Digite cliente, consultor ou m&ecirc;s" autocomplete="off" oninput="acompResolveProjectFromInput()" onchange="acompResolveProjectFromInput()" required><input id="acom-form-project" type="hidden"><datalist id="acom-project-list">'+acompProjectOptions(list)+'</datalist><div class="acom-field-help">Digite para buscar. A lista segue m&ecirc;s de entrada e data da venda.</div></div>'+
+        '<div class="acom-field"><label for="acom-form-project-search">Projeto</label><input id="acom-form-project-search" type="search" placeholder="Digite para filtrar cliente, consultor ou m&ecirc;s" autocomplete="off" oninput="acompFilterProjectSelect()"><select id="acom-form-project" required><option value="">Selecione o projeto</option>'+acompProjectOptions(list)+'</select><div class="acom-field-help">Digite para filtrar. A lista abaixo permanece agrupada por m&ecirc;s de entrada e data da venda.</div></div>'+
         '<div class="acom-field"><label for="acom-form-date">Data</label><input id="acom-form-date" type="date" value="'+acompTodayIso()+'" required></div>'+
     '<div class="acom-field"><label for="acom-form-owner">Respons&aacute;vel</label><input id="acom-form-owner" type="text" value="'+escapeHtml((AUTH_STATE.user && (AUTH_STATE.user.name || AUTH_STATE.user.username)) || getUpdateActor() || 'PMO')+'" readonly></div>'+
         '<div class="acom-field"><label for="acom-form-stage">Etapa no kanban</label><select id="acom-form-stage"><option value="pending">Acompanhamento pendente</option><option value="doing">Em processo de interfer&ecirc;ncia</option><option value="done">Acompanhamento mensal conclu&iacute;do</option></select></div>'+
