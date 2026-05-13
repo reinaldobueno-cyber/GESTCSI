@@ -179,17 +179,17 @@ nav{background:var(--nav);height:58px;display:flex;align-items:center;justify-co
 .acom-hero-meta{display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end;}
 .acom-chip{display:inline-flex;align-items:center;gap:6px;background:var(--surf2);border:1px solid var(--border);border-radius:999px;padding:7px 10px;font-size:11px;font-weight:800;color:var(--text2);white-space:nowrap;}
 .acom-grid{display:grid;grid-template-columns:minmax(0,1.15fr) minmax(320px,.85fr);gap:14px;}
-.acom-form{display:grid;grid-template-columns:1.2fr 150px 180px;gap:10px;align-items:end;}
+.acom-form{display:grid;grid-template-columns:minmax(320px,1fr) 150px 180px 210px;gap:12px;align-items:start;}
 .acom-field{display:flex;flex-direction:column;gap:5px;}
 .acom-field label{font-size:10px;font-weight:900;color:var(--muted);letter-spacing:.7px;text-transform:uppercase;}
-.acom-field input,.acom-field select,.acom-field textarea{border:1px solid var(--border);border-radius:8px;background:var(--surf);color:var(--text);font:600 12px 'Inter',sans-serif;padding:9px 10px;min-height:38px;}
+.acom-field input,.acom-field select,.acom-field textarea{border:1px solid var(--border);border-radius:8px;background:var(--surf);color:var(--text);font:600 12px 'Inter',sans-serif;padding:9px 10px;min-height:40px;width:100%;}
 .acom-field select optgroup{font-weight:900;color:var(--green);}
 .acom-field select option{font-weight:600;color:var(--text);}
 .acom-field-help{font-size:11px;font-weight:700;color:var(--muted);line-height:1.45;margin-top:6px;}
 .acom-field textarea{min-height:76px;resize:vertical;line-height:1.45;}
 .acom-field input:focus,.acom-field select:focus,.acom-field textarea:focus{outline:none;border-color:rgba(45,110,78,.35);box-shadow:0 0 0 4px rgba(45,110,78,.08);}
 .acom-form-wide{grid-column:1 / -1;}
-.acom-save{height:38px;border:1px solid var(--green);background:var(--green);color:#fff;border-radius:8px;font:900 12px 'Inter',sans-serif;cursor:pointer;}
+.acom-save{height:40px;border:1px solid var(--green);background:var(--green);color:#fff;border-radius:8px;font:900 12px 'Inter',sans-serif;cursor:pointer;grid-column:1 / -1;}
 .acom-save:hover{background:var(--green2);border-color:var(--green2);}
 .acom-panel{background:var(--surf);border:1px solid var(--border);border-radius:10px;overflow:hidden;}
 .acom-panel-head{padding:13px 15px;border-bottom:1px solid var(--border);background:var(--surf2);display:flex;align-items:center;justify-content:space-between;gap:10px;}
@@ -3627,6 +3627,7 @@ function acompSetKanbanStage(projectKey, cycleKey, stage) {
   storageSet(ACOMP_KANBAN_STAGE_KEY, JSON.stringify(store));
 }
 function acompDragStart(ev, projectKey, cycleKey) {
+  window._acomDraggingCard = true;
   if (!ev || !ev.dataTransfer) return true;
   ev.dataTransfer.setData('text/plain', JSON.stringify({projectKey:projectKey, cycleKey:cycleKey}));
   ev.dataTransfer.effectAllowed = 'move';
@@ -3639,6 +3640,7 @@ function acompDropCard(ev, stage) {
     var data = JSON.parse(raw || '{}');
     acompSetKanbanStage(data.projectKey, data.cycleKey, stage);
     initAcomp();
+    setTimeout(function(){ window._acomDraggingCard = false; }, 0);
   } catch(e) {}
   return false;
 }
@@ -3656,33 +3658,48 @@ function acompSortProjetosFormulario(a, b) {
   if (!isNaN(oa) && !isNaN(ob) && oa !== ob) return oa - ob;
   return String(a && a.cliente || '').localeCompare(String(b && b.cliente || ''));
 }
+function acompProjectOptionLabel(x) {
+  var data = acompDataEntradaLabel(x && x.projeto);
+  var prefix = data ? data + ' - ' : '';
+  return prefix + ((x && x.mes) || '-') + ' - ' + ((x && x.cliente) || '-') + ' - ' + ((x && x.consultor) || '-');
+}
 function acompProjectOptions(list) {
   ACOMP_FORM_PROJECTS = (list || []).slice().sort(acompSortProjetosFormulario);
-  var byMonth = {};
-  ACOMP_FORM_PROJECTS.forEach(function(x){
-    var mes = String(x.mes || 'SEM').toUpperCase();
-    if (!byMonth[mes]) byMonth[mes] = [];
-    byMonth[mes].push(x);
-  });
-  return ordenarMesesPainel(Object.keys(byMonth)).map(function(mes){
-    var options = byMonth[mes].map(function(x){
-      var data = acompDataEntradaLabel(x.projeto);
-      var prefix = data ? data + ' - ' : '';
-      return '<option value="'+escapeHtml(x.projectKey)+'">'+escapeHtml(prefix + x.cliente+' - '+x.consultor)+'</option>';
-    }).join('');
-    return '<optgroup label="'+escapeHtml(mes+' - '+byMonth[mes].length+' projeto(s)')+'">'+options+'</optgroup>';
+  return ACOMP_FORM_PROJECTS.map(function(x){
+    return '<option value="'+escapeHtml(acompProjectOptionLabel(x))+'"></option>';
   }).join('');
 }
+function acompResolveProjectFromInput() {
+  var input = document.getElementById('acom-form-project-search');
+  var hidden = document.getElementById('acom-form-project');
+  var value = String((input && input.value) || '').trim().toLowerCase();
+  var found = (ACOMP_FORM_PROJECTS || []).filter(function(x){
+    return acompProjectOptionLabel(x).toLowerCase() === value;
+  })[0];
+  if (!found && value) {
+    found = (ACOMP_FORM_PROJECTS || []).filter(function(x){
+      return String(x.cliente || '').toLowerCase().indexOf(value) >= 0 ||
+        String(x.consultor || '').toLowerCase().indexOf(value) >= 0 ||
+        String(x.mes || '').toLowerCase().indexOf(value) >= 0;
+    })[0];
+  }
+  if (hidden) hidden.value = found ? found.projectKey : '';
+  return found || null;
+}
+window.acompResolveProjectFromInput = acompResolveProjectFromInput;
 function salvarAcompanhamentoProjeto(btn) {
   if (!authTokenParam()) { showToast('Entre no painel para salvar acompanhamento', 'err'); return false; }
   var form = document.getElementById('acom-form');
   if (!form) return false;
+  var resolved = acompResolveProjectFromInput();
   var projectKey = (document.getElementById('acom-form-project') || {}).value || '';
   var item = (ACOMP_FORM_PROJECTS || []).filter(function(x){ return x.projectKey === projectKey; })[0];
   var data = (document.getElementById('acom-form-date') || {}).value || acompTodayIso();
   var consideracao = String((document.getElementById('acom-form-text') || {}).value || '').trim();
   var proxima = String((document.getElementById('acom-form-next') || {}).value || '').trim();
   var responsavel = String((document.getElementById('acom-form-owner') || {}).value || getUpdateActor() || '').trim();
+  var stage = String((document.getElementById('acom-form-stage') || {}).value || 'pending');
+  if (!item && resolved) item = resolved;
   if (!item) { showToast('Selecione um projeto para registrar', 'err'); return false; }
   if (!consideracao && !proxima) { showToast('Informe uma considera&ccedil;&atilde;o ou pr&oacute;xima a&ccedil;&atilde;o', 'err'); return false; }
   if (btn) { btn.disabled = true; btn.textContent = 'Salvando...'; }
@@ -3698,6 +3715,7 @@ function salvarAcompanhamentoProjeto(btn) {
     consideracao:consideracao,
     proxima_acao:proxima,
     responsavel:responsavel,
+    kanban_stage:stage,
     origem:'site',
     status:item.status,
     url:location.href,
@@ -3715,10 +3733,12 @@ function salvarAcompanhamentoProjeto(btn) {
       consideracao:consideracao,
       proxima_acao:proxima,
       responsavel:responsavel,
+      kanban_stage:stage,
       origem:'site',
       status:item.status,
       logged_at:new Date().toISOString()
     });
+    acompSetKanbanStage(item.projectKey, acompKanbanCycleKey(acompCicloAtual()), stage);
     ACOMP_REMOTE_LOADED = true;
     form.reset();
     initAcomp();
@@ -3809,6 +3829,10 @@ function acompFindProjectView(projectKey) {
   return found;
 }
 function acompProjectInfoPopup(projectKey) {
+  if (window._acomDraggingCard) {
+    setTimeout(function(){ window._acomDraggingCard = false; }, 0);
+    return false;
+  }
   var item = acompFindProjectView(projectKey);
   if (!item) return false;
   var p = item.projeto || {};
@@ -3939,9 +3963,10 @@ function initAcomp() {
         kpi('Cr&iacute;ticos', criticos, criticos ? 'r' : 'g', 'onclick="return setAcompFilter(\'pendentes\')"', 'sem registro ou acima de 30 dias')+
       '</div>'+
       '<div class="acom-panel"><div class="acom-panel-head"><div><div class="acom-panel-title">Registrar no site</div><div class="acom-panel-note">'+syncNote+'</div></div></div><div class="acom-panel-body"><form id="acom-form" class="acom-form" onsubmit="return salvarAcompanhamentoProjeto(this.querySelector(\'.acom-save\'))">'+
-        '<div class="acom-field"><label for="acom-form-project">Projeto</label><select id="acom-form-project" required><option value="">Selecione o projeto</option>'+acompProjectOptions(list)+'</select><div class="acom-field-help">Lista agrupada por m&ecirc;s de entrada e ordenada pela data da venda dentro de cada m&ecirc;s.</div></div>'+
+        '<div class="acom-field"><label for="acom-form-project-search">Projeto</label><input id="acom-form-project-search" list="acom-project-list" placeholder="Digite cliente, consultor ou m&ecirc;s" autocomplete="off" oninput="acompResolveProjectFromInput()" onchange="acompResolveProjectFromInput()" required><input id="acom-form-project" type="hidden"><datalist id="acom-project-list">'+acompProjectOptions(list)+'</datalist><div class="acom-field-help">Digite para buscar. A lista segue m&ecirc;s de entrada e data da venda.</div></div>'+
         '<div class="acom-field"><label for="acom-form-date">Data</label><input id="acom-form-date" type="date" value="'+acompTodayIso()+'" required></div>'+
     '<div class="acom-field"><label for="acom-form-owner">Respons&aacute;vel</label><input id="acom-form-owner" type="text" value="'+escapeHtml((AUTH_STATE.user && (AUTH_STATE.user.name || AUTH_STATE.user.username)) || getUpdateActor() || 'PMO')+'" readonly></div>'+
+        '<div class="acom-field"><label for="acom-form-stage">Etapa no kanban</label><select id="acom-form-stage"><option value="pending">Acompanhamento pendente</option><option value="doing">Em processo de interfer&ecirc;ncia</option><option value="done">Acompanhamento mensal conclu&iacute;do</option></select></div>'+
         '<div class="acom-field acom-form-wide"><label for="acom-form-text">Considera&ccedil;&atilde;o</label><textarea id="acom-form-text" placeholder="O que foi observado no acompanhamento deste projeto?"></textarea></div>'+
         '<div class="acom-field acom-form-wide"><label for="acom-form-next">Pr&oacute;xima a&ccedil;&atilde;o</label><textarea id="acom-form-next" placeholder="Qual &eacute; o pr&oacute;ximo movimento esperado?"></textarea></div>'+
         '<button type="submit" class="acom-save">Salvar acompanhamento</button>'+
