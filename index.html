@@ -31,6 +31,9 @@ nav{background:var(--nav);height:58px;display:flex;align-items:center;justify-co
 .btn-theme-icon{font-size:13px;line-height:1;}
 .btn-history{background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.12);color:rgba(255,255,255,.72);font-family:'Inter',sans-serif;font-size:12px;font-weight:600;padding:7px 12px;border-radius:7px;cursor:pointer;}
 .btn-history:hover{background:rgba(255,255,255,.14);color:#fff;}
+.btn-admin-top{background:var(--green-s);border:1px solid rgba(45,110,78,.18);color:var(--green);font-family:'Inter',sans-serif;font-size:12px;font-weight:800;padding:7px 12px;border-radius:7px;cursor:pointer;}
+.btn-admin-top:hover{background:rgba(45,110,78,.16);}
+.btn-admin-top.on{background:var(--green);border-color:var(--green);color:#fff;}
 /* PERIOD BAR */
 .period-bar{background:var(--nav);padding:6px 24px;display:flex;align-items:center;gap:6px;border-top:1px solid rgba(255,255,255,.08);}
 .period-label{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:rgba(255,255,255,.35);margin-right:2px;}
@@ -168,6 +171,65 @@ nav{background:var(--nav);height:58px;display:flex;align-items:center;justify-co
 .search-input{min-width:280px;max-width:420px;width:min(420px,100%);height:38px;border:1px solid var(--border);border-radius:999px;background:var(--surf);padding:0 14px;font:600 13px 'Inter',sans-serif;color:var(--text);box-shadow:0 1px 2px rgba(20,32,24,.03);}
 .search-input:focus{outline:none;border-color:rgba(45,110,78,.35);box-shadow:0 0 0 4px rgba(45,110,78,.08);}
 .search-note{font-size:11px;font-weight:700;color:var(--muted);}
+.acom-shell{display:flex;flex-direction:column;gap:14px;}
+.acom-hero{background:var(--surf);border:1px solid var(--border);border-radius:10px;padding:18px;display:flex;align-items:flex-start;justify-content:space-between;gap:16px;}
+.acom-kicker{font-size:10px;font-weight:800;letter-spacing:1px;text-transform:uppercase;color:var(--green);margin-bottom:5px;}
+.acom-title{font-size:24px;font-weight:800;color:var(--text);line-height:1.15;}
+.acom-sub{font-size:12px;color:var(--text2);line-height:1.5;margin-top:7px;max-width:760px;}
+.acom-hero-meta{display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end;}
+.acom-chip{display:inline-flex;align-items:center;gap:6px;background:var(--surf2);border:1px solid var(--border);border-radius:999px;padding:7px 10px;font-size:11px;font-weight:800;color:var(--text2);white-space:nowrap;}
+.acom-grid{display:grid;grid-template-columns:minmax(0,1.15fr) minmax(320px,.85fr);gap:14px;}
+.acom-form{display:grid;grid-template-columns:1.2fr 150px 180px;gap:10px;align-items:end;}
+.acom-field{display:flex;flex-direction:column;gap:5px;}
+.acom-field label{font-size:10px;font-weight:900;color:var(--muted);letter-spacing:.7px;text-transform:uppercase;}
+.acom-field input,.acom-field select,.acom-field textarea{border:1px solid var(--border);border-radius:8px;background:var(--surf);color:var(--text);font:600 12px 'Inter',sans-serif;padding:9px 10px;min-height:38px;}
+.acom-field textarea{min-height:76px;resize:vertical;line-height:1.45;}
+.acom-field input:focus,.acom-field select:focus,.acom-field textarea:focus{outline:none;border-color:rgba(45,110,78,.35);box-shadow:0 0 0 4px rgba(45,110,78,.08);}
+.acom-form-wide{grid-column:1 / -1;}
+.acom-save{height:38px;border:1px solid var(--green);background:var(--green);color:#fff;border-radius:8px;font:900 12px 'Inter',sans-serif;cursor:pointer;}
+.acom-save:hover{background:var(--green2);border-color:var(--green2);}
+.acom-panel{background:var(--surf);border:1px solid var(--border);border-radius:10px;overflow:hidden;}
+.acom-panel-head{padding:13px 15px;border-bottom:1px solid var(--border);background:var(--surf2);display:flex;align-items:center;justify-content:space-between;gap:10px;}
+.acom-panel-title{font-size:12px;font-weight:800;text-transform:uppercase;letter-spacing:.7px;color:var(--text);}
+.acom-panel-note{font-size:11px;font-weight:700;color:var(--muted);}
+.acom-panel-body{padding:14px 15px;}
+.acom-setup-grid{display:grid;grid-template-columns:repeat(4,minmax(135px,1fr));gap:8px;}
+.acom-setup-cell{border:1px solid var(--border);border-radius:8px;background:var(--surf);padding:10px;min-height:72px;}
+.acom-setup-label{font-size:9px;font-weight:800;text-transform:uppercase;letter-spacing:.7px;color:var(--muted);margin-bottom:5px;}
+.acom-setup-value{font-size:12px;font-weight:800;color:var(--text);line-height:1.25;}
+.acom-filters{display:flex;gap:6px;flex-wrap:wrap;}
+.acom-filter{background:var(--surf);border:1px solid var(--border);border-radius:999px;padding:7px 11px;font:800 11px 'Inter',sans-serif;color:var(--text2);cursor:pointer;}
+.acom-filter.on{background:var(--nav);border-color:var(--nav);color:#fff;}
+.acom-buckets{display:grid;grid-template-columns:repeat(6,1fr);gap:8px;}
+.acom-bucket{border:1px solid var(--border);border-radius:8px;background:var(--surf);padding:10px;cursor:pointer;transition:box-shadow .15s ease,transform .15s ease;}
+.acom-bucket:hover{transform:translateY(-1px);box-shadow:0 8px 18px rgba(20,32,24,.06);}
+.acom-bucket.on{border-color:rgba(45,110,78,.35);box-shadow:0 0 0 3px rgba(45,110,78,.08);}
+.acom-bucket-label{font-size:10px;font-weight:800;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;}
+.acom-bucket-value{font-size:25px;font-weight:800;margin-top:2px;color:var(--text);}
+.acom-bucket-bar{height:5px;border-radius:99px;background:var(--border);overflow:hidden;margin-top:8px;}
+.acom-bucket-fill{height:100%;border-radius:99px;}
+.acom-months{display:grid;grid-template-columns:repeat(6,1fr);gap:8px;}
+.acom-month{border:1px solid var(--border);border-radius:8px;background:var(--surf);padding:10px;}
+.acom-month-name{font-size:10px;font-weight:900;color:var(--green);letter-spacing:.7px;}
+.acom-month-row{display:flex;justify-content:space-between;gap:8px;margin-top:6px;font-size:11px;font-weight:800;color:var(--text2);}
+.acom-mini-track{height:6px;background:var(--border);border-radius:999px;overflow:hidden;margin-top:8px;}
+.acom-mini-fill{height:100%;background:var(--green);border-radius:999px;}
+.acom-cons-row{display:grid;grid-template-columns:130px 1fr 52px;gap:10px;align-items:center;padding:9px 0;border-bottom:1px solid var(--border);}
+.acom-cons-row:last-child{border-bottom:none;}
+.acom-cons-name{font-size:12px;font-weight:800;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.acom-stack{height:12px;border-radius:999px;background:var(--border);overflow:hidden;display:flex;}
+.acom-stack span{height:100%;}
+.acom-table-wrap{overflow:auto;border:1px solid var(--border);border-radius:8px;}
+.acom-table{width:100%;border-collapse:collapse;min-width:760px;}
+.acom-table th{background:var(--surf2);font-size:10px;font-weight:900;letter-spacing:.7px;text-transform:uppercase;color:var(--muted);text-align:left;padding:9px 10px;border-bottom:1px solid var(--border);}
+.acom-table td{font-size:12px;color:var(--text2);padding:10px;border-bottom:1px solid var(--border);vertical-align:top;}
+.acom-table tr:last-child td{border-bottom:none;}
+.acom-status{display:inline-flex;border-radius:999px;padding:3px 8px;font-size:10px;font-weight:900;}
+.acom-status.ok{background:var(--green-s);color:var(--green);}
+.acom-status.warn{background:var(--orange-s);color:var(--orange);}
+.acom-status.bad{background:var(--red-s);color:var(--red);}
+.acom-status.neu{background:var(--surf2);color:var(--muted);}
+@media(max-width:980px){.acom-grid{grid-template-columns:1fr}.acom-form{grid-template-columns:1fr}.acom-buckets,.acom-months{grid-template-columns:repeat(2,1fr)}.acom-setup-grid{grid-template-columns:1fr 1fr}.acom-hero{flex-direction:column}.acom-hero-meta{justify-content:flex-start}}
 .month-group{border-top:1px solid var(--border);}
 .month-group:first-child{border-top:none;}
 .month-group-title{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:12px 14px;background:linear-gradient(180deg,#f8faf7,#f5f8f5);border-bottom:1px solid var(--border);}
@@ -441,7 +503,7 @@ nav{
   background:transparent;
   font-size:10px;
 }
-.btn-history,.btn-reload{
+.btn-history,.btn-reload,.btn-admin-top{
   border-radius:999px;
   height:28px;
   padding:0 12px;
@@ -882,7 +944,7 @@ nav{
   padding:0 13px!important;
   border-radius:13px!important;
 }
-.btn-history,.btn-reload{
+.btn-history,.btn-reload,.btn-admin-top{
   height:38px!important;
   padding:0 16px!important;
   border-radius:13px!important;
@@ -1266,12 +1328,12 @@ nav{
   letter-spacing:.02em!important;
   white-space:nowrap!important;
 }
-.btn-history,.btn-reload,.nav-profile,.btn-theme{
+.btn-history,.btn-reload,.nav-profile,.btn-theme,.btn-admin-top{
   height:34px!important;
   min-height:34px!important;
   border-radius:18px!important;
 }
-.btn-history,.btn-reload,.btn-theme{
+.btn-history,.btn-reload,.btn-theme,.btn-admin-top{
   padding:0 15px!important;
   font-size:11px!important;
 }
@@ -2249,6 +2311,7 @@ body.theme-dark .period-bar{box-shadow:0 10px 30px rgba(0,0,0,.35)!important;}
 body.theme-dark .nav-date{color:#9aada0!important;}
 body.theme-dark .btn-history,
 body.theme-dark .btn-reload,
+body.theme-dark .btn-admin-top,
 body.theme-dark .btn-theme,
 body.theme-dark .nav-profile{
   background:rgba(255,255,255,.04)!important;
@@ -2258,8 +2321,10 @@ body.theme-dark .nav-profile{
 }
 body.theme-dark .btn-history:hover,
 body.theme-dark .btn-reload:hover,
+body.theme-dark .btn-admin-top:hover,
 body.theme-dark .btn-theme:hover,
 body.theme-dark .nav-profile:hover{background:rgba(255,255,255,.08)!important;}
+body.theme-dark .btn-admin-top.on{background:#2f8d5b!important;border-color:#2f8d5b!important;color:#fff!important;}
 body.theme-dark .sidenav{
   background:linear-gradient(180deg,rgba(18,26,22,.98) 0%,rgba(20,30,24,.96) 100%)!important;
   border-right:1px solid rgba(255,255,255,.06)!important;
@@ -2513,9 +2578,40 @@ body.theme-dark .dashx-heatmap-cell.zero{background:#1b241f!important;color:#7f9
 body.theme-dark .dashx-heatmap-cell.low{background:rgba(120,176,138,.16)!important;color:#a9dcb6!important;}
 body.theme-dark .dashx-heatmap-cell.med{background:rgba(213,154,70,.18)!important;color:#e3b15f!important;}
 body.theme-dark .dashx-heatmap-cell.high{background:rgba(225,112,107,.18)!important;color:#f08b84!important;}
+.auth-backdrop{position:fixed;inset:0;background:rgba(240,244,240,.94);z-index:20000;display:flex;align-items:center;justify-content:center;padding:20px;}
+.auth-card{width:min(420px,calc(100vw - 32px));background:var(--surf);border:1px solid var(--border);border-radius:12px;box-shadow:0 20px 70px rgba(20,32,24,.18);padding:24px;}
+.auth-title{font-size:22px;font-weight:900;color:var(--text);margin-bottom:6px;}
+.auth-sub{font-size:12px;color:var(--text2);line-height:1.5;margin-bottom:18px;}
+.auth-form{display:flex;flex-direction:column;gap:10px;}
+.auth-form label{font-size:10px;font-weight:900;color:var(--muted);letter-spacing:.7px;text-transform:uppercase;}
+.auth-form input,.auth-form select{height:40px;border:1px solid var(--border);border-radius:8px;background:var(--surf);padding:0 11px;font:700 13px 'Inter',sans-serif;color:var(--text);}
+.auth-form input:focus,.auth-form select:focus{outline:none;border-color:rgba(45,110,78,.35);box-shadow:0 0 0 4px rgba(45,110,78,.08);}
+.auth-btn{height:40px;border:1px solid var(--green);background:var(--green);color:#fff;border-radius:8px;font:900 12px 'Inter',sans-serif;cursor:pointer;margin-top:4px;}
+.auth-error{font-size:12px;color:var(--red);font-weight:800;min-height:16px;}
+.admin-users{display:grid;grid-template-columns:1fr 1fr;gap:14px;}
+.admin-user-row{display:grid;grid-template-columns:1fr auto;gap:10px;align-items:center;padding:9px 0;border-bottom:1px solid var(--border);}
+.admin-user-row:last-child{border-bottom:none;}
+.admin-user-name{font-size:12px;font-weight:900;color:var(--text);}
+.admin-user-meta{font-size:11px;color:var(--muted);margin-top:2px;}
+.admin-toggle{border:1px solid var(--border);background:var(--surf2);border-radius:999px;padding:6px 10px;font:900 11px 'Inter',sans-serif;color:var(--text2);cursor:pointer;}
+@media(max-width:860px){.admin-users{grid-template-columns:1fr}}
 </style>
 </head>
 <body>
+<div class="auth-backdrop" id="auth-gate">
+  <div class="auth-card">
+    <div class="auth-title">Entrar no painel</div>
+    <div class="auth-sub">Use seu usu&aacute;rio para registrar acompanhamentos com respons&aacute;vel identificado.</div>
+    <form class="auth-form" onsubmit="return loginPainel(this)">
+      <label for="auth-user">Usu&aacute;rio</label>
+      <input id="auth-user" name="username" autocomplete="username" required>
+      <label for="auth-pass">Senha</label>
+      <input id="auth-pass" name="password" type="password" autocomplete="current-password" required>
+      <div class="auth-error" id="auth-error"></div>
+      <button class="auth-btn" type="submit">Entrar</button>
+    </form>
+  </div>
+</div>
 <div id="refresh-bar"></div>
 <div id="load-overlay" style="display:none">
   <div class="ld-logo">M</div>
@@ -2535,9 +2631,10 @@ body.theme-dark .dashx-heatmap-cell.high{background:rgba(225,112,107,.18)!import
       <span id="theme-toggle-label">Escuro</span>
     </button>
     <button class="btn-history" onclick="mostrarHistoricoAtualizacoes()">Hist&oacute;rico</button>
+    <button class="btn-admin-top" id="nav-admin" style="display:none" onclick="goTab('admin',this)">Usu&aacute;rios</button>
     <button class="btn-syncall" onclick="sincronizarTodosProjetosClickup(this)">Sync ClickUp</button>
     <button class="btn-reload" onclick="recarregarPainelManual()">Atualizar</button>
-    <div class="nav-profile">PMO</div>
+    <button class="nav-profile" style="border:0;cursor:pointer" onclick="logoutPainel()" title="Sair" id="nav-user">PMO</button>
   </div>
 </nav>
 <div class="period-bar" id="period-bar">
@@ -2549,6 +2646,7 @@ body.theme-dark .dashx-heatmap-cell.high{background:rgba(225,112,107,.18)!import
 <button class="snb on" onclick="goTab('dash',this)"><span class="snb-icon">&#128200;</span><span class="snb-label">Dashboard</span></button>
 <button class="snb" onclick="goTab('exec',this)"><span class="snb-icon">&#127775;</span><span class="snb-label">Executivo</span></button>
 <button class="snb" onclick="goTab('tower',this)"><span class="snb-icon">&#128737;</span><span class="snb-label">Gest&atilde;o</span><span class="snb-badge" id="n-tower">0</span></button>
+<button class="snb" onclick="goTab('acom',this)"><span class="snb-icon">&#128221;</span><span class="snb-label">Acompanhamento</span><span class="snb-badge" id="n-acom">0</span></button>
 <button class="snb" onclick="goTab('all',this)"><span class="snb-icon">&#128203;</span><span class="snb-label">Projetos</span><span class="snb-badge" id="n-all">0</span></button>
 <button class="snb" onclick="goTab('cons',this)"><span class="snb-icon">&#128100;</span><span class="snb-label">Consultores</span></button>
 <button class="snb" onclick="goTab('vend',this)"><span class="snb-icon">&#129309;</span><span class="snb-label">Vendedores</span></button>
@@ -2560,6 +2658,8 @@ body.theme-dark .dashx-heatmap-cell.high{background:rgba(225,112,107,.18)!import
 <div class="main-content">
 <div class="page on" id="page-dash"><div id="dash-content"></div></div>
 <div class="page tower-page" id="page-tower"><div id="tower-content"></div></div>
+<div class="page" id="page-acom"><div id="acom-content"></div></div>
+<div class="page" id="page-admin"><div id="admin-content"></div></div>
 <div class="page" id="page-all">
   <div class="kpis" id="kpis-all"></div>
   <div class="fbox">
@@ -2779,6 +2879,9 @@ var UPDATE_ACTOR_KEY = 'gestcsi_update_actor_v1';
 var LAST_UPDATE_KEY = 'gestcsi_last_update_label_v1';
 var PANEL_CACHE_KEY = 'gestcsi_panel_cache_v1';
 var THEME_MODE_KEY = 'gestcsi_theme_mode_v1';
+var AUTH_SESSION_KEY = 'gestcsi_auth_session_v1';
+var AUTH_STATE = { token:'', user:null };
+var PANEL_STARTED = false;
 var PANEL_CACHE_MIN_PROJECTS = 80;
 function storageGet(key, fallback) {
   try {
@@ -2818,6 +2921,72 @@ function obterTemaPreferido() {
 function inicializarTema() {
   aplicarTema(obterTemaPreferido());
 }
+function authSession() {
+  try { return JSON.parse(storageGet(AUTH_SESSION_KEY, 'null')) || null; } catch(e) { return null; }
+}
+function authSet(session) {
+  AUTH_STATE.token = session && session.token || '';
+  AUTH_STATE.user = session && session.user || null;
+  storageSet(AUTH_SESSION_KEY, session ? JSON.stringify(session) : '');
+  var gate = document.getElementById('auth-gate');
+  if (gate) gate.style.display = AUTH_STATE.user ? 'none' : 'flex';
+  var navUser = document.getElementById('nav-user');
+  if (navUser) navUser.textContent = AUTH_STATE.user ? (AUTH_STATE.user.name || AUTH_STATE.user.username) : 'PMO';
+  var adminNav = document.getElementById('nav-admin');
+  if (adminNav) adminNav.style.display = AUTH_STATE.user && AUTH_STATE.user.role === 'admin' ? '' : 'none';
+  if (AUTH_STATE.user) {
+    storageSet(UPDATE_ACTOR_KEY, AUTH_STATE.user.name || AUTH_STATE.user.username);
+    try { iniciarPainelAutenticado(); } catch(e) {}
+  }
+}
+function authTokenParam() {
+  return AUTH_STATE.token || '';
+}
+function sha256Hex(text) {
+  var raw = new TextEncoder().encode(String(text || ''));
+  return crypto.subtle.digest('SHA-256', raw).then(function(buf){
+    return Array.from(new Uint8Array(buf)).map(function(b){ return ('0' + b.toString(16)).slice(-2); }).join('');
+  });
+}
+function loginPainel(form) {
+  var error = document.getElementById('auth-error');
+  var btn = form && form.querySelector('button[type="submit"]');
+  if (error) error.textContent = '';
+  if (btn) { btn.disabled = true; btn.textContent = 'Entrando...'; }
+  var username = String((form && form.username && form.username.value) || '').trim();
+  var password = String((form && form.password && form.password.value) || '');
+  sha256Hex(password).then(function(passwordSha){
+    return chamarAppsScriptJsonp('login', {username:username, password_sha:passwordSha}, 12000);
+  }).then(function(resp){
+    if (!resp || resp.ok === false || !resp.token) throw new Error((resp && (resp.error || resp.message)) || 'Login recusado');
+    authSet({token:resp.token, user:resp.user});
+    ACOMP_REMOTE_LOADED = false;
+    ACOMP_REMOTE_FOLLOWUPS = [];
+    acompLoadRemoteFollowups(true);
+    showToast('Bem-vindo, ' + (resp.user && (resp.user.name || resp.user.username) || username), 'ok');
+  }).catch(function(err){
+    if (error) error.textContent = (err && err.message) || 'Não foi possível entrar.';
+  }).finally(function(){
+    if (btn) { btn.disabled = false; btn.textContent = 'Entrar'; }
+  });
+  return false;
+}
+function logoutPainel() {
+  authSet(null);
+  PANEL_STARTED = false;
+  showToast('Sessão encerrada', 'ok');
+  return false;
+}
+function iniciarPainelAutenticado() {
+  if (!AUTH_STATE.user || !AUTH_STATE.token || PANEL_STARTED) return;
+  PANEL_STARTED = true;
+  inicializarPainel();
+}
+function inicializarAuth() {
+  authSet(null);
+}
+window.loginPainel = loginPainel;
+window.logoutPainel = logoutPainel;
 window.alternarTema = function() {
   var next = document.body && document.body.classList.contains('theme-dark') ? 'light' : 'dark';
   storageSet(THEME_MODE_KEY, next);
@@ -3157,13 +3326,17 @@ window.identificarUsuarioAtualizacao = function(nome) {
 };
 function goTab(id, btn) {
   document.querySelectorAll('.page').forEach(function(x){ x.classList.remove('on'); });
-  document.querySelectorAll('.tab,.snb').forEach(function(x){ x.classList.remove('on'); });
+  document.querySelectorAll('.tab,.snb,.btn-admin-top').forEach(function(x){ x.classList.remove('on'); });
   var pg = document.getElementById('page-'+id);
   if (pg) pg.classList.add('on');
   if (btn) { btn.classList.add('on'); } else {
     document.querySelectorAll('.snb').forEach(function(b){
       if ((b.getAttribute('onclick')||'').indexOf("'"+id+"'") >= 0) b.classList.add('on');
     });
+    if (id === 'admin') {
+      var adminTop = document.getElementById('nav-admin');
+      if (adminTop) adminTop.classList.add('on');
+    }
   }
   _openId = null;
   if (id === 'log') {
@@ -3197,8 +3370,402 @@ function buildPeriodBar() {
   bar.innerHTML = btns;
 }
 
+var ACOMP_VIEW_FILTER = 'todos';
+var ACOMP_REMOTE_FOLLOWUPS = [];
+var ACOMP_REMOTE_LOADED = false;
+var ACOMP_REMOTE_LOADING = false;
+var ACOMP_FORM_PROJECTS = [];
+var ACOMP_BUCKETS = [
+  {key:'0-7', label:'0-7 dias', cls:'ok', color:'#2d6e4e'},
+  {key:'8-15', label:'8-15 dias', cls:'warn', color:'#6d8e72'},
+  {key:'16-30', label:'16-30 dias', cls:'warn', color:'#b85c00'},
+  {key:'31-45', label:'31-45 dias', cls:'bad', color:'#c96c5f'},
+  {key:'45+', label:'+45 dias', cls:'bad', color:'#c0392b'},
+  {key:'sem', label:'Sem registro', cls:'neu', color:'#9aa59d'}
+];
+function acompFollowupKey(item) {
+  return String((item && item.project_key) || (((item && item.mes) || '') + '|' + ((item && item.cliente) || ''))).toUpperCase();
+}
+function acompLatestFollowupMap() {
+  var map = {};
+  (ACOMP_REMOTE_FOLLOWUPS || []).forEach(function(item){
+    var key = acompFollowupKey(item);
+    if (!key) return;
+    var d = dashParseDate(item.data_acompanhamento || item.logged_at || '');
+    var ts = d ? d.getTime() : 0;
+    if (!map[key] || ts >= (map[key]._ts || 0)) {
+      map[key] = Object.assign({}, item, {_ts:ts});
+    }
+  });
+  return map;
+}
+function acompLoadRemoteFollowups(force) {
+  if (!authTokenParam()) return;
+  if (ACOMP_REMOTE_LOADING || (ACOMP_REMOTE_LOADED && !force)) return;
+  ACOMP_REMOTE_LOADING = true;
+  chamarAppsScriptJsonp('getProjectFollowups', {limit: 2000, auth_token: authTokenParam()}, 12000).then(function(resp){
+    ACOMP_REMOTE_LOADING = false;
+    if (!resp || resp.ok === false) throw new Error((resp && (resp.error || resp.message)) || 'Histórico indisponível');
+    if (!Array.isArray(resp.followups)) throw new Error('Publique o Apps Script atualizado para carregar acompanhamentos.');
+    ACOMP_REMOTE_FOLLOWUPS = Array.isArray(resp.followups) ? resp.followups : [];
+    ACOMP_REMOTE_LOADED = true;
+    initAcomp();
+  }).catch(function(error){
+    ACOMP_REMOTE_LOADING = false;
+    console.warn('[ACOMPANHAMENTO] Histórico do site indisponível:', error && error.message);
+  });
+}
+function acompStatusAtivo(p) {
+  var s = dashStatusKey(p && p.status);
+  return s !== 'concluido' && s !== 'cancelado';
+}
+function acompTemRegistro(p, followup) {
+  if (followup) return true;
+  return !!String((p && p.acompanhamento) || '').trim() ||
+    dashProjectHasClickUpTrace(p) ||
+    dashLastClickUpUpdateDate(p);
+}
+function acompDiasDesdeRegistro(p, followup) {
+  if (followup) {
+    var fdFollowup = dashParseDate(followup.data_acompanhamento || followup.logged_at || '');
+    if (fdFollowup) return diasCalendarioEntreProjeto(fdFollowup, new Date());
+  }
+  var n = numeroProjeto(p && p.dias_sem_atualizacao);
+  if (n !== null && n !== undefined) return Math.max(0, Number(n));
+  var clickup = dashClickUpAgingDays(p);
+  if (clickup !== null && clickup !== undefined) return Math.max(0, Number(clickup));
+  var d = dashParseDate((p && (p.data_ultima_atualizacao || p.ultima_sync_clickup || p.data_inicio || p.data_kick || p.data_venda)) || '');
+  if (!d && String((p && p.acompanhamento) || '').trim()) {
+    var meses = {JAN:0, FEV:1, MAR:2, ABR:3, MAI:4, JUN:5, JUL:6, AGO:7, SET:8, OUT:9, NOV:10, DEZ:11};
+    var mes = String((p && p.mes) || '').toUpperCase();
+    if (meses[mes] !== undefined) d = new Date(2026, meses[mes], 1);
+  }
+  return d ? diasCalendarioEntreProjeto(d, new Date()) : null;
+}
+function acompBucketKey(dias, temRegistro) {
+  if (!temRegistro || dias === null || dias === undefined || isNaN(Number(dias))) return 'sem';
+  dias = Number(dias);
+  if (dias <= 7) return '0-7';
+  if (dias <= 15) return '8-15';
+  if (dias <= 30) return '16-30';
+  if (dias <= 45) return '31-45';
+  return '45+';
+}
+function acompBucketMeta(key) {
+  for (var i=0;i<ACOMP_BUCKETS.length;i++) if (ACOMP_BUCKETS[i].key === key) return ACOMP_BUCKETS[i];
+  return ACOMP_BUCKETS[ACOMP_BUCKETS.length - 1];
+}
+function acompFonte(p, followup) {
+  if (followup) return 'Site';
+  if (String((p && p.acompanhamento) || '').trim()) return 'Acompanhamento';
+  if (dashProjectHasClickUpTrace(p)) return 'ClickUp';
+  return 'Pendente';
+}
+function acompProjetoView(p, followupMap) {
+  var key = projectMonthKey(p);
+  var followup = followupMap && followupMap[key] || null;
+  var tem = acompTemRegistro(p, followup);
+  var dias = acompDiasDesdeRegistro(p, followup);
+  var bucket = acompBucketKey(dias, tem);
+  return {
+    projeto:p,
+    projectKey:key,
+    cliente:(p && p.cliente) || '-',
+    consultor:(p && p.consultor) || 'Sem consultor',
+    mes:String((p && p.mes) || 'SEM').toUpperCase(),
+    status:(p && p.status) || '-',
+    fonte:acompFonte(p, followup),
+    temRegistro:tem,
+    dias:dias,
+    bucket:bucket,
+    bucketMeta:acompBucketMeta(bucket),
+    texto:String((followup && (followup.consideracao || followup.proxima_acao)) || (p && p.acompanhamento) || '').trim(),
+    proximaAcao:String((followup && followup.proxima_acao) || '').trim(),
+    responsavel:String((followup && followup.responsavel) || '').trim(),
+    dataAcompanhamento:String((followup && followup.data_acompanhamento) || '').trim(),
+    obsInicial:String((p && p.obs) || '').trim()
+  };
+}
+function acompBase() {
+  var base = (DATA.projetos || []).filter(function(p){ return p && p.cliente && acompStatusAtivo(p); });
+  if (activePeriod !== 'all') base = base.filter(function(p){ return String(p.mes || '').toUpperCase() === activePeriod; });
+  var followupMap = acompLatestFollowupMap();
+  return ordenarProjetosPainel(base).map(function(p){ return acompProjetoView(p, followupMap); });
+}
+function acompPercent(a, b) {
+  return b ? Math.round((a / b) * 100) : 0;
+}
+function acompFilterList(list) {
+  if (ACOMP_VIEW_FILTER === 'todos') return list;
+  if (ACOMP_VIEW_FILTER === 'acompanhados') return list.filter(function(x){ return x.temRegistro; });
+  if (ACOMP_VIEW_FILTER === 'pendentes') return list.filter(function(x){ return x.bucket === 'sem' || x.bucket === '31-45' || x.bucket === '45+'; });
+  return list.filter(function(x){ return x.bucket === ACOMP_VIEW_FILTER; });
+}
+function setAcompFilter(filter) {
+  ACOMP_VIEW_FILTER = filter || 'todos';
+  initAcomp();
+  return false;
+}
+function acompTodayIso() {
+  var d = new Date();
+  return d.getFullYear() + '-' + ('0' + (d.getMonth()+1)).slice(-2) + '-' + ('0' + d.getDate()).slice(-2);
+}
+function acompProjectOptions(list) {
+  ACOMP_FORM_PROJECTS = (list || []).slice().sort(function(a,b){
+    return String(a.cliente || '').localeCompare(String(b.cliente || ''));
+  });
+  return ACOMP_FORM_PROJECTS.map(function(x){
+    return '<option value="'+escapeHtml(x.projectKey)+'">'+escapeHtml(x.cliente)+' - '+escapeHtml(x.consultor)+' ('+escapeHtml(x.mes)+')</option>';
+  }).join('');
+}
+function salvarAcompanhamentoProjeto(btn) {
+  if (!authTokenParam()) { showToast('Entre no painel para salvar acompanhamento', 'err'); return false; }
+  var form = document.getElementById('acom-form');
+  if (!form) return false;
+  var projectKey = (document.getElementById('acom-form-project') || {}).value || '';
+  var item = (ACOMP_FORM_PROJECTS || []).filter(function(x){ return x.projectKey === projectKey; })[0];
+  var data = (document.getElementById('acom-form-date') || {}).value || acompTodayIso();
+  var consideracao = String((document.getElementById('acom-form-text') || {}).value || '').trim();
+  var proxima = String((document.getElementById('acom-form-next') || {}).value || '').trim();
+  var responsavel = String((document.getElementById('acom-form-owner') || {}).value || getUpdateActor() || '').trim();
+  if (!item) { showToast('Selecione um projeto para registrar', 'err'); return false; }
+  if (!consideracao && !proxima) { showToast('Informe uma considera&ccedil;&atilde;o ou pr&oacute;xima a&ccedil;&atilde;o', 'err'); return false; }
+  if (btn) { btn.disabled = true; btn.textContent = 'Salvando...'; }
+  var p = item.projeto || {};
+  chamarAppsScriptJsonp('logProjectFollowup', {
+    auth_token:authTokenParam(),
+    data_acompanhamento:data,
+    mes:item.mes,
+    cliente:item.cliente,
+    consultor:item.consultor,
+    project_key:item.projectKey,
+    link_projeto:p.projeto_link || p.link_projeto || '',
+    consideracao:consideracao,
+    proxima_acao:proxima,
+    responsavel:responsavel,
+    origem:'site',
+    status:item.status,
+    url:location.href,
+    navegador:navigator.userAgent || ''
+  }, 15000).then(function(resp){
+    if (!resp || resp.ok === false) throw new Error((resp && (resp.error || resp.message)) || 'Registro recusado');
+    if (!resp.logged) throw new Error('Publique o Apps Script atualizado para salvar acompanhamentos.');
+    ACOMP_REMOTE_FOLLOWUPS.unshift({
+      data_acompanhamento:data,
+      mes:item.mes,
+      cliente:item.cliente,
+      consultor:item.consultor,
+      project_key:item.projectKey,
+      link_projeto:p.projeto_link || p.link_projeto || '',
+      consideracao:consideracao,
+      proxima_acao:proxima,
+      responsavel:responsavel,
+      origem:'site',
+      status:item.status,
+      logged_at:new Date().toISOString()
+    });
+    ACOMP_REMOTE_LOADED = true;
+    form.reset();
+    initAcomp();
+    showToast('Acompanhamento registrado', 'ok');
+  }).catch(function(error){
+    showToast('N&atilde;o salvou no site: ' + ((error && error.message) || 'tente novamente'), 'err');
+  }).finally(function(){
+    if (btn) { btn.disabled = false; btn.textContent = 'Salvar acompanhamento'; }
+  });
+  return false;
+}
+window.salvarAcompanhamentoProjeto = salvarAcompanhamentoProjeto;
+function acompRenderBuckets(list) {
+  var total = list.length || 1;
+  return ACOMP_BUCKETS.map(function(b){
+    var qtd = list.filter(function(x){ return x.bucket === b.key; }).length;
+    return '<button type="button" class="acom-bucket '+(ACOMP_VIEW_FILTER === b.key ? 'on' : '')+'" onclick="return setAcompFilter(\''+b.key+'\')">'+
+      '<div class="acom-bucket-label">'+b.label+'</div>'+
+      '<div class="acom-bucket-value">'+qtd+'</div>'+
+      '<div class="acom-bucket-bar"><div class="acom-bucket-fill" style="width:'+acompPercent(qtd,total)+'%;background:'+b.color+'"></div></div>'+
+    '</button>';
+  }).join('');
+}
+function acompRenderMonths(list) {
+  var months = ['JAN','FEV','MAR','ABR','MAI','JUN','JUL','AGO','SET','OUT','NOV','DEZ'];
+  return months.map(function(m){
+    var rows = (DATA.projetos || []).filter(function(p){ return p && p.cliente && acompStatusAtivo(p) && String(p.mes || '').toUpperCase() === m; }).map(acompProjetoView);
+    var ok = rows.filter(function(x){ return x.bucket !== 'sem'; }).length;
+    return '<div class="acom-month"><div class="acom-month-name">'+m+'</div>'+
+      '<div class="acom-month-row"><span>Acomp.</span><strong>'+ok+'/'+rows.length+'</strong></div>'+
+      '<div class="acom-month-row"><span>Pendente</span><strong>'+(rows.length-ok)+'</strong></div>'+
+      '<div class="acom-mini-track"><div class="acom-mini-fill" style="width:'+acompPercent(ok, rows.length)+'%"></div></div></div>';
+  }).join('');
+}
+function acompRenderConsultores(list) {
+  var map = {};
+  list.forEach(function(x){
+    var key = x.consultor || 'Sem consultor';
+    if (!map[key]) map[key] = {nome:key, total:0};
+    map[key].total += 1;
+    ACOMP_BUCKETS.forEach(function(b){ if (map[key][b.key] == null) map[key][b.key] = 0; });
+    map[key][x.bucket] += 1;
+  });
+  return Object.keys(map).sort().map(function(k){
+    var c = map[k];
+    var segs = ACOMP_BUCKETS.map(function(b){
+      var pct = acompPercent(c[b.key] || 0, c.total || 1);
+      return pct ? '<span style="width:'+pct+'%;background:'+b.color+'"></span>' : '';
+    }).join('');
+    return '<div class="acom-cons-row"><div class="acom-cons-name">'+escapeHtml(c.nome)+'</div><div class="acom-stack">'+segs+'</div><strong>'+c.total+'</strong></div>';
+  }).join('') || '<div class="empty">Sem consultores no recorte.</div>';
+}
+function acompRenderRows(list) {
+  var rows = acompFilterList(list).sort(function(a,b){
+    var pa = a.bucket === 'sem' ? 999 : Number(a.dias || 0);
+    var pb = b.bucket === 'sem' ? 999 : Number(b.dias || 0);
+    return pb - pa;
+  }).slice(0, 40);
+  return rows.map(function(x){
+    var meta = x.bucketMeta;
+    var cls = meta.cls === 'ok' ? 'ok' : meta.cls === 'bad' ? 'bad' : meta.cls === 'warn' ? 'warn' : 'neu';
+    var texto = x.texto ? escapeHtml(x.texto).slice(0, 130) : (x.bucket === 'sem' ? 'Registrar acompanhamento datado no setup.' : 'Registro vindo da base t&eacute;cnica.');
+    if (x.proximaAcao) texto += '<div class="dashx-list-sub">Pr&oacute;xima a&ccedil;&atilde;o: '+escapeHtml(x.proximaAcao).slice(0, 100)+'</div>';
+    if (x.responsavel) texto += '<div class="dashx-list-sub">Respons&aacute;vel: '+escapeHtml(x.responsavel)+'</div>';
+    var obsInicial = x.obsInicial ? '<div class="dashx-list-sub">Obs inicial: '+escapeHtml(x.obsInicial).slice(0, 90)+'</div>' : '';
+    return '<tr><td><strong>'+escapeHtml(x.cliente)+'</strong><div class="dashx-list-sub">'+escapeHtml(x.mes)+' &bull; '+escapeHtml(x.consultor)+'</div></td>'+
+      '<td><span class="acom-status '+cls+'">'+meta.label+'</span></td>'+
+      '<td>'+(x.dias !== null && x.dias !== undefined ? x.dias+'d' : '-')+'</td>'+
+      '<td>'+escapeHtml(x.fonte)+'</td>'+
+      '<td>'+escapeHtml(x.status)+'</td>'+
+      '<td>'+texto+obsInicial+'</td></tr>';
+  }).join('') || '<tr><td colspan="6">Nenhum projeto para este filtro.</td></tr>';
+}
+function initAcomp() {
+  var el = document.getElementById('acom-content');
+  if (!el) return;
+  acompLoadRemoteFollowups(false);
+  var list = acompBase();
+  var total = list.length;
+  var acompanhados = list.filter(function(x){ return x.temRegistro; }).length;
+  var pendentes = total - acompanhados;
+  var criticos = list.filter(function(x){ return x.bucket === '31-45' || x.bucket === '45+' || x.bucket === 'sem'; }).length;
+  var badge = document.getElementById('n-acom');
+  if (badge) badge.textContent = pendentes;
+  var periodo = activePeriod === 'all' ? 'Todos os meses' : activePeriod;
+  var syncNote = ACOMP_REMOTE_LOADED ? 'Hist&oacute;rico do site carregado' : (ACOMP_REMOTE_LOADING ? 'Carregando hist&oacute;rico do site...' : 'Hist&oacute;rico do site ainda n&atilde;o carregado');
+  var filters = [
+    ['todos','Todos'],
+    ['acompanhados','Acompanhados'],
+    ['pendentes','Pendentes'],
+    ['0-7','0-7 dias'],
+    ['8-15','8-15 dias'],
+    ['16-30','16-30 dias'],
+    ['31-45','31-45 dias'],
+    ['45+','+45 dias']
+  ].map(function(f){
+    return '<button type="button" class="acom-filter '+(ACOMP_VIEW_FILTER === f[0] ? 'on' : '')+'" onclick="return setAcompFilter(\''+f[0]+'\')">'+f[1]+'</button>';
+  }).join('');
+  el.innerHTML =
+    '<div class="acom-shell">'+
+      '<div class="acom-hero"><div><div class="acom-kicker">Setup proposto</div><div class="acom-title">Controle mensal de acompanhamento</div><div class="acom-sub">Observa&ccedil;&otilde;es s&atilde;o o contexto inicial do projeto. Acompanhamento &eacute; o registro datado que mostra se a coordena&ccedil;&atilde;o olhou aquele projeto no per&iacute;odo.</div></div><div class="acom-hero-meta"><span class="acom-chip"><b>Per&iacute;odo</b> '+periodo+'</span><span class="acom-chip"><b>Base</b> '+total+' ativos</span><span class="acom-chip"><b>Pendentes</b> '+pendentes+'</span></div></div>'+
+      '<div class="kpis">'+
+        kpi('Carteira ativa', total, 'b')+
+        kpi('Acompanhados', acompanhados, 'g', 'onclick="return setAcompFilter(\'acompanhados\')"', acompPercent(acompanhados,total)+'% da carteira')+
+        kpi('Faltam registrar', pendentes, pendentes ? 'o' : 'g', 'onclick="return setAcompFilter(\'pendentes\')"', pendentes ? 'prioridade da coordena&ccedil;&atilde;o' : 'cobertura completa')+
+        kpi('Cr&iacute;ticos', criticos, criticos ? 'r' : 'g', 'onclick="return setAcompFilter(\'pendentes\')"', 'sem registro ou acima de 30 dias')+
+      '</div>'+
+      '<div class="acom-panel"><div class="acom-panel-head"><div><div class="acom-panel-title">Registrar no site</div><div class="acom-panel-note">'+syncNote+'</div></div></div><div class="acom-panel-body"><form id="acom-form" class="acom-form" onsubmit="return salvarAcompanhamentoProjeto(this.querySelector(\'.acom-save\'))">'+
+        '<div class="acom-field"><label for="acom-form-project">Projeto</label><select id="acom-form-project" required><option value="">Selecione o projeto</option>'+acompProjectOptions(list)+'</select></div>'+
+        '<div class="acom-field"><label for="acom-form-date">Data</label><input id="acom-form-date" type="date" value="'+acompTodayIso()+'" required></div>'+
+    '<div class="acom-field"><label for="acom-form-owner">Respons&aacute;vel</label><input id="acom-form-owner" type="text" value="'+escapeHtml((AUTH_STATE.user && (AUTH_STATE.user.name || AUTH_STATE.user.username)) || getUpdateActor() || 'PMO')+'" readonly></div>'+
+        '<div class="acom-field acom-form-wide"><label for="acom-form-text">Considera&ccedil;&atilde;o</label><textarea id="acom-form-text" placeholder="O que foi observado no acompanhamento deste projeto?"></textarea></div>'+
+        '<div class="acom-field acom-form-wide"><label for="acom-form-next">Pr&oacute;xima a&ccedil;&atilde;o</label><textarea id="acom-form-next" placeholder="Qual &eacute; o pr&oacute;ximo movimento esperado?"></textarea></div>'+
+        '<button type="submit" class="acom-save">Salvar acompanhamento</button>'+
+      '</form></div></div>'+
+      '<div class="acom-panel"><div class="acom-panel-head"><div><div class="acom-panel-title">Formato do setup na planilha</div><div class="acom-panel-note">Uma linha por acompanhamento datado, mantendo Observa&ccedil;&otilde;es como contexto inicial</div></div></div><div class="acom-panel-body"><div class="acom-setup-grid">'+
+        ['data_acompanhamento','mes','cliente','consultor','project_key','link_projeto','consideracao','proxima_acao','responsavel','origem'].map(function(c){ return '<div class="acom-setup-cell"><div class="acom-setup-label">Coluna</div><div class="acom-setup-value">'+c+'</div></div>'; }).join('')+
+      '</div></div></div>'+
+      '<div class="acom-grid">'+
+        '<div class="acom-panel"><div class="acom-panel-head"><div><div class="acom-panel-title">Faixas de acompanhamento</div><div class="acom-panel-note">Clique em uma faixa para filtrar</div></div><div class="acom-filters">'+filters+'</div></div><div class="acom-panel-body"><div class="acom-buckets">'+acompRenderBuckets(list)+'</div></div></div>'+
+        '<div class="acom-panel"><div class="acom-panel-head"><div><div class="acom-panel-title">Cobertura por consultor</div><div class="acom-panel-note">Distribui&ccedil;&atilde;o por rec&ecirc;ncia</div></div></div><div class="acom-panel-body">'+acompRenderConsultores(list)+'</div></div>'+
+      '</div>'+
+      '<div class="acom-panel"><div class="acom-panel-head"><div><div class="acom-panel-title">Controle mensal</div><div class="acom-panel-note">Acompanhado x pendente por aba</div></div></div><div class="acom-panel-body"><div class="acom-months">'+acompRenderMonths(list)+'</div></div></div>'+
+      '<div class="acom-panel"><div class="acom-panel-head"><div><div class="acom-panel-title">Lista de a&ccedil;&atilde;o</div><div class="acom-panel-note">Projetos que aparecem no filtro selecionado</div></div></div><div class="acom-panel-body"><div class="acom-table-wrap"><table class="acom-table"><thead><tr><th>Projeto</th><th>Faixa</th><th>Dias</th><th>Fonte</th><th>Status</th><th>Considera&ccedil;&atilde;o</th></tr></thead><tbody>'+acompRenderRows(list)+'</tbody></table></div></div></div>'+
+    '</div>';
+}
+
+function initAdmin() {
+  var el = document.getElementById('admin-content');
+  if (!el) return;
+  if (!AUTH_STATE.user || AUTH_STATE.user.role !== 'admin') {
+    el.innerHTML = '<div class="empty">Acesso restrito ao administrador.</div>';
+    return;
+  }
+  el.innerHTML =
+    '<div class="acom-shell">'+
+      '<div class="acom-hero"><div><div class="acom-kicker">Gerenciamento</div><div class="acom-title">Usu&aacute;rios do painel</div><div class="acom-sub">Somente administrador cadastra, ativa e desativa acessos. O nome do usu&aacute;rio logado vira o respons&aacute;vel dos acompanhamentos.</div></div><div class="acom-hero-meta"><span class="acom-chip"><b>Admin</b> '+escapeHtml(AUTH_STATE.user.name || AUTH_STATE.user.username)+'</span></div></div>'+
+      '<div class="admin-users">'+
+        '<div class="acom-panel"><div class="acom-panel-head"><div><div class="acom-panel-title">Cadastrar usu&aacute;rio</div><div class="acom-panel-note">Defina a senha inicial</div></div></div><div class="acom-panel-body"><form class="auth-form" onsubmit="return criarUsuarioPainel(this)">'+
+          '<label>Nome</label><input name="name" required>'+
+          '<label>Usu&aacute;rio</label><input name="username" autocomplete="off" required>'+
+          '<label>Senha</label><input name="password" type="password" autocomplete="new-password" required>'+
+          '<label>Perfil</label><select name="role"><option value="user">Usu&aacute;rio</option><option value="admin">Administrador</option></select>'+
+          '<div class="auth-error" id="admin-create-error"></div><button class="auth-btn" type="submit">Cadastrar</button>'+
+        '</form></div></div>'+
+        '<div class="acom-panel"><div class="acom-panel-head"><div><div class="acom-panel-title">Acessos liberados</div><div class="acom-panel-note" id="admin-users-note">Carregando...</div></div></div><div class="acom-panel-body" id="admin-users-list"></div></div>'+
+      '</div>'+
+    '</div>';
+  carregarUsuariosPainel();
+}
+function carregarUsuariosPainel() {
+  var box = document.getElementById('admin-users-list');
+  var note = document.getElementById('admin-users-note');
+  if (box) box.innerHTML = '<div class="empty">Carregando usu&aacute;rios...</div>';
+  chamarAppsScriptJsonp('listUsers', {auth_token:authTokenParam()}, 12000).then(function(resp){
+    if (!resp || resp.ok === false) throw new Error((resp && (resp.error || resp.message)) || 'Falha ao listar');
+    var users = Array.isArray(resp.users) ? resp.users : [];
+    if (note) note.textContent = users.length + ' usuário(s)';
+    if (box) box.innerHTML = users.map(function(u){
+      return '<div class="admin-user-row"><div><div class="admin-user-name">'+escapeHtml(u.name || u.username)+'</div><div class="admin-user-meta">'+escapeHtml(u.username)+' &bull; '+escapeHtml(u.role || 'user')+' &bull; '+(u.enabled ? 'ativo' : 'desativado')+'</div></div>'+
+        '<button class="admin-toggle" onclick="return alternarUsuarioPainel(\''+jsQuote(u.username)+'\', '+(u.enabled ? 'false' : 'true')+')">'+(u.enabled ? 'Desativar' : 'Ativar')+'</button></div>';
+    }).join('') || '<div class="empty">Nenhum usu&aacute;rio cadastrado.</div>';
+  }).catch(function(err){
+    if (box) box.innerHTML = '<div class="empty">'+escapeHtml((err && err.message) || 'Erro ao carregar')+'</div>';
+  });
+}
+function criarUsuarioPainel(form) {
+  var err = document.getElementById('admin-create-error');
+  var btn = form && form.querySelector('button[type="submit"]');
+  if (err) err.textContent = '';
+  if (btn) { btn.disabled = true; btn.textContent = 'Cadastrando...'; }
+  var name = String(form.name.value || '').trim();
+  var username = String(form.username.value || '').trim();
+  var role = String(form.role.value || 'user');
+  sha256Hex(String(form.password.value || '')).then(function(passwordSha){
+    return chamarAppsScriptJsonp('createUser', {auth_token:authTokenParam(), name:name, username:username, role:role, password_sha:passwordSha}, 12000);
+  }).then(function(resp){
+    if (!resp || resp.ok === false) throw new Error((resp && (resp.error || resp.message)) || 'Cadastro recusado');
+    form.reset();
+    showToast('Usuário cadastrado', 'ok');
+    carregarUsuariosPainel();
+  }).catch(function(error){
+    if (err) err.textContent = (error && error.message) || 'Erro ao cadastrar';
+  }).finally(function(){
+    if (btn) { btn.disabled = false; btn.textContent = 'Cadastrar'; }
+  });
+  return false;
+}
+function alternarUsuarioPainel(username, enabled) {
+  chamarAppsScriptJsonp('setUserEnabled', {auth_token:authTokenParam(), username:username, enabled:enabled ? '1' : '0'}, 12000).then(function(resp){
+    if (!resp || resp.ok === false) throw new Error((resp && (resp.error || resp.message)) || 'Alteração recusada');
+    carregarUsuariosPainel();
+  }).catch(function(error){
+    showToast((error && error.message) || 'Erro ao alterar usuário', 'err');
+  });
+  return false;
+}
+window.criarUsuarioPainel = criarUsuarioPainel;
+window.alternarUsuarioPainel = alternarUsuarioPainel;
+
 function renderAll() {
-  buildPeriodBar(); initDash(); initControlTower(); initAll(); initCons(); initVend(); initAvul(); initLog(); initPraz(); initAlert(); initExec();
+  buildPeriodBar(); initDash(); initControlTower(); initAcomp(); initAdmin(); initAll(); initCons(); initVend(); initAvul(); initLog(); initPraz(); initAlert(); initExec();
 }
 function abrirProjetosComFiltro(status, clienteBusca) {
   fS = status || 'all';
@@ -9648,7 +10215,7 @@ function prepareBaseLocal(projetos) {
 }
 // Mostra overlay e busca Sheets — não renderiza nada antes
 inicializarTema();
-inicializarPainel();
+inicializarAuth();
 </script>
 </body>
 </html>
