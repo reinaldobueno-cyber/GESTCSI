@@ -246,10 +246,22 @@ nav{background:var(--nav);height:58px;display:flex;align-items:center;justify-co
 .acom-kanban-col-title{font-size:10px;font-weight:900;text-transform:uppercase;letter-spacing:.7px;color:var(--text);}
 .acom-kanban-count{font-size:11px;font-weight:900;color:var(--muted);}
 .acom-kanban-list{display:flex;flex-direction:column;gap:8px;padding:10px;max-height:360px;overflow:auto;}
-.acom-kanban-card{border:1px solid var(--border);border-radius:8px;background:var(--surf);padding:10px;box-shadow:0 1px 2px rgba(20,32,24,.03);}
+.acom-kanban-card{border:1px solid var(--border);border-radius:8px;background:var(--surf);padding:10px;box-shadow:0 1px 2px rgba(20,32,24,.03);cursor:grab;}
+.acom-kanban-card:active{cursor:grabbing;}
+.acom-kanban-card:hover{border-color:rgba(45,110,78,.32);box-shadow:0 8px 20px rgba(20,32,24,.08);}
 .acom-kanban-name{font-size:12px;font-weight:900;color:var(--text);line-height:1.25;}
 .acom-kanban-meta{font-size:10px;font-weight:800;color:var(--muted);margin-top:4px;line-height:1.35;}
 .acom-kanban-text{font-size:11px;color:var(--text2);line-height:1.4;margin-top:7px;}
+.acom-popup-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin-bottom:12px;}
+.acom-popup-cell{border:1px solid var(--border);border-radius:8px;background:var(--surf2);padding:9px 10px;}
+.acom-popup-label{font-size:9px;font-weight:900;text-transform:uppercase;letter-spacing:.7px;color:var(--muted);margin-bottom:4px;}
+.acom-popup-value{font-size:12px;font-weight:800;color:var(--text);line-height:1.35;}
+.acom-popup-section{margin-top:14px;}
+.acom-popup-title{font-size:11px;font-weight:900;text-transform:uppercase;letter-spacing:.8px;color:var(--green);margin-bottom:7px;}
+.acom-popup-text{border:1px solid var(--border);border-radius:8px;background:var(--surf2);padding:10px;font-size:12px;line-height:1.5;color:var(--text2);}
+.acom-popup-history{display:flex;flex-direction:column;gap:8px;}
+.acom-popup-log{border:1px solid var(--border);border-radius:8px;background:var(--surf);padding:9px 10px;}
+.acom-popup-log-date{font-size:10px;font-weight:900;color:var(--muted);margin-bottom:4px;}
 @media(max-width:980px){.acom-kanban-cols{grid-template-columns:1fr}.acom-cycle-row{justify-content:flex-start}.acom-cohort-head{flex-direction:column}}
 @media(max-width:980px){.acom-grid{grid-template-columns:1fr}.acom-form{grid-template-columns:1fr}.acom-buckets,.acom-months{grid-template-columns:repeat(2,1fr)}.acom-setup-grid{grid-template-columns:1fr 1fr}.acom-hero{flex-direction:column}.acom-hero-meta{justify-content:flex-start}}
 .month-group{border-top:1px solid var(--border);}
@@ -3397,6 +3409,7 @@ var ACOMP_REMOTE_FOLLOWUPS = [];
 var ACOMP_REMOTE_LOADED = false;
 var ACOMP_REMOTE_LOADING = false;
 var ACOMP_FORM_PROJECTS = [];
+var ACOMP_KANBAN_STAGE_KEY = 'gestcsi_acomp_kanban_stage_v1';
 var ACOMP_BUCKETS = [
   {key:'0-7', label:'0-7 dias', cls:'ok', color:'#2d6e4e'},
   {key:'8-15', label:'8-15 dias', cls:'warn', color:'#6d8e72'},
@@ -3592,13 +3605,42 @@ function acompFollowupNoCiclo(list, cycleInfo) {
   });
   return matches.length ? matches[matches.length - 1] : null;
 }
-function acompKanbanStage(item, cycleFollowup) {
-  var s = dashStatusKey(item && item.status);
-  var hasNext = !!String((cycleFollowup && cycleFollowup.proxima_acao) || item.proximaAcao || '').trim();
-  var critical = item && (item.bucket === '31-45' || item.bucket === '45+' || /parad|atras/.test(s));
-  if (cycleFollowup && !hasNext && !critical) return 'done';
-  if (cycleFollowup || hasNext || critical) return 'doing';
-  return 'pending';
+function acompKanbanCycleKey(cycleInfo) {
+  return String((cycleInfo && cycleInfo.ano) || new Date().getFullYear()) + '-' + String((cycleInfo && cycleInfo.mes) || '').toUpperCase();
+}
+function acompKanbanStageStore() {
+  try { return JSON.parse(storageGet(ACOMP_KANBAN_STAGE_KEY, '{}')) || {}; } catch(e) { return {}; }
+}
+function acompKanbanStageKey(projectKey, cycleInfo) {
+  return acompKanbanCycleKey(cycleInfo) + '|' + String(projectKey || '').toUpperCase();
+}
+function acompKanbanStage(item, cycleInfo) {
+  var store = acompKanbanStageStore();
+  var value = store[acompKanbanStageKey(item && item.projectKey, cycleInfo)];
+  return value === 'doing' || value === 'done' ? value : 'pending';
+}
+function acompSetKanbanStage(projectKey, cycleKey, stage) {
+  if (!projectKey || !cycleKey) return;
+  var store = acompKanbanStageStore();
+  var value = stage === 'doing' || stage === 'done' ? stage : 'pending';
+  store[String(cycleKey) + '|' + String(projectKey).toUpperCase()] = value;
+  storageSet(ACOMP_KANBAN_STAGE_KEY, JSON.stringify(store));
+}
+function acompDragStart(ev, projectKey, cycleKey) {
+  if (!ev || !ev.dataTransfer) return true;
+  ev.dataTransfer.setData('text/plain', JSON.stringify({projectKey:projectKey, cycleKey:cycleKey}));
+  ev.dataTransfer.effectAllowed = 'move';
+  return true;
+}
+function acompDropCard(ev, stage) {
+  if (ev) ev.preventDefault();
+  var raw = ev && ev.dataTransfer ? ev.dataTransfer.getData('text/plain') : '';
+  try {
+    var data = JSON.parse(raw || '{}');
+    acompSetKanbanStage(data.projectKey, data.cycleKey, stage);
+    initAcomp();
+  } catch(e) {}
+  return false;
 }
 function acompSortProjetosFormulario(a, b) {
   var ma = indiceMesPainel(a && a.mes);
@@ -3689,6 +3731,8 @@ function salvarAcompanhamentoProjeto(btn) {
   return false;
 }
 window.salvarAcompanhamentoProjeto = salvarAcompanhamentoProjeto;
+window.acompDragStart = acompDragStart;
+window.acompDropCard = acompDropCard;
 function acompRenderBuckets(list) {
   var total = list.length || 1;
   return ACOMP_BUCKETS.map(function(b){
@@ -3751,6 +3795,62 @@ function acompRenderRows(list) {
       '<td>'+texto+obsInicial+'</td></tr>';
   }).join('') || '<tr><td colspan="6">Nenhum projeto para este filtro.</td></tr>';
 }
+function acompFindProjectView(projectKey) {
+  var key = String(projectKey || '').toUpperCase();
+  var followupMap = acompLatestFollowupMap();
+  var found = null;
+  (DATA.projetos || []).some(function(p){
+    if (projectMonthKey(p) === key) {
+      found = acompProjetoView(p, followupMap);
+      return true;
+    }
+    return false;
+  });
+  return found;
+}
+function acompProjectInfoPopup(projectKey) {
+  var item = acompFindProjectView(projectKey);
+  if (!item) return false;
+  var p = item.projeto || {};
+  var followups = (acompFollowupsByProjectMap()[item.projectKey] || []).slice().reverse().slice(0, 8);
+  var link = p.projeto_link || p.link_projeto || '';
+  var resumo = montarResumoClickup ? montarResumoClickup(p) : null;
+  var cells = [
+    ['M&ecirc;s entrada', item.mes],
+    ['Data venda', acompDataEntradaLabel(p) || '-'],
+    ['Consultor', item.consultor],
+    ['Status', item.status],
+    ['Formato', p.formato || '-'],
+    ['Di&aacute;rias', ((p.diarias_real != null ? p.diarias_real : '-') + ' / ' + (p.diarias_cont != null ? p.diarias_cont : '-'))],
+    ['&Uacute;ltima atualiza&ccedil;&atilde;o', p.data_ultima_atualizacao || p.ultima_sync_clickup || '-'],
+    ['Dias sem update', item.dias != null ? item.dias + 'd' : '-'],
+    ['Fase atual', (resumo && resumo.fase_atual) || p.fase_atual || '-']
+  ].map(function(c){
+    return '<div class="acom-popup-cell"><div class="acom-popup-label">'+c[0]+'</div><div class="acom-popup-value">'+escapeHtml(c[1])+'</div></div>';
+  }).join('');
+  var historico = followups.map(function(f){
+    var texto = [f.consideracao, f.proxima_acao ? ('Pr&oacute;xima a&ccedil;&atilde;o: '+f.proxima_acao) : '', f.responsavel ? ('Respons&aacute;vel: '+f.responsavel) : ''].filter(Boolean).join(' | ');
+    return '<div class="acom-popup-log"><div class="acom-popup-log-date">'+escapeHtml(f.data_acompanhamento || f.logged_at || '-')+'</div><div class="acom-popup-text">'+escapeHtml(texto || '-')+'</div></div>';
+  }).join('') || '<div class="acom-popup-text">Nenhum acompanhamento registrado no site para este projeto.</div>';
+  var clickup = [
+    resumo ? ('Fases: '+(resumo.fases_total || 0)) : '',
+    resumo ? ('Tasks: '+(resumo.tasks_concluidas || 0)+' concl. / '+(resumo.tasks_pendentes || 0)+' pend.') : '',
+    resumo ? ('Marcos: '+(resumo.marcos_concluidos || 0)+' concl. / '+(resumo.marcos_pendentes || 0)+' pend.') : ''
+  ].filter(Boolean).join(' &bull; ') || 'Sem resumo ClickUp estruturado.';
+  var html =
+    '<div class="acom-popup-grid">'+cells+'</div>'+
+    '<div class="acom-popup-section"><div class="acom-popup-title">Observa&ccedil;&atilde;o inicial</div><div class="acom-popup-text">'+escapeHtml(item.obsInicial || p.acompanhamento || p.obs || 'Sem observa&ccedil;&atilde;o inicial.')+'</div></div>'+
+    '<div class="acom-popup-section"><div class="acom-popup-title">&Uacute;ltimos acompanhamentos</div><div class="acom-popup-history">'+historico+'</div></div>'+
+    '<div class="acom-popup-section"><div class="acom-popup-title">ClickUp</div><div class="acom-popup-text">'+clickup+(link ? '<div style="margin-top:8px"><a class="project-link-btn alt" href="'+escapeHtml(link)+'" target="_blank" rel="noopener noreferrer">Abrir projeto</a></div>' : '')+'</div></div>';
+  abrirModalHistorico(item.cliente, item.mes+' • '+item.consultor, [html], '');
+  var modal = document.querySelector('.history-body');
+  if (modal) {
+    modal.style.whiteSpace = 'normal';
+    modal.innerHTML = html;
+  }
+  return false;
+}
+window.acompProjectInfoPopup = acompProjectInfoPopup;
 function acompRenderKanban(list) {
   var cycleInfo = acompCicloAtual();
   var followupsByProject = acompFollowupsByProjectMap();
@@ -3770,11 +3870,12 @@ function acompRenderKanban(list) {
   return '<div class="acom-kanban">'+months.map(function(mes){
     var items = byMonth[mes].slice().sort(acompSortProjetosFormulario);
     var cycles = acompCycleMonths(mes, cycleInfo);
+    var cycleKey = acompKanbanCycleKey(cycleInfo);
     var grouped = {pending:[], doing:[], done:[]};
     items.forEach(function(item){
       var cycleFollowup = acompFollowupNoCiclo(followupsByProject[item.projectKey] || [], cycleInfo);
       item._cycleFollowup = cycleFollowup;
-      grouped[acompKanbanStage(item, cycleFollowup)].push(item);
+      grouped[acompKanbanStage(item, cycleInfo)].push(item);
     });
     var cycleHtml = cycles.map(function(c){
       return '<span class="acom-cycle '+(c === cycleInfo.mes ? 'on' : '')+'">'+c+'</span>';
@@ -3786,15 +3887,15 @@ function acompRenderKanban(list) {
         var follow = item._cycleFollowup;
         var texto = String((follow && (follow.consideracao || follow.proxima_acao)) || item.texto || item.obsInicial || '').trim();
         var meta = [data || item.mes, item.consultor, item.status].filter(Boolean).join(' • ');
-        var detalhe = follow ? ('Ciclo '+cycleInfo.mes+': '+(follow.proxima_acao ? 'com pr&oacute;xima a&ccedil;&atilde;o' : 'registrado')) : (item.bucket === 'sem' ? 'Sem registro no ciclo atual.' : item.bucketMeta.label);
-        return '<div class="acom-kanban-card">'+
+        var detalhe = follow ? ('Registro no ciclo '+cycleInfo.mes) : 'Aguardando movimenta&ccedil;&atilde;o da coordena&ccedil;&atilde;o neste ciclo.';
+        return '<div class="acom-kanban-card" draggable="true" ondragstart="return acompDragStart(event,\''+jsQuote(item.projectKey)+'\',\''+jsQuote(cycleKey)+'\')" onclick="return acompProjectInfoPopup(\''+jsQuote(item.projectKey)+'\')">'+
           '<div class="acom-kanban-name">'+escapeHtml(item.cliente)+'</div>'+
           '<div class="acom-kanban-meta">'+escapeHtml(meta)+'</div>'+
           '<div class="acom-kanban-meta">'+detalhe+'</div>'+
           (texto ? '<div class="acom-kanban-text">'+escapeHtml(texto).slice(0, 150)+'</div>' : '')+
         '</div>';
       }).join('');
-      return '<div class="acom-kanban-col"><div class="acom-kanban-col-head"><div class="acom-kanban-col-title">'+stage.title+'</div><div class="acom-kanban-count">'+grouped[stage.key].length+'</div></div><div class="acom-kanban-list">'+(cards || '<div class="empty">Sem projetos nesta etapa.</div>')+'</div></div>';
+      return '<div class="acom-kanban-col" ondragover="event.preventDefault()" ondrop="return acompDropCard(event,\''+stage.key+'\')"><div class="acom-kanban-col-head"><div class="acom-kanban-col-title">'+stage.title+'</div><div class="acom-kanban-count">'+grouped[stage.key].length+'</div></div><div class="acom-kanban-list">'+(cards || '<div class="empty">Sem projetos nesta etapa.</div>')+'</div></div>';
     }).join('');
     return '<section class="acom-cohort">'+
       '<div class="acom-cohort-head"><div><div class="acom-cohort-title">'+escapeHtml(mes)+' • '+items.length+' projeto(s) de entrada</div><div class="acom-cohort-note">'+cycles.length+' ciclo(s) de acompanhamento at&eacute; '+escapeHtml(cycleInfo.mes)+'/'+cycleInfo.ano+'</div></div><div class="acom-cycle-row">'+cycleHtml+'</div></div>'+
@@ -3845,9 +3946,6 @@ function initAcomp() {
         '<div class="acom-field acom-form-wide"><label for="acom-form-next">Pr&oacute;xima a&ccedil;&atilde;o</label><textarea id="acom-form-next" placeholder="Qual &eacute; o pr&oacute;ximo movimento esperado?"></textarea></div>'+
         '<button type="submit" class="acom-save">Salvar acompanhamento</button>'+
       '</form></div></div>'+
-      '<div class="acom-panel"><div class="acom-panel-head"><div><div class="acom-panel-title">Formato do setup na planilha</div><div class="acom-panel-note">Uma linha por acompanhamento datado, mantendo Observa&ccedil;&otilde;es como contexto inicial</div></div></div><div class="acom-panel-body"><div class="acom-setup-grid">'+
-        ['data_acompanhamento','mes','cliente','consultor','project_key','link_projeto','consideracao','proxima_acao','responsavel','origem'].map(function(c){ return '<div class="acom-setup-cell"><div class="acom-setup-label">Coluna</div><div class="acom-setup-value">'+c+'</div></div>'; }).join('')+
-      '</div></div></div>'+
       '<div class="acom-grid">'+
         '<div class="acom-panel"><div class="acom-panel-head"><div><div class="acom-panel-title">Faixas de acompanhamento</div><div class="acom-panel-note">Clique em uma faixa para filtrar</div></div><div class="acom-filters">'+filters+'</div></div><div class="acom-panel-body"><div class="acom-buckets">'+acompRenderBuckets(list)+'</div></div></div>'+
         '<div class="acom-panel"><div class="acom-panel-head"><div><div class="acom-panel-title">Cobertura por consultor</div><div class="acom-panel-note">Distribui&ccedil;&atilde;o por rec&ecirc;ncia</div></div></div><div class="acom-panel-body">'+acompRenderConsultores(list)+'</div></div>'+
