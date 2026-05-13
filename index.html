@@ -232,6 +232,25 @@ nav{background:var(--nav);height:58px;display:flex;align-items:center;justify-co
 .acom-status.warn{background:var(--orange-s);color:var(--orange);}
 .acom-status.bad{background:var(--red-s);color:var(--red);}
 .acom-status.neu{background:var(--surf2);color:var(--muted);}
+.acom-kanban{display:flex;flex-direction:column;gap:14px;}
+.acom-cohort{border:1px solid var(--border);border-radius:10px;background:var(--surf);overflow:hidden;}
+.acom-cohort-head{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;padding:13px 15px;background:var(--surf2);border-bottom:1px solid var(--border);}
+.acom-cohort-title{font-size:12px;font-weight:900;text-transform:uppercase;letter-spacing:.9px;color:var(--green);}
+.acom-cohort-note{font-size:11px;font-weight:700;color:var(--muted);margin-top:3px;}
+.acom-cycle-row{display:flex;flex-wrap:wrap;gap:5px;justify-content:flex-end;}
+.acom-cycle{display:inline-flex;align-items:center;border:1px solid var(--border);background:var(--surf);border-radius:999px;padding:3px 8px;font-size:10px;font-weight:900;color:var(--text2);}
+.acom-cycle.on{background:var(--green);border-color:var(--green);color:#fff;}
+.acom-kanban-cols{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;padding:14px;}
+.acom-kanban-col{border:1px solid var(--border);border-radius:8px;background:var(--surf2);min-width:0;overflow:hidden;}
+.acom-kanban-col-head{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:10px 12px;border-bottom:1px solid var(--border);background:var(--surf);}
+.acom-kanban-col-title{font-size:10px;font-weight:900;text-transform:uppercase;letter-spacing:.7px;color:var(--text);}
+.acom-kanban-count{font-size:11px;font-weight:900;color:var(--muted);}
+.acom-kanban-list{display:flex;flex-direction:column;gap:8px;padding:10px;max-height:360px;overflow:auto;}
+.acom-kanban-card{border:1px solid var(--border);border-radius:8px;background:var(--surf);padding:10px;box-shadow:0 1px 2px rgba(20,32,24,.03);}
+.acom-kanban-name{font-size:12px;font-weight:900;color:var(--text);line-height:1.25;}
+.acom-kanban-meta{font-size:10px;font-weight:800;color:var(--muted);margin-top:4px;line-height:1.35;}
+.acom-kanban-text{font-size:11px;color:var(--text2);line-height:1.4;margin-top:7px;}
+@media(max-width:980px){.acom-kanban-cols{grid-template-columns:1fr}.acom-cycle-row{justify-content:flex-start}.acom-cohort-head{flex-direction:column}}
 @media(max-width:980px){.acom-grid{grid-template-columns:1fr}.acom-form{grid-template-columns:1fr}.acom-buckets,.acom-months{grid-template-columns:repeat(2,1fr)}.acom-setup-grid{grid-template-columns:1fr 1fr}.acom-hero{flex-direction:column}.acom-hero-meta{justify-content:flex-start}}
 .month-group{border-top:1px solid var(--border);}
 .month-group:first-child{border-top:none;}
@@ -3402,6 +3421,23 @@ function acompLatestFollowupMap() {
   });
   return map;
 }
+function acompFollowupsByProjectMap() {
+  var map = {};
+  (ACOMP_REMOTE_FOLLOWUPS || []).forEach(function(item){
+    var key = acompFollowupKey(item);
+    if (!key) return;
+    if (!map[key]) map[key] = [];
+    map[key].push(item);
+  });
+  Object.keys(map).forEach(function(key){
+    map[key].sort(function(a,b){
+      var da = dashParseDate(a.data_acompanhamento || a.logged_at || '');
+      var db = dashParseDate(b.data_acompanhamento || b.logged_at || '');
+      return (da ? da.getTime() : 0) - (db ? db.getTime() : 0);
+    });
+  });
+  return map;
+}
 function acompLoadRemoteFollowups(force) {
   if (!authTokenParam()) return;
   if (ACOMP_REMOTE_LOADING || (ACOMP_REMOTE_LOADED && !force)) return;
@@ -3531,6 +3567,38 @@ function acompTodayIso() {
 function acompDataEntradaLabel(p) {
   var d = parseD((p && p.data_venda) || '');
   return d ? d.toLocaleDateString('pt-BR') : '';
+}
+function acompCicloAtual() {
+  var now = new Date();
+  var mes = activePeriod !== 'all' ? activePeriod : ORDEM_MESES[now.getMonth()];
+  var idx = indiceMesPainel(mes);
+  if (idx === 999) idx = now.getMonth();
+  return { mes: ORDEM_MESES[idx] || mes, idx: idx, ano: now.getFullYear() };
+}
+function acompCycleMonths(entryMes, cycleInfo) {
+  var start = indiceMesPainel(entryMes);
+  var end = cycleInfo && cycleInfo.idx;
+  if (start === 999) start = 0;
+  if (end === 999 || end === undefined || end === null) end = new Date().getMonth();
+  if (end < start) end = start;
+  var out = [];
+  for (var i = start; i <= end && i < ORDEM_MESES.length; i++) out.push(ORDEM_MESES[i]);
+  return out;
+}
+function acompFollowupNoCiclo(list, cycleInfo) {
+  var matches = (list || []).filter(function(item){
+    var d = dashParseDate(item.data_acompanhamento || item.logged_at || '');
+    return d && d.getFullYear() === cycleInfo.ano && d.getMonth() === cycleInfo.idx;
+  });
+  return matches.length ? matches[matches.length - 1] : null;
+}
+function acompKanbanStage(item, cycleFollowup) {
+  var s = dashStatusKey(item && item.status);
+  var hasNext = !!String((cycleFollowup && cycleFollowup.proxima_acao) || item.proximaAcao || '').trim();
+  var critical = item && (item.bucket === '31-45' || item.bucket === '45+' || /parad|atras/.test(s));
+  if (cycleFollowup && !hasNext && !critical) return 'done';
+  if (cycleFollowup || hasNext || critical) return 'doing';
+  return 'pending';
 }
 function acompSortProjetosFormulario(a, b) {
   var ma = indiceMesPainel(a && a.mes);
@@ -3683,6 +3751,57 @@ function acompRenderRows(list) {
       '<td>'+texto+obsInicial+'</td></tr>';
   }).join('') || '<tr><td colspan="6">Nenhum projeto para este filtro.</td></tr>';
 }
+function acompRenderKanban(list) {
+  var cycleInfo = acompCicloAtual();
+  var followupsByProject = acompFollowupsByProjectMap();
+  var byMonth = {};
+  (list || []).forEach(function(item){
+    var mes = String(item.mes || 'SEM').toUpperCase();
+    if (!byMonth[mes]) byMonth[mes] = [];
+    byMonth[mes].push(item);
+  });
+  var stages = [
+    {key:'pending', title:'Acompanhamento pendente'},
+    {key:'doing', title:'Em processo de interfer&ecirc;ncia'},
+    {key:'done', title:'Acompanhamento mensal conclu&iacute;do'}
+  ];
+  var months = ordenarMesesPainel(Object.keys(byMonth));
+  if (!months.length) return '<div class="empty">Sem projetos ativos para acompanhamento.</div>';
+  return '<div class="acom-kanban">'+months.map(function(mes){
+    var items = byMonth[mes].slice().sort(acompSortProjetosFormulario);
+    var cycles = acompCycleMonths(mes, cycleInfo);
+    var grouped = {pending:[], doing:[], done:[]};
+    items.forEach(function(item){
+      var cycleFollowup = acompFollowupNoCiclo(followupsByProject[item.projectKey] || [], cycleInfo);
+      item._cycleFollowup = cycleFollowup;
+      grouped[acompKanbanStage(item, cycleFollowup)].push(item);
+    });
+    var cycleHtml = cycles.map(function(c){
+      return '<span class="acom-cycle '+(c === cycleInfo.mes ? 'on' : '')+'">'+c+'</span>';
+    }).join('');
+    var cols = stages.map(function(stage){
+      var cards = grouped[stage.key].map(function(item){
+        var p = item.projeto || {};
+        var data = acompDataEntradaLabel(p);
+        var follow = item._cycleFollowup;
+        var texto = String((follow && (follow.consideracao || follow.proxima_acao)) || item.texto || item.obsInicial || '').trim();
+        var meta = [data || item.mes, item.consultor, item.status].filter(Boolean).join(' • ');
+        var detalhe = follow ? ('Ciclo '+cycleInfo.mes+': '+(follow.proxima_acao ? 'com pr&oacute;xima a&ccedil;&atilde;o' : 'registrado')) : (item.bucket === 'sem' ? 'Sem registro no ciclo atual.' : item.bucketMeta.label);
+        return '<div class="acom-kanban-card">'+
+          '<div class="acom-kanban-name">'+escapeHtml(item.cliente)+'</div>'+
+          '<div class="acom-kanban-meta">'+escapeHtml(meta)+'</div>'+
+          '<div class="acom-kanban-meta">'+detalhe+'</div>'+
+          (texto ? '<div class="acom-kanban-text">'+escapeHtml(texto).slice(0, 150)+'</div>' : '')+
+        '</div>';
+      }).join('');
+      return '<div class="acom-kanban-col"><div class="acom-kanban-col-head"><div class="acom-kanban-col-title">'+stage.title+'</div><div class="acom-kanban-count">'+grouped[stage.key].length+'</div></div><div class="acom-kanban-list">'+(cards || '<div class="empty">Sem projetos nesta etapa.</div>')+'</div></div>';
+    }).join('');
+    return '<section class="acom-cohort">'+
+      '<div class="acom-cohort-head"><div><div class="acom-cohort-title">'+escapeHtml(mes)+' • '+items.length+' projeto(s) de entrada</div><div class="acom-cohort-note">'+cycles.length+' ciclo(s) de acompanhamento at&eacute; '+escapeHtml(cycleInfo.mes)+'/'+cycleInfo.ano+'</div></div><div class="acom-cycle-row">'+cycleHtml+'</div></div>'+
+      '<div class="acom-kanban-cols">'+cols+'</div>'+
+    '</section>';
+  }).join('')+'</div>';
+}
 function initAcomp() {
   var el = document.getElementById('acom-content');
   if (!el) return;
@@ -3711,7 +3830,7 @@ function initAcomp() {
   }).join('');
   el.innerHTML =
     '<div class="acom-shell">'+
-      '<div class="acom-hero"><div><div class="acom-kicker">Setup proposto</div><div class="acom-title">Controle mensal de acompanhamento</div><div class="acom-sub">Observa&ccedil;&otilde;es s&atilde;o o contexto inicial do projeto. Acompanhamento &eacute; o registro datado que mostra se a coordena&ccedil;&atilde;o olhou aquele projeto no per&iacute;odo. A base de acompanhamento considera apenas projetos ativos; conclu&iacute;dos e cancelados ficam fora da rotina mensal.</div></div><div class="acom-hero-meta"><span class="acom-chip"><b>Per&iacute;odo</b> '+periodo+'</span><span class="acom-chip"><b>Total</b> '+resumoBase.total+' projeto(s)</span><span class="acom-chip"><b>Ativos</b> '+total+'</span><span class="acom-chip"><b>Fora</b> '+resumoBase.fora+'</span><span class="acom-chip"><b>Pendentes</b> '+pendentes+'</span></div></div>'+
+      '<div class="acom-hero"><div><div class="acom-kicker">Setup proposto</div><div class="acom-title">Controle mensal de acompanhamento</div><div class="acom-sub">Observa&ccedil;&otilde;es s&atilde;o o contexto inicial do projeto. Acompanhamento &eacute; o registro datado que mostra se a coordena&ccedil;&atilde;o olhou aquele projeto no per&iacute;odo. A base de acompanhamento considera apenas projetos ativos; conclu&iacute;dos e cancelados ficam fora da rotina mensal.</div></div><div class="acom-hero-meta"><span class="acom-chip"><b>Per&iacute;odo</b> '+periodo+'</span><span class="acom-chip"><b>Total</b> '+resumoBase.total+' projeto(s)</span><span class="acom-chip"><b>Ativos</b> '+total+'</span><span class="acom-chip"><b>Concl./cancel.</b> '+resumoBase.fora+'</span><span class="acom-chip"><b>Pendentes</b> '+pendentes+'</span></div></div>'+
       '<div class="kpis">'+
         kpi('Carteira ativa', total, 'b')+
         kpi('Acompanhados', acompanhados, 'g', 'onclick="return setAcompFilter(\'acompanhados\')"', acompPercent(acompanhados,total)+'% da carteira')+
@@ -3734,7 +3853,7 @@ function initAcomp() {
         '<div class="acom-panel"><div class="acom-panel-head"><div><div class="acom-panel-title">Cobertura por consultor</div><div class="acom-panel-note">Distribui&ccedil;&atilde;o por rec&ecirc;ncia</div></div></div><div class="acom-panel-body">'+acompRenderConsultores(list)+'</div></div>'+
       '</div>'+
       '<div class="acom-panel"><div class="acom-panel-head"><div><div class="acom-panel-title">Controle mensal</div><div class="acom-panel-note">Acompanhado x pendente por aba</div></div></div><div class="acom-panel-body"><div class="acom-months">'+acompRenderMonths(list)+'</div></div></div>'+
-      '<div class="acom-panel"><div class="acom-panel-head"><div><div class="acom-panel-title">Lista de a&ccedil;&atilde;o</div><div class="acom-panel-note">Projetos que aparecem no filtro selecionado</div></div></div><div class="acom-panel-body"><div class="acom-table-wrap"><table class="acom-table"><thead><tr><th>Projeto</th><th>Faixa</th><th>Dias</th><th>Fonte</th><th>Status</th><th>Considera&ccedil;&atilde;o</th></tr></thead><tbody>'+acompRenderRows(list)+'</tbody></table></div></div></div>'+
+      '<div class="acom-panel"><div class="acom-panel-head"><div><div class="acom-panel-title">Kanban por m&ecirc;s de entrada</div><div class="acom-panel-note">Ciclos mensais da cohort: pendente, interfer&ecirc;ncia e conclu&iacute;do no ciclo atual</div></div></div><div class="acom-panel-body">'+acompRenderKanban(acompFilterList(list))+'</div></div>'+
     '</div>';
 }
 
