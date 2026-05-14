@@ -263,6 +263,9 @@ nav{background:var(--nav);height:58px;display:flex;align-items:center;justify-co
 .acom-popup-history{display:flex;flex-direction:column;gap:8px;}
 .acom-popup-log{border:1px solid var(--border);border-radius:8px;background:var(--surf);padding:9px 10px;}
 .acom-popup-log-date{font-size:10px;font-weight:900;color:var(--muted);margin-bottom:4px;}
+.acom-popup-actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px;}
+.acom-popup-danger{border:1px solid var(--red);background:var(--red-s);color:var(--red);border-radius:8px;padding:8px 10px;font:900 11px 'Inter',sans-serif;cursor:pointer;}
+.acom-popup-danger:hover{background:#f7d8d4;}
 @media(max-width:980px){.acom-kanban-cols{grid-template-columns:1fr}.acom-cycle-row{justify-content:flex-start}.acom-cohort-head{flex-direction:column}}
 @media(max-width:980px){.acom-grid{grid-template-columns:1fr}.acom-form{grid-template-columns:1fr}.acom-buckets,.acom-months{grid-template-columns:repeat(2,1fr)}.acom-setup-grid{grid-template-columns:1fr 1fr}.acom-hero{flex-direction:column}.acom-hero-meta{justify-content:flex-start}}
 .month-group{border-top:1px solid var(--border);}
@@ -3641,6 +3644,12 @@ function acompSetKanbanStage(projectKey, cycleKey, stage) {
   store[String(cycleKey) + '|' + String(projectKey).toUpperCase()] = value;
   storageSet(ACOMP_KANBAN_STAGE_KEY, JSON.stringify(store));
 }
+function acompClearKanbanStage(projectKey, cycleKey) {
+  if (!projectKey || !cycleKey) return;
+  var store = acompKanbanStageStore();
+  delete store[String(cycleKey) + '|' + String(projectKey).toUpperCase()];
+  storageSet(ACOMP_KANBAN_STAGE_KEY, JSON.stringify(store));
+}
 function acompDragStart(ev, projectKey, cycleKey) {
   window._acomDraggingCard = true;
   if (!ev || !ev.dataTransfer) return true;
@@ -3915,7 +3924,7 @@ function acompProjectInfoPopup(projectKey) {
     return '<div class="acom-popup-cell"><div class="acom-popup-label">'+c[0]+'</div><div class="acom-popup-value">'+escapeHtml(c[1])+'</div></div>';
   }).join('');
   var historico = followups.map(function(f){
-    var texto = [f.consideracao, f.proxima_acao ? ('Pr&oacute;xima a&ccedil;&atilde;o: '+f.proxima_acao) : '', f.responsavel ? ('Respons&aacute;vel: '+f.responsavel) : ''].filter(Boolean).join(' | ');
+    var texto = [f.consideracao, f.proxima_acao ? ('Proxima acao: '+f.proxima_acao) : '', f.responsavel ? ('Responsavel: '+f.responsavel) : ''].filter(Boolean).join(' | ');
     return '<div class="acom-popup-log"><div class="acom-popup-log-date">'+escapeHtml(f.data_acompanhamento || f.logged_at || '-')+'</div><div class="acom-popup-text">'+escapeHtml(texto || '-')+'</div></div>';
   }).join('') || '<div class="acom-popup-text">Nenhum acompanhamento registrado no site para este projeto.</div>';
   var clickup = [
@@ -3926,7 +3935,7 @@ function acompProjectInfoPopup(projectKey) {
   var html =
     '<div class="acom-popup-grid">'+cells+'</div>'+
     '<div class="acom-popup-section"><div class="acom-popup-title">Observa&ccedil;&atilde;o inicial</div><div class="acom-popup-text">'+escapeHtml(item.obsInicial || p.acompanhamento || p.obs || 'Sem observa&ccedil;&atilde;o inicial.')+'</div></div>'+
-    '<div class="acom-popup-section"><div class="acom-popup-title">&Uacute;ltimos acompanhamentos</div><div class="acom-popup-history">'+historico+'</div></div>'+
+    '<div class="acom-popup-section"><div class="acom-popup-title">&Uacute;ltimos acompanhamentos</div><div class="acom-popup-history">'+historico+'</div>'+(followups.length ? '<div class="acom-popup-actions"><button type="button" class="acom-popup-danger" onclick="return acompDeleteLatestFollowup(\''+jsQuote(item.projectKey)+'\')">Excluir &uacute;ltimo acompanhamento</button></div>' : '')+'</div>'+
     '<div class="acom-popup-section"><div class="acom-popup-title">ClickUp</div><div class="acom-popup-text">'+clickup+(link ? '<div style="margin-top:8px"><a class="project-link-btn alt" href="'+escapeHtml(link)+'" target="_blank" rel="noopener noreferrer">Abrir projeto</a></div>' : '')+'</div></div>';
   abrirModalHistorico(item.cliente, item.mes+' • '+item.consultor, [html], '');
   var modal = document.querySelector('.history-body');
@@ -3937,6 +3946,40 @@ function acompProjectInfoPopup(projectKey) {
   return false;
 }
 window.acompProjectInfoPopup = acompProjectInfoPopup;
+function acompDeleteLatestFollowup(projectKey) {
+  if (!authTokenParam()) { showToast('Entre no painel para excluir acompanhamento', 'err'); return false; }
+  projectKey = String(projectKey || '').toUpperCase();
+  var list = (acompFollowupsByProjectMap()[projectKey] || []);
+  if (!list.length) { showToast('Nenhum acompanhamento para excluir', 'err'); return false; }
+  var latest = list[list.length - 1] || {};
+  var label = latest.data_acompanhamento || latest.logged_at || 'mais recente';
+  if (!confirm('Excluir o último acompanhamento deste projeto (' + label + ')?')) return false;
+  chamarAppsScriptJsonp('deleteProjectFollowup', {
+    auth_token: authTokenParam(),
+    project_key: projectKey,
+    logged_at: latest.logged_at || '',
+    data_acompanhamento: latest.data_acompanhamento || ''
+  }, 15000).then(function(resp){
+    if (!resp || resp.ok === false || !resp.deleted) throw new Error((resp && (resp.error || resp.message)) || 'Exclusão recusada');
+    var removed = false;
+    ACOMP_REMOTE_FOLLOWUPS = (ACOMP_REMOTE_FOLLOWUPS || []).filter(function(item){
+      if (removed) return true;
+      var sameKey = String(acompFollowupKey(item) || '').toUpperCase() === projectKey;
+      var sameLogged = latest.logged_at ? String(item.logged_at || '') === String(latest.logged_at || '') : true;
+      var sameDate = latest.data_acompanhamento ? String(item.data_acompanhamento || '') === String(latest.data_acompanhamento || '') : true;
+      if (sameKey && sameLogged && sameDate) { removed = true; return false; }
+      return true;
+    });
+    acompClearKanbanStage(projectKey, acompKanbanCycleKey(acompCicloAtual()));
+    fecharModalHistorico();
+    initAcomp();
+    showToast('Último acompanhamento excluído', 'ok');
+  }).catch(function(error){
+    showToast('Não excluiu: ' + ((error && error.message) || 'tente novamente'), 'err');
+  });
+  return false;
+}
+window.acompDeleteLatestFollowup = acompDeleteLatestFollowup;
 function acompRenderKanban(list) {
   var cycleInfo = acompCicloAtual();
   var followupsByProject = acompFollowupsByProjectMap();
