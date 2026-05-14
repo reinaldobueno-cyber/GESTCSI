@@ -3615,15 +3615,29 @@ function acompKanbanStageStore() {
 function acompKanbanStageKey(projectKey, cycleInfo) {
   return acompKanbanCycleKey(cycleInfo) + '|' + String(projectKey || '').toUpperCase();
 }
-function acompKanbanStage(item, cycleInfo) {
+function acompNormalizeKanbanStage(value, fallback) {
+  var s = acompSearchText(value).replace(/[^a-z0-9]+/g, ' ').trim();
+  if (!s) return fallback || 'pending';
+  if (s === 'done' || s === 'concluido' || s.indexOf('concluido') >= 0 || s.indexOf('conclu') >= 0) return 'done';
+  if (s === 'doing' || s.indexOf('interferencia') >= 0 || s.indexOf('processo') >= 0 || s.indexOf('andamento') >= 0) return 'doing';
+  if (s === 'pending' || s.indexOf('pendente') >= 0) return 'pending';
+  return fallback || 'pending';
+}
+function acompFollowupKanbanStage(followup) {
+  if (!followup) return '';
+  var explicit = followup.kanban_stage || followup.etapa_kanban || followup.etapa || followup.status_kanban || '';
+  return acompNormalizeKanbanStage(explicit, explicit ? 'pending' : 'done');
+}
+function acompKanbanStage(item, cycleInfo, cycleFollowup) {
   var store = acompKanbanStageStore();
   var value = store[acompKanbanStageKey(item && item.projectKey, cycleInfo)];
-  return value === 'doing' || value === 'done' ? value : 'pending';
+  if (value) return acompNormalizeKanbanStage(value, 'pending');
+  return acompFollowupKanbanStage(cycleFollowup) || 'pending';
 }
 function acompSetKanbanStage(projectKey, cycleKey, stage) {
   if (!projectKey || !cycleKey) return;
   var store = acompKanbanStageStore();
-  var value = stage === 'doing' || stage === 'done' ? stage : 'pending';
+  var value = acompNormalizeKanbanStage(stage, 'pending');
   store[String(cycleKey) + '|' + String(projectKey).toUpperCase()] = value;
   storageSet(ACOMP_KANBAN_STAGE_KEY, JSON.stringify(store));
 }
@@ -3947,7 +3961,7 @@ function acompRenderKanban(list) {
     items.forEach(function(item){
       var cycleFollowup = acompFollowupNoCiclo(followupsByProject[item.projectKey] || [], cycleInfo);
       item._cycleFollowup = cycleFollowup;
-      grouped[acompKanbanStage(item, cycleInfo)].push(item);
+      grouped[acompKanbanStage(item, cycleInfo, cycleFollowup)].push(item);
     });
     var cycleHtml = cycles.map(function(c){
       return '<span class="acom-cycle '+(c === cycleInfo.mes ? 'on' : '')+'">'+c+'</span>';
@@ -4014,7 +4028,7 @@ function initAcomp() {
         '<div class="acom-field"><label for="acom-form-project-search">Projeto</label><input id="acom-form-project-search" type="search" placeholder="Digite para filtrar cliente, consultor ou m&ecirc;s" autocomplete="off" oninput="acompFilterProjectSelect()"><select id="acom-form-project" required onchange="acomProjectSelectChanged()"><option value="">Selecione o projeto</option>'+acompProjectOptions(list)+'</select><div id="acom-form-project-help" class="acom-field-help">Digite para filtrar. A lista abaixo permanece agrupada por m&ecirc;s de entrada e data da venda.</div></div>'+
         '<div class="acom-field"><label for="acom-form-date">Data</label><input id="acom-form-date" type="date" value="'+acompTodayIso()+'" required></div>'+
     '<div class="acom-field"><label for="acom-form-owner">Respons&aacute;vel</label><input id="acom-form-owner" type="text" value="'+escapeHtml((AUTH_STATE.user && (AUTH_STATE.user.name || AUTH_STATE.user.username)) || getUpdateActor() || 'PMO')+'" readonly></div>'+
-        '<div class="acom-field"><label for="acom-form-stage">Etapa no kanban</label><select id="acom-form-stage"><option value="pending">Acompanhamento pendente</option><option value="doing">Em processo de interfer&ecirc;ncia</option><option value="done">Acompanhamento mensal conclu&iacute;do</option></select></div>'+
+        '<div class="acom-field"><label for="acom-form-stage">Etapa no kanban</label><select id="acom-form-stage"><option value="done" selected>Acompanhamento mensal conclu&iacute;do</option><option value="doing">Em processo de interfer&ecirc;ncia</option><option value="pending">Acompanhamento pendente</option></select></div>'+
         '<div class="acom-field acom-form-wide"><label for="acom-form-text">Considera&ccedil;&atilde;o</label><textarea id="acom-form-text" placeholder="O que foi observado no acompanhamento deste projeto?"></textarea></div>'+
         '<div class="acom-field acom-form-wide"><label for="acom-form-next">Pr&oacute;xima a&ccedil;&atilde;o</label><textarea id="acom-form-next" placeholder="Qual &eacute; o pr&oacute;ximo movimento esperado?"></textarea></div>'+
         '<button type="submit" class="acom-save">Salvar acompanhamento</button>'+
