@@ -121,6 +121,10 @@ function doGet(e) {
       var followupsResult = getProjectFollowups_(params, toInt_(params.limit, 1000));
       return jsonOutput_(followupsResult, params.callback);
     }
+    if (action === 'setProjectKanbanStage') {
+      var kanbanResult = setProjectKanbanStage_(params);
+      return jsonOutput_(kanbanResult, params.callback);
+    }
     if (action === 'deleteProjectFollowup') {
       var deleteFollowupResult = deleteProjectFollowup_(params);
       return jsonOutput_(deleteFollowupResult, params.callback);
@@ -129,7 +133,7 @@ function doGet(e) {
     var payload = {
       ok: true,
       service: 'clickup-sync',
-      message: 'Use action=syncProject|syncAll|processDirty|validateConfig|getClickUpInventory|logPanelUpdate|getPanelUpdateHistory|login|me|listUsers|createUser|setUserEnabled|logProjectFollowup|getProjectFollowups|deleteProjectFollowup'
+      message: 'Use action=syncProject|syncAll|processDirty|validateConfig|getClickUpInventory|logPanelUpdate|getPanelUpdateHistory|login|me|listUsers|createUser|setUserEnabled|logProjectFollowup|getProjectFollowups|setProjectKanbanStage|deleteProjectFollowup'
     };
     return jsonOutput_(payload, params.callback);
   } catch (error) {
@@ -1365,6 +1369,20 @@ function getProjectFollowupSheet_() {
   return sheet;
 }
 
+function getProjectKanbanStateSheet_() {
+  var ss = SpreadsheetApp.openById(getScriptProperty_('SHEET_ID'));
+  var name = getScriptProperty_('PROJECT_KANBAN_STATE_SHEET', 'ACOMPANHAMENTOS_KANBAN');
+  var sheet = ss.getSheetByName(name) || ss.insertSheet(name);
+  ensureHeaders_(sheet, [
+    'updated_at',
+    'cycle_key',
+    'project_key',
+    'stage',
+    'updated_by'
+  ]);
+  return sheet;
+}
+
 function getUsersSheet_() {
   var ss = SpreadsheetApp.openById(getScriptProperty_('SHEET_ID'));
   var name = getScriptProperty_('PANEL_USERS_SHEET', 'PAINEL_USUARIOS');
@@ -1608,11 +1626,14 @@ function logProjectFollowup_(params) {
     sanitizeText_(params.kanban_stage || params.etapa_kanban)
   ];
   sheet.appendRow(row);
+  var rowNumber = sheet.getLastRow();
+  var followup = rowToObject_(getProjectFollowupHeaders_(), row);
+  followup.row_number = rowNumber;
   return {
     ok: true,
     logged: true,
-    followup: rowToObject_(getProjectFollowupHeaders_(), row),
-    total_rows: Math.max(0, sheet.getLastRow() - 1)
+    followup: followup,
+    total_rows: Math.max(0, rowNumber - 1)
   };
 }
 
@@ -1646,9 +1667,11 @@ function getProjectFollowups_(params, limit) {
   var header = values[0];
   var rows = values.slice(1);
   var max = Math.max(1, Math.min(Number(limit || 1000), 5000));
-  var followups = rows.slice(Math.max(0, rows.length - max)).map(function(row) {
+  var start = Math.max(0, rows.length - max);
+  var followups = rows.slice(start).map(function(row, index) {
     var item = rowToObject_(header, row);
     return {
+      row_number: start + index + 2,
       logged_at: item.logged_at instanceof Date ? item.logged_at.toISOString() : String(item.logged_at || ''),
       data_acompanhamento: item.data_acompanhamento instanceof Date ? Utilities.formatDate(item.data_acompanhamento, Session.getScriptTimeZone(), 'yyyy-MM-dd') : String(item.data_acompanhamento || ''),
       mes: String(item.mes || ''),
@@ -1669,8 +1692,87 @@ function getProjectFollowups_(params, limit) {
   return {
     ok: true,
     total: rows.length,
-    followups: followups
+    followups: followups,
+    kanban_states: getProjectKanbanStates_()
   };
+}
+
+function normalizeKanbanStage_(value) {
+  var raw = String(value || '').toLowerCase();
+  if (raw === 'done' || raw.indexOf('conclu') >= 0) return 'done';
+  if (raw === 'doing' || raw.indexOf('interfer') >= 0 || raw.indexOf('processo') >= 0 || raw.indexOf('andamento') >= 0) return 'doing';
+  return 'pending';
+}
+
+function getProjectKanbanStates_() {
+  var sheet = getProjectKanbanStateSheet_();
+  var values = sheet.getDataRange().getValues();
+  if (values.length <= 1) return {};
+  var header = values[0];
+  var map = {};
+  values.slice(1).forEach(function(row) {
+    var item = rowToObject_(header, row);
+    var cycleKey = sanitizeText_(item.cycle_key);
+    var projectKey = sanitizeText_(item.project_key).toUpperCase();
+    if (!cycleKey || !projectKey) return;
+    map[cycleKey + '|' + projectKey] = normalizeKanbanStage_(item.stage);
+  });
+  return map;
+}
+
+function findProjectKanbanStateRow_(sheet, cycleKey, projectKey) {
+  var values = sheet.getDataRange().getValues();
+  if (values.length <= 1) return null;
+  var header = values[0];
+  for (var i = 1; i < values.length; i++) {
+    var item = rowToObject_(header, values[i]);
+    if (String(item.cycle_key || '') === cycleKey && String(item.project_key || '').toUpperCase() === projectKey) {
+      return { row: i + 1, header: header };
+    }
+  }
+  return null;
+}
+
+function setProjectKanbanStage_(params) {
+  params = params || {};
+  var user = requireUser_(params);
+  var projectKey = sanitizeText_(params.project_key).toUpperCase();
+  var cycleKey = sanitizeText_(params.cycle_key);
+  if (!projectKey || !cycleKey) throw new Error('project_key and cycle_key are required');
+  var stage = normalizeKanbanStage_(params.stage);
+  var sheet = getProjectKanbanStateSheet_();
+  var found = findProjectKanbanStateRow_(sheet, cycleKey, projectKey);
+  var row = [
+    new Date(),
+    cycleKey,
+    projectKey,
+    stage,
+    user.name || user.username || ''
+  ];
+  if (found) {
+    sheet.getRange(found.row, 1, 1, row.length).setValues([row]);
+  } else {
+    sheet.appendRow(row);
+  }
+  return {
+    ok: true,
+    saved: true,
+    cycle_key: cycleKey,
+    project_key: projectKey,
+    stage: stage,
+    kanban_states: getProjectKanbanStates_()
+  };
+}
+
+function clearProjectKanbanStage_(cycleKey, projectKey) {
+  cycleKey = sanitizeText_(cycleKey);
+  projectKey = sanitizeText_(projectKey).toUpperCase();
+  if (!cycleKey || !projectKey) return false;
+  var sheet = getProjectKanbanStateSheet_();
+  var found = findProjectKanbanStateRow_(sheet, cycleKey, projectKey);
+  if (!found) return false;
+  sheet.deleteRow(found.row);
+  return true;
 }
 
 function normalizeFollowupDateForCompare_(value) {
@@ -1689,18 +1791,22 @@ function normalizeFollowupLoggedForCompare_(value) {
 
 function deleteProjectFollowup_(params) {
   params = params || {};
-  requireUser_(params);
+  requireAdmin_(params);
   var projectKey = sanitizeText_(params.project_key).toUpperCase();
   var cliente = sanitizeText_(params.cliente).toLowerCase();
   var loggedAt = sanitizeText_(params.logged_at);
   var dataAcompanhamento = sanitizeText_(params.data_acompanhamento);
+  var rowNumber = toInt_(params.row_number, null);
+  var cycleKey = sanitizeText_(params.cycle_key);
   if (!projectKey && !cliente) throw new Error('project_key or cliente is required');
   var sheet = getProjectFollowupSheet_();
   var values = sheet.getDataRange().getValues();
   if (values.length <= 1) return { ok: true, deleted: false, message: 'Nenhum acompanhamento encontrado.' };
   var header = values[0];
   var deleted = null;
-  for (var i = values.length - 1; i >= 1; i--) {
+  var start = rowNumber && rowNumber >= 2 && rowNumber <= values.length ? rowNumber - 1 : values.length - 1;
+  var end = rowNumber ? start : 1;
+  for (var i = start; i >= end; i--) {
     var item = rowToObject_(header, values[i]);
     var itemKey = String(item.project_key || '').toUpperCase();
     var itemCliente = String(item.cliente || '').toLowerCase();
@@ -1712,11 +1818,13 @@ function deleteProjectFollowup_(params) {
     sheet.deleteRow(i + 1);
     break;
   }
+  if (deleted && cycleKey) clearProjectKanbanStage_(cycleKey, projectKey);
   return {
     ok: true,
     deleted: !!deleted,
     followup: deleted || null,
-    total_rows: Math.max(0, sheet.getLastRow() - 1)
+    total_rows: Math.max(0, sheet.getLastRow() - 1),
+    kanban_states: getProjectKanbanStates_()
   };
 }
 
