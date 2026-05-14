@@ -3964,10 +3964,23 @@ function acompFilterProjectSelect() {
   }
 }
 window.acompFilterProjectSelect = acompFilterProjectSelect;
+function acompCommitProjectSelection() {
+  window.setTimeout(function(){
+    var input = document.getElementById('acom-form-project-search');
+    var select = document.getElementById('acom-form-project');
+    var help = document.getElementById('acom-form-project-help');
+    if (!select || !select.value) return;
+    var option = select.options[select.selectedIndex];
+    if (input && option) input.value = option.text;
+    select.removeAttribute('size');
+    if (help) help.textContent = 'Projeto selecionado. Para trocar, digite novamente no campo acima.';
+  }, 0);
+}
+window.acompCommitProjectSelection = acompCommitProjectSelection;
 function acompProjectSelectChanged() {
   var select = document.getElementById('acom-form-project');
   if (!select) return;
-  if (select.value) select.removeAttribute('size');
+  if (select.value) acompCommitProjectSelection();
 }
 window.acompProjectSelectChanged = acompProjectSelectChanged;
 function salvarAcompanhamentoProjeto(btn) {
@@ -4296,7 +4309,7 @@ function initAcomp() {
         kpi('Cr&iacute;ticos', criticos, criticos ? 'r' : 'g', 'onclick="return setAcompFilter(\'pendentes\')"', 'sem registro ou acima de 30 dias')+
       '</div>'+
       '<div class="acom-panel"><div class="acom-panel-head"><div><div class="acom-panel-title">Registrar no site</div><div class="acom-panel-note">'+syncNote+'</div></div></div><div class="acom-panel-body"><form id="acom-form" class="acom-form" onsubmit="return salvarAcompanhamentoProjeto(this.querySelector(\'.acom-save\'))">'+
-        '<div class="acom-field"><label for="acom-form-project-search">Projeto</label><input id="acom-form-project-search" type="search" placeholder="Digite para filtrar cliente, consultor ou m&ecirc;s" autocomplete="off" oninput="acompFilterProjectSelect()"><select id="acom-form-project" required onchange="acomProjectSelectChanged()"><option value="">Selecione o projeto</option>'+acompProjectOptions(list)+'</select><div id="acom-form-project-help" class="acom-field-help">Digite para filtrar. A lista abaixo permanece agrupada por m&ecirc;s de entrada e data da venda.</div></div>'+
+        '<div class="acom-field"><label for="acom-form-project-search">Projeto</label><input id="acom-form-project-search" type="search" placeholder="Digite para filtrar cliente, consultor ou m&ecirc;s" autocomplete="off" oninput="acompFilterProjectSelect()"><select id="acom-form-project" required onchange="acompProjectSelectChanged()" onclick="acompCommitProjectSelection()" onkeyup="if(event.key===\'Enter\') acompCommitProjectSelection()"><option value="">Selecione o projeto</option>'+acompProjectOptions(list)+'</select><div id="acom-form-project-help" class="acom-field-help">Digite para filtrar. A lista abaixo permanece agrupada por m&ecirc;s de entrada e data da venda.</div></div>'+
         '<div class="acom-field"><label for="acom-form-date">Data</label><input id="acom-form-date" type="date" value="'+acompTodayIso()+'" required></div>'+
     '<div class="acom-field"><label for="acom-form-owner">Respons&aacute;vel</label><input id="acom-form-owner" type="text" value="'+escapeHtml((AUTH_STATE.user && (AUTH_STATE.user.name || AUTH_STATE.user.username)) || getUpdateActor() || 'PMO')+'" readonly></div>'+
         '<div class="acom-field"><label for="acom-form-stage">Etapa no kanban</label><select id="acom-form-stage"><option value="done" selected>Acompanhamento mensal conclu&iacute;do</option><option value="doing">Em processo de interfer&ecirc;ncia</option><option value="pending">Acompanhamento pendente</option></select></div>'+
