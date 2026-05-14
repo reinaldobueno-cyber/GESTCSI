@@ -3631,6 +3631,48 @@ function acompLoadRemoteFollowups(force) {
     throw error;
   });
 }
+function acompRefreshFollowupsInBackground(delay) {
+  window.setTimeout(function(){
+    acompLoadRemoteFollowups(true).catch(function(error){
+      console.warn('[ACOMPANHAMENTO] Recarregamento em segundo plano falhou:', error && error.message);
+    });
+  }, delay || 700);
+}
+function acompAddFollowupLocal(followup) {
+  if (!followup) return;
+  var id = String(followup.followup_id || '');
+  if (id) {
+    ACOMP_REMOTE_FOLLOWUPS = (ACOMP_REMOTE_FOLLOWUPS || []).filter(function(item){
+      return String(item.followup_id || '') !== id;
+    });
+  }
+  ACOMP_REMOTE_FOLLOWUPS.unshift(followup);
+  ACOMP_REMOTE_LOADED = true;
+}
+function acompRemoveFollowupLocal(target) {
+  if (!target) return;
+  var removed = false;
+  var targetId = String(target.followup_id || '');
+  var targetRow = String(target.row_number || target.row || '');
+  var targetLogged = String(target.logged_at || '');
+  var targetDate = String(target.data_acompanhamento || '');
+  var targetKey = String(target.project_key || '').toUpperCase();
+  ACOMP_REMOTE_FOLLOWUPS = (ACOMP_REMOTE_FOLLOWUPS || []).filter(function(item){
+    if (removed) return true;
+    var sameId = targetId && String(item.followup_id || '') === targetId;
+    var sameRow = targetRow && String(item.row_number || item.row || '') === targetRow;
+    var sameFallback = targetKey &&
+      String(item.project_key || '').toUpperCase() === targetKey &&
+      String(item.logged_at || '') === targetLogged &&
+      String(item.data_acompanhamento || '') === targetDate;
+    if (sameId || sameRow || sameFallback) {
+      removed = true;
+      return false;
+    }
+    return true;
+  });
+  ACOMP_REMOTE_LOADED = true;
+}
 function acompStatusAtivo(p) {
   var s = dashStatusKey(p && p.status);
   return s !== 'concluido' && s !== 'cancelado';
@@ -3962,17 +4004,34 @@ function salvarAcompanhamentoProjeto(btn) {
   }, 15000).then(function(resp){
     if (!resp || resp.ok === false) throw new Error((resp && (resp.error || resp.message)) || 'Registro recusado');
     if (!resp.logged) throw new Error('Publique o Apps Script atualizado para salvar acompanhamentos.');
+    var savedFollowup = resp.followup || {
+      logged_at: new Date().toISOString(),
+      data_acompanhamento: data,
+      mes: item.mes,
+      cliente: item.cliente,
+      consultor: item.consultor,
+      project_key: item.projectKey,
+      link_projeto: p.projeto_link || p.link_projeto || '',
+      consideracao: consideracao,
+      proxima_acao: proxima,
+      responsavel: responsavel,
+      kanban_stage: stage,
+      origem: 'site',
+      status: item.status
+    };
     var cycleKey = acompKanbanCycleKey(acompCicloAtual());
+    acompAddFollowupLocal(savedFollowup);
     acompSetKanbanStageLocal(item.projectKey, cycleKey, stage);
-    acompPersistKanbanStage(item.projectKey, cycleKey, stage).catch(function(error){
+    acompPersistKanbanStage(item.projectKey, cycleKey, stage).then(function(kanbanResp){
+      if (kanbanResp && kanbanResp.kanban_states) ACOMP_REMOTE_KANBAN_STAGES = kanbanResp.kanban_states;
+      initAcomp();
+    }).catch(function(error){
       console.warn('[ACOMPANHAMENTO] Não salvou etapa compartilhada:', error && error.message);
     });
     form.reset();
-    ACOMP_REMOTE_LOADED = false;
     initAcomp();
-    return acompLoadRemoteFollowups(true).then(function(){
-      showToast('Acompanhamento registrado e sincronizado', 'ok');
-    });
+    showToast('Acompanhamento registrado', 'ok');
+    acompRefreshFollowupsInBackground(900);
   }).catch(function(error){
     showToast('N&atilde;o salvou no site: ' + ((error && error.message) || 'tente novamente'), 'err');
   }).finally(function(){
@@ -4132,12 +4191,11 @@ function acompDeleteFollowup(projectKey, rowNumber, followupId) {
   }, 15000).then(function(resp){
     if (!resp || resp.ok === false || !resp.deleted) throw new Error((resp && (resp.error || resp.message)) || 'Exclusão recusada');
     if (resp.kanban_states) ACOMP_REMOTE_KANBAN_STAGES = resp.kanban_states;
+    acompRemoveFollowupLocal(target);
     fecharModalHistorico();
-    ACOMP_REMOTE_LOADED = false;
     initAcomp();
-    return acompLoadRemoteFollowups(true).then(function(){
-      showToast('Acompanhamento excluído e histórico sincronizado', 'ok');
-    });
+    showToast('Acompanhamento excluído', 'ok');
+    acompRefreshFollowupsInBackground(900);
   }).catch(function(error){
     showToast('Não excluiu: ' + ((error && error.message) || 'tente novamente'), 'err');
   });
