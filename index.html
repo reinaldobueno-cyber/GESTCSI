@@ -3613,10 +3613,10 @@ function acompFollowupsByProjectMap() {
   return map;
 }
 function acompLoadRemoteFollowups(force) {
-  if (!authTokenParam()) return;
-  if (ACOMP_REMOTE_LOADING || (ACOMP_REMOTE_LOADED && !force)) return;
+  if (!authTokenParam()) return Promise.resolve(null);
+  if (ACOMP_REMOTE_LOADING || (ACOMP_REMOTE_LOADED && !force)) return Promise.resolve(null);
   ACOMP_REMOTE_LOADING = true;
-  chamarAppsScriptJsonp('getProjectFollowups', {limit: 2000, auth_token: authTokenParam()}, 12000).then(function(resp){
+  return chamarAppsScriptJsonp('getProjectFollowups', {limit: 2000, auth_token: authTokenParam()}, 12000).then(function(resp){
     ACOMP_REMOTE_LOADING = false;
     if (!resp || resp.ok === false) throw new Error((resp && (resp.error || resp.message)) || 'Histórico indisponível');
     if (!Array.isArray(resp.followups)) throw new Error('Publique o Apps Script atualizado para carregar acompanhamentos.');
@@ -3624,9 +3624,11 @@ function acompLoadRemoteFollowups(force) {
     ACOMP_REMOTE_KANBAN_STAGES = resp.kanban_states || {};
     ACOMP_REMOTE_LOADED = true;
     initAcomp();
+    return resp;
   }).catch(function(error){
     ACOMP_REMOTE_LOADING = false;
     console.warn('[ACOMPANHAMENTO] Histórico do site indisponível:', error && error.message);
+    throw error;
   });
 }
 function acompStatusAtivo(p) {
@@ -3960,30 +3962,17 @@ function salvarAcompanhamentoProjeto(btn) {
   }, 15000).then(function(resp){
     if (!resp || resp.ok === false) throw new Error((resp && (resp.error || resp.message)) || 'Registro recusado');
     if (!resp.logged) throw new Error('Publique o Apps Script atualizado para salvar acompanhamentos.');
-    ACOMP_REMOTE_FOLLOWUPS.unshift((resp && resp.followup) || {
-      data_acompanhamento:data,
-      mes:item.mes,
-      cliente:item.cliente,
-      consultor:item.consultor,
-      project_key:item.projectKey,
-      link_projeto:p.projeto_link || p.link_projeto || '',
-      consideracao:consideracao,
-      proxima_acao:proxima,
-      responsavel:responsavel,
-      kanban_stage:stage,
-      origem:'site',
-      status:item.status,
-      logged_at:new Date().toISOString()
-    });
     var cycleKey = acompKanbanCycleKey(acompCicloAtual());
     acompSetKanbanStageLocal(item.projectKey, cycleKey, stage);
     acompPersistKanbanStage(item.projectKey, cycleKey, stage).catch(function(error){
       console.warn('[ACOMPANHAMENTO] Não salvou etapa compartilhada:', error && error.message);
     });
-    ACOMP_REMOTE_LOADED = true;
     form.reset();
+    ACOMP_REMOTE_LOADED = false;
     initAcomp();
-    showToast('Acompanhamento registrado', 'ok');
+    return acompLoadRemoteFollowups(true).then(function(){
+      showToast('Acompanhamento registrado e sincronizado', 'ok');
+    });
   }).catch(function(error){
     showToast('N&atilde;o salvou no site: ' + ((error && error.message) || 'tente novamente'), 'err');
   }).finally(function(){
@@ -4097,7 +4086,8 @@ function acompProjectInfoPopup(projectKey) {
   var historico = followups.map(function(f){
     var texto = [f.consideracao, f.proxima_acao ? ('Proxima acao: '+f.proxima_acao) : '', f.responsavel ? ('Responsavel: '+f.responsavel) : ''].filter(Boolean).join(' | ');
     var rowId = f.row_number || f.row || '';
-    var action = isAdmin ? '<div class="acom-popup-actions"><button type="button" class="acom-popup-danger" onclick="return acompDeleteFollowup(\''+jsQuote(item.projectKey)+'\',\''+jsQuote(rowId)+'\')">Excluir este acompanhamento</button></div>' : '';
+    var followupId = f.followup_id || '';
+    var action = isAdmin ? '<div class="acom-popup-actions"><button type="button" class="acom-popup-danger" onclick="return acompDeleteFollowup(\''+jsQuote(item.projectKey)+'\',\''+jsQuote(rowId)+'\',\''+jsQuote(followupId)+'\')">Excluir este acompanhamento</button></div>' : '';
     return '<div class="acom-popup-log"><div class="acom-popup-log-date">'+escapeHtml(f.data_acompanhamento || f.logged_at || '-')+'</div><div class="acom-popup-text">'+escapeHtml(texto || '-')+'</div>'+action+'</div>';
   }).join('') || '<div class="acom-popup-text">Nenhum acompanhamento registrado no site para este projeto.</div>';
   var clickup = [
@@ -4119,41 +4109,35 @@ function acompProjectInfoPopup(projectKey) {
   return false;
 }
 window.acompProjectInfoPopup = acompProjectInfoPopup;
-function acompDeleteFollowup(projectKey, rowNumber) {
+function acompDeleteFollowup(projectKey, rowNumber, followupId) {
   if (!authTokenParam()) { showToast('Entre no painel para excluir acompanhamento', 'err'); return false; }
   if (!AUTH_STATE.user || AUTH_STATE.user.role !== 'admin') { showToast('Somente admin pode excluir acompanhamentos', 'err'); return false; }
   projectKey = String(projectKey || '').toUpperCase();
   var list = (acompFollowupsByProjectMap()[projectKey] || []);
   if (!list.length) { showToast('Nenhum acompanhamento para excluir', 'err'); return false; }
-  var target = rowNumber ? list.filter(function(item){ return String(item.row_number || item.row || '') === String(rowNumber); })[0] : list[list.length - 1];
+  var target = followupId ? list.filter(function(item){ return String(item.followup_id || '') === String(followupId); })[0] : null;
+  if (!target) target = rowNumber ? list.filter(function(item){ return String(item.row_number || item.row || '') === String(rowNumber); })[0] : list[list.length - 1];
   if (!target) { showToast('Acompanhamento não encontrado para excluir', 'err'); return false; }
   var label = target.data_acompanhamento || target.logged_at || ('linha ' + (target.row_number || rowNumber || ''));
   if (!confirm('Excluir este acompanhamento (' + label + ')?')) return false;
+  showToast('Excluindo acompanhamento...', 'ok');
   chamarAppsScriptJsonp('deleteProjectFollowup', {
     auth_token: authTokenParam(),
     project_key: projectKey,
+    followup_id: target.followup_id || followupId || '',
     row_number: target.row_number || rowNumber || '',
     cycle_key: acompKanbanCycleKey(acompCicloAtual()),
     logged_at: target.logged_at || '',
     data_acompanhamento: target.data_acompanhamento || ''
   }, 15000).then(function(resp){
     if (!resp || resp.ok === false || !resp.deleted) throw new Error((resp && (resp.error || resp.message)) || 'Exclusão recusada');
-    var removed = false;
-    ACOMP_REMOTE_FOLLOWUPS = (ACOMP_REMOTE_FOLLOWUPS || []).filter(function(item){
-      if (removed) return true;
-      var sameKey = String(acompFollowupKey(item) || '').toUpperCase() === projectKey;
-      var sameRow = (target.row_number || rowNumber) ? String(item.row_number || item.row || '') === String(target.row_number || rowNumber) : true;
-      var sameLogged = target.logged_at ? String(item.logged_at || '') === String(target.logged_at || '') : true;
-      var sameDate = target.data_acompanhamento ? String(item.data_acompanhamento || '') === String(target.data_acompanhamento || '') : true;
-      if (sameKey && sameRow && sameLogged && sameDate) { removed = true; return false; }
-      return true;
-    });
-    var cycleKey = acompKanbanCycleKey(acompCicloAtual());
     if (resp.kanban_states) ACOMP_REMOTE_KANBAN_STAGES = resp.kanban_states;
-    else delete (ACOMP_REMOTE_KANBAN_STAGES || {})[String(cycleKey) + '|' + projectKey];
     fecharModalHistorico();
+    ACOMP_REMOTE_LOADED = false;
     initAcomp();
-    showToast('Acompanhamento excluído', 'ok');
+    return acompLoadRemoteFollowups(true).then(function(){
+      showToast('Acompanhamento excluído e histórico sincronizado', 'ok');
+    });
   }).catch(function(error){
     showToast('Não excluiu: ' + ((error && error.message) || 'tente novamente'), 'err');
   });
@@ -4163,7 +4147,7 @@ window.acompDeleteFollowup = acompDeleteFollowup;
 function acompDeleteLatestFollowup(projectKey) {
   var list = (acompFollowupsByProjectMap()[String(projectKey || '').toUpperCase()] || []);
   var latest = list[list.length - 1] || {};
-  return acompDeleteFollowup(projectKey, latest.row_number || latest.row || '');
+  return acompDeleteFollowup(projectKey, latest.row_number || latest.row || '', latest.followup_id || '');
 }
 window.acompDeleteLatestFollowup = acompDeleteLatestFollowup;
 function acompRenderKanban(list) {

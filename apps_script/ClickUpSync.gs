@@ -1364,7 +1364,8 @@ function getProjectFollowupSheet_() {
     'status',
     'url',
     'navegador',
-    'kanban_stage'
+    'kanban_stage',
+    'followup_id'
   ]);
   return sheet;
 }
@@ -1608,6 +1609,7 @@ function logProjectFollowup_(params) {
   if (!consideracao && !proximaAcao) throw new Error('consideracao or proxima_acao is required');
   var sheet = getProjectFollowupSheet_();
   var dataAcompanhamento = sanitizeText_(params.data_acompanhamento) || Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'yyyy-MM-dd');
+  var followupId = makeAuthToken_();
   var row = [
     new Date(),
     dataAcompanhamento,
@@ -1623,7 +1625,8 @@ function logProjectFollowup_(params) {
     sanitizeText_(params.status),
     sanitizeText_(params.url),
     sanitizeText_(params.navegador),
-    sanitizeText_(params.kanban_stage || params.etapa_kanban)
+    sanitizeText_(params.kanban_stage || params.etapa_kanban),
+    followupId
   ];
   sheet.appendRow(row);
   var rowNumber = sheet.getLastRow();
@@ -1653,7 +1656,8 @@ function getProjectFollowupHeaders_() {
     'status',
     'url',
     'navegador',
-    'kanban_stage'
+    'kanban_stage',
+    'followup_id'
   ];
 }
 
@@ -1686,7 +1690,8 @@ function getProjectFollowups_(params, limit) {
       origem: String(item.origem || ''),
       status: String(item.status || ''),
       url: String(item.url || ''),
-      navegador: String(item.navegador || '')
+      navegador: String(item.navegador || ''),
+      followup_id: String(item.followup_id || '')
     };
   }).reverse();
   return {
@@ -1796,6 +1801,7 @@ function deleteProjectFollowup_(params) {
   var cliente = sanitizeText_(params.cliente).toLowerCase();
   var loggedAt = sanitizeText_(params.logged_at);
   var dataAcompanhamento = sanitizeText_(params.data_acompanhamento);
+  var followupId = sanitizeText_(params.followup_id);
   var rowNumber = toInt_(params.row_number, null);
   var cycleKey = sanitizeText_(params.cycle_key);
   if (!projectKey && !cliente) throw new Error('project_key or cliente is required');
@@ -1808,6 +1814,7 @@ function deleteProjectFollowup_(params) {
   var end = rowNumber ? start : 1;
   for (var i = start; i >= end; i--) {
     var item = rowToObject_(header, values[i]);
+    if (followupId && String(item.followup_id || '') !== followupId) continue;
     var itemKey = String(item.project_key || '').toUpperCase();
     var itemCliente = String(item.cliente || '').toLowerCase();
     var keyMatches = projectKey ? itemKey === projectKey : itemCliente === cliente;
