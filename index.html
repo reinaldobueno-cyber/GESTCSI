@@ -2769,6 +2769,174 @@ body.theme-dark .dashx-info{
   border-color:rgba(148,163,184,.28)!important;
   color:#F8FAFC!important;
 }
+
+/* Dark mode foundation: this final layer wins over older light-only blocks that
+   still use fixed colors and !important. */
+html:has(body.theme-dark),
+body.theme-dark{
+  color-scheme:dark;
+  background:#0B1120!important;
+}
+body.theme-dark .app-shell,
+body.theme-dark .main-content,
+body.theme-dark .page{
+  background:linear-gradient(180deg,#0B1120 0%,#0F172A 100%)!important;
+}
+body.theme-dark .sidenav,
+body.theme-dark .sidenav:hover{
+  background:linear-gradient(180deg,#070D19 0%,#0B1120 58%,#0F172A 100%)!important;
+  border-right:1px solid rgba(148,163,184,.18)!important;
+  box-shadow:none!important;
+}
+body.theme-dark nav,
+body.theme-dark .period-bar,
+body.theme-dark .tabs{
+  background:#0B1120!important;
+  border-color:rgba(148,163,184,.18)!important;
+}
+body.theme-dark .dash-panel,
+body.theme-dark .dashx-section,
+body.theme-dark .dashx-card,
+body.theme-dark .dashx-chart-card,
+body.theme-dark .dashx-action-card,
+body.theme-dark .tower-panel,
+body.theme-dark .ptable,
+body.theme-dark .fbox,
+body.theme-dark .cdetail,
+body.theme-dark .cc,
+body.theme-dark .acom-hero,
+body.theme-dark .acom-panel,
+body.theme-dark .acom-cohort,
+body.theme-dark .acom-kanban-card,
+body.theme-dark .kpi,
+body.theme-dark .dash-kpi,
+body.theme-dark .exec-wrap,
+body.theme-dark .exec-card,
+body.theme-dark .history-modal,
+body.theme-dark .history-box{
+  background:#111827!important;
+  border-color:rgba(148,163,184,.22)!important;
+  color:#F8FAFC!important;
+  box-shadow:none!important;
+}
+body.theme-dark .dash-ph,
+body.theme-dark .dashx-section-head,
+body.theme-dark .dashx-table th,
+body.theme-dark .dashx-health-table th,
+body.theme-dark .tower-table th,
+body.theme-dark .ptable-head,
+body.theme-dark .flabel,
+body.theme-dark .history-head,
+body.theme-dark .history-foot,
+body.theme-dark .month-group-title,
+body.theme-dark .acom-panel-head,
+body.theme-dark .acom-cohort-head,
+body.theme-dark .acom-kanban-col-head{
+  background:#1E293B!important;
+  border-color:rgba(148,163,184,.22)!important;
+  color:#CBD5E1!important;
+}
+body.theme-dark .prow,
+body.theme-dark .pexpand,
+body.theme-dark .dashx-table,
+body.theme-dark .dashx-table tbody,
+body.theme-dark .dashx-table tr,
+body.theme-dark .dashx-table td,
+body.theme-dark .dashx-health-table,
+body.theme-dark .dashx-health-table tbody,
+body.theme-dark .dashx-health-table tr,
+body.theme-dark .dashx-health-table td,
+body.theme-dark .tower-table,
+body.theme-dark .tower-table tbody,
+body.theme-dark .tower-table tr,
+body.theme-dark .tower-table td,
+body.theme-dark .dashx-delivery-row,
+body.theme-dark .dashx-action-item,
+body.theme-dark .dashx-list-item,
+body.theme-dark .dashx-mini-card,
+body.theme-dark .dashx-inline-note,
+body.theme-dark .dashx-focus-note,
+body.theme-dark .tower-risk-row{
+  background:#111827!important;
+  border-color:rgba(148,163,184,.22)!important;
+  color:#F8FAFC!important;
+}
+body.theme-dark .prow:hover,
+body.theme-dark .dashx-table tbody tr:hover td,
+body.theme-dark .dashx-table tbody tr.is-active td,
+body.theme-dark .dashx-health-table tbody tr:hover td,
+body.theme-dark .tower-table tbody tr:hover td,
+body.theme-dark .dashx-delivery-row:hover,
+body.theme-dark .dashx-action-item.is-active,
+body.theme-dark .dashx-mini-card.active{
+  background:#1E293B!important;
+  border-color:rgba(148,163,184,.30)!important;
+  color:#F8FAFC!important;
+}
+body.theme-dark .pname,
+body.theme-dark .pcell,
+body.theme-dark .dashx-table td,
+body.theme-dark .dashx-table td strong,
+body.theme-dark .dashx-health-table td,
+body.theme-dark .tower-table td,
+body.theme-dark .tower-risk-name,
+body.theme-dark .dashx-delivery-name,
+body.theme-dark .dashx-action-name,
+body.theme-dark .dashx-list-title,
+body.theme-dark .admin-user-name{
+  color:#F8FAFC!important;
+}
+body.theme-dark .psub,
+body.theme-dark .dashx-card-note,
+body.theme-dark .dashx-mini-sub,
+body.theme-dark .dashx-list-sub,
+body.theme-dark .dashx-action-meta,
+body.theme-dark .tower-cons-meta,
+body.theme-dark .tower-panel-note,
+body.theme-dark .tower-sub,
+body.theme-dark .admin-user-meta{
+  color:#94A3B8!important;
+}
+body.theme-dark input,
+body.theme-dark select,
+body.theme-dark textarea,
+body.theme-dark .search-input{
+  background:#0F172A!important;
+  border-color:rgba(148,163,184,.26)!important;
+  color:#F8FAFC!important;
+}
+body.theme-dark option,
+body.theme-dark optgroup{
+  background:#0F172A!important;
+  color:#F8FAFC!important;
+}
+body.theme-dark .tag-gray,
+body.theme-dark .dashx-meta-chip,
+body.theme-dark .dashx-filter-chip,
+body.theme-dark .dashx-table-chip,
+body.theme-dark .dashx-mini-chip,
+body.theme-dark .tower-mini-badge,
+body.theme-dark .project-link-btn,
+body.theme-dark .pb,
+body.theme-dark .fb,
+body.theme-dark .pf-btn,
+body.theme-dark .cbtn{
+  background:rgba(255,255,255,.055)!important;
+  border-color:rgba(148,163,184,.24)!important;
+  color:#CBD5E1!important;
+}
+body.theme-dark .pb.on,
+body.theme-dark .fb.on,
+body.theme-dark .pf-btn.on,
+body.theme-dark .dashx-filter-chip.on,
+body.theme-dark .project-link-btn:hover{
+  background:rgba(34,197,94,.18)!important;
+  border-color:rgba(34,197,94,.42)!important;
+  color:#86EFAC!important;
+}
+body.theme-dark *{
+  scrollbar-color:#334155 #0B1120;
+}
 .auth-backdrop{position:fixed;inset:0;background:rgba(240,244,240,.94);z-index:20000;display:flex;align-items:center;justify-content:center;padding:20px;}
 .auth-card{width:min(420px,calc(100vw - 32px));background:var(--surf);border:1px solid var(--border);border-radius:12px;box-shadow:0 20px 70px rgba(20,32,24,.18);padding:24px;}
 .auth-title{font-size:22px;font-weight:900;color:var(--text);margin-bottom:6px;}
