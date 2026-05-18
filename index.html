@@ -2943,6 +2943,7 @@ var DASH_AUDIT_MODAL_HTML = '';
 var DASH_AUDIT_MODAL_TITLE = '';
 var DASH_DELIVERY_MONTH = '';
 var _openId = null;
+var _pendingProjectOpen = null;
 var ORDEM_MESES = ['JAN','FEV','MAR','ABR','MAI','JUN','JUL','AGO','SET','OUT','NOV','DEZ'];
 
 function indiceMesPainel(mes) {
@@ -5886,7 +5887,8 @@ function buildRows(list, pfx) {
     var followupsH = renderProjectFollowupsForProjectTab(p);
     var logH = p.acompanhamento ? '<div class="sec-l">Observa&ccedil;&atilde;o</div><div class="log-box">'+escapeHtml(p.acompanhamento)+'</div>' : '';
     var obsH = p.obs ? '<div class="sec-l">Observa&ccedil;&otilde;es internas</div><div class="obs-box">'+escapeHtml(p.obs)+'</div>' : '';
-    out += '<div class="prow '+info.rc+'" id="'+id+'" onclick="togRow(\''+id+'\')">';
+    var projectKeyAttr = escapeHtml(projectMonthKey(p));
+    out += '<div class="prow '+info.rc+'" id="'+id+'" data-project-key="'+projectKeyAttr+'" onclick="togRow(\''+id+'\')">';
     var projetoLinkBtn = p.projeto_link ? '<a class=\"project-link project-link-btn\" href=\"'+p.projeto_link+'\" target=\"_blank\" rel=\"noopener noreferrer\" onclick=\"event.stopPropagation()\">Abrir Projeto</a>' : '';
     var seqBadge = p._monthSeq ? '<span class="month-seq-badge">'+p._monthSeq+'&ordf; venda do m&ecirc;s</span>' : '';
     out += '<div class="pcell"><div class="pname-row"><div class="pname">'+p.cliente+'</div>'+projetoLinkBtn+'</div><div class="psub">'+(p.consultor||'\u2014')+' &bull; '+p.mes+seqBadge+'</div></div>';
@@ -5939,6 +5941,31 @@ function togRow(id) {
   row.classList.toggle('open',!was);
   exp.style.display=was?'none':'block';
   _openId=was?null:id;
+}
+function abrirProjetoAtualizadoAposSync(foco, allowFilter) {
+  if (!foco || !foco.projectKey) return false;
+  var targetKey = String(foco.projectKey || '').toUpperCase();
+  var row = null;
+  document.querySelectorAll('#rows-all .prow[data-project-key]').forEach(function(item) {
+    if (row) return;
+    if (String(item.getAttribute('data-project-key') || '').toUpperCase() === targetKey) row = item;
+  });
+  if (!row && allowFilter !== false && foco.cliente) {
+    fS = 'all';
+    fC = 'all';
+    fM = 'all';
+    fQ = String(foco.cliente || '').trim().toLowerCase();
+    var search = document.getElementById('project-search');
+    if (search) search.value = fQ;
+    applyF();
+    return abrirProjetoAtualizadoAposSync(foco, false);
+  }
+  if (!row) return false;
+  if (!row.classList.contains('open')) togRow(row.id);
+  setTimeout(function() {
+    try { row.scrollIntoView({ behavior: 'smooth', block: 'center' }); } catch(e) {}
+  }, 120);
+  return true;
 }
 
 // ---- Dashboard ----
@@ -7535,7 +7562,7 @@ function applyF(){
   if(fC!=='all')p=p.filter(function(x){return x.consultor===fC;});
   if(fM!=='all')p=p.filter(function(x){return x.mes===fM;});
   if(fQ)p=p.filter(function(x){return String(x.cliente||'').toLowerCase().indexOf(fQ)>=0;});
-  _openId=null;
+  if (!_pendingProjectOpen) _openId=null;
   document.getElementById('rows-all').innerHTML=buildMonthGroupedRows(p,'r-');
   document.getElementById('sh-count').textContent=p.length+' encontrado'+(p.length===1?'':'s');
   var orderEl = document.getElementById('project-order');
@@ -7543,6 +7570,13 @@ function applyF(){
   document.querySelectorAll('[data-project-status]').forEach(function(card){
     card.classList.toggle('active', card.getAttribute('data-project-status') === fS);
   });
+  if (_pendingProjectOpen) {
+    var foco = _pendingProjectOpen;
+    _pendingProjectOpen = null;
+    if (!abrirProjetoAtualizadoAposSync(foco, true)) {
+      showToast('Projeto sincronizado, mas nao localizei o card atualizado no filtro atual.', 'warn');
+    }
+  }
 }
 
 // ---- By Consultant ----
@@ -9901,6 +9935,12 @@ window.sincronizarClickupProjeto = function(key, btn) {
     showToast('Projeto nao encontrado para sincronizar', 'err');
     return false;
   }
+  var focoSync = {
+    projectKey: projectMonthKey(projeto || { project_key: projectKey }),
+    cliente: projeto && projeto.cliente || '',
+    pageId: ((document.querySelector('.page.on') || {}).id || 'page-all').replace('page-', ''),
+    filters: { status:fS, consultor:fC, mes:fM, busca:fQ }
+  };
   var labelOriginal = btn ? btn.textContent : '';
   if (btn) {
     btn.disabled = true;
@@ -9924,6 +9964,8 @@ window.sincronizarClickupProjeto = function(key, btn) {
     if (btn) btn.textContent = 'Atualizando painel...';
     aguardarReflexoSyncClickup(projectKey, resp.synced_at).then(function(refletiu){
       resetarCachesDerivadosPainel({ limparCachePainel: true });
+      window._syncProjectFocus = focoSync;
+      _pendingProjectOpen = focoSync;
       loadAll('manual');
       showToast(refletiu ? 'ClickUp atualizado no painel.' : 'ClickUp sincronizado; painel recarregado com a versao mais recente disponivel.', refletiu ? 'ok' : 'warn');
       if (btn) {
@@ -10924,8 +10966,19 @@ function _finalizarLoad(projetos, isRefresh, motivo, tipoAtualizacao) {
   if (isRefresh) {
     var pageAtiva = document.querySelector('.page.on');
     var snbAtivo  = document.querySelector('.snb.on');
-    var pageId    = pageAtiva ? pageAtiva.id.replace('page-','') : 'dash';
-    activePeriod='all'; fS='all'; fC='all'; fM='all'; _openId=null;
+    var focoSync = window._syncProjectFocus || null;
+    var pageId    = focoSync && focoSync.pageId ? focoSync.pageId : (pageAtiva ? pageAtiva.id.replace('page-','') : 'dash');
+    if (focoSync) {
+      activePeriod = 'all';
+      fS = focoSync.filters && focoSync.filters.status || 'all';
+      fC = focoSync.filters && focoSync.filters.consultor || 'all';
+      fM = focoSync.filters && focoSync.filters.mes || 'all';
+      fQ = focoSync.filters && focoSync.filters.busca || '';
+      _pendingProjectOpen = focoSync;
+      window._syncProjectFocus = null;
+    } else {
+      activePeriod='all'; fS='all'; fC='all'; fM='all'; _openId=null;
+    }
     renderAll();
     goTab(pageId, snbAtivo);
   } else {
