@@ -3853,6 +3853,21 @@ function acompKanbanStageLabel(value) {
   if (stage === 'doing') return 'Em processo de interferencia';
   return 'Acompanhamento pendente';
 }
+function acompCycleFromFollowup(item) {
+  var d = dashParseDate((item && (item.data_acompanhamento || item.logged_at)) || '');
+  if (d) return {mes: ORDEM_MESES[d.getMonth()], idx: d.getMonth(), ano: d.getFullYear()};
+  return acompCicloAtual();
+}
+function acompFollowupKanbanStageForProjectTab(item, p) {
+  var explicit = item && (item.kanban_stage || item.etapa_kanban || item.etapa || item.status_kanban);
+  if (explicit) return acompNormalizeKanbanStage(explicit, 'pending');
+  var projectKey = (item && item.project_key) || (p && p.project_key) || projectMonthKey(p || {});
+  var cycleInfo = acompCycleFromFollowup(item || {});
+  var value = (ACOMP_REMOTE_KANBAN_STAGES || {})[acompKanbanStageKey(projectKey, cycleInfo)];
+  if (value) return acompNormalizeKanbanStage(value, 'pending');
+  value = acompLatestRemoteKanbanStage(projectKey, cycleInfo);
+  return value ? acompNormalizeKanbanStage(value, 'pending') : '';
+}
 function acompFollowupKanbanStage(followup) {
   if (!followup) return '';
   var explicit = followup.kanban_stage || followup.etapa_kanban || followup.etapa || followup.status_kanban || '';
@@ -5797,10 +5812,11 @@ function renderProjectFollowupsForProjectTab(p) {
       item.consideracao ? escapeHtml(item.consideracao) : '',
       item.proxima_acao ? '<strong>Pr&oacute;xima a&ccedil;&atilde;o:</strong> ' + escapeHtml(item.proxima_acao) : ''
     ].filter(Boolean).join('<br>');
+    var kanbanStage = acompFollowupKanbanStageForProjectTab(item, p);
     var meta = [
       item.data_acompanhamento || item.logged_at || '-',
       item.responsavel || '',
-      item.kanban_stage ? acompKanbanStageLabel(item.kanban_stage) : ''
+      kanbanStage ? acompKanbanStageLabel(kanbanStage) : ''
     ].filter(Boolean).map(escapeHtml).join(' &bull; ');
     return '<div style="padding:8px 0;border-top:1px solid var(--border)"><div style="font-size:10px;font-weight:800;color:var(--muted);text-transform:uppercase;letter-spacing:.08em">'+meta+'</div><div style="font-size:12px;color:var(--text2);line-height:1.55;margin-top:4px">'+(texto || '-')+'</div></div>';
   }).join('');
