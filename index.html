@@ -2999,10 +2999,32 @@ function sl(s) {
   if (n.indexOf('conclu') >= 0) return 'Conclu&iacute;do';
   return s;
 }
+function pad2DatePart_(n) {
+  return ('0' + Number(n || 0)).slice(-2);
+}
+function formatDatePartsProjeto_(ano, mesZero, dia) {
+  return pad2DatePart_(dia) + '/' + pad2DatePart_(Number(mesZero) + 1) + '/' + String(ano);
+}
+function normalizeGvizDateValue_(value) {
+  if (value instanceof Date && !isNaN(value.getTime())) {
+    return formatDatePartsProjeto_(value.getFullYear(), value.getMonth(), value.getDate());
+  }
+  var text = String(value || '').trim();
+  var gviz = text.match(/^Date\((\d{4}),\s*(\d{1,2}),\s*(\d{1,2})\)$/);
+  if (gviz) return formatDatePartsProjeto_(gviz[1], gviz[2], gviz[3]);
+  return value;
+}
 function fd(d) {
   if (!d || d === '' || d === 'NaT') return '-';
-  var m = d.match(/(\d{4})-(\d{2})-(\d{2})/);
-  return m ? (m[3]+'/'+m[2]+'/'+m[1]) : d;
+  if (d instanceof Date && !isNaN(d.getTime())) {
+    return formatDatePartsProjeto_(d.getFullYear(), d.getMonth(), d.getDate());
+  }
+  var raw = String(normalizeGvizDateValue_(d) || '').trim();
+  if (!raw) return '-';
+  var br = raw.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+  if (br) return pad2DatePart_(br[1]) + '/' + pad2DatePart_(br[2]) + '/' + br[3];
+  var iso = raw.match(/(\d{4})-(\d{2})-(\d{2})/);
+  return iso ? (iso[3]+'/'+iso[2]+'/'+iso[1]) : raw;
 }
 function fn(n) {
   if (n === null || n === undefined) return '-';
@@ -3020,10 +3042,16 @@ function kpi(l, v, c, attrs) {
 }
 function parseD(s) {
   if (!s || s === '') return null;
-  var a = s.match(/(\d{2})\/(\d{2})\/(\d{4})/);
-  if (a) return new Date(a[3]+'-'+a[2]+'-'+a[1]);
-  var b = s.match(/(\d{4}-\d{2}-\d{2})/);
-  if (b) return new Date(b[1]);
+  if (s instanceof Date && !isNaN(s.getTime())) {
+    return new Date(s.getFullYear(), s.getMonth(), s.getDate());
+  }
+  var raw = String(normalizeGvizDateValue_(s) || '').trim();
+  var g = raw.match(/^Date\((\d{4}),\s*(\d{1,2}),\s*(\d{1,2})\)$/);
+  if (g) return new Date(Number(g[1]), Number(g[2]), Number(g[3]));
+  var a = raw.match(/(\d{1,2})\/(\d{1,2})\/(\d{4})/);
+  if (a) return new Date(Number(a[3]), Number(a[2]) - 1, Number(a[1]));
+  var b = raw.match(/(\d{4})-(\d{2})-(\d{2})/);
+  if (b) return new Date(Number(b[1]), Number(b[2]) - 1, Number(b[3]));
   return null;
 }
 function diffD(a, b) {
@@ -10030,7 +10058,8 @@ function mapearGvizRow(cols, row) {
 function valorCelulaGviz(row, idx) {
   var cell = row && row.c ? row.c[idx] : null;
   if (!cell) return '';
-  return cell.f !== undefined && cell.f !== null && String(cell.f).trim() !== '' ? cell.f : cell.v;
+  var value = cell.f !== undefined && cell.f !== null && String(cell.f).trim() !== '' ? cell.f : cell.v;
+  return normalizeGvizDateValue_(value);
 }
 function mapearProjetoMensalPorIndice(row, abaTitle) {
   return {
