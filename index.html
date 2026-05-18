@@ -266,6 +266,26 @@ nav{background:var(--nav);height:58px;display:flex;align-items:center;justify-co
 .acom-popup-actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px;}
 .acom-popup-danger{border:1px solid var(--red);background:var(--red-s);color:var(--red);border-radius:8px;padding:8px 10px;font:900 11px 'Inter',sans-serif;cursor:pointer;}
 .acom-popup-danger:hover{background:#f7d8d4;}
+.acom-follow-head{display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;margin-bottom:7px;}
+.acom-follow-status{display:inline-flex;align-items:center;gap:6px;border-radius:999px;padding:4px 9px;font-size:10px;font-weight:900;text-transform:uppercase;letter-spacing:.04em;border:1px solid transparent;}
+.acom-follow-status .mark{width:18px;height:18px;border-radius:999px;display:inline-flex;align-items:center;justify-content:center;font-size:11px;line-height:1;}
+.acom-follow-status.pending{background:var(--orange-s);color:var(--orange);border-color:rgba(184,92,0,.18);}
+.acom-follow-status.partial{background:var(--blue-s);color:var(--blue);border-color:rgba(37,99,235,.18);}
+.acom-follow-status.done{background:var(--green-s);color:var(--green);border-color:rgba(45,110,78,.18);}
+.acom-follow-status.pending .mark{background:rgba(184,92,0,.12);}
+.acom-follow-status.partial .mark{background:rgba(37,99,235,.12);}
+.acom-follow-status.done .mark{background:rgba(45,110,78,.12);}
+.acom-follow-return{margin-top:8px;border:1px solid var(--border);background:var(--surf2);border-radius:8px;padding:8px;font-size:11px;color:var(--text2);line-height:1.45;}
+.acom-follow-return b{display:block;font-size:9px;text-transform:uppercase;letter-spacing:.07em;color:var(--muted);margin-bottom:3px;}
+.acom-status-editor{margin-top:10px;border-top:1px solid var(--border);padding-top:10px;}
+.acom-status-editor textarea{width:100%;min-height:58px;resize:vertical;border:1px solid var(--border);border-radius:8px;background:var(--surf2);color:var(--text);font:600 12px 'Inter',sans-serif;padding:8px 10px;}
+.acom-status-editor textarea:focus{outline:none;border-color:rgba(45,110,78,.35);box-shadow:0 0 0 4px rgba(45,110,78,.08);}
+.acom-status-buttons{display:flex;gap:6px;flex-wrap:wrap;margin-top:8px;}
+.acom-status-btn{border:1px solid var(--border);background:var(--surf);color:var(--text2);border-radius:8px;padding:7px 9px;font:900 10px 'Inter',sans-serif;text-transform:uppercase;letter-spacing:.05em;cursor:pointer;}
+.acom-status-btn:hover{border-color:rgba(45,110,78,.35);color:var(--green);}
+.acom-status-btn.pending.on{background:var(--orange-s);border-color:rgba(184,92,0,.24);color:var(--orange);}
+.acom-status-btn.partial.on{background:var(--blue-s);border-color:rgba(37,99,235,.24);color:var(--blue);}
+.acom-status-btn.done.on{background:var(--green-s);border-color:rgba(45,110,78,.24);color:var(--green);}
 @media(max-width:980px){.acom-kanban-cols{grid-template-columns:1fr}.acom-cycle-row{justify-content:flex-start}.acom-cohort-head{flex-direction:column}}
 @media(max-width:980px){.acom-grid{grid-template-columns:1fr}.acom-form{grid-template-columns:1fr}.acom-buckets,.acom-months{grid-template-columns:repeat(2,1fr)}.acom-setup-grid{grid-template-columns:1fr 1fr}.acom-hero{flex-direction:column}.acom-hero-meta{justify-content:flex-start}}
 .month-group{border-top:1px solid var(--border);}
@@ -2637,7 +2657,8 @@ body.theme-dark .acom-panel,
 body.theme-dark .acom-cohort,
 body.theme-dark .acom-kanban-card,
 body.theme-dark .acom-popup-log,
-body.theme-dark .acom-popup-cell{
+body.theme-dark .acom-popup-cell,
+body.theme-dark .acom-status-btn{
   background:var(--surf)!important;
   border-color:var(--border)!important;
   color:var(--text)!important;
@@ -2647,6 +2668,8 @@ body.theme-dark .acom-panel-head,
 body.theme-dark .acom-cohort-head,
 body.theme-dark .acom-kanban-col,
 body.theme-dark .acom-popup-text,
+body.theme-dark .acom-follow-return,
+body.theme-dark .acom-status-editor textarea,
 body.theme-dark .acom-field input,
 body.theme-dark .acom-field select,
 body.theme-dark .acom-field textarea,
@@ -3919,6 +3942,23 @@ function acompAddFollowupLocal(followup) {
   ACOMP_REMOTE_FOLLOWUPS.unshift(followup);
   ACOMP_REMOTE_LOADED = true;
 }
+function acompUpdateFollowupLocal(followup) {
+  if (!followup) return;
+  var updated = false;
+  var id = String(followup.followup_id || '');
+  var row = String(followup.row_number || followup.row || '');
+  ACOMP_REMOTE_FOLLOWUPS = (ACOMP_REMOTE_FOLLOWUPS || []).map(function(item){
+    var sameId = id && String(item.followup_id || '') === id;
+    var sameRow = row && String(item.row_number || item.row || '') === row;
+    if (sameId || sameRow) {
+      updated = true;
+      return Object.assign({}, item, followup);
+    }
+    return item;
+  });
+  if (!updated) ACOMP_REMOTE_FOLLOWUPS.unshift(followup);
+  ACOMP_REMOTE_LOADED = true;
+}
 function acompRemoveFollowupLocal(target) {
   if (!target) return;
   var removed = false;
@@ -3943,6 +3983,70 @@ function acompRemoveFollowupLocal(target) {
   });
   ACOMP_REMOTE_LOADED = true;
 }
+function acompNormalizeFollowupStatus(value) {
+  var s = acompSearchText(value).replace(/[^a-z0-9]+/g, ' ').trim();
+  if (s.indexOf('conclu') >= 0 || s === 'done' || s.indexOf('resolvid') >= 0) return 'concluido';
+  if (s.indexOf('parcial') >= 0) return 'parcial';
+  return 'pendente';
+}
+function acompFollowupStatusMeta(value) {
+  var status = acompNormalizeFollowupStatus(value);
+  if (status === 'concluido') return {key:'concluido', label:'Conclu&iacute;do', text:'Concluido', cls:'done', icon:'&#10003;'};
+  if (status === 'parcial') return {key:'parcial', label:'Parcial', text:'Parcial', cls:'partial', icon:'&#9680;'};
+  return {key:'pendente', label:'Pendente', text:'Pendente', cls:'pending', icon:'!'};
+}
+function acompFollowupDomId(followup) {
+  return String((followup && (followup.followup_id || followup.row_number || followup.row)) || Math.random()).replace(/[^a-zA-Z0-9_-]/g, '').slice(0, 40);
+}
+function acompFollowupStatusBadge(followup) {
+  var meta = acompFollowupStatusMeta(followup && followup.followup_status);
+  return '<span class="acom-follow-status '+meta.cls+'"><span class="mark">'+meta.icon+'</span>'+meta.label+'</span>';
+}
+function acompFollowupStatusControls(projectKey, followup) {
+  var domId = 'acom-status-comment-' + acompFollowupDomId(followup);
+  var rowId = (followup && (followup.row_number || followup.row)) || '';
+  var followupId = (followup && followup.followup_id) || '';
+  var current = acompNormalizeFollowupStatus(followup && followup.followup_status);
+  var comment = String((followup && followup.status_comment) || '');
+  var updatedBy = String((followup && followup.status_updated_by) || '');
+  var updatedAt = String((followup && followup.status_updated_at) || '');
+  var retorno = comment ? '<div class="acom-follow-return"><b>Coment&aacute;rio do retorno'+(updatedBy ? ' - '+escapeHtml(updatedBy) : '')+'</b>'+escapeHtml(comment)+(updatedAt ? '<div class="dashx-list-sub">'+escapeHtml(updatedAt.slice(0, 10))+'</div>' : '')+'</div>' : '';
+  var buttons = [
+    ['pendente','Pendente'],
+    ['parcial','Parcial'],
+    ['concluido','Conclu&iacute;do']
+  ].map(function(item){
+    return '<button type="button" class="acom-status-btn '+(item[0] === 'concluido' ? 'done' : item[0])+' '+(current === item[0] ? 'on' : '')+'" onclick="return acompSetFollowupStatus(\''+jsQuote(projectKey)+'\',\''+jsQuote(rowId)+'\',\''+jsQuote(followupId)+'\',\''+item[0]+'\',\''+domId+'\')">'+item[1]+'</button>';
+  }).join('');
+  return retorno+
+    '<div class="acom-status-editor">'+
+      '<textarea id="'+domId+'" placeholder="Coment&aacute;rio do consultor: o que foi feito e o que ainda falta">'+escapeHtml(comment)+'</textarea>'+
+      '<div class="acom-status-buttons">'+buttons+'</div>'+
+    '</div>';
+}
+function acompSetFollowupStatus(projectKey, rowNumber, followupId, status, commentId) {
+  if (!authTokenParam()) { showToast('Entre no painel para atualizar a observa&ccedil;&atilde;o', 'err'); return false; }
+  var comment = String((document.getElementById(commentId) || {}).value || '').trim();
+  showToast('Salvando status da observa&ccedil;&atilde;o...', 'ok');
+  chamarAppsScriptJsonp('setProjectFollowupStatus', {
+    auth_token: authTokenParam(),
+    followup_id: followupId || '',
+    row_number: rowNumber || '',
+    followup_status: status,
+    status_comment: comment
+  }, 15000).then(function(resp){
+    if (!resp || resp.ok === false || !resp.saved) throw new Error((resp && (resp.error || resp.message)) || 'Atualiza&ccedil;&atilde;o recusada');
+    if (resp.followup) acompUpdateFollowupLocal(resp.followup);
+    initAcomp();
+    acompProjectInfoPopup(projectKey);
+    showToast('Status da observa&ccedil;&atilde;o salvo', 'ok');
+    acompRefreshFollowupsInBackground(900);
+  }).catch(function(error){
+    showToast('N&atilde;o salvou o status: ' + ((error && error.message) || 'tente novamente'), 'err');
+  });
+  return false;
+}
+window.acompSetFollowupStatus = acompSetFollowupStatus;
 function acompStatusAtivo(p) {
   var s = dashStatusKey(p && p.status);
   return s !== 'concluido' && s !== 'cancelado';
@@ -4027,6 +4131,8 @@ function acompProjetoView(p, followupMap) {
     proximaAcao:String((followup && followup.proxima_acao) || '').trim(),
     responsavel:String((followup && followup.responsavel) || '').trim(),
     dataAcompanhamento:String((followup && followup.data_acompanhamento) || '').trim(),
+    followupStatus:String((followup && followup.followup_status) || ''),
+    statusComment:String((followup && followup.status_comment) || '').trim(),
     obsInicial:String((p && p.obs) || '').trim()
   };
 }
@@ -4344,7 +4450,11 @@ function salvarAcompanhamentoProjeto(btn) {
       responsavel: responsavel,
       kanban_stage: stage,
       origem: 'site',
-      status: item.status
+      status: item.status,
+      followup_status: 'pendente',
+      status_updated_at: '',
+      status_updated_by: '',
+      status_comment: ''
     };
     var cycleKey = acompKanbanCycleKey(acompCicloAtual());
     acompAddFollowupLocal(savedFollowup);
@@ -4422,6 +4532,7 @@ function acompRenderRows(list) {
     var texto = x.texto ? escapeHtml(x.texto).slice(0, 130) : (x.bucket === 'sem' ? 'Registrar acompanhamento datado no setup.' : 'Registro vindo da base t&eacute;cnica.');
     if (x.proximaAcao) texto += '<div class="dashx-list-sub">Pr&oacute;xima a&ccedil;&atilde;o: '+escapeHtml(x.proximaAcao).slice(0, 100)+'</div>';
     if (x.responsavel) texto += '<div class="dashx-list-sub">Respons&aacute;vel: '+escapeHtml(x.responsavel)+'</div>';
+    if (x.followupStatus) texto += '<div class="dashx-list-sub">Observa&ccedil;&atilde;o: '+acompFollowupStatusMeta(x.followupStatus).text+(x.statusComment ? ' - '+escapeHtml(x.statusComment).slice(0, 90) : '')+'</div>';
     var obsInicial = x.obsInicial ? '<div class="dashx-list-sub">Obs inicial: '+escapeHtml(x.obsInicial).slice(0, 90)+'</div>' : '';
     return '<tr><td><strong>'+escapeHtml(x.cliente)+'</strong><div class="dashx-list-sub">'+escapeHtml(x.mes)+' &bull; '+escapeHtml(x.consultor)+'</div></td>'+
       '<td><span class="acom-status '+cls+'">'+meta.label+'</span></td>'+
@@ -4474,7 +4585,12 @@ function acompProjectInfoPopup(projectKey) {
     var rowId = f.row_number || f.row || '';
     var followupId = f.followup_id || '';
     var action = isAdmin ? '<div class="acom-popup-actions"><button type="button" class="acom-popup-danger" onclick="return acompDeleteFollowup(\''+jsQuote(item.projectKey)+'\',\''+jsQuote(rowId)+'\',\''+jsQuote(followupId)+'\')">Excluir este acompanhamento</button></div>' : '';
-    return '<div class="acom-popup-log"><div class="acom-popup-log-date">'+escapeHtml(f.data_acompanhamento || f.logged_at || '-')+'</div><div class="acom-popup-text">'+escapeHtml(texto || '-')+'</div>'+action+'</div>';
+    return '<div class="acom-popup-log">'+
+      '<div class="acom-follow-head"><div class="acom-popup-log-date">'+escapeHtml(f.data_acompanhamento || f.logged_at || '-')+'</div>'+acompFollowupStatusBadge(f)+'</div>'+
+      '<div class="acom-popup-text">'+escapeHtml(texto || '-')+'</div>'+
+      acompFollowupStatusControls(item.projectKey, f)+
+      action+
+    '</div>';
   }).join('') || '<div class="acom-popup-text">Nenhum acompanhamento registrado no site para este projeto.</div>';
   var clickup = [
     resumo ? ('Fases: '+(resumo.fases_total || 0)) : '',
@@ -4572,10 +4688,12 @@ function acompRenderKanban(list) {
         var texto = String((follow && (follow.consideracao || follow.proxima_acao)) || item.texto || item.obsInicial || '').trim();
         var meta = [data || item.mes, item.consultor, item.status].filter(Boolean).join(' • ');
         var detalhe = follow ? ('Registro no ciclo '+cycleInfo.mes) : 'Aguardando movimenta&ccedil;&atilde;o da coordena&ccedil;&atilde;o neste ciclo.';
+        var obsStatus = follow ? '<div class="acom-kanban-meta">Observa&ccedil;&atilde;o: '+acompFollowupStatusMeta(follow.followup_status).text+'</div>' : '';
         return '<div class="acom-kanban-card" draggable="true" ondragstart="return acompDragStart(event,\''+jsQuote(item.projectKey)+'\',\''+jsQuote(cycleKey)+'\')" onclick="return acompProjectInfoPopup(\''+jsQuote(item.projectKey)+'\')">'+
           '<div class="acom-kanban-name">'+escapeHtml(item.cliente)+'</div>'+
           '<div class="acom-kanban-meta">'+escapeHtml(meta)+'</div>'+
           '<div class="acom-kanban-meta">'+detalhe+'</div>'+
+          obsStatus+
           (texto ? '<div class="acom-kanban-text">'+escapeHtml(texto).slice(0, 150)+'</div>' : '')+
         '</div>';
       }).join('');
@@ -6084,10 +6202,15 @@ function renderProjectFollowupsForProjectTab(p) {
       item.consideracao ? escapeHtml(item.consideracao) : '',
       item.proxima_acao ? '<strong>Pr&oacute;xima a&ccedil;&atilde;o:</strong> ' + escapeHtml(item.proxima_acao) : ''
     ].filter(Boolean).join('<br>');
+    if (item.status_comment) {
+      texto += (texto ? '<br>' : '') + '<strong>Retorno:</strong> ' + escapeHtml(item.status_comment);
+    }
     var kanbanStage = acompFollowupKanbanStageForProjectTab(item, p);
+    var followupStatus = acompFollowupStatusMeta(item.followup_status).text;
     var meta = [
       item.data_acompanhamento || item.logged_at || '-',
       item.responsavel || '',
+      followupStatus,
       kanbanStage ? acompKanbanStageLabel(kanbanStage) : ''
     ].filter(Boolean).map(escapeHtml).join(' &bull; ');
     return '<div style="padding:8px 0;border-top:1px solid var(--border)"><div style="font-size:10px;font-weight:800;color:var(--muted);text-transform:uppercase;letter-spacing:.08em">'+meta+'</div><div style="font-size:12px;color:var(--text2);line-height:1.55;margin-top:4px">'+(texto || '-')+'</div></div>';
