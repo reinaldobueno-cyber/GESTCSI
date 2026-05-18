@@ -418,9 +418,14 @@ function getMonthlyProjectsFromSheet_(month) {
   if (values.length <= 1) return [];
   var header = normalizeMonthlyHeader_(values[0] || []);
   var out = [];
+  var ultimaDataVenda = '';
   values.slice(1).forEach(function(row, index) {
     var item = monthlyProjectFromRow_(month, header, row, index + 2);
-    if (item) out.push(item);
+    if (item) {
+      if (item.data_venda) ultimaDataVenda = item.data_venda;
+      else if (ultimaDataVenda) item.data_venda = ultimaDataVenda;
+      out.push(item);
+    }
   });
   return out;
 }
