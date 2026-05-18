@@ -3152,6 +3152,7 @@ function loginPainel(form) {
     if (!resp || resp.ok === false || !resp.token) throw new Error((resp && (resp.error || resp.message)) || 'Login recusado');
     authSet({token:resp.token, user:resp.user});
     ACOMP_REMOTE_LOADED = false;
+    ACOMP_REMOTE_ERROR = '';
     ACOMP_REMOTE_FOLLOWUPS = [];
     acompLoadRemoteFollowups(true);
     showToast('Bem-vindo, ' + (resp.user && (resp.user.name || resp.user.username) || username), 'ok');
@@ -3566,6 +3567,7 @@ var ACOMP_REMOTE_FOLLOWUPS = [];
 var ACOMP_REMOTE_KANBAN_STAGES = {};
 var ACOMP_REMOTE_LOADED = false;
 var ACOMP_REMOTE_LOADING = false;
+var ACOMP_REMOTE_ERROR = '';
 var ACOMP_FORM_PROJECTS = [];
 var ACOMP_BUCKETS = [
   {key:'0-7', label:'0-7 dias', cls:'ok', color:'#2d6e4e'},
@@ -3616,7 +3618,8 @@ function acompLoadRemoteFollowups(force) {
   if (!authTokenParam()) return Promise.resolve(null);
   if (ACOMP_REMOTE_LOADING || (ACOMP_REMOTE_LOADED && !force)) return Promise.resolve(null);
   ACOMP_REMOTE_LOADING = true;
-  return chamarAppsScriptJsonp('getProjectFollowups', {limit: 2000, auth_token: authTokenParam()}, 12000).then(function(resp){
+  ACOMP_REMOTE_ERROR = '';
+  return chamarAppsScriptJsonp('getProjectFollowups', {limit: 2000, auth_token: authTokenParam()}, 25000).then(function(resp){
     ACOMP_REMOTE_LOADING = false;
     if (!resp || resp.ok === false) throw new Error((resp && (resp.error || resp.message)) || 'Histórico indisponível');
     if (!Array.isArray(resp.followups)) throw new Error('Publique o Apps Script atualizado para carregar acompanhamentos.');
@@ -3628,8 +3631,12 @@ function acompLoadRemoteFollowups(force) {
     return resp;
   }).catch(function(error){
     ACOMP_REMOTE_LOADING = false;
+    ACOMP_REMOTE_LOADED = true;
+    ACOMP_REMOTE_ERROR = (error && error.message) || 'Historico indisponivel';
     console.warn('[ACOMPANHAMENTO] Histórico do site indisponível:', error && error.message);
-    throw error;
+    initAcomp();
+    if (document.getElementById('rows-all')) initAll();
+    return null;
   });
 }
 function acompRefreshFollowupsInBackground(delay) {
@@ -4331,7 +4338,7 @@ function initAcomp() {
   var badge = document.getElementById('n-acom');
   if (badge) badge.textContent = pendentes;
   var periodo = activePeriod === 'all' ? 'Todos os meses' : activePeriod;
-  var syncNote = ACOMP_REMOTE_LOADED ? 'Hist&oacute;rico do site carregado' : (ACOMP_REMOTE_LOADING ? 'Carregando hist&oacute;rico do site...' : 'Hist&oacute;rico do site ainda n&atilde;o carregado');
+  var syncNote = ACOMP_REMOTE_ERROR ? 'Hist&oacute;rico do site indispon&iacute;vel' : (ACOMP_REMOTE_LOADED ? 'Hist&oacute;rico do site carregado' : (ACOMP_REMOTE_LOADING ? 'Carregando hist&oacute;rico do site...' : 'Hist&oacute;rico do site ainda n&atilde;o carregado'));
   var filters = [
     ['todos','Todos'],
     ['acompanhados','Acompanhados'],
@@ -5802,6 +5809,9 @@ function renderProjectFollowupsForProjectTab(p) {
   var key = projectMonthKey(p || {});
   var list = (acompFollowupsByProjectMap()[key] || []).slice().reverse();
   if (!list.length) {
+    if (ACOMP_REMOTE_ERROR) {
+      return '<div class="sec-l">Acompanhamentos do site</div><div class="log-box">N&atilde;o foi poss&iacute;vel carregar os acompanhamentos do site agora. Atualize a p&aacute;gina ou entre novamente.</div>';
+    }
     if (authTokenParam() && !ACOMP_REMOTE_LOADED) {
       return '<div class="sec-l">Acompanhamentos do site</div><div class="log-box">Carregando acompanhamentos registrados no site...</div>';
     }
