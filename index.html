@@ -10117,10 +10117,13 @@ function carregarProjetosDiretoPlanilha() {
     return loadGvizTableJsonp(url, 15000).then(function(table){
       if (!table) return;
       var normalizada = normalizarTabelaGviz(table);
+      var ultimaDataVendaAba = '';
       (normalizada.rows || []).forEach(function(row){
         var ro = mapearGvizRow(normalizada.cols, row);
         ro = Object.assign(ro, mapearProjetoMensalPorIndice(row, aba.title));
         if (!linhaProjetoMensalValida(ro)) return;
+        if (ro.data_venda) ultimaDataVendaAba = ro.data_venda;
+        else if (ultimaDataVendaAba) ro.data_venda = ultimaDataVendaAba;
         ro._aba_origem = aba.title;
         ro._sheet_order = seq++;
         projetos.push(ro);
