@@ -8132,6 +8132,32 @@ var CIDADES_COORDS = {
   'SANTA ISABEL':[-15.2950,-49.4260]
 };
 
+var CIDADES_UF_COORDS = {
+  'AGUA BOA|MT':[-14.0491,-52.1600],
+  'BANDEIRANTES DO TOCANTINS|TO':[-7.7561,-48.5844],
+  'BARRA DO GARCAS|MT':[-15.8901,-52.2567],
+  'BARREIRAS|TO':[-12.1500,-46.0900],
+  'BARREIRAS DO TOCANTINS|TO':[-12.1500,-46.0900],
+  'CABIXI|RO':[-13.4945,-60.5440],
+  'CASSILANDIA|MS':[-19.1133,-51.7342],
+  'FORMOSA|GO':[-15.5372,-47.3344],
+  'GONGOCI|BA':[-14.3194,-39.4692],
+  'GONGOGI|BA':[-14.3194,-39.4692],
+  'GRAJAU|MA':[-5.8194,-46.1386],
+  'MARABA|PA':[-5.3686,-49.1178],
+  'MATOSINHOS|MG':[-19.5578,-44.0814],
+  'MATOZINHOS|MG':[-19.5578,-44.0814],
+  'MOZARLANDIA|GO':[-14.7447,-50.5706],
+  'NAVIRAI|MS':[-23.0650,-54.1907],
+  'PIRACANJUBA|GO':[-17.3028,-49.0166],
+  'ROSARIO OESTE|MT':[-14.8361,-56.4275],
+  'SAO FELIX DO XINGU|PA':[-6.6425,-51.9904],
+  'SAO SEBASTIAO DA GRAMA|SP':[-21.7041,-46.8208],
+  'SAPUCAIA|PA':[-6.9408,-49.6836],
+  'TAPURAH|MT':[-12.7388,-56.5158],
+  'XINGUARA|PA':[-7.1006,-49.9433]
+};
+
 var MAP_GEOCODE_CACHE_KEY = 'gestcsi_map_geocode_cache_v1';
 var _mapGeocodeCache = null;
 var _mapGeocodeInFlight = {};
@@ -8156,6 +8182,13 @@ function saveMapGeocodeCache_() {
 
 function getMapGeocodeKey_(info) {
   return (info.cidadeNorm || '') + '|' + (info.uf || '');
+}
+
+function getKnownCidadeCoords_(info) {
+  if (!info || !info.cidadeNorm) return null;
+  var ufKey = getMapGeocodeKey_(info);
+  if (ufKey && CIDADES_UF_COORDS[ufKey]) return CIDADES_UF_COORDS[ufKey];
+  return CIDADES_COORDS[info.cidadeNorm] || null;
 }
 
 function getCachedMapGeocode_(info) {
@@ -8191,7 +8224,7 @@ function geocodeCidadeAutomatica_(info) {
   if (!info || !info.cidadeNorm || !info.uf || typeof fetch === 'undefined') {
     return Promise.resolve(false);
   }
-  if (CIDADES_COORDS[info.cidadeNorm] || getCachedMapGeocode_(info)) {
+  if (getKnownCidadeCoords_(info) || getCachedMapGeocode_(info)) {
     return Promise.resolve(false);
   }
 
@@ -8234,7 +8267,7 @@ function hydrateMapGeocodes_(projList) {
     var key = getMapGeocodeKey_(info);
     if (!info.cidadeNorm || !info.uf || seen[key]) return;
     seen[key] = true;
-    if (CIDADES_COORDS[info.cidadeNorm] || getCachedMapGeocode_(info)) return;
+    if (getKnownCidadeCoords_(info) || getCachedMapGeocode_(info)) return;
     jobs.push(geocodeCidadeAutomatica_(info));
   });
   if (!jobs.length) return;
@@ -8256,8 +8289,9 @@ var _ufLayer = null;
 function getCidadeCoordInfo(cidadeStr) {
   var info = parseCidadeInfo(cidadeStr);
   if (!info.raw) return null;
-  if (info.cidadeNorm && CIDADES_COORDS[info.cidadeNorm]) {
-    return { coords: CIDADES_COORDS[info.cidadeNorm], aproximado: false, tipo: 'cidade' };
+  var known = getKnownCidadeCoords_(info);
+  if (known) {
+    return { coords: known, aproximado: false, tipo: 'cidade' };
   }
   var cached = getCachedMapGeocode_(info);
   if (cached) return cached;
