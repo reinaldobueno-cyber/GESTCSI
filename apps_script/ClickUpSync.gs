@@ -127,6 +127,10 @@ function doGet(e) {
       var followupsResult = getProjectFollowups_(params, toInt_(params.limit, 1000));
       return jsonOutput_(followupsResult, params.callback);
     }
+    if (action === 'setProjectFollowupStatus') {
+      var followupStatusResult = setProjectFollowupStatus_(params);
+      return jsonOutput_(followupStatusResult, params.callback);
+    }
     if (action === 'setProjectKanbanStage') {
       var kanbanResult = setProjectKanbanStage_(params);
       return jsonOutput_(kanbanResult, params.callback);
@@ -139,7 +143,7 @@ function doGet(e) {
     var payload = {
       ok: true,
       service: 'clickup-sync',
-      message: 'Use action=getMonthlyProjects|syncProject|syncAll|processDirty|validateConfig|getClickUpInventory|logPanelUpdate|getPanelUpdateHistory|login|me|listUsers|createUser|setUserEnabled|logProjectFollowup|getProjectFollowups|setProjectKanbanStage|deleteProjectFollowup'
+      message: 'Use action=getMonthlyProjects|syncProject|syncAll|processDirty|validateConfig|getClickUpInventory|logPanelUpdate|getPanelUpdateHistory|login|me|listUsers|createUser|setUserEnabled|logProjectFollowup|getProjectFollowups|setProjectFollowupStatus|setProjectKanbanStage|deleteProjectFollowup'
     };
     return jsonOutput_(payload, params.callback);
   } catch (error) {
@@ -1534,7 +1538,11 @@ function getProjectFollowupSheet_() {
     'url',
     'navegador',
     'kanban_stage',
-    'followup_id'
+    'followup_id',
+    'followup_status',
+    'status_updated_at',
+    'status_updated_by',
+    'status_comment'
   ]);
   return sheet;
 }
@@ -1795,7 +1803,11 @@ function logProjectFollowup_(params) {
     sanitizeText_(params.url),
     sanitizeText_(params.navegador),
     sanitizeText_(params.kanban_stage || params.etapa_kanban),
-    followupId
+    followupId,
+    normalizeFollowupStatus_(params.followup_status || params.observation_status || 'pendente'),
+    '',
+    '',
+    ''
   ];
   sheet.appendRow(row);
   var rowNumber = sheet.getLastRow();
@@ -1826,8 +1838,47 @@ function getProjectFollowupHeaders_() {
     'url',
     'navegador',
     'kanban_stage',
-    'followup_id'
+    'followup_id',
+    'followup_status',
+    'status_updated_at',
+    'status_updated_by',
+    'status_comment'
   ];
+}
+
+function normalizeFollowupStatus_(value) {
+  var key = normalizeKey_(value);
+  if (key === 'CONCLUIDO' || key === 'CONCLUIDA' || key === 'DONE' || key === 'RESOLVIDO' || key === 'FINALIZADO') return 'concluido';
+  if (key === 'PARCIAL' || key === 'PARCIALMENTE' || key.indexOf('PARCIAL') >= 0) return 'parcial';
+  return 'pendente';
+}
+
+function publicProjectFollowup_(item, rowNumber) {
+  item = item || {};
+  var updatedAt = item.status_updated_at instanceof Date ? item.status_updated_at.toISOString() : String(item.status_updated_at || '');
+  return {
+    row_number: rowNumber || '',
+    logged_at: item.logged_at instanceof Date ? item.logged_at.toISOString() : String(item.logged_at || ''),
+    data_acompanhamento: item.data_acompanhamento instanceof Date ? Utilities.formatDate(item.data_acompanhamento, Session.getScriptTimeZone(), 'yyyy-MM-dd') : String(item.data_acompanhamento || ''),
+    mes: String(item.mes || ''),
+    cliente: String(item.cliente || ''),
+    consultor: String(item.consultor || ''),
+    project_key: String(item.project_key || ''),
+    link_projeto: String(item.link_projeto || ''),
+    consideracao: String(item.consideracao || ''),
+    proxima_acao: String(item.proxima_acao || ''),
+    responsavel: String(item.responsavel || ''),
+    kanban_stage: String(item.kanban_stage || item.etapa_kanban || ''),
+    origem: String(item.origem || ''),
+    status: String(item.status || ''),
+    url: String(item.url || ''),
+    navegador: String(item.navegador || ''),
+    followup_id: String(item.followup_id || ''),
+    followup_status: normalizeFollowupStatus_(item.followup_status),
+    status_updated_at: updatedAt,
+    status_updated_by: String(item.status_updated_by || ''),
+    status_comment: String(item.status_comment || '')
+  };
 }
 
 function getProjectFollowups_(params, limit) {
@@ -1843,31 +1894,68 @@ function getProjectFollowups_(params, limit) {
   var start = Math.max(0, rows.length - max);
   var followups = rows.slice(start).map(function(row, index) {
     var item = rowToObject_(header, row);
-    return {
-      row_number: start + index + 2,
-      logged_at: item.logged_at instanceof Date ? item.logged_at.toISOString() : String(item.logged_at || ''),
-      data_acompanhamento: item.data_acompanhamento instanceof Date ? Utilities.formatDate(item.data_acompanhamento, Session.getScriptTimeZone(), 'yyyy-MM-dd') : String(item.data_acompanhamento || ''),
-      mes: String(item.mes || ''),
-      cliente: String(item.cliente || ''),
-      consultor: String(item.consultor || ''),
-      project_key: String(item.project_key || ''),
-      link_projeto: String(item.link_projeto || ''),
-      consideracao: String(item.consideracao || ''),
-      proxima_acao: String(item.proxima_acao || ''),
-      responsavel: String(item.responsavel || ''),
-      kanban_stage: String(item.kanban_stage || item.etapa_kanban || ''),
-      origem: String(item.origem || ''),
-      status: String(item.status || ''),
-      url: String(item.url || ''),
-      navegador: String(item.navegador || ''),
-      followup_id: String(item.followup_id || '')
-    };
+    return publicProjectFollowup_(item, start + index + 2);
   }).reverse();
   return {
     ok: true,
     total: rows.length,
     followups: followups,
     kanban_states: getProjectKanbanStates_()
+  };
+}
+
+function findProjectFollowupRow_(sheet, followupId, rowNumber) {
+  var values = sheet.getDataRange().getValues();
+  if (values.length <= 1) return null;
+  var header = values[0];
+  var rowIndex = rowNumber && rowNumber >= 2 && rowNumber <= values.length ? rowNumber - 1 : null;
+  if (rowIndex !== null) {
+    var byRow = rowToObject_(header, values[rowIndex]);
+    if (!followupId || String(byRow.followup_id || '') === followupId) {
+      return { sheet: sheet, row: rowIndex + 1, header: header, item: byRow };
+    }
+  }
+  if (!followupId) return null;
+  for (var i = values.length - 1; i >= 1; i--) {
+    var item = rowToObject_(header, values[i]);
+    if (String(item.followup_id || '') === followupId) {
+      return { sheet: sheet, row: i + 1, header: header, item: item };
+    }
+  }
+  return null;
+}
+
+function setProjectFollowupStatus_(params) {
+  params = params || {};
+  var user = requireUser_(params);
+  var followupId = sanitizeText_(params.followup_id);
+  var rowNumber = toInt_(params.row_number, null);
+  if (!followupId && !rowNumber) throw new Error('followup_id or row_number is required');
+  var sheet = getProjectFollowupSheet_();
+  var found = findProjectFollowupRow_(sheet, followupId, rowNumber);
+  if (!found) throw new Error('Acompanhamento nao encontrado.');
+  var status = normalizeFollowupStatus_(params.followup_status || params.status);
+  var comment = sanitizeText_(params.status_comment || params.comment || params.comentario);
+  var updatedAt = new Date();
+  var updatedBy = user.name || user.username || '';
+  var header = found.header;
+  var statusCol = header.indexOf('followup_status') + 1;
+  var updatedAtCol = header.indexOf('status_updated_at') + 1;
+  var updatedByCol = header.indexOf('status_updated_by') + 1;
+  var commentCol = header.indexOf('status_comment') + 1;
+  if (!statusCol || !updatedAtCol || !updatedByCol || !commentCol) throw new Error('Colunas de status do acompanhamento nao encontradas.');
+  sheet.getRange(found.row, statusCol).setValue(status);
+  sheet.getRange(found.row, updatedAtCol).setValue(updatedAt);
+  sheet.getRange(found.row, updatedByCol).setValue(updatedBy);
+  sheet.getRange(found.row, commentCol).setValue(comment);
+  found.item.followup_status = status;
+  found.item.status_updated_at = updatedAt;
+  found.item.status_updated_by = updatedBy;
+  found.item.status_comment = comment;
+  return {
+    ok: true,
+    saved: true,
+    followup: publicProjectFollowup_(found.item, found.row)
   };
 }
 
