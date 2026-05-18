@@ -3624,6 +3624,7 @@ function acompLoadRemoteFollowups(force) {
     ACOMP_REMOTE_KANBAN_STAGES = resp.kanban_states || {};
     ACOMP_REMOTE_LOADED = true;
     initAcomp();
+    if (document.getElementById('rows-all')) initAll();
     return resp;
   }).catch(function(error){
     ACOMP_REMOTE_LOADING = false;
@@ -3817,6 +3818,27 @@ function acompKanbanCycleKey(cycleInfo) {
 function acompKanbanStageKey(projectKey, cycleInfo) {
   return acompKanbanCycleKey(cycleInfo) + '|' + String(projectKey || '').toUpperCase();
 }
+function acompCycleSortValue(cycleKey) {
+  var parts = String(cycleKey || '').split('-');
+  var year = Number(parts[0] || 0);
+  var month = indiceMesPainel(parts[1] || '');
+  if (!year || month === 999) return 0;
+  return (year * 12) + month;
+}
+function acompLatestRemoteKanbanStage(projectKey, cycleInfo) {
+  var keySuffix = '|' + String(projectKey || '').toUpperCase();
+  if (!projectKey || !ACOMP_REMOTE_KANBAN_STAGES) return '';
+  var currentValue = acompCycleSortValue(acompKanbanCycleKey(cycleInfo));
+  var best = {sort: -1, value: ''};
+  Object.keys(ACOMP_REMOTE_KANBAN_STAGES).forEach(function(key){
+    if (String(key).slice(-keySuffix.length) !== keySuffix) return;
+    var cycleKey = String(key).slice(0, -keySuffix.length);
+    var sort = acompCycleSortValue(cycleKey);
+    if (currentValue && sort > currentValue) return;
+    if (sort >= best.sort) best = {sort: sort, value: ACOMP_REMOTE_KANBAN_STAGES[key]};
+  });
+  return best.value || '';
+}
 function acompNormalizeKanbanStage(value, fallback) {
   var s = acompSearchText(value).replace(/[^a-z0-9]+/g, ' ').trim();
   if (!s) return fallback || 'pending';
@@ -3825,6 +3847,12 @@ function acompNormalizeKanbanStage(value, fallback) {
   if (s === 'pending' || s.indexOf('pendente') >= 0) return 'pending';
   return fallback || 'pending';
 }
+function acompKanbanStageLabel(value) {
+  var stage = acompNormalizeKanbanStage(value, 'pending');
+  if (stage === 'done') return 'Acompanhamento mensal concluido';
+  if (stage === 'doing') return 'Em processo de interferencia';
+  return 'Acompanhamento pendente';
+}
 function acompFollowupKanbanStage(followup) {
   if (!followup) return '';
   var explicit = followup.kanban_stage || followup.etapa_kanban || followup.etapa || followup.status_kanban || '';
@@ -3832,6 +3860,8 @@ function acompFollowupKanbanStage(followup) {
 }
 function acompKanbanStage(item, cycleInfo, cycleFollowup) {
   var value = (ACOMP_REMOTE_KANBAN_STAGES || {})[acompKanbanStageKey(item && item.projectKey, cycleInfo)];
+  if (value) return acompNormalizeKanbanStage(value, 'pending');
+  value = acompLatestRemoteKanbanStage(item && item.projectKey, cycleInfo);
   if (value) return acompNormalizeKanbanStage(value, 'pending');
   return acompFollowupKanbanStage(cycleFollowup) || 'pending';
 }
@@ -5753,6 +5783,31 @@ function buildGerencialProjeto(p) {
   return buildGerencialBase(p);
 }
 
+function renderProjectFollowupsForProjectTab(p) {
+  var key = projectMonthKey(p || {});
+  var list = (acompFollowupsByProjectMap()[key] || []).slice().reverse();
+  if (!list.length) {
+    if (authTokenParam() && !ACOMP_REMOTE_LOADED) {
+      return '<div class="sec-l">Acompanhamentos do site</div><div class="log-box">Carregando acompanhamentos registrados no site...</div>';
+    }
+    return '';
+  }
+  var rows = list.slice(0, 4).map(function(item) {
+    var texto = [
+      item.consideracao ? escapeHtml(item.consideracao) : '',
+      item.proxima_acao ? '<strong>Pr&oacute;xima a&ccedil;&atilde;o:</strong> ' + escapeHtml(item.proxima_acao) : ''
+    ].filter(Boolean).join('<br>');
+    var meta = [
+      item.data_acompanhamento || item.logged_at || '-',
+      item.responsavel || '',
+      item.kanban_stage ? acompKanbanStageLabel(item.kanban_stage) : ''
+    ].filter(Boolean).map(escapeHtml).join(' &bull; ');
+    return '<div style="padding:8px 0;border-top:1px solid var(--border)"><div style="font-size:10px;font-weight:800;color:var(--muted);text-transform:uppercase;letter-spacing:.08em">'+meta+'</div><div style="font-size:12px;color:var(--text2);line-height:1.55;margin-top:4px">'+(texto || '-')+'</div></div>';
+  }).join('');
+  var more = list.length > 4 ? '<div style="font-size:10px;color:var(--muted);margin-top:6px">+'+(list.length - 4)+' acompanhamento(s) anterior(es) no hist&oacute;rico do projeto.</div>' : '';
+  return '<div class="sec-l">Acompanhamentos do site</div><div class="log-box">'+rows+more+'</div>';
+}
+
 // ---- Build table rows ----
 function buildRows(list, pfx) {
   if (!list || !list.length) return '<div class="empty">Nenhum projeto encontrado</div>';
@@ -5774,8 +5829,9 @@ function buildRows(list, pfx) {
     }
     var prazoH = buildPrazoCards(p);
     var gerH = buildGerencialProjeto(p);
-    var logH = p.acompanhamento ? '<div class="sec-l">Acompanhamento</div><div class="log-box">'+p.acompanhamento+'</div>' : '';
-    var obsH = p.obs ? '<div class="sec-l">Observacoes</div><div class="obs-box">'+p.obs+'</div>' : '';
+    var followupsH = renderProjectFollowupsForProjectTab(p);
+    var logH = p.acompanhamento ? '<div class="sec-l">Observa&ccedil;&atilde;o</div><div class="log-box">'+escapeHtml(p.acompanhamento)+'</div>' : '';
+    var obsH = p.obs ? '<div class="sec-l">Observa&ccedil;&otilde;es internas</div><div class="obs-box">'+escapeHtml(p.obs)+'</div>' : '';
     out += '<div class="prow '+info.rc+'" id="'+id+'" onclick="togRow(\''+id+'\')">';
     var projetoLinkBtn = p.projeto_link ? '<a class=\"project-link project-link-btn\" href=\"'+p.projeto_link+'\" target=\"_blank\" rel=\"noopener noreferrer\" onclick=\"event.stopPropagation()\">Abrir Projeto</a>' : '';
     var seqBadge = p._monthSeq ? '<span class="month-seq-badge">'+p._monthSeq+'&ordf; venda do m&ecirc;s</span>' : '';
@@ -5794,7 +5850,7 @@ function buildRows(list, pfx) {
     out += '<div><div class="ef-l">In&iacute;cio Implant.</div><div class="ef-v">'+fd(p.data_inicio)+'</div></div>';
     out += '<div><div class="ef-l">Data Venda</div><div class="ef-v">'+fd(p.data_venda)+'</div></div>';
     out += '<div><div class="ef-l">KO Realiz.?</div><div class="ef-v">'+(p.kickoff||'-')+'</div></div>';
-    out += '</div>'+gerH+logH+obsH+'</div></div>';
+    out += '</div>'+gerH+followupsH+logH+obsH+'</div></div>';
   }
   return out;
 }
@@ -7363,6 +7419,9 @@ function handleTrendClick(el) {
 }
 
 function initAll() {
+  if (authTokenParam() && !ACOMP_REMOTE_LOADED && !ACOMP_REMOTE_LOADING) {
+    acompLoadRemoteFollowups(false).catch(function(){});
+  }
   var p=filteredProj();
   var and=p.filter(function(x){return String(x.status||'').toLowerCase().indexOf('andamento')>=0;}).length;
   var par=p.filter(function(x){return String(x.status||'').toLowerCase().indexOf('parado')>=0;}).length;
@@ -10600,10 +10659,20 @@ function loadAll(tipoAtualizacao) {
     if (nd) nd.textContent = 'Atualizando...';
   }
 
-  function buscarViaAppsScript() {
+  function buscarViaAppsScript(fallbackProjetos, fallbackMotivo) {
+    fallbackProjetos = Array.isArray(fallbackProjetos) ? fallbackProjetos : [];
+    fallbackMotivo = fallbackMotivo || 'fallback';
+    function finalizarFallback(motivoErro) {
+      if (fallbackProjetos.length) {
+        console.warn('[INIT] Apps Script indisponivel; usando fallback '+fallbackMotivo+':', motivoErro || '-');
+        _finalizarLoad(fallbackProjetos, isRefresh, fallbackMotivo, window._lastUpdateTrigger);
+      } else {
+        _finalizarLoad([], isRefresh, motivoErro || 'apps_script_indisponivel', window._lastUpdateTrigger);
+      }
+    }
     if (!APPS_SCRIPT_URL || APPS_SCRIPT_URL.indexOf('AK') < 0) {
       console.warn('[INIT] URL do Apps Script ausente/invalida. Usando fallback.');
-      _finalizarLoad([], isRefresh, 'local', window._lastUpdateTrigger);
+      finalizarFallback('local');
       return;
     }
 
@@ -10616,7 +10685,7 @@ function loadAll(tipoAtualizacao) {
       done = true;
       _limparJsonp(cbName);
       console.error('[INIT] Timeout na carga Apps Script (12s)');
-      _finalizarLoad([], isRefresh, 'timeout', window._lastUpdateTrigger);
+      finalizarFallback('timeout');
     }, 12000);
 
     window[cbName] = function(resp) {
@@ -10629,7 +10698,7 @@ function loadAll(tipoAtualizacao) {
       if (resp && resp.projetos && resp.projetos.length > 0) {
         _finalizarLoad(resp.projetos, isRefresh, 'apps_script', window._lastUpdateTrigger);
       } else {
-        _finalizarLoad([], isRefresh, 'vazio', window._lastUpdateTrigger);
+        finalizarFallback('vazio');
       }
     };
 
@@ -10642,7 +10711,7 @@ function loadAll(tipoAtualizacao) {
       clearTimeout(timer);
       _limparJsonp(cbName);
       console.error('[INIT] Erro de rede/JSONP ao carregar Apps Script');
-      _finalizarLoad([], isRefresh, 'erro', window._lastUpdateTrigger);
+      finalizarFallback('erro');
     };
     document.head.appendChild(s);
   }
@@ -10651,6 +10720,11 @@ function loadAll(tipoAtualizacao) {
     console.log('[1] Buscando planilha diretamente pelas abas mensais');
     carregarProjetosDiretoPlanilha().then(function(projetosDiretos){
       if (Array.isArray(projetosDiretos) && projetosDiretos.length > 0) {
+        if (projetosDiretos.length < PANEL_CACHE_MIN_PROJECTS) {
+          console.warn('[INIT] Leitura direta parece parcial ('+projetosDiretos.length+' projetos). Tentando Apps Script antes de finalizar.');
+          buscarViaAppsScript(projetosDiretos, 'sheet_direct_partial');
+          return;
+        }
         _finalizarLoad(projetosDiretos, isRefresh, 'sheet_direct', window._lastUpdateTrigger);
         return;
       }

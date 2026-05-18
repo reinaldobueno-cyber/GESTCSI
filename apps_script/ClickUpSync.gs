@@ -65,6 +65,12 @@ function doGet(e) {
   var action = String(params.action || '').trim();
 
   try {
+    if (!action && params.mes) {
+      return jsonOutput_(getMonthlyProjectsPayload_(params), params.callback);
+    }
+    if (action === 'getMonthlyProjects') {
+      return jsonOutput_(getMonthlyProjectsPayload_(params), params.callback);
+    }
     if (action === 'syncProject') {
       var projectKey = String(params.project_key || '').trim();
       var result = syncProjectByKey(projectKey);
@@ -133,7 +139,7 @@ function doGet(e) {
     var payload = {
       ok: true,
       service: 'clickup-sync',
-      message: 'Use action=syncProject|syncAll|processDirty|validateConfig|getClickUpInventory|logPanelUpdate|getPanelUpdateHistory|login|me|listUsers|createUser|setUserEnabled|logProjectFollowup|getProjectFollowups|setProjectKanbanStage|deleteProjectFollowup'
+      message: 'Use action=getMonthlyProjects|syncProject|syncAll|processDirty|validateConfig|getClickUpInventory|logPanelUpdate|getPanelUpdateHistory|login|me|listUsers|createUser|setUserEnabled|logProjectFollowup|getProjectFollowups|setProjectKanbanStage|deleteProjectFollowup'
     };
     return jsonOutput_(payload, params.callback);
   } catch (error) {
@@ -381,6 +387,164 @@ function diagnosticarPrimeiroProjetoClickup() {
   };
   Logger.log(JSON.stringify(result, null, 2));
   return result;
+}
+
+function getMonthlyProjectsPayload_(params) {
+  params = params || {};
+  var requested = sanitizeMonth_(params.mes || 'ALL');
+  var months = requested && requested !== 'ALL' ? [requested] : MONTHS.slice();
+  var projetos = [];
+  var byMonth = {};
+  months.forEach(function(month) {
+    if (MONTHS.indexOf(month) < 0) return;
+    var rows = getMonthlyProjectsFromSheet_(month);
+    byMonth[month] = rows.length;
+    projetos = projetos.concat(rows);
+  });
+  return {
+    ok: true,
+    mes: requested || 'ALL',
+    total: projetos.length,
+    projetos_por_mes: byMonth,
+    projetos: projetos
+  };
+}
+
+function getMonthlyProjectsFromSheet_(month) {
+  var ss = SpreadsheetApp.openById(getScriptProperty_('SHEET_ID'));
+  var sheet = ss.getSheetByName(month);
+  if (!sheet) return [];
+  var values = sheet.getDataRange().getDisplayValues();
+  if (values.length <= 1) return [];
+  var header = normalizeMonthlyHeader_(values[0] || []);
+  var out = [];
+  values.slice(1).forEach(function(row, index) {
+    var item = monthlyProjectFromRow_(month, header, row, index + 2);
+    if (item) out.push(item);
+  });
+  return out;
+}
+
+function monthlyProjectFromRow_(month, header, row, rowNumber) {
+  var obj = rowToObject_(header, row);
+  function pick(names, fallbackIndex) {
+    for (var i = 0; i < names.length; i++) {
+      var value = obj[names[i]];
+      if (value !== undefined && value !== null && String(value).trim() !== '') return value;
+    }
+    return fallbackIndex !== undefined && fallbackIndex !== null ? row[fallbackIndex] : '';
+  }
+
+  var cliente = sanitizeText_(pick(['cliente', 'nome_cliente', 'nome_do_cliente'], 1));
+  if (!isValidMonthlyClient_(cliente)) return null;
+
+  return {
+    mes: month,
+    mes_origem: month,
+    data_venda: pick(['data_venda', 'data_da_venda'], 0),
+    cliente: cliente,
+    pacote: pick(['pacote'], 2),
+    adicionais: pick(['adicionais'], 3),
+    tipo: pick(['tipo', 'tipo_projeto'], 4),
+    vendedor: pick(['vendedor'], 5),
+    consultor: pick(['consultor', 'consultora', 'responsavel'], 7),
+    formato: pick(['formato', 'modalidade'], 8),
+    cidade: pick(['cidade'], 9),
+    data_estimada: pick(['data_estimada', 'previsao', 'mes_estimado'], 10),
+    kickoff: pick(['kickoff', 'kick_off'], 11),
+    data_kick: pick(['data_kick', 'data_kickoff'], 12),
+    clickup: pick(['clickup'], 13),
+    data_inicio: pick(['data_inicio', 'primeiro_treinamento'], 14),
+    diarias_cont: pick(['diarias_cont', 'diarias_contratadas', 'diarias_total'], 15),
+    diarias_real: pick(['diarias_real', 'diarias_realizadas', 'diarias_consumidas'], 16),
+    diarias_rest: pick(['diarias_rest', 'diarias_restantes', 'saldo_diarias'], 17),
+    acompanhamento: pick(['acompanhamento', 'observacao_acompanhamento'], 18),
+    data_enc: pick(['data_enc', 'data_encerramento'], 19),
+    avaliacao_consultor: pick(['avaliacao_consultor'], 20),
+    status: pick(['status', 'status_projeto'], 21),
+    projeto_link: pick(['projeto_link', 'link_projeto', 'link_do_projeto', 'url_projeto'], 22),
+    link_projeto: pick(['link_projeto', 'projeto_link', 'link_do_projeto', 'url_projeto'], 22),
+    tasks_concluidas: pick(['tasks_concluidas'], null),
+    tasks_pendentes: pick(['tasks_pendentes'], null),
+    marcos_concluidos: pick(['marcos_concluidos'], null),
+    marcos_pendentes: pick(['marcos_pendentes'], null),
+    fases_total: pick(['fases_total'], null),
+    progresso: pick(['progresso'], null),
+    data_ultima_atualizacao: pick(['data_ultima_atualizacao'], null),
+    dias_sem_atualizacao: pick(['dias_sem_atualizacao'], null),
+    view_id: pick(['view_id'], null),
+    list_id: pick(['list_id'], null),
+    clickup_json: pick(['clickup_json'], null),
+    ultima_sync_clickup: pick(['ultima_sync_clickup'], null),
+    sync_status_clickup: pick(['sync_status_clickup'], null),
+    sync_error_clickup: pick(['sync_error_clickup'], null),
+    _sheet_row: rowNumber
+  };
+}
+
+function normalizeMonthlyHeader_(header) {
+  return (header || []).map(function(name, index) {
+    var key = canonicalMonthlyHeader_(name);
+    return key || ('col_' + index);
+  });
+}
+
+function canonicalMonthlyHeader_(name) {
+  var key = normalizeKey_(name);
+  var aliases = {
+    data_venda: ['DATA VENDA', 'DATA DA VENDA'],
+    cliente: ['CLIENTE', 'NOME CLIENTE', 'NOME DO CLIENTE'],
+    pacote: ['PACOTE'],
+    adicionais: ['ADICIONAIS'],
+    tipo: ['TIPO', 'TIPO PROJETO'],
+    vendedor: ['VENDEDOR'],
+    consultor: ['CONSULTOR', 'CONSULTORA', 'RESPONSAVEL'],
+    formato: ['FORMATO', 'MODALIDADE'],
+    cidade: ['CIDADE'],
+    data_estimada: ['DATA ESTIMADA', 'PREVISAO', 'MES ESTIMADO'],
+    kickoff: ['KICKOFF', 'KICK OFF'],
+    data_kick: ['DATA KICK', 'DATA KICKOFF'],
+    clickup: ['CLICKUP'],
+    data_inicio: ['DATA INICIO', 'PRIMEIRO TREINAMENTO'],
+    diarias_cont: ['DIARIAS CONT', 'DIARIAS CONTRATADAS', 'DIARIAS TOTAL'],
+    diarias_real: ['DIARIAS REAL', 'DIARIAS REALIZADAS', 'DIARIAS CONSUMIDAS'],
+    diarias_rest: ['DIARIAS REST', 'DIARIAS RESTANTES', 'SALDO DIARIAS'],
+    acompanhamento: ['ACOMPANHAMENTO', 'OBSERVACAO ACOMPANHAMENTO'],
+    data_enc: ['DATA ENC', 'DATA ENCERRAMENTO'],
+    avaliacao_consultor: ['AVALIACAO CONSULTOR'],
+    status: ['STATUS', 'STATUS PROJETO'],
+    projeto_link: ['PROJETO LINK', 'LINK PROJETO', 'LINK DO PROJETO', 'URL PROJETO'],
+    link_projeto: ['LINK PROJETO', 'LINK DO PROJETO', 'PROJETO LINK', 'URL PROJETO'],
+    tasks_concluidas: ['TASKS CONCLUIDAS'],
+    tasks_pendentes: ['TASKS PENDENTES'],
+    marcos_concluidos: ['MARCOS CONCLUIDOS'],
+    marcos_pendentes: ['MARCOS PENDENTES'],
+    fases_total: ['FASES TOTAL'],
+    progresso: ['PROGRESSO'],
+    data_ultima_atualizacao: ['DATA ULTIMA ATUALIZACAO'],
+    dias_sem_atualizacao: ['DIAS SEM ATUALIZACAO'],
+    view_id: ['VIEW ID'],
+    list_id: ['LIST ID'],
+    clickup_json: ['CLICKUP JSON'],
+    ultima_sync_clickup: ['ULTIMA SYNC CLICKUP'],
+    sync_status_clickup: ['SYNC STATUS CLICKUP'],
+    sync_error_clickup: ['SYNC ERROR CLICKUP']
+  };
+  var found = '';
+  Object.keys(aliases).some(function(canonical) {
+    if (aliases[canonical].indexOf(key) >= 0) {
+      found = canonical;
+      return true;
+    }
+    return false;
+  });
+  return found;
+}
+
+function isValidMonthlyClient_(cliente) {
+  var key = normalizeKey_(cliente);
+  if (!key) return false;
+  return ['CLIENTE', 'NOME CLIENTE', 'NOME DO CLIENTE', 'TOTAL DE PROJETOS', 'CONSULTOR', 'VENDEDOR', 'STATUS', 'FORMATO', 'TIPO', 'PERIODO', 'MES', 'INDICADORES GERAIS'].indexOf(key) < 0;
 }
 
 function syncProjectMapping_(mapping, options) {
