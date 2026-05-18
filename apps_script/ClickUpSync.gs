@@ -1,0 +1,2449 @@
+/**
+ * ClickUp -> Google Sheets sync for the PMO panel.
+ *
+ * What it does:
+ * 1. Reads project mappings from CLICKUP_CONFIG.
+ * 2. Fetches tasks from ClickUp using list_id (preferred) or view_id.
+ * 3. Builds a normalized project summary JSON.
+ * 4. Writes summary columns back to the monthly sheet row.
+ * 5. Supports webhook + time trigger driven refresh.
+ *
+ * Required Script Properties:
+ * - CLICKUP_TOKEN
+ * - SHEET_ID
+ *
+ * Optional Script Properties:
+ * - CLICKUP_CONFIG_SHEET        default: CLICKUP_CONFIG
+ * - CLICKUP_WEBHOOKS_SHEET      default: CLICKUP_WEBHOOKS
+ * - CLICKUP_DIRTY_SHEET         default: CLICKUP_DIRTY_QUEUE
+ * - CLICKUP_SYNC_BATCH_SIZE     default: 10
+ * - CLICKUP_WEBHOOK_ENDPOINT    full deployed Apps Script web app URL
+ * - CLICKUP_TEAM_ID             required only for webhook registration
+ * - CLICKUP_WEBHOOK_TOKEN       shared token appended to webhook endpoint
+ */
+
+var CLICKUP_API_BASE = 'https://api.clickup.com/api/v2';
+var MONTHS = ['JAN', 'FEV', 'MAR', 'ABR', 'MAI', 'JUN', 'JUL', 'AGO', 'SET', 'OUT', 'NOV', 'DEZ'];
+var HISTORICAL_CLICKUP_SPACES = [
+  { name: 'CSI-PROJETOS-ENGORDA', space_id: '90130063112', url: 'https://app.clickup.com/9007083069/v/s/90130063112' },
+  { name: 'CSI-PROJETOS-CICLO COMPLETO', space_id: '90130064659', url: 'https://app.clickup.com/9007083069/v/s/90130064659' },
+  { name: 'CSI-PROJETOS-ELITE', space_id: '90130063158', url: 'https://app.clickup.com/9007083069/v/s/90130063158' },
+  { name: 'CSI-PROJETOS-CRIA', space_id: '90130063122', url: 'https://app.clickup.com/9007083069/v/s/90130063122' },
+  { name: 'CSI-AVULSOS', space_id: '90139026911', url: 'https://app.clickup.com/9007083069/v/s/90139026911' }
+];
+var OUTPUT_COLUMNS = [
+  'tasks_concluidas',
+  'tasks_pendentes',
+  'marcos_concluidos',
+  'marcos_pendentes',
+  'fases_total',
+  'progresso',
+  'data_ultima_atualizacao',
+  'dias_sem_atualizacao',
+  'link_projeto',
+  'view_id',
+  'list_id',
+  'clickup_json',
+  'ultima_sync_clickup',
+  'sync_status_clickup',
+  'sync_error_clickup'
+];
+
+function onOpen() {
+  SpreadsheetApp.getUi()
+    .createMenu('ClickUp Sync')
+    .addItem('Validar CLICKUP_CONFIG', 'validarClickUpConfig')
+    .addItem('Importar projetos dos spaces históricos', 'inserirSpacesHistoricosClickUp')
+    .addItem('Sincronizar inventário ClickUp', 'sincronizarInventarioClickUp')
+    .addItem('Sincronizar todos habilitados', 'syncAllProjectsTrigger')
+    .addItem('Sincronizar primeiro configurado', 'syncPrimeiroProjetoConfigurado')
+    .addToUi();
+}
+
+function doGet(e) {
+  var params = (e && e.parameter) || {};
+  var action = String(params.action || '').trim();
+
+  try {
+    if (!action && params.mes) {
+      return jsonOutput_(getMonthlyProjectsPayload_(params), params.callback);
+    }
+    if (action === 'getMonthlyProjects') {
+      return jsonOutput_(getMonthlyProjectsPayload_(params), params.callback);
+    }
+    if (action === 'syncProject') {
+      var projectKey = String(params.project_key || '').trim();
+      var result = syncProjectByKey(projectKey);
+      result.ok = true;
+      return jsonOutput_(result, params.callback);
+    }
+    if (action === 'syncAll') {
+      var allResult = syncAllProjects({
+        force: String(params.force || '') === '1',
+        limit: toInt_(params.limit, null)
+      });
+      return jsonOutput_(allResult, params.callback);
+    }
+    if (action === 'processDirty') {
+      var dirtyResult = processDirtyQueue({
+        limit: toInt_(params.limit, null)
+      });
+      return jsonOutput_(dirtyResult, params.callback);
+    }
+    if (action === 'validateConfig') {
+      return jsonOutput_(validarClickUpConfig(), params.callback);
+    }
+    if (action === 'getClickUpInventory') {
+      return jsonOutput_(getClickUpInventory_(), params.callback);
+    }
+    if (action === 'logPanelUpdate' || String(params.log_update || '') === '1') {
+      var logResult = logPanelUpdate_(params);
+      return jsonOutput_(logResult, params.callback);
+    }
+    if (action === 'getPanelUpdateHistory' || String(params.history || '') === '1') {
+      var historyResult = getPanelUpdateHistory_(toInt_(params.limit, 20));
+      return jsonOutput_(historyResult, params.callback);
+    }
+    if (action === 'login') {
+      return jsonOutput_(loginUser_(params), params.callback);
+    }
+    if (action === 'me') {
+      return jsonOutput_(getCurrentUser_(params), params.callback);
+    }
+    if (action === 'listUsers') {
+      return jsonOutput_(listUsers_(params), params.callback);
+    }
+    if (action === 'createUser') {
+      return jsonOutput_(createUser_(params), params.callback);
+    }
+    if (action === 'setUserEnabled') {
+      return jsonOutput_(setUserEnabled_(params), params.callback);
+    }
+    if (action === 'logProjectFollowup') {
+      var followupResult = logProjectFollowup_(params);
+      return jsonOutput_(followupResult, params.callback);
+    }
+    if (action === 'getProjectFollowups') {
+      var followupsResult = getProjectFollowups_(params, toInt_(params.limit, 1000));
+      return jsonOutput_(followupsResult, params.callback);
+    }
+    if (action === 'setProjectKanbanStage') {
+      var kanbanResult = setProjectKanbanStage_(params);
+      return jsonOutput_(kanbanResult, params.callback);
+    }
+    if (action === 'deleteProjectFollowup') {
+      var deleteFollowupResult = deleteProjectFollowup_(params);
+      return jsonOutput_(deleteFollowupResult, params.callback);
+    }
+
+    var payload = {
+      ok: true,
+      service: 'clickup-sync',
+      message: 'Use action=getMonthlyProjects|syncProject|syncAll|processDirty|validateConfig|getClickUpInventory|logPanelUpdate|getPanelUpdateHistory|login|me|listUsers|createUser|setUserEnabled|logProjectFollowup|getProjectFollowups|setProjectKanbanStage|deleteProjectFollowup'
+    };
+    return jsonOutput_(payload, params.callback);
+  } catch (error) {
+    return jsonOutput_({
+      ok: false,
+      action: action,
+      error: simplifyErrorMessage_(error),
+      raw_error: error && error.message ? error.message : String(error || ''),
+      at: new Date().toISOString()
+    }, params.callback);
+  }
+}
+
+function doPost(e) {
+  var rawBody = ((e || {}).postData || {}).contents || '';
+  var event = rawBody ? JSON.parse(rawBody) : {};
+  if (!verifyWebhookRequest_(e, rawBody)) {
+    return ContentService.createTextOutput(JSON.stringify({ ok: false, error: 'invalid_signature' }))
+      .setMimeType(ContentService.MimeType.JSON);
+  }
+
+  var dirty = enqueueDirtyEvent_(event);
+  return ContentService.createTextOutput(JSON.stringify({
+    ok: true,
+    queued: dirty.queued,
+    event: event.event || ''
+  })).setMimeType(ContentService.MimeType.JSON);
+}
+
+function syncAllProjects(options) {
+  options = options || {};
+  var mappings = loadProjectMappings_().filter(function(item) {
+    return item.enabled && MONTHS.indexOf(sanitizeMonth_(item.mes)) >= 0;
+  });
+  var limit = options.limit || mappings.length;
+  var force = !!options.force;
+  var processed = [];
+  var errors = [];
+
+  mappings.slice(0, limit).forEach(function(mapping) {
+    try {
+      processed.push(syncProjectMapping_(mapping, { force: force }));
+    } catch (error) {
+      errors.push({
+        project_key: mapping.project_key,
+        error: error.message
+      });
+      writeSyncStatus_(mapping, 'error', error.message);
+    }
+  });
+
+  return {
+    ok: errors.length === 0,
+    total: Math.min(limit, mappings.length),
+    processed: processed,
+    errors: errors
+  };
+}
+
+function syncProjectByKey(projectKey) {
+  if (!projectKey) throw new Error('project_key is required');
+  var mapping = findProjectMapping_(projectKey);
+  if (!mapping) throw new Error('Project mapping not found: ' + projectKey);
+  return syncProjectMapping_(mapping, { force: true });
+}
+
+function processDirtyQueue(options) {
+  options = options || {};
+  var sheet = getDirtyQueueSheet_();
+  var values = sheet.getDataRange().getValues();
+  if (values.length <= 1) {
+    return { ok: true, processed: [], total: 0 };
+  }
+
+  var header = values[0];
+  var rows = values.slice(1);
+  var limit = options.limit || Number(getScriptProperty_('CLICKUP_SYNC_BATCH_SIZE', '10'));
+  var processed = [];
+  var keepRows = [header];
+
+  rows.forEach(function(row) {
+    if (processed.length >= limit) {
+      keepRows.push(row);
+      return;
+    }
+    var item = rowToObject_(header, row);
+    try {
+      var mapping = null;
+      if (item.project_key) mapping = findProjectMapping_(item.project_key);
+      if (!mapping && item.list_id) mapping = findProjectMappingByListId_(item.list_id);
+      if (!mapping && item.task_id) mapping = findProjectMappingByTaskId_(item.task_id);
+
+      if (!mapping) {
+        keepRows.push(row);
+        return;
+      }
+
+      processed.push(syncProjectMapping_(mapping, { force: true }));
+    } catch (error) {
+      keepRows.push(row);
+    }
+  });
+
+  sheet.clearContents();
+  sheet.getRange(1, 1, keepRows.length, keepRows[0].length).setValues(keepRows);
+  return {
+    ok: true,
+    total: processed.length,
+    processed: processed
+  };
+}
+
+function registerAllWebhooks() {
+  var endpoint = getScriptProperty_('CLICKUP_WEBHOOK_ENDPOINT');
+  var teamId = getScriptProperty_('CLICKUP_TEAM_ID');
+  var webhookToken = getScriptProperty_('CLICKUP_WEBHOOK_TOKEN', '');
+  if (!endpoint) throw new Error('CLICKUP_WEBHOOK_ENDPOINT is required');
+  if (!teamId) throw new Error('CLICKUP_TEAM_ID is required');
+
+  var mappings = loadProjectMappings_().filter(function(item) {
+    return item.enabled && item.list_id;
+  });
+  var webhookSheet = getWebhookSheet_();
+  var registered = [];
+
+  mappings.forEach(function(mapping) {
+    var body = {
+      endpoint: appendQueryParam_(endpoint, 'webhook_token', webhookToken),
+      events: [
+        'taskCreated',
+        'taskUpdated',
+        'taskDeleted',
+        'taskMoved',
+        'taskStatusUpdated'
+      ],
+      list_id: Number(mapping.list_id)
+    };
+    var response = clickupRequest_('post', '/team/' + teamId + '/webhook', body);
+    registered.push({
+      project_key: mapping.project_key,
+      list_id: mapping.list_id,
+      webhook_id: response.id || response.webhook && response.webhook.id || '',
+      secret: response.secret || response.webhook && response.webhook.secret || ''
+    });
+  });
+
+  writeObjectsToSheet_(webhookSheet, registered, ['project_key', 'list_id', 'webhook_id', 'secret']);
+  return { ok: true, total: registered.length, registered: registered };
+}
+
+function createTimeDrivenTriggers() {
+  ScriptApp.newTrigger('processDirtyQueueTrigger').timeBased().everyMinutes(5).create();
+  ScriptApp.newTrigger('syncAllProjectsTrigger').timeBased().everyHours(6).create();
+}
+
+function processDirtyQueueTrigger() {
+  processDirtyQueue({});
+}
+
+function syncAllProjectsTrigger() {
+  syncAllProjects({ force: true });
+}
+
+function diagnosticarSetup() {
+  var sheetId = getScriptProperty_('SHEET_ID', '');
+  var token = getScriptProperty_('CLICKUP_TOKEN', '');
+  var ss = sheetId ? SpreadsheetApp.openById(sheetId) : null;
+  var mappings = loadProjectMappings_();
+  var first = mappings.length ? mappings[0] : null;
+  var monthSheet = first ? ss.getSheetByName(first.mes) : null;
+  var row = first && monthSheet ? findClientRow_(monthSheet, first.cliente) : null;
+
+  var result = {
+    ok: true,
+    propriedades: {
+      SHEET_ID_preenchido: !!sheetId,
+      CLICKUP_TOKEN_preenchido: !!token
+    },
+    planilha: {
+      encontrada: !!ss,
+      abas: ss ? ss.getSheets().map(function(s) { return s.getName(); }) : []
+    },
+    config: {
+      total_projetos: mappings.length,
+      primeiro_projeto: first || null
+    },
+    linha_projeto: {
+      aba_encontrada: !!monthSheet,
+      linha_encontrada: !!row,
+      numero_linha: row || null
+    }
+  };
+
+  Logger.log(JSON.stringify(result, null, 2));
+  return result;
+}
+
+function syncPrimeiroProjetoConfigurado() {
+  var mappings = loadProjectMappings_().filter(function(item) { return item.enabled; });
+  if (!mappings.length) throw new Error('Nenhum projeto habilitado em CLICKUP_CONFIG');
+  return syncProjectMapping_(mappings[0], { force: true });
+}
+
+function garantirColunasPrimeiroProjeto() {
+  var mappings = loadProjectMappings_().filter(function(item) { return item.enabled; });
+  if (!mappings.length) throw new Error('Nenhum projeto habilitado em CLICKUP_CONFIG');
+  var mapping = mappings[0];
+  var sheet = getMonthSheet_(mapping.mes);
+  var cols = ensureMonthlyOutputColumns_(sheet);
+  Logger.log(JSON.stringify({
+    ok: true,
+    mes: mapping.mes,
+    cliente: mapping.cliente,
+    colunas: cols
+  }, null, 2));
+  return cols;
+}
+
+function diagnosticarPrimeiroProjetoClickup() {
+  var mappings = loadProjectMappings_().filter(function(item) { return item.enabled; });
+  if (!mappings.length) throw new Error('Nenhum projeto habilitado em CLICKUP_CONFIG');
+  var mapping = mappings[0];
+  var payload = fetchProjectTasks_(mapping);
+  var tasks = payload.tasks || [];
+  var sample = tasks.slice(0, 15).map(function(task) {
+    return {
+      id: String(task.id || ''),
+      name: sanitizeText_(task.name),
+      parent: String(task.parent || ''),
+      status: task.status && (task.status.status || task.status.type || task.status.label) || '',
+      list_name: task.list && task.list.name || '',
+      custom_item_id: String(task.custom_item_id || ''),
+      custom_item_name: task.custom_item && task.custom_item.name || ''
+    };
+  });
+  var result = {
+    ok: true,
+    project_key: mapping.project_key,
+    cliente: mapping.cliente,
+    source: payload.source,
+    view_id: mapping.view_id,
+    list_id: mapping.list_id,
+    total_tasks: tasks.length,
+    sample: sample
+  };
+  Logger.log(JSON.stringify(result, null, 2));
+  return result;
+}
+
+function getMonthlyProjectsPayload_(params) {
+  params = params || {};
+  var requested = sanitizeMonth_(params.mes || 'ALL');
+  var months = requested && requested !== 'ALL' ? [requested] : MONTHS.slice();
+  var projetos = [];
+  var byMonth = {};
+  months.forEach(function(month) {
+    if (MONTHS.indexOf(month) < 0) return;
+    var rows = getMonthlyProjectsFromSheet_(month);
+    byMonth[month] = rows.length;
+    projetos = projetos.concat(rows);
+  });
+  return {
+    ok: true,
+    mes: requested || 'ALL',
+    total: projetos.length,
+    projetos_por_mes: byMonth,
+    projetos: projetos
+  };
+}
+
+function getMonthlyProjectsFromSheet_(month) {
+  var ss = SpreadsheetApp.openById(getScriptProperty_('SHEET_ID'));
+  var sheet = ss.getSheetByName(month);
+  if (!sheet) return [];
+  var values = sheet.getDataRange().getDisplayValues();
+  if (values.length <= 1) return [];
+  var header = normalizeMonthlyHeader_(values[0] || []);
+  var out = [];
+  values.slice(1).forEach(function(row, index) {
+    var item = monthlyProjectFromRow_(month, header, row, index + 2);
+    if (item) out.push(item);
+  });
+  return out;
+}
+
+function monthlyProjectFromRow_(month, header, row, rowNumber) {
+  var obj = rowToObject_(header, row);
+  function pick(names, fallbackIndex) {
+    for (var i = 0; i < names.length; i++) {
+      var value = obj[names[i]];
+      if (value !== undefined && value !== null && String(value).trim() !== '') return value;
+    }
+    return fallbackIndex !== undefined && fallbackIndex !== null ? row[fallbackIndex] : '';
+  }
+
+  var cliente = sanitizeText_(pick(['cliente', 'nome_cliente', 'nome_do_cliente'], 1));
+  if (!isValidMonthlyClient_(cliente)) return null;
+
+  return {
+    mes: month,
+    mes_origem: month,
+    data_venda: pick(['data_venda', 'data_da_venda'], 0),
+    cliente: cliente,
+    pacote: pick(['pacote'], 2),
+    adicionais: pick(['adicionais'], 3),
+    tipo: pick(['tipo', 'tipo_projeto'], 4),
+    vendedor: pick(['vendedor'], 5),
+    consultor: pick(['consultor', 'consultora', 'responsavel'], 7),
+    formato: pick(['formato', 'modalidade'], 8),
+    cidade: pick(['cidade'], 9),
+    data_estimada: pick(['data_estimada', 'previsao', 'mes_estimado'], 10),
+    kickoff: pick(['kickoff', 'kick_off'], 11),
+    data_kick: pick(['data_kick', 'data_kickoff'], 12),
+    clickup: pick(['clickup'], 13),
+    data_inicio: pick(['data_inicio', 'primeiro_treinamento'], 14),
+    diarias_cont: pick(['diarias_cont', 'diarias_contratadas', 'diarias_total'], 15),
+    diarias_real: pick(['diarias_real', 'diarias_realizadas', 'diarias_consumidas'], 16),
+    diarias_rest: pick(['diarias_rest', 'diarias_restantes', 'saldo_diarias'], 17),
+    acompanhamento: pick(['acompanhamento', 'observacao_acompanhamento'], 18),
+    data_enc: pick(['data_enc', 'data_encerramento'], 19),
+    avaliacao_consultor: pick(['avaliacao_consultor'], 20),
+    status: pick(['status', 'status_projeto'], 21),
+    projeto_link: pick(['projeto_link', 'link_projeto', 'link_do_projeto', 'url_projeto'], 22),
+    link_projeto: pick(['link_projeto', 'projeto_link', 'link_do_projeto', 'url_projeto'], 22),
+    tasks_concluidas: pick(['tasks_concluidas'], null),
+    tasks_pendentes: pick(['tasks_pendentes'], null),
+    marcos_concluidos: pick(['marcos_concluidos'], null),
+    marcos_pendentes: pick(['marcos_pendentes'], null),
+    fases_total: pick(['fases_total'], null),
+    progresso: pick(['progresso'], null),
+    data_ultima_atualizacao: pick(['data_ultima_atualizacao'], null),
+    dias_sem_atualizacao: pick(['dias_sem_atualizacao'], null),
+    view_id: pick(['view_id'], null),
+    list_id: pick(['list_id'], null),
+    clickup_json: pick(['clickup_json'], null),
+    ultima_sync_clickup: pick(['ultima_sync_clickup'], null),
+    sync_status_clickup: pick(['sync_status_clickup'], null),
+    sync_error_clickup: pick(['sync_error_clickup'], null),
+    _sheet_row: rowNumber
+  };
+}
+
+function normalizeMonthlyHeader_(header) {
+  return (header || []).map(function(name, index) {
+    var key = canonicalMonthlyHeader_(name);
+    return key || ('col_' + index);
+  });
+}
+
+function canonicalMonthlyHeader_(name) {
+  var key = normalizeKey_(name);
+  var aliases = {
+    data_venda: ['DATA VENDA', 'DATA DA VENDA'],
+    cliente: ['CLIENTE', 'NOME CLIENTE', 'NOME DO CLIENTE'],
+    pacote: ['PACOTE'],
+    adicionais: ['ADICIONAIS'],
+    tipo: ['TIPO', 'TIPO PROJETO'],
+    vendedor: ['VENDEDOR'],
+    consultor: ['CONSULTOR', 'CONSULTORA', 'RESPONSAVEL'],
+    formato: ['FORMATO', 'MODALIDADE'],
+    cidade: ['CIDADE'],
+    data_estimada: ['DATA ESTIMADA', 'PREVISAO', 'MES ESTIMADO'],
+    kickoff: ['KICKOFF', 'KICK OFF'],
+    data_kick: ['DATA KICK', 'DATA KICKOFF'],
+    clickup: ['CLICKUP'],
+    data_inicio: ['DATA INICIO', 'PRIMEIRO TREINAMENTO'],
+    diarias_cont: ['DIARIAS CONT', 'DIARIAS CONTRATADAS', 'DIARIAS TOTAL'],
+    diarias_real: ['DIARIAS REAL', 'DIARIAS REALIZADAS', 'DIARIAS CONSUMIDAS'],
+    diarias_rest: ['DIARIAS REST', 'DIARIAS RESTANTES', 'SALDO DIARIAS'],
+    acompanhamento: ['ACOMPANHAMENTO', 'OBSERVACAO ACOMPANHAMENTO'],
+    data_enc: ['DATA ENC', 'DATA ENCERRAMENTO'],
+    avaliacao_consultor: ['AVALIACAO CONSULTOR'],
+    status: ['STATUS', 'STATUS PROJETO'],
+    projeto_link: ['PROJETO LINK', 'LINK PROJETO', 'LINK DO PROJETO', 'URL PROJETO'],
+    link_projeto: ['LINK PROJETO', 'LINK DO PROJETO', 'PROJETO LINK', 'URL PROJETO'],
+    tasks_concluidas: ['TASKS CONCLUIDAS'],
+    tasks_pendentes: ['TASKS PENDENTES'],
+    marcos_concluidos: ['MARCOS CONCLUIDOS'],
+    marcos_pendentes: ['MARCOS PENDENTES'],
+    fases_total: ['FASES TOTAL'],
+    progresso: ['PROGRESSO'],
+    data_ultima_atualizacao: ['DATA ULTIMA ATUALIZACAO'],
+    dias_sem_atualizacao: ['DIAS SEM ATUALIZACAO'],
+    view_id: ['VIEW ID'],
+    list_id: ['LIST ID'],
+    clickup_json: ['CLICKUP JSON'],
+    ultima_sync_clickup: ['ULTIMA SYNC CLICKUP'],
+    sync_status_clickup: ['SYNC STATUS CLICKUP'],
+    sync_error_clickup: ['SYNC ERROR CLICKUP']
+  };
+  var found = '';
+  Object.keys(aliases).some(function(canonical) {
+    if (aliases[canonical].indexOf(key) >= 0) {
+      found = canonical;
+      return true;
+    }
+    return false;
+  });
+  return found;
+}
+
+function isValidMonthlyClient_(cliente) {
+  var key = normalizeKey_(cliente);
+  if (!key) return false;
+  return ['CLIENTE', 'NOME CLIENTE', 'NOME DO CLIENTE', 'TOTAL DE PROJETOS', 'CONSULTOR', 'VENDEDOR', 'STATUS', 'FORMATO', 'TIPO', 'PERIODO', 'MES', 'INDICADORES GERAIS'].indexOf(key) < 0;
+}
+
+function syncProjectMapping_(mapping, options) {
+  options = options || {};
+  var normalized = buildNormalizedProjectFromClickUp_(mapping);
+  writeProjectSummaryToMonthlySheet_(mapping, normalized);
+  writeSyncStatus_(mapping, 'ok', '');
+  return {
+    project_key: mapping.project_key,
+    cliente: mapping.cliente,
+    mes: mapping.mes,
+    tasks_total: normalized.resumo.tasks_total,
+    marcos_total: normalized.resumo.marcos_total,
+    synced_at: normalized.synced_at,
+    source: normalized.clickup_payload && normalized.clickup_payload.source || '',
+    warning: normalized.clickup_payload && normalized.clickup_payload.warning || ''
+  };
+}
+
+function buildNormalizedProjectFromClickUp_(mapping) {
+  var payload = fetchProjectTasks_(mapping);
+  var tasks = payload.tasks || [];
+  var phaseMap = {};
+  var byId = {};
+  var ignoredNestedItems = 0;
+
+  tasks.forEach(function(task) {
+    byId[String(task.id)] = task;
+  });
+
+  tasks.forEach(function(task) {
+    if (isPhaseTask_(task, byId)) {
+      phaseMap[String(task.id)] = {
+        tipo: 'fase',
+        id: String(task.id),
+        nome: sanitizeText_(task.name),
+        ordem: extractLeadingNumber_(task.name),
+        status_original: task.status && (task.status.status || task.status.type || task.status.label) || '',
+        tasks_concluidas: 0,
+        tasks_pendentes: 0,
+        marcos_concluidos: 0,
+        marcos_pendentes: 0
+      };
+    }
+  });
+
+  var normalizedTasks = [];
+  var normalizedMilestones = [];
+
+  tasks.forEach(function(task) {
+    if (isPhaseTask_(task, byId)) return;
+    var phaseInfo = resolvePhaseForTask_(task, byId, phaseMap);
+    var phase = phaseInfo.phase;
+    var countInSummary = shouldCountTaskInSummary_(task, phaseInfo, byId);
+
+    if (!countInSummary) {
+      ignoredNestedItems += 1;
+      return;
+    }
+
+    var item = {
+      id: String(task.id),
+      tipo: 'task',
+      nome: sanitizeText_(task.name),
+      fase_nome: phase ? phase.nome : '',
+      parent_id: String(task.parent || ''),
+      status_original: task.status && (task.status.status || task.status.type || task.status.label) || '',
+      updated_at: task.date_updated ? fromMillisIso_(task.date_updated) : '',
+      due_date: task.due_date ? fromMillisIso_(task.due_date) : ''
+    };
+
+    if (isMilestoneTask_(task)) {
+      item.tipo = 'marco';
+      item.concluido = isClosedStatus_(item.status_original);
+      normalizedMilestones.push(item);
+      if (phase) {
+        if (item.concluido) phase.marcos_concluidos += 1;
+        else phase.marcos_pendentes += 1;
+      }
+      return;
+    }
+
+    item.concluida = isClosedStatus_(item.status_original);
+    normalizedTasks.push(item);
+    if (phase) {
+      if (item.concluida) phase.tasks_concluidas += 1;
+      else phase.tasks_pendentes += 1;
+    }
+  });
+
+  var phases = Object.keys(phaseMap).map(function(id) { return phaseMap[id]; });
+  phases.sort(function(a, b) {
+    if (a.ordem !== b.ordem) return a.ordem - b.ordem;
+    return a.nome.localeCompare(b.nome);
+  });
+
+  var tasksDone = normalizedTasks.filter(function(item) { return item.concluida; }).length;
+  var tasksPending = normalizedTasks.length - tasksDone;
+  var milestonesDone = normalizedMilestones.filter(function(item) { return item.concluido; }).length;
+  var milestonesPending = normalizedMilestones.length - milestonesDone;
+  var totalItems = normalizedTasks.length + normalizedMilestones.length;
+  var progress = totalItems ? Math.round(((tasksDone + milestonesDone) / totalItems) * 100) : 0;
+  var latestUpdateItem = getLatestUpdateItemFromRawTasks_(tasks, byId, phaseMap);
+  var latestUpdate = latestUpdateItem && latestUpdateItem.updated_at ? latestUpdateItem.updated_at : getLatestUpdate_(tasks);
+  var projectUrl = mapping.project_url || buildProjectUrl_(mapping, tasks);
+  var consultorInferido = mapping.consultor || inferConsultorFromTasks_(tasks);
+
+  return {
+    project_key: mapping.project_key,
+    cliente: mapping.cliente,
+    mes: mapping.mes,
+    consultor: consultorInferido,
+    project_url: projectUrl,
+    view_id: mapping.view_id,
+    list_id: mapping.list_id,
+    synced_at: new Date().toISOString(),
+    fases: phases.map(function(phase) {
+      var tasksTotal = phase.tasks_concluidas + phase.tasks_pendentes;
+      var marcosTotal = phase.marcos_concluidos + phase.marcos_pendentes;
+      var totalItens = tasksTotal + marcosTotal;
+      var totalConcluidos = phase.tasks_concluidas + phase.marcos_concluidos;
+      return {
+        tipo: 'fase',
+        id: phase.id,
+        nome: phase.nome,
+        ordem: phase.ordem,
+        status_original: phase.status_original || '',
+        tasks_concluidas: phase.tasks_concluidas,
+        tasks_pendentes: phase.tasks_pendentes,
+        marcos_concluidos: phase.marcos_concluidos,
+        marcos_pendentes: phase.marcos_pendentes,
+        tasks_total: tasksTotal,
+        marcos_total: marcosTotal,
+        total_itens: totalItens,
+        progresso: totalItens ? Math.round((totalConcluidos / totalItens) * 100) : 0
+      };
+    }),
+    tasks: normalizedTasks,
+    marcos: normalizedMilestones,
+    resumo: {
+      fases_total: phases.length,
+      tasks_total: normalizedTasks.length,
+      tasks_concluidas: tasksDone,
+      tasks_pendentes: tasksPending,
+      marcos_total: normalizedMilestones.length,
+      marcos_concluidos: milestonesDone,
+      marcos_pendentes: milestonesPending,
+      progresso: progress,
+      data_ultima_atualizacao: latestUpdate || '',
+      ultima_alteracao_item: latestUpdateItem || null
+    },
+    clickup_payload: {
+      source: payload.source,
+      warning: payload.warning || '',
+      fetched_task_count: tasks.length,
+      ignored_nested_items: ignoredNestedItems,
+      list_id: mapping.list_id || '',
+      view_id: mapping.view_id || ''
+    }
+  };
+}
+
+function fetchProjectTasks_(mapping) {
+  var listError = null;
+  if (mapping.list_id) {
+    try {
+      return {
+        source: 'list',
+        tasks: fetchAllListTasks_(mapping.list_id)
+      };
+    } catch (error) {
+      listError = error;
+      if (!mapping.view_id || !isClickUpRecoverableSyncError_(error)) {
+        throw error;
+      }
+    }
+  }
+  if (mapping.view_id) {
+    try {
+      return {
+        source: listError ? 'view_fallback' : 'view',
+        tasks: fetchAllViewTasks_(mapping.view_id),
+        warning: listError ? simplifyErrorMessage_(listError) : ''
+      };
+    } catch (viewError) {
+      if (listError) {
+        throw new Error(
+          'List sync failed: ' + simplifyErrorMessage_(listError) +
+          ' | View fallback failed: ' + simplifyErrorMessage_(viewError)
+        );
+      }
+      throw viewError;
+    }
+  }
+  if (mapping.folder_id) {
+    return {
+      source: 'folder',
+      tasks: fetchAllFolderTasks_(mapping.folder_id)
+    };
+  }
+  if (mapping.space_id) {
+    return {
+      source: 'space',
+      tasks: fetchAllSpaceTasks_(mapping.space_id)
+    };
+  }
+  throw new Error('Project mapping must have list_id, view_id, folder_id or space_id: ' + mapping.project_key);
+}
+
+function fetchAllListTasks_(listId) {
+  listId = normalizeClickUpId_(listId);
+  if (!listId) throw new Error('CLICKUP_CONFIG com list_id invalido ou vazio.');
+  var page = 0;
+  var all = [];
+  while (true) {
+    var query = [
+      'include_closed=true',
+      'subtasks=true',
+      'include_timl=true',
+      'page=' + page
+    ].join('&');
+    var response = clickupRequest_('get', '/list/' + listId + '/task?' + query);
+    var batch = response.tasks || [];
+    all = all.concat(batch);
+    if (batch.length < 100) break;
+    page += 1;
+  }
+  return dedupeTasks_(all);
+}
+
+function fetchAllViewTasks_(viewId) {
+  viewId = normalizeClickUpId_(viewId);
+  if (!viewId) throw new Error('CLICKUP_CONFIG com view_id invalido ou vazio.');
+  var page = 0;
+  var all = [];
+  while (true) {
+    var response = clickupRequest_('get', '/view/' + viewId + '/task?page=' + page);
+    var batch = response.tasks || [];
+    all = all.concat(batch);
+    if (batch.length < 100) break;
+    page += 1;
+  }
+  return dedupeTasks_(all);
+}
+
+function fetchAllFolderTasks_(folderId) {
+  folderId = normalizeClickUpId_(folderId);
+  if (!folderId) throw new Error('CLICKUP_CONFIG com folder_id invalido ou vazio.');
+  var response = clickupRequest_('get', '/folder/' + folderId + '/list?archived=false');
+  var lists = response.lists || [];
+  var all = [];
+  lists.forEach(function(list) {
+    if (list && list.id) {
+      all = all.concat(fetchAllListTasks_(list.id));
+    }
+  });
+  return dedupeTasks_(all);
+}
+
+function fetchAllSpaceTasks_(spaceId) {
+  spaceId = normalizeClickUpId_(spaceId);
+  if (!spaceId) throw new Error('CLICKUP_CONFIG com space_id invalido ou vazio.');
+  var all = [];
+  var folderResponse = clickupRequest_('get', '/space/' + spaceId + '/folder?archived=false');
+  var folders = folderResponse.folders || [];
+  folders.forEach(function(folder) {
+    if (folder && folder.id) {
+      all = all.concat(fetchAllFolderTasks_(folder.id));
+    }
+  });
+  var listResponse = clickupRequest_('get', '/space/' + spaceId + '/list?archived=false');
+  var lists = listResponse.lists || [];
+  lists.forEach(function(list) {
+    if (list && list.id) {
+      all = all.concat(fetchAllListTasks_(list.id));
+    }
+  });
+  return dedupeTasks_(all);
+}
+
+function inserirSpacesHistoricosClickUp() {
+  var result = importClickUpSpaceListsToConfig_(HISTORICAL_CLICKUP_SPACES);
+  try {
+    SpreadsheetApp.getUi().alert(
+      'Importacao ClickUp concluida',
+      'Projetos/pastas historicos inseridos: ' + result.inserted +
+        '\nLinhas historicas antigas removidas: ' + result.removed +
+        '\nJa existiam no CLICKUP_CONFIG: ' + result.skipped +
+        '\nSpaces lidos: ' + result.spaces +
+        '\n\nDepois rode "Sincronizar inventario ClickUp".',
+      SpreadsheetApp.getUi().ButtonSet.OK
+    );
+  } catch (e) {}
+  return result;
+}
+
+function importClickUpSpaceListsToConfig_(spaces) {
+  var sheet = getConfigSheet_();
+  var headers = ['enabled', 'mes', 'cliente', 'project_key', 'project_url', 'view_id', 'list_id', 'folder_id', 'space_id', 'sync_mode', 'notes'];
+  ensureHeaders_(sheet, headers);
+
+  var values = sheet.getDataRange().getValues();
+  var header = normalizeConfigHeader_(values[0] || headers);
+  var keptRows = [];
+  var removed = 0;
+  var existingListIds = {};
+  var existingFolderIds = {};
+  values.slice(1).forEach(function(row) {
+    var item = rowToObject_(header, row);
+    if (isAutoHistoricalConfigRow_(item)) {
+      removed += 1;
+      return;
+    }
+    keptRows.push(item);
+    var listId = normalizeClickUpId_(item.list_id) || extractClickUpIdFromUrl_(item.project_url, 'list');
+    var folderId = normalizeClickUpId_(item.folder_id) || extractClickUpIdFromUrl_(item.project_url, 'folder');
+    if (listId) existingListIds[listId] = true;
+    if (folderId) existingFolderIds[folderId] = true;
+  });
+
+  var rows = [];
+  var skipped = 0;
+  (spaces || []).forEach(function(space) {
+    var projects = fetchClickUpImplementationProjectsFromSpace_(space);
+    projects.forEach(function(project) {
+      var listId = normalizeClickUpId_(project.list_id);
+      var folderId = normalizeClickUpId_(project.folder_id);
+      if (!listId && !folderId) return;
+      if ((folderId && existingFolderIds[folderId]) || (listId && existingListIds[listId])) {
+        skipped += 1;
+        return;
+      }
+      if (listId) existingListIds[listId] = true;
+      if (folderId) existingFolderIds[folderId] = true;
+      rows.push({
+        enabled: true,
+        mes: 'HIST',
+        cliente: sanitizeText_(project.name),
+        project_key: buildHistoricalProjectKey_(space.name, project),
+        project_url: listId ? buildClickUpListUrl_(listId) : buildClickUpFolderUrl_(folderId),
+        view_id: '',
+        list_id: listId,
+        folder_id: folderId,
+        space_id: normalizeClickUpId_(space.space_id),
+        sync_mode: 'list',
+        notes: 'Importado automaticamente de ' + sanitizeText_(space.name) + ' / Cronograma de Implantacao'
+      });
+    });
+  });
+
+  sheet.clearContents();
+  ensureHeaders_(sheet, headers);
+  var outputObjects = keptRows.concat(rows);
+  if (outputObjects.length) {
+    var output = outputObjects.map(function(item) {
+      return headers.map(function(headerName) { return item[headerName] !== undefined ? item[headerName] : ''; });
+    });
+    sheet.getRange(2, 1, output.length, headers.length).setValues(output);
+  }
+
+  return {
+    ok: true,
+    spaces: (spaces || []).length,
+    inserted: rows.length,
+    skipped: skipped,
+    removed: removed,
+    sheet: sheet.getName()
+  };
+}
+
+function isAutoHistoricalConfigRow_(item) {
+  var mes = sanitizeMonth_(item && item.mes);
+  var notes = normalizeKey_(item && item.notes);
+  var projectKey = normalizeKey_(item && item.project_key);
+  return mes === 'HIST' && (
+    notes.indexOf('IMPORTADO AUTOMATICAMENTE') >= 0 ||
+    projectKey.indexOf('HIST CSI PROJETOS') === 0 ||
+    projectKey.indexOf('HIST CSI AVULSOS') === 0
+  );
+}
+
+function fetchClickUpImplementationProjectsFromSpace_(space) {
+  var spaceId = normalizeClickUpId_(space && space.space_id);
+  if (!spaceId) throw new Error('Space historico sem space_id valido: ' + sanitizeText_(space && space.name));
+  var all = [];
+  var seen = {};
+
+  function addProjectFromList(list, folder) {
+    var listId = normalizeClickUpId_(list && list.id);
+    if (!listId || seen['list:' + listId]) return;
+    if (!isImplementationScheduleList_(list && list.name)) return;
+    seen['list:' + listId] = true;
+    all.push({
+      type: 'list',
+      id: listId,
+      list_id: listId,
+      folder_id: normalizeClickUpId_(folder && folder.id),
+      name: sanitizeText_((folder && folder.name) || list.name),
+      space_id: spaceId,
+      space_name: sanitizeText_(space.name)
+    });
+  }
+
+  var rootResponse = clickupRequest_('get', '/space/' + spaceId + '/list?archived=false');
+  (rootResponse.lists || []).forEach(function(list) {
+    addProjectFromList(list, null);
+  });
+
+  var folderResponse = clickupRequest_('get', '/space/' + spaceId + '/folder?archived=false');
+  (folderResponse.folders || []).forEach(function(folder) {
+    var folderLists = folder.lists || [];
+    if (!folderLists.length && folder && folder.id) {
+      var listResponse = clickupRequest_('get', '/folder/' + folder.id + '/list?archived=false');
+      folderLists = listResponse.lists || [];
+    }
+    folderLists.forEach(function(list) {
+      addProjectFromList(list, folder);
+    });
+  });
+
+  return all;
+}
+
+function isImplementationScheduleList_(name) {
+  var key = normalizeKey_(name);
+  return key === 'CRONOGRAMA DE IMPLANTACAO' ||
+    key.indexOf('CRONOGRAMA DE IMPLANTACAO') >= 0;
+}
+
+function buildHistoricalProjectKey_(spaceName, project) {
+  return 'HIST|' + normalizeKey_(spaceName) + '|' + normalizeKey_(project.type || 'project') + '|' + normalizeClickUpId_(project.id);
+}
+
+function buildClickUpListUrl_(listId) {
+  return 'https://app.clickup.com/9007083069/v/li/' + normalizeClickUpId_(listId);
+}
+
+function buildClickUpFolderUrl_(folderId) {
+  return 'https://app.clickup.com/9007083069/v/f/' + normalizeClickUpId_(folderId);
+}
+
+function sincronizarInventarioClickUp() {
+  var result = syncClickUpInventoryFromConfig_();
+  try {
+    SpreadsheetApp.getUi().alert(
+      'Inventario ClickUp sincronizado',
+      'Projetos/listas historicos gravados: ' + result.total +
+        '\nErros: ' + result.errors.length +
+        '\nAba: ' + result.sheet,
+      SpreadsheetApp.getUi().ButtonSet.OK
+    );
+  } catch (e) {}
+  return result;
+}
+
+function syncClickUpInventoryFromConfig_() {
+  var mappings = loadProjectMappings_().filter(function(item) {
+    return item.enabled &&
+      sanitizeMonth_(item.mes) === 'HIST' &&
+      (item.list_id || item.view_id || item.folder_id || item.space_id);
+  });
+  var rows = [];
+  var errors = [];
+  mappings.forEach(function(mapping) {
+    try {
+      var normalized = buildNormalizedProjectFromClickUp_(mapping);
+      rows.push(inventoryRowFromNormalized_(mapping, normalized, 'ok', ''));
+    } catch (error) {
+      errors.push({ project_key: mapping.project_key, cliente: mapping.cliente, error: simplifyErrorMessage_(error) });
+      rows.push(inventoryRowFromNormalized_(mapping, null, 'error', simplifyErrorMessage_(error)));
+    }
+  });
+
+  var sheet = getClickUpInventorySheet_();
+  var headers = getClickUpInventoryHeaders_();
+  writeObjectsToSheet_(sheet, rows, headers);
+  return { ok: errors.length === 0, total: rows.length, errors: errors, sheet: sheet.getName() };
+}
+
+function inventoryRowFromNormalized_(mapping, normalized, status, errorMessage) {
+  var resumo = normalized && normalized.resumo || {};
+  return {
+    mes: mapping.mes || '',
+    cliente: mapping.cliente || '',
+    consultor: normalized && normalized.consultor || mapping.consultor || '',
+    status: status === 'ok' ? inferProjectStatusFromSummary_(resumo) : '',
+    project_key: mapping.project_key || '',
+    project_url: normalized && normalized.project_url || mapping.project_url || '',
+    view_id: mapping.view_id || '',
+    list_id: mapping.list_id || '',
+    folder_id: mapping.folder_id || '',
+    space_id: mapping.space_id || '',
+    tasks_concluidas: resumo.tasks_concluidas || 0,
+    tasks_pendentes: resumo.tasks_pendentes || 0,
+    marcos_concluidos: resumo.marcos_concluidos || 0,
+    marcos_pendentes: resumo.marcos_pendentes || 0,
+    fases_total: resumo.fases_total || 0,
+    progresso: resumo.progresso || 0,
+    data_ultima_atualizacao: resumo.data_ultima_atualizacao || '',
+    dias_sem_atualizacao: diffDaysFromIso_(resumo.data_ultima_atualizacao),
+    clickup_json: normalized ? JSON.stringify(normalized) : '',
+    ultima_sync_clickup: new Date(),
+    sync_status_clickup: status || '',
+    sync_error_clickup: errorMessage || ''
+  };
+}
+
+function getClickUpInventory_() {
+  var sheet = getClickUpInventorySheet_();
+  var values = sheet.getDataRange().getValues();
+  if (values.length <= 1) return { ok: true, projetos: [], total: 0 };
+  var header = values[0];
+  var projetos = values.slice(1).map(function(row) {
+    var item = rowToObject_(header, row);
+    if (item.ultima_sync_clickup instanceof Date) item.ultima_sync_clickup = item.ultima_sync_clickup.toISOString();
+    return item;
+  }).filter(function(item) {
+    return !!sanitizeText_(item.cliente);
+  });
+  return { ok: true, projetos: projetos, total: projetos.length };
+}
+
+function getClickUpInventoryHeaders_() {
+  return [
+    'mes', 'cliente', 'consultor', 'status', 'project_key', 'project_url', 'view_id', 'list_id', 'folder_id', 'space_id',
+    'tasks_concluidas', 'tasks_pendentes', 'marcos_concluidos', 'marcos_pendentes', 'fases_total', 'progresso',
+    'data_ultima_atualizacao', 'dias_sem_atualizacao', 'clickup_json', 'ultima_sync_clickup', 'sync_status_clickup', 'sync_error_clickup'
+  ];
+}
+
+function inferProjectStatusFromSummary_(resumo) {
+  var total = (resumo.tasks_concluidas || 0) + (resumo.tasks_pendentes || 0) + (resumo.marcos_concluidos || 0) + (resumo.marcos_pendentes || 0);
+  var pend = (resumo.tasks_pendentes || 0) + (resumo.marcos_pendentes || 0);
+  if (total && !pend) return 'Concluido';
+  return 'Em Andamento';
+}
+
+function inferConsultorFromTasks_(tasks) {
+  var counts = {};
+  (tasks || []).forEach(function(task) {
+    (task.assignees || []).forEach(function(user) {
+      var name = sanitizeText_(user && (user.username || user.name || user.email));
+      if (!name) return;
+      counts[name] = (counts[name] || 0) + 1;
+    });
+  });
+  var best = '';
+  Object.keys(counts).forEach(function(name) {
+    if (!best || counts[name] > counts[best]) best = name;
+  });
+  return best;
+}
+
+function clickupRequest_(method, path, body) {
+  var token = getScriptProperty_('CLICKUP_TOKEN');
+  if (!token) throw new Error('Missing CLICKUP_TOKEN script property');
+  var options = {
+    method: String(method || 'get').toUpperCase(),
+    muteHttpExceptions: true,
+    headers: {
+      Authorization: token,
+      'Content-Type': 'application/json'
+    }
+  };
+  if (body) options.payload = JSON.stringify(body);
+
+  var url = CLICKUP_API_BASE + path;
+  var maxAttempts = 3;
+  var lastError = null;
+
+  for (var attempt = 1; attempt <= maxAttempts; attempt++) {
+    try {
+      var response = UrlFetchApp.fetch(url, options);
+      var code = response.getResponseCode();
+      var text = response.getContentText() || '{}';
+      if (code >= 200 && code < 300) {
+        return JSON.parse(text);
+      }
+      lastError = new Error('ClickUp API error ' + code + ': ' + text);
+      if (attempt >= maxAttempts || !isRecoverableClickUpHttpError_(code, text)) {
+        throw lastError;
+      }
+    } catch (error) {
+      lastError = error;
+      if (attempt >= maxAttempts || !isRecoverableClickUpTransportError_(error)) {
+        throw error;
+      }
+    }
+
+    Utilities.sleep(500 * attempt);
+  }
+
+  throw lastError || new Error('Falha desconhecida ao consultar o ClickUp.');
+}
+
+function loadProjectMappings_() {
+  var sheet = getConfigSheet_();
+  var values = sheet.getDataRange().getValues();
+  if (values.length <= 1) return [];
+  var seen = {};
+  var out = [];
+  getConfigHeaderCandidates_(values).forEach(function(candidate) {
+    values.slice(candidate.index + 1).forEach(function(row) {
+      var item = rowToObject_(candidate.header, row);
+      var mapping = projectMappingFromConfigItem_(item);
+      if (!mapping || !mapping.cliente || !mapping.mes) return;
+      var key = normalizeProjectKey_(mapping.project_key || buildProjectKey_(mapping.mes, mapping.cliente));
+      if (seen[key] !== undefined) {
+        var existing = out[seen[key]];
+        var existingHasId = !!(existing && (existing.list_id || existing.view_id || existing.folder_id || existing.space_id || existing.project_url));
+        var mappingHasId = !!(mapping.list_id || mapping.view_id || mapping.folder_id || mapping.space_id || mapping.project_url);
+        if (!existingHasId && mappingHasId) out[seen[key]] = mapping;
+        return;
+      }
+      seen[key] = out.length;
+      out.push(mapping);
+    });
+  });
+  return out;
+}
+
+function projectMappingFromConfigItem_(item) {
+  item = item || {};
+  var mes = sanitizeMonth_(item.mes);
+  var cliente = sanitizeText_(item.cliente);
+  var projectUrl = sanitizeText_(item.project_url || item.link_projeto || item.link_do_projeto || item.link_clickup);
+  var viewId = normalizeClickUpId_(item.view_id) || extractClickUpIdFromUrl_(projectUrl, 'view');
+  var listId = normalizeClickUpId_(item.list_id) || extractClickUpIdFromUrl_(projectUrl, 'list');
+  var folderId = normalizeClickUpId_(item.folder_id) || extractClickUpIdFromUrl_(projectUrl, 'folder');
+  var spaceId = normalizeClickUpId_(item.space_id) || extractClickUpIdFromUrl_(projectUrl, 'space');
+  if (!mes && !cliente && !projectUrl && !viewId && !listId && !folderId && !spaceId) return null;
+  return {
+    enabled: normalizeBoolean_(item.enabled, true),
+    mes: mes,
+    cliente: cliente,
+    project_key: String(item.project_key || buildProjectKey_(mes, cliente)),
+    project_url: projectUrl,
+    view_id: viewId,
+    list_id: listId,
+    folder_id: folderId,
+    space_id: spaceId,
+    sync_mode: sanitizeText_(item.sync_mode || 'list'),
+    notes: sanitizeText_(item.notes)
+  };
+}
+
+function validarClickUpConfig() {
+  var sheet = getConfigSheet_();
+  var values = sheet.getDataRange().getValues();
+  var diagnostics = [];
+  if (values.length <= 1) {
+    diagnostics.push({
+      row: '',
+      status: 'erro',
+      mes: '',
+      cliente: '',
+      project_url: '',
+      view_id: '',
+      list_id: '',
+      diagnostico: 'CLICKUP_CONFIG vazio ou sem linhas de projeto.'
+    });
+  } else {
+    getConfigHeaderCandidates_(values).forEach(function(candidate) {
+      values.slice(candidate.index + 1).forEach(function(row, offset) {
+      var item = rowToObject_(candidate.header, row);
+      var mapping = projectMappingFromConfigItem_(item);
+      if (!mapping) return;
+      var rawCliente = mapping.cliente;
+      var rawMes = mapping.mes;
+      var projectUrl = mapping.project_url;
+      var viewId = mapping.view_id;
+      var listId = mapping.list_id;
+      var folderId = mapping.folder_id;
+      var spaceId = mapping.space_id;
+      var enabled = mapping.enabled;
+      var rowNumber = candidate.index + 2 + offset;
+      var problems = [];
+      if (!enabled) problems.push('Linha desabilitada.');
+      if (!rawMes) problems.push('Mes nao encontrado.');
+      if (!rawCliente) problems.push('Cliente/projeto nao encontrado.');
+      if (!viewId && !listId && !folderId && !spaceId) problems.push('Sem view_id/list_id/folder_id/space_id e nao foi possivel extrair do link.');
+      diagnostics.push({
+        row: rowNumber,
+        status: problems.length ? 'revisar' : 'ok',
+        mes: rawMes,
+        cliente: rawCliente,
+        project_url: projectUrl,
+        view_id: viewId,
+        list_id: listId,
+        folder_id: folderId,
+        space_id: spaceId,
+        diagnostico: problems.length ? problems.join(' ') : 'Configuracao minima OK.'
+      });
+      });
+    });
+  }
+  var out = getOrCreateSheet_('CLICKUP_CONFIG_DIAGNOSTICO');
+  writeObjectsToSheet_(out, diagnostics, ['row', 'status', 'mes', 'cliente', 'project_url', 'view_id', 'list_id', 'folder_id', 'space_id', 'diagnostico']);
+  return {
+    ok: true,
+    total: diagnostics.length,
+    ok_count: diagnostics.filter(function(item) { return item.status === 'ok'; }).length,
+    revisar_count: diagnostics.filter(function(item) { return item.status !== 'ok'; }).length,
+    sheet: 'CLICKUP_CONFIG_DIAGNOSTICO'
+  };
+}
+
+function findProjectMapping_(projectKey) {
+  var raw = String(projectKey || '').trim();
+  if (!raw) return null;
+  var normalizedInput = normalizeProjectKey_(raw);
+  return loadProjectMappings_().filter(function(item) {
+    if (!item) return false;
+    var rawItemKey = String(item.project_key || '').trim();
+    if (rawItemKey === raw) return true;
+    if (normalizeProjectKey_(rawItemKey) === normalizedInput) return true;
+    if (buildProjectKey_(item.mes, item.cliente) === normalizedInput) return true;
+    return false;
+  })[0] || null;
+}
+
+function findProjectMappingByListId_(listId) {
+  return loadProjectMappings_().filter(function(item) {
+    return String(item.list_id) === String(listId || '');
+  })[0] || null;
+}
+
+function findProjectMappingByTaskId_(taskId) {
+  var task = clickupRequest_('get', '/task/' + taskId);
+  var listId = task && task.list && task.list.id;
+  return listId ? findProjectMappingByListId_(listId) : null;
+}
+
+function writeProjectSummaryToMonthlySheet_(mapping, normalized) {
+  var sheet = getMonthSheet_(mapping.mes);
+  var headerInfo = ensureMonthlyOutputColumns_(sheet);
+  var clientRow = findClientRow_(sheet, mapping.cliente);
+  if (!clientRow) throw new Error('Client row not found in month sheet: ' + mapping.cliente + ' (' + mapping.mes + ')');
+
+  var values = {};
+  values.tasks_concluidas = normalized.resumo.tasks_concluidas;
+  values.tasks_pendentes = normalized.resumo.tasks_pendentes;
+  values.marcos_concluidos = normalized.resumo.marcos_concluidos;
+  values.marcos_pendentes = normalized.resumo.marcos_pendentes;
+  values.fases_total = normalized.resumo.fases_total;
+  values.progresso = normalized.resumo.progresso;
+  values.data_ultima_atualizacao = normalized.resumo.data_ultima_atualizacao || '';
+  values.dias_sem_atualizacao = diffDaysFromIso_(normalized.resumo.data_ultima_atualizacao);
+  values.link_projeto = normalized.project_url || '';
+  values.view_id = normalized.view_id || '';
+  values.list_id = normalized.list_id || '';
+  values.clickup_json = JSON.stringify(normalized);
+  values.ultima_sync_clickup = new Date();
+  values.sync_status_clickup = 'OK';
+  values.sync_error_clickup = '';
+
+  OUTPUT_COLUMNS.forEach(function(column) {
+    var col = headerInfo[column];
+    sheet.getRange(clientRow, col).setValue(values[column] !== undefined ? values[column] : '');
+  });
+}
+
+function writeSyncStatus_(mapping, status, errorMessage) {
+  try {
+    var sheet = getMonthSheet_(mapping.mes);
+    var headerInfo = ensureMonthlyOutputColumns_(sheet);
+    var clientRow = findClientRow_(sheet, mapping.cliente);
+    if (!clientRow) return;
+    sheet.getRange(clientRow, headerInfo.sync_status_clickup).setValue(String(status || ''));
+    sheet.getRange(clientRow, headerInfo.sync_error_clickup).setValue(String(errorMessage || ''));
+    sheet.getRange(clientRow, headerInfo.ultima_sync_clickup).setValue(new Date());
+  } catch (e) {}
+}
+
+function ensureMonthlyOutputColumns_(sheet) {
+  var headerRange = sheet.getRange(1, 1, 1, Math.max(sheet.getLastColumn(), 1));
+  var headerValues = headerRange.getValues()[0];
+  var map = {};
+
+  OUTPUT_COLUMNS.forEach(function(name) {
+    var index = headerValues.indexOf(name);
+    if (index < 0) {
+      index = headerValues.length;
+      headerValues.push(name);
+      sheet.getRange(1, index + 1).setValue(name);
+    }
+    map[name] = index + 1;
+  });
+  return map;
+}
+
+function findClientRow_(sheet, cliente) {
+  var lastRow = sheet.getLastRow();
+  if (lastRow < 2) return null;
+  var names = sheet.getRange(2, 2, lastRow - 1, 1).getValues();
+  var target = normalizeKey_(cliente);
+  for (var i = 0; i < names.length; i++) {
+    if (normalizeKey_(names[i][0]) === target) return i + 2;
+  }
+  return null;
+}
+
+function enqueueDirtyEvent_(event) {
+  var sheet = getDirtyQueueSheet_();
+  ensureHeaders_(sheet, ['queued_at', 'event', 'task_id', 'list_id', 'project_key']);
+  var row = [
+    new Date(),
+    String(event.event || ''),
+    String(event.task_id || ''),
+    String(event.list_id || event.folder_id || ''),
+    ''
+  ];
+  sheet.appendRow(row);
+  return { queued: true };
+}
+
+function verifyWebhookSignature_(body, signature) {
+  var sheet = getWebhookSheet_();
+  var values = sheet.getDataRange().getValues();
+  if (values.length <= 1) return true;
+  var header = values[0];
+  var secrets = values.slice(1).map(function(row) {
+    return rowToObject_(header, row).secret;
+  }).filter(function(secret) { return !!secret; });
+  if (!secrets.length) return true;
+  return secrets.some(function(secret) {
+    var digest = Utilities.computeHmacSha256Signature(body, secret);
+    var hex = digest.map(function(byte) {
+      var v = (byte < 0 ? byte + 256 : byte).toString(16);
+      return v.length === 1 ? '0' + v : v;
+    }).join('');
+    return hex === signature;
+  });
+}
+
+function verifyWebhookRequest_(e, body) {
+  var expectedToken = getScriptProperty_('CLICKUP_WEBHOOK_TOKEN', '');
+  if (expectedToken) {
+    var actualToken = String(((e || {}).parameter || {}).webhook_token || '');
+    return actualToken === expectedToken;
+  }
+  return true;
+}
+
+function getMonthSheet_(month) {
+  var ss = SpreadsheetApp.openById(getScriptProperty_('SHEET_ID'));
+  var sheet = ss.getSheetByName(sanitizeMonth_(month));
+  if (!sheet) throw new Error('Month sheet not found: ' + month);
+  return sheet;
+}
+
+function getConfigSheet_() {
+  var ss = SpreadsheetApp.openById(getScriptProperty_('SHEET_ID'));
+  var name = getScriptProperty_('CLICKUP_CONFIG_SHEET', 'CLICKUP_CONFIG');
+  var sheet = ss.getSheetByName(name) || ss.insertSheet(name);
+  ensureHeaders_(sheet, ['enabled', 'mes', 'cliente', 'project_key', 'project_url', 'view_id', 'list_id', 'folder_id', 'space_id', 'sync_mode', 'notes']);
+  return sheet;
+}
+
+function getClickUpInventorySheet_() {
+  var ss = SpreadsheetApp.openById(getScriptProperty_('SHEET_ID'));
+  var name = getScriptProperty_('CLICKUP_INVENTORY_SHEET', 'CLICKUP_INVENTARIO');
+  var sheet = ss.getSheetByName(name) || ss.insertSheet(name);
+  ensureHeaders_(sheet, getClickUpInventoryHeaders_());
+  return sheet;
+}
+
+function getOrCreateSheet_(name) {
+  var ss = SpreadsheetApp.openById(getScriptProperty_('SHEET_ID'));
+  return ss.getSheetByName(name) || ss.insertSheet(name);
+}
+
+function getWebhookSheet_() {
+  var ss = SpreadsheetApp.openById(getScriptProperty_('SHEET_ID'));
+  var name = getScriptProperty_('CLICKUP_WEBHOOKS_SHEET', 'CLICKUP_WEBHOOKS');
+  var sheet = ss.getSheetByName(name) || ss.insertSheet(name);
+  ensureHeaders_(sheet, ['project_key', 'list_id', 'webhook_id', 'secret']);
+  return sheet;
+}
+
+function getDirtyQueueSheet_() {
+  var ss = SpreadsheetApp.openById(getScriptProperty_('SHEET_ID'));
+  var name = getScriptProperty_('CLICKUP_DIRTY_SHEET', 'CLICKUP_DIRTY_QUEUE');
+  var sheet = ss.getSheetByName(name) || ss.insertSheet(name);
+  ensureHeaders_(sheet, ['queued_at', 'event', 'task_id', 'list_id', 'project_key']);
+  return sheet;
+}
+
+function getPanelUpdateHistorySheet_() {
+  var ss = SpreadsheetApp.openById(getScriptProperty_('SHEET_ID'));
+  var name = getScriptProperty_('PANEL_UPDATE_HISTORY_SHEET', 'PANEL_UPDATE_HISTORY');
+  var sheet = ss.getSheetByName(name) || ss.insertSheet(name);
+  ensureHeaders_(sheet, [
+    'logged_at',
+    'quando_iso',
+    'quando',
+    'usuario',
+    'dispositivo',
+    'tipo',
+    'resultado',
+    'motivo',
+    'projetos',
+    'url',
+    'navegador'
+  ]);
+  return sheet;
+}
+
+function logPanelUpdate_(params) {
+  params = params || {};
+  var sheet = getPanelUpdateHistorySheet_();
+  var row = [
+    new Date(),
+    sanitizeText_(params.quando_iso),
+    sanitizeText_(params.quando),
+    sanitizeText_(params.usuario),
+    sanitizeText_(params.dispositivo),
+    sanitizeText_(params.tipo),
+    sanitizeText_(params.resultado),
+    sanitizeText_(params.motivo),
+    toInt_(params.projetos, 0),
+    sanitizeText_(params.url),
+    sanitizeText_(params.navegador)
+  ];
+  sheet.appendRow(row);
+  return {
+    ok: true,
+    logged: true,
+    total_rows: Math.max(0, sheet.getLastRow() - 1)
+  };
+}
+
+function getPanelUpdateHistory_(limit) {
+  var sheet = getPanelUpdateHistorySheet_();
+  var values = sheet.getDataRange().getValues();
+  if (values.length <= 1) {
+    return { ok: true, history: [], total: 0 };
+  }
+  var header = values[0];
+  var rows = values.slice(1);
+  var max = Math.max(1, Math.min(Number(limit || 20), 100));
+  var history = rows.slice(Math.max(0, rows.length - max)).reverse().map(function(row) {
+    var item = rowToObject_(header, row);
+    return {
+      logged_at: item.logged_at instanceof Date ? item.logged_at.toISOString() : String(item.logged_at || ''),
+      quando_iso: String(item.quando_iso || ''),
+      quando: item.quando ? String(item.quando) : (item.logged_at instanceof Date ? item.logged_at.toLocaleString('pt-BR') : ''),
+      usuario: String(item.usuario || ''),
+      dispositivo: String(item.dispositivo || ''),
+      tipo: String(item.tipo || ''),
+      resultado: String(item.resultado || ''),
+      motivo: String(item.motivo || ''),
+      projetos: toInt_(item.projetos, 0),
+      url: String(item.url || ''),
+      navegador: String(item.navegador || '')
+    };
+  });
+  return {
+    ok: true,
+    total: rows.length,
+    history: history
+  };
+}
+
+function getProjectFollowupSheet_() {
+  var ss = SpreadsheetApp.openById(getScriptProperty_('SHEET_ID'));
+  var name = getScriptProperty_('PROJECT_FOLLOWUP_SHEET', 'ACOMPANHAMENTOS_PROJETOS');
+  var sheet = ss.getSheetByName(name) || ss.insertSheet(name);
+  ensureHeaders_(sheet, [
+    'logged_at',
+    'data_acompanhamento',
+    'mes',
+    'cliente',
+    'consultor',
+    'project_key',
+    'link_projeto',
+    'consideracao',
+    'proxima_acao',
+    'responsavel',
+    'origem',
+    'status',
+    'url',
+    'navegador',
+    'kanban_stage',
+    'followup_id'
+  ]);
+  return sheet;
+}
+
+function getProjectKanbanStateSheet_() {
+  var ss = SpreadsheetApp.openById(getScriptProperty_('SHEET_ID'));
+  var name = getScriptProperty_('PROJECT_KANBAN_STATE_SHEET', 'ACOMPANHAMENTOS_KANBAN');
+  var sheet = ss.getSheetByName(name) || ss.insertSheet(name);
+  ensureHeaders_(sheet, [
+    'updated_at',
+    'cycle_key',
+    'project_key',
+    'stage',
+    'updated_by'
+  ]);
+  return sheet;
+}
+
+function getUsersSheet_() {
+  var ss = SpreadsheetApp.openById(getScriptProperty_('SHEET_ID'));
+  var name = getScriptProperty_('PANEL_USERS_SHEET', 'PAINEL_USUARIOS');
+  var sheet = ss.getSheetByName(name) || ss.insertSheet(name);
+  ensureHeaders_(sheet, [
+    'created_at',
+    'username',
+    'name',
+    'role',
+    'enabled',
+    'password_salt',
+    'password_hash',
+    'last_login'
+  ]);
+  ensureBootstrapAdmin_(sheet);
+  return sheet;
+}
+
+function ensureBootstrapAdmin_(sheet) {
+  if (sheet.getLastRow() > 1) return;
+  var username = sanitizeText_(getScriptProperty_('PANEL_ADMIN_USERNAME', ''));
+  var name = sanitizeText_(getScriptProperty_('PANEL_ADMIN_NAME', username));
+  var passwordSha = sanitizeText_(getScriptProperty_('PANEL_ADMIN_PASSWORD_SHA256', ''));
+  if (!username || !passwordSha) return;
+  var salt = makeAuthToken_().slice(0, 16);
+  sheet.appendRow([
+    new Date(),
+    username.toLowerCase(),
+    name || username,
+    'admin',
+    'TRUE',
+    salt,
+    hashPassword_(salt, passwordSha),
+    ''
+  ]);
+}
+
+function hashPassword_(salt, passwordSha) {
+  var raw = String(salt || '') + '|' + String(passwordSha || '');
+  var bytes = Utilities.computeDigest(Utilities.DigestAlgorithm.SHA_256, raw, Utilities.Charset.UTF_8);
+  return bytes.map(function(b) {
+    var v = b < 0 ? b + 256 : b;
+    return ('0' + v.toString(16)).slice(-2);
+  }).join('');
+}
+
+function hashPlainTextPasswordForPanel_(password) {
+  var bytes = Utilities.computeDigest(Utilities.DigestAlgorithm.SHA_256, String(password || ''), Utilities.Charset.UTF_8);
+  return bytes.map(function(b) {
+    var v = b < 0 ? b + 256 : b;
+    return ('0' + v.toString(16)).slice(-2);
+  }).join('');
+}
+
+function resetPanelUserPasswordFromEditor() {
+  // Utilitario manual: edite os dois valores abaixo, rode no editor do Apps Script
+  // e depois apague a senha deste arquivo no editor.
+  var username = 'reinaldo';
+  var newPassword = 'TROQUE_ESTA_SENHA';
+  if (!username || newPassword === 'TROQUE_ESTA_SENHA') {
+    throw new Error('Edite username e newPassword antes de executar.');
+  }
+  var found = findUserRow_(username);
+  if (!found) throw new Error('Usuario nao encontrado: ' + username);
+  var header = found.header;
+  var saltCol = header.indexOf('password_salt') + 1;
+  var hashCol = header.indexOf('password_hash') + 1;
+  if (!saltCol || !hashCol) throw new Error('Colunas password_salt/password_hash nao encontradas.');
+  var salt = makeAuthToken_().slice(0, 16);
+  var passwordSha = hashPlainTextPasswordForPanel_(newPassword);
+  found.sheet.getRange(found.row, saltCol).setValue(salt);
+  found.sheet.getRange(found.row, hashCol).setValue(hashPassword_(salt, passwordSha));
+  return { ok: true, username: String(username).toLowerCase() };
+}
+
+function makeAuthToken_() {
+  return Utilities.getUuid().replace(/-/g, '') + Utilities.getUuid().replace(/-/g, '');
+}
+
+function publicUser_(user) {
+  return {
+    username: String(user.username || ''),
+    name: String(user.name || ''),
+    role: String(user.role || 'user'),
+    enabled: String(user.enabled || '').toUpperCase() !== 'FALSE',
+    last_login: user.last_login instanceof Date ? user.last_login.toISOString() : String(user.last_login || '')
+  };
+}
+
+function findUserRow_(username) {
+  username = sanitizeText_(username).toLowerCase();
+  if (!username) return null;
+  var sheet = getUsersSheet_();
+  var values = sheet.getDataRange().getValues();
+  if (values.length <= 1) return null;
+  var header = values[0];
+  for (var i = 1; i < values.length; i++) {
+    var item = rowToObject_(header, values[i]);
+    if (String(item.username || '').toLowerCase() === username) {
+      return {
+        sheet: sheet,
+        row: i + 1,
+        header: header,
+        user: item
+      };
+    }
+  }
+  return null;
+}
+
+function sessionCache_() {
+  return CacheService.getScriptCache();
+}
+
+function storeSession_(user) {
+  var token = makeAuthToken_();
+  sessionCache_().put('session:' + token, JSON.stringify(publicUser_(user)), 21600);
+  return token;
+}
+
+function requireUser_(params) {
+  var token = sanitizeText_(params && params.auth_token);
+  if (!token) throw new Error('Login obrigatorio.');
+  var raw = sessionCache_().get('session:' + token);
+  if (!raw) throw new Error('Sessao expirada. Entre novamente.');
+  var user = JSON.parse(raw);
+  if (!user.enabled) throw new Error('Usuario desativado.');
+  return user;
+}
+
+function requireAdmin_(params) {
+  var user = requireUser_(params);
+  if (String(user.role || '') !== 'admin') throw new Error('Apenas administrador pode executar esta acao.');
+  return user;
+}
+
+function loginUser_(params) {
+  params = params || {};
+  var username = sanitizeText_(params.username).toLowerCase();
+  var passwordSha = sanitizeText_(params.password_sha);
+  if (!username || !passwordSha) throw new Error('Usuario e senha sao obrigatorios.');
+  var found = findUserRow_(username);
+  if (!found) throw new Error('Usuario ou senha invalidos.');
+  var user = found.user;
+  if (String(user.enabled || '').toUpperCase() === 'FALSE') throw new Error('Usuario desativado.');
+  var expected = hashPassword_(user.password_salt, passwordSha);
+  if (expected !== String(user.password_hash || '')) throw new Error('Usuario ou senha invalidos.');
+  found.sheet.getRange(found.row, found.header.indexOf('last_login') + 1).setValue(new Date());
+  var token = storeSession_(user);
+  return {
+    ok: true,
+    token: token,
+    user: publicUser_(user)
+  };
+}
+
+function getCurrentUser_(params) {
+  return {
+    ok: true,
+    user: requireUser_(params)
+  };
+}
+
+function listUsers_(params) {
+  requireAdmin_(params);
+  var sheet = getUsersSheet_();
+  var values = sheet.getDataRange().getValues();
+  if (values.length <= 1) return { ok: true, users: [] };
+  var header = values[0];
+  var users = values.slice(1).map(function(row) {
+    return publicUser_(rowToObject_(header, row));
+  });
+  return { ok: true, users: users };
+}
+
+function createUser_(params) {
+  var admin = requireAdmin_(params);
+  params = params || {};
+  var username = sanitizeText_(params.username).toLowerCase();
+  var name = sanitizeText_(params.name);
+  var role = sanitizeText_(params.role) === 'admin' ? 'admin' : 'user';
+  var passwordSha = sanitizeText_(params.password_sha);
+  if (!username || !name || !passwordSha) throw new Error('Nome, usuario e senha sao obrigatorios.');
+  if (findUserRow_(username)) throw new Error('Usuario ja existe.');
+  var sheet = getUsersSheet_();
+  var salt = makeAuthToken_().slice(0, 16);
+  sheet.appendRow([
+    new Date(),
+    username,
+    name,
+    role,
+    'TRUE',
+    salt,
+    hashPassword_(salt, passwordSha),
+    ''
+  ]);
+  return {
+    ok: true,
+    created_by: admin.username,
+    user: { username: username, name: name, role: role, enabled: true, last_login: '' }
+  };
+}
+
+function setUserEnabled_(params) {
+  requireAdmin_(params);
+  params = params || {};
+  var username = sanitizeText_(params.username).toLowerCase();
+  var enabled = String(params.enabled || '') === '1' || String(params.enabled || '').toUpperCase() === 'TRUE';
+  var found = findUserRow_(username);
+  if (!found) throw new Error('Usuario nao encontrado.');
+  var col = found.header.indexOf('enabled') + 1;
+  found.sheet.getRange(found.row, col).setValue(enabled ? 'TRUE' : 'FALSE');
+  return { ok: true, username: username, enabled: enabled };
+}
+
+function logProjectFollowup_(params) {
+  params = params || {};
+  var user = requireUser_(params);
+  var cliente = sanitizeText_(params.cliente);
+  if (!cliente) throw new Error('cliente is required');
+  var consideracao = sanitizeText_(params.consideracao || params.observacao);
+  var proximaAcao = sanitizeText_(params.proxima_acao);
+  if (!consideracao && !proximaAcao) throw new Error('consideracao or proxima_acao is required');
+  var sheet = getProjectFollowupSheet_();
+  var dataAcompanhamento = sanitizeText_(params.data_acompanhamento) || Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'yyyy-MM-dd');
+  var followupId = makeAuthToken_();
+  var row = [
+    new Date(),
+    dataAcompanhamento,
+    sanitizeMonth_(params.mes),
+    cliente,
+    sanitizeText_(params.consultor),
+    sanitizeText_(params.project_key),
+    sanitizeText_(params.link_projeto),
+    consideracao,
+    proximaAcao,
+    user.name || user.username || sanitizeText_(params.responsavel),
+    sanitizeText_(params.origem) || 'site',
+    sanitizeText_(params.status),
+    sanitizeText_(params.url),
+    sanitizeText_(params.navegador),
+    sanitizeText_(params.kanban_stage || params.etapa_kanban),
+    followupId
+  ];
+  sheet.appendRow(row);
+  var rowNumber = sheet.getLastRow();
+  var followup = rowToObject_(getProjectFollowupHeaders_(), row);
+  followup.row_number = rowNumber;
+  return {
+    ok: true,
+    logged: true,
+    followup: followup,
+    total_rows: Math.max(0, rowNumber - 1)
+  };
+}
+
+function getProjectFollowupHeaders_() {
+  return [
+    'logged_at',
+    'data_acompanhamento',
+    'mes',
+    'cliente',
+    'consultor',
+    'project_key',
+    'link_projeto',
+    'consideracao',
+    'proxima_acao',
+    'responsavel',
+    'origem',
+    'status',
+    'url',
+    'navegador',
+    'kanban_stage',
+    'followup_id'
+  ];
+}
+
+function getProjectFollowups_(params, limit) {
+  requireUser_(params);
+  var sheet = getProjectFollowupSheet_();
+  var values = sheet.getDataRange().getValues();
+  if (values.length <= 1) {
+    return { ok: true, followups: [], total: 0 };
+  }
+  var header = values[0];
+  var rows = values.slice(1);
+  var max = Math.max(1, Math.min(Number(limit || 1000), 5000));
+  var start = Math.max(0, rows.length - max);
+  var followups = rows.slice(start).map(function(row, index) {
+    var item = rowToObject_(header, row);
+    return {
+      row_number: start + index + 2,
+      logged_at: item.logged_at instanceof Date ? item.logged_at.toISOString() : String(item.logged_at || ''),
+      data_acompanhamento: item.data_acompanhamento instanceof Date ? Utilities.formatDate(item.data_acompanhamento, Session.getScriptTimeZone(), 'yyyy-MM-dd') : String(item.data_acompanhamento || ''),
+      mes: String(item.mes || ''),
+      cliente: String(item.cliente || ''),
+      consultor: String(item.consultor || ''),
+      project_key: String(item.project_key || ''),
+      link_projeto: String(item.link_projeto || ''),
+      consideracao: String(item.consideracao || ''),
+      proxima_acao: String(item.proxima_acao || ''),
+      responsavel: String(item.responsavel || ''),
+      kanban_stage: String(item.kanban_stage || item.etapa_kanban || ''),
+      origem: String(item.origem || ''),
+      status: String(item.status || ''),
+      url: String(item.url || ''),
+      navegador: String(item.navegador || ''),
+      followup_id: String(item.followup_id || '')
+    };
+  }).reverse();
+  return {
+    ok: true,
+    total: rows.length,
+    followups: followups,
+    kanban_states: getProjectKanbanStates_()
+  };
+}
+
+function normalizeKanbanStage_(value) {
+  var raw = String(value || '').toLowerCase();
+  if (raw === 'done' || raw.indexOf('conclu') >= 0) return 'done';
+  if (raw === 'doing' || raw.indexOf('interfer') >= 0 || raw.indexOf('processo') >= 0 || raw.indexOf('andamento') >= 0) return 'doing';
+  return 'pending';
+}
+
+function getProjectKanbanStates_() {
+  var sheet = getProjectKanbanStateSheet_();
+  var values = sheet.getDataRange().getValues();
+  if (values.length <= 1) return {};
+  var header = values[0];
+  var map = {};
+  values.slice(1).forEach(function(row) {
+    var item = rowToObject_(header, row);
+    var cycleKey = sanitizeText_(item.cycle_key);
+    var projectKey = sanitizeText_(item.project_key).toUpperCase();
+    if (!cycleKey || !projectKey) return;
+    map[cycleKey + '|' + projectKey] = normalizeKanbanStage_(item.stage);
+  });
+  return map;
+}
+
+function findProjectKanbanStateRow_(sheet, cycleKey, projectKey) {
+  var values = sheet.getDataRange().getValues();
+  if (values.length <= 1) return null;
+  var header = values[0];
+  for (var i = 1; i < values.length; i++) {
+    var item = rowToObject_(header, values[i]);
+    if (String(item.cycle_key || '') === cycleKey && String(item.project_key || '').toUpperCase() === projectKey) {
+      return { row: i + 1, header: header };
+    }
+  }
+  return null;
+}
+
+function setProjectKanbanStage_(params) {
+  params = params || {};
+  var user = requireUser_(params);
+  var projectKey = sanitizeText_(params.project_key).toUpperCase();
+  var cycleKey = sanitizeText_(params.cycle_key);
+  if (!projectKey || !cycleKey) throw new Error('project_key and cycle_key are required');
+  var stage = normalizeKanbanStage_(params.stage);
+  var sheet = getProjectKanbanStateSheet_();
+  var found = findProjectKanbanStateRow_(sheet, cycleKey, projectKey);
+  var row = [
+    new Date(),
+    cycleKey,
+    projectKey,
+    stage,
+    user.name || user.username || ''
+  ];
+  if (found) {
+    sheet.getRange(found.row, 1, 1, row.length).setValues([row]);
+  } else {
+    sheet.appendRow(row);
+  }
+  return {
+    ok: true,
+    saved: true,
+    cycle_key: cycleKey,
+    project_key: projectKey,
+    stage: stage,
+    kanban_states: getProjectKanbanStates_()
+  };
+}
+
+function clearProjectKanbanStage_(cycleKey, projectKey) {
+  cycleKey = sanitizeText_(cycleKey);
+  projectKey = sanitizeText_(projectKey).toUpperCase();
+  if (!cycleKey || !projectKey) return false;
+  var sheet = getProjectKanbanStateSheet_();
+  var found = findProjectKanbanStateRow_(sheet, cycleKey, projectKey);
+  if (!found) return false;
+  sheet.deleteRow(found.row);
+  return true;
+}
+
+function normalizeFollowupDateForCompare_(value) {
+  if (value instanceof Date) {
+    return Utilities.formatDate(value, Session.getScriptTimeZone(), 'yyyy-MM-dd');
+  }
+  return String(value || '').slice(0, 10);
+}
+
+function normalizeFollowupLoggedForCompare_(value) {
+  if (value instanceof Date) {
+    return value.toISOString();
+  }
+  return String(value || '');
+}
+
+function deleteProjectFollowup_(params) {
+  params = params || {};
+  requireAdmin_(params);
+  var projectKey = sanitizeText_(params.project_key).toUpperCase();
+  var cliente = sanitizeText_(params.cliente).toLowerCase();
+  var loggedAt = sanitizeText_(params.logged_at);
+  var dataAcompanhamento = sanitizeText_(params.data_acompanhamento);
+  var followupId = sanitizeText_(params.followup_id);
+  var rowNumber = toInt_(params.row_number, null);
+  var cycleKey = sanitizeText_(params.cycle_key);
+  if (!projectKey && !cliente) throw new Error('project_key or cliente is required');
+  var sheet = getProjectFollowupSheet_();
+  var values = sheet.getDataRange().getValues();
+  if (values.length <= 1) return { ok: true, deleted: false, message: 'Nenhum acompanhamento encontrado.' };
+  var header = values[0];
+  var deleted = null;
+  var start = rowNumber && rowNumber >= 2 && rowNumber <= values.length ? rowNumber - 1 : values.length - 1;
+  var end = rowNumber ? start : 1;
+  for (var i = start; i >= end; i--) {
+    var item = rowToObject_(header, values[i]);
+    if (followupId && String(item.followup_id || '') !== followupId) continue;
+    var itemKey = String(item.project_key || '').toUpperCase();
+    var itemCliente = String(item.cliente || '').toLowerCase();
+    var keyMatches = projectKey ? itemKey === projectKey : itemCliente === cliente;
+    if (!keyMatches) continue;
+    if (loggedAt && normalizeFollowupLoggedForCompare_(item.logged_at) !== loggedAt) continue;
+    if (dataAcompanhamento && normalizeFollowupDateForCompare_(item.data_acompanhamento) !== dataAcompanhamento) continue;
+    deleted = rowToObject_(header, values[i]);
+    sheet.deleteRow(i + 1);
+    break;
+  }
+  if (deleted && cycleKey) clearProjectKanbanStage_(cycleKey, projectKey);
+  return {
+    ok: true,
+    deleted: !!deleted,
+    followup: deleted || null,
+    total_rows: Math.max(0, sheet.getLastRow() - 1),
+    kanban_states: getProjectKanbanStates_()
+  };
+}
+
+function ensureHeaders_(sheet, headers) {
+  if (!sheet.getLastRow()) {
+    sheet.getRange(1, 1, 1, headers.length).setValues([headers]);
+    return;
+  }
+  var current = sheet.getRange(1, 1, 1, Math.max(sheet.getLastColumn(), headers.length)).getValues()[0];
+  headers.forEach(function(header, index) {
+    if (current[index] !== header) sheet.getRange(1, index + 1).setValue(header);
+  });
+}
+
+function writeObjectsToSheet_(sheet, objects, headers) {
+  sheet.clearContents();
+  ensureHeaders_(sheet, headers);
+  if (!objects.length) return;
+  var rows = objects.map(function(item) {
+    return headers.map(function(header) { return item[header] || ''; });
+  });
+  sheet.getRange(2, 1, rows.length, headers.length).setValues(rows);
+}
+
+function findConfigHeaderRow_(values) {
+  var candidates = getConfigHeaderCandidates_(values);
+  return candidates.length ? candidates[0].index : 0;
+}
+
+function getConfigHeaderCandidates_(values) {
+  var candidates = [];
+  var bestIndex = 0;
+  var bestScore = -1;
+  var maxRows = Math.min(values.length, 15);
+  for (var i = 0; i < maxRows; i++) {
+    var normalized = normalizeConfigHeader_(values[i] || []);
+    var score = 0;
+    if (normalized.indexOf('mes') >= 0) score += 3;
+    if (normalized.indexOf('cliente') >= 0) score += 3;
+    if (normalized.indexOf('project_url') >= 0) score += 2;
+    if (normalized.indexOf('view_id') >= 0) score += 2;
+    if (normalized.indexOf('list_id') >= 0) score += 2;
+    if (normalized.indexOf('folder_id') >= 0) score += 2;
+    if (normalized.indexOf('space_id') >= 0) score += 2;
+    if (normalized.indexOf('enabled') >= 0) score += 1;
+    if (score >= 5) {
+      candidates.push({ index: i, score: score, header: normalized });
+    }
+    if (score > bestScore) {
+      bestScore = score;
+      bestIndex = i;
+    }
+  }
+  if (!candidates.length) candidates.push({ index: bestIndex, score: bestScore, header: normalizeConfigHeader_(values[bestIndex] || []) });
+  candidates.sort(function(a, b) {
+    if (b.score !== a.score) return b.score - a.score;
+    return a.index - b.index;
+  });
+  return candidates;
+}
+
+function normalizeConfigHeader_(header) {
+  var used = {};
+  return (header || []).map(function(name) {
+    var canonical = canonicalConfigHeader_(name);
+    if (!canonical) canonical = sanitizeText_(name);
+    if (!canonical) return '';
+    if (!used[canonical]) {
+      used[canonical] = 1;
+      return canonical;
+    }
+    used[canonical] += 1;
+    return canonical + '_' + used[canonical];
+  });
+}
+
+function canonicalConfigHeader_(name) {
+  var key = normalizeKey_(name);
+  var aliases = {
+    enabled: ['ENABLED', 'HABILITADO', 'ATIVO', 'SINCRONIZAR', 'SYNC', 'CLICKUP SYNC'],
+    mes: ['MES', 'MONTH', 'MES DA VENDA', 'MES VENDA'],
+    cliente: ['CLIENTE', 'PROJETO', 'CLIENTE PROJETO', 'NOME DO PROJETO', 'NOME PROJETO', 'RAZAO SOCIAL'],
+    project_key: ['PROJECT KEY', 'CHAVE', 'CHAVE PROJETO', 'PROJECT KEY CLICKUP'],
+    project_url: ['PROJECT URL', 'PROJECT URL CLICKUP', 'LINK PROJETO', 'LINK DO PROJETO', 'LINK CLICKUP', 'URL CLICKUP', 'PROJETO LINK'],
+    view_id: ['VIEW ID', 'VIEWID', 'ID VIEW', 'CLICKUP VIEW ID'],
+    list_id: ['LIST ID', 'LISTID', 'ID LISTA', 'CLICKUP LIST ID'],
+    folder_id: ['FOLDER ID', 'FOLDERID', 'ID FOLDER', 'ID PASTA', 'PASTA ID', 'CLICKUP FOLDER ID'],
+    space_id: ['SPACE ID', 'SPACEID', 'ID SPACE', 'ID ESPACO', 'ESPACO ID', 'CLICKUP SPACE ID'],
+    sync_mode: ['SYNC MODE', 'MODO SYNC', 'MODO SINCRONIZACAO'],
+    notes: ['NOTES', 'OBS', 'OBSERVACAO', 'NOTAS']
+  };
+  var found = '';
+  Object.keys(aliases).some(function(canonical) {
+    if (aliases[canonical].indexOf(key) >= 0) {
+      found = canonical;
+      return true;
+    }
+    return false;
+  });
+  return found;
+}
+
+function rowToObject_(header, row) {
+  var out = {};
+  header.forEach(function(key, index) {
+    out[String(key || '').trim()] = row[index];
+  });
+  return out;
+}
+
+function jsonOutput_(payload, callbackName) {
+  var json = JSON.stringify(payload);
+  if (callbackName) {
+    return ContentService.createTextOutput(String(callbackName) + '(' + json + ')')
+      .setMimeType(ContentService.MimeType.JAVASCRIPT);
+  }
+  return ContentService.createTextOutput(json).setMimeType(ContentService.MimeType.JSON);
+}
+
+function simplifyErrorMessage_(error) {
+  var message = error && error.message ? error.message : String(error || '');
+  if (/list_id invalido|view_id invalido|folder_id invalido|space_id invalido/i.test(message)) {
+    return 'O CLICKUP_CONFIG possui list_id/view_id/folder_id/space_id vazio, invalido ou mal formatado.';
+  }
+  if (/largura de banda|bandwidth/i.test(message)) {
+    return 'ClickUp recusou a sincronizacao por limite temporario de banda. Aguarde alguns minutos e tente novamente.';
+  }
+  if (/ClickUp API error 401/i.test(message)) {
+    return 'CLICKUP_TOKEN invalido ou expirado nas propriedades do Apps Script.';
+  }
+  if (/ClickUp API error 403/i.test(message)) {
+    return 'O token nao tem permissao para acessar esta lista/view do ClickUp.';
+  }
+  if (/ClickUp API error 404/i.test(message)) {
+    return 'A lista/view/folder/space informado no CLICKUP_CONFIG nao foi encontrado no ClickUp. Confira list_id/view_id/folder_id/space_id.';
+  }
+  if (/ClickUp API error 400/i.test(message)) {
+    return 'O ClickUp rejeitou a requisicao. Normalmente isso indica id ClickUp invalido ou configuracao incompleta.';
+  }
+  if (/ClickUp API error 5\d\d/i.test(message)) {
+    return 'O ClickUp retornou erro temporario no servidor. Tente sincronizar novamente em alguns minutos.';
+  }
+  if (/Project mapping not found/i.test(message)) {
+    return 'Projeto nao encontrado no CLICKUP_CONFIG para a chave informada.';
+  }
+  if (/Missing CLICKUP_TOKEN/i.test(message)) {
+    return 'CLICKUP_TOKEN nao configurado nas propriedades do Apps Script.';
+  }
+  return message || 'Erro inesperado na sincronizacao.';
+}
+
+function isClickUpBandwidthError_(error) {
+  var message = error && error.message ? error.message : String(error || '');
+  return /largura de banda|bandwidth/i.test(message);
+}
+
+function isClickUpRecoverableSyncError_(error) {
+  var message = error && error.message ? error.message : String(error || '');
+  return isClickUpBandwidthError_(error) ||
+    /ClickUp API error (400|403|404|408|429|5\d\d)/i.test(message) ||
+    /list_id invalido|view_id invalido|folder_id invalido|space_id invalido/i.test(message);
+}
+
+function appendQueryParam_(url, key, value) {
+  if (!value) return url;
+  var sep = String(url).indexOf('?') >= 0 ? '&' : '?';
+  return String(url) + sep + encodeURIComponent(key) + '=' + encodeURIComponent(value);
+}
+
+function getScriptProperty_(key, fallback) {
+  var value = PropertiesService.getScriptProperties().getProperty(key);
+  return value !== null && value !== undefined && value !== '' ? value : fallback;
+}
+
+function sanitizeText_(value) {
+  return String(value || '').replace(/\s+/g, ' ').trim();
+}
+
+function normalizeClickUpId_(value) {
+  var text = sanitizeText_(value);
+  if (!text) return '';
+
+  if (/^\d+$/.test(text)) return text;
+
+  var numeric = Number(String(text).replace(',', '.'));
+  if (isFinite(numeric) && numeric > 0) {
+    var rounded = String(Math.round(numeric));
+    if (/^\d+$/.test(rounded)) return rounded;
+  }
+
+  if (/^[0-9 .,'+\-Ee]+$/.test(text)) {
+    var digits = text.replace(/\D/g, '');
+    if (digits) return digits;
+  }
+
+  return text;
+}
+
+function extractClickUpIdFromUrl_(url, kind) {
+  var text = sanitizeText_(url);
+  if (!text) return '';
+  var listMatch = text.match(/\/list\/(\d+)/i) || text.match(/[?&]list_id=(\d+)/i);
+  if (kind === 'list') return listMatch ? normalizeClickUpId_(listMatch[1]) : '';
+  var folderMatch =
+    text.match(/\/v\/o\/f\/(\d+)/i) ||
+    text.match(/\/v\/f\/(\d+)/i) ||
+    text.match(/\/folder\/(\d+)/i) ||
+    text.match(/[?&]folder_id=(\d+)/i);
+  if (kind === 'folder') return folderMatch ? normalizeClickUpId_(folderMatch[1]) : '';
+  var spaceMatch =
+    text.match(/\/v\/s\/(\d+)/i) ||
+    text.match(/\/space\/(\d+)/i) ||
+    text.match(/[?&]space_id=(\d+)/i);
+  if (kind === 'space') return spaceMatch ? normalizeClickUpId_(spaceMatch[1]) : '';
+  var viewMatch =
+    text.match(/\/v\/l\/([^/?#]+)/i) ||
+    text.match(/\/v\/o\/(?!f\/)([^/?#]+)/i) ||
+    text.match(/[?&]view_id=([^&#]+)/i);
+  if (kind === 'view') return viewMatch ? normalizeClickUpId_(decodeURIComponent(viewMatch[1])) : '';
+  return '';
+}
+
+function sanitizeMonth_(value) {
+  return String(value || '').toUpperCase().trim();
+}
+
+function extractLeadingNumber_(value) {
+  var text = sanitizeText_(value);
+  var match = text.match(/^(\d+)/) || text.match(/^fase\s*(\d+(?:\.\d+)?)/i);
+  return match ? Number(match[1]) : 9999;
+}
+
+function normalizeKey_(value) {
+  return sanitizeText_(value)
+    .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+    .toUpperCase()
+    .replace(/[^A-Z0-9 ]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function buildProjectKey_(month, cliente) {
+  return sanitizeMonth_(month) + '|' + normalizeKey_(cliente);
+}
+
+function normalizeProjectKey_(value) {
+  var text = sanitizeText_(value);
+  if (!text) return '';
+  var parts = text.split('|');
+  if (parts.length < 2) return normalizeKey_(text);
+  var mes = sanitizeMonth_(parts.shift());
+  var cliente = normalizeKey_(parts.join('|'));
+  return mes + '|' + cliente;
+}
+
+function normalizeBoolean_(value, fallback) {
+  if (value === true || value === false) return value;
+  if (value === null || value === undefined || value === '') return fallback;
+  var norm = String(value).toLowerCase().trim();
+  return ['1', 'true', 'sim', 'yes', 'y'].indexOf(norm) >= 0;
+}
+
+function toInt_(value, fallback) {
+  var n = Number(value);
+  return isNaN(n) ? fallback : n;
+}
+
+function fromMillisIso_(value) {
+  var n = Number(value);
+  if (!n) return '';
+  return new Date(n).toISOString();
+}
+
+function diffDaysFromIso_(iso) {
+  if (!iso) return '';
+  var date = new Date(iso);
+  if (isNaN(date.getTime())) return '';
+  var now = new Date();
+  var start = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+  var end = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  var diff = end.getTime() - start.getTime();
+  return Math.max(0, Math.floor(diff / 86400000));
+}
+
+function dedupeTasks_(tasks) {
+  var seen = {};
+  return tasks.filter(function(task) {
+    var id = String(task.id || '');
+    if (!id || seen[id]) return false;
+    seen[id] = true;
+    return true;
+  });
+}
+
+function isClosedStatus_(status) {
+  var norm = sanitizeText_(status).toLowerCase();
+  return /(done|closed|complete|conclu|finaliz|feito|resolved|encerrad|sucesso|finalizado)/.test(norm);
+}
+
+function isMilestoneTask_(task) {
+  var typeName = sanitizeText_(
+    task.custom_item && task.custom_item.name ||
+    task.custom_task_type && task.custom_task_type.name ||
+    task.task_type ||
+    task.type
+  ).toLowerCase();
+  if (String(task.custom_item_id || '') === '1') return true;
+  if (typeName.indexOf('milestone') >= 0 || typeName.indexOf('marco') >= 0) return true;
+  return false;
+}
+
+function isPhaseTask_(task, byId) {
+  var name = sanitizeText_(task.name).toLowerCase();
+  if (String(task.parent || '').trim()) return false;
+  if (/^fase\s*(\d+(?:\.\d+)?|x)\b/.test(name)) return true;
+  if (/^fase\s*final/.test(name)) return true;
+  return false;
+}
+
+function countDirectChildren_(task, byId) {
+  var taskId = String(task.id || '');
+  var count = 0;
+  Object.keys(byId).forEach(function(id) {
+    if (String(byId[id].parent || '') === taskId) count += 1;
+  });
+  return count;
+}
+
+function resolvePhaseForTask_(task, byId, phaseMap) {
+  var current = task;
+  var visited = {};
+  var depth = 0;
+  while (current && current.parent && !visited[current.parent]) {
+    visited[current.parent] = true;
+    depth += 1;
+    if (phaseMap[String(current.parent)]) {
+      return {
+        phase: phaseMap[String(current.parent)],
+        depth: depth
+      };
+    }
+    current = byId[String(current.parent)];
+  }
+
+  if (task.list && task.list.name) {
+    var listName = sanitizeText_(task.list.name);
+    var phaseByName = Object.keys(phaseMap).map(function(id) { return phaseMap[id]; }).filter(function(phase) {
+      return phase.nome === listName;
+    })[0];
+    if (phaseByName) {
+      return {
+        phase: phaseByName,
+        depth: 0
+      };
+    }
+  }
+  return {
+    phase: null,
+    depth: 0
+  };
+}
+
+function shouldCountTaskInSummary_(task, phaseInfo, byId) {
+  if (phaseInfo.phase) {
+    if (countDirectChildren_(task, byId) > 0) {
+      return false;
+    }
+    return true;
+  }
+  if (task.parent) return false;
+  return countDirectChildren_(task, byId) === 0;
+}
+
+function isRecoverableClickUpHttpError_(code, text) {
+  var message = String(text || '');
+  return code === 408 ||
+    code === 409 ||
+    code === 423 ||
+    code === 425 ||
+    code === 429 ||
+    (code >= 500 && code < 600) ||
+    /largura de banda|bandwidth/i.test(message);
+}
+
+function isRecoverableClickUpTransportError_(error) {
+  var message = error && error.message ? error.message : String(error || '');
+  return /timeout|timed out|temporar|temporari|service unavailable|bandwidth|largura de banda|internal error|exception/i.test(message);
+}
+
+function getLatestUpdate_(tasks) {
+  var latest = 0;
+  tasks.forEach(function(task) {
+    var updated = Number(task.date_updated || 0);
+    if (updated > latest) latest = updated;
+  });
+  return latest ? new Date(latest).toISOString() : '';
+}
+
+function getLatestUpdateItem_(items) {
+  var latest = null;
+  (items || []).forEach(function(item) {
+    var date = item && item.updated_at ? new Date(item.updated_at) : null;
+    if (!date || isNaN(date.getTime())) return;
+    if (!latest || date.getTime() > latest.ts) {
+      latest = {
+        ts: date.getTime(),
+        item: {
+          id: String(item.id || ''),
+          tipo: item.tipo || 'task',
+          nome: sanitizeText_(item.nome || ''),
+          fase_nome: sanitizeText_(item.fase_nome || ''),
+          status_original: sanitizeText_(item.status_original || ''),
+          updated_at: date.toISOString()
+        }
+      };
+    }
+  });
+  return latest ? latest.item : null;
+}
+
+function getLatestUpdateItemFromRawTasks_(tasks, byId, phaseMap) {
+  var latest = null;
+  (tasks || []).forEach(function(task) {
+    var updated = Number(task && task.date_updated || 0);
+    if (!updated) return;
+    if (!latest || updated > latest.ts) {
+      var phaseInfo = resolvePhaseForTask_(task, byId || {}, phaseMap || {});
+      var status = task.status && (task.status.status || task.status.type || task.status.label) || '';
+      latest = {
+        ts: updated,
+        item: {
+          id: String(task.id || ''),
+          tipo: isMilestoneTask_(task) ? 'marco' : (isPhaseTask_(task, byId || {}) ? 'fase' : 'task'),
+          nome: sanitizeText_(task.name || ''),
+          fase_nome: phaseInfo && phaseInfo.phase ? sanitizeText_(phaseInfo.phase.nome || '') : '',
+          status_original: sanitizeText_(status),
+          updated_at: new Date(updated).toISOString()
+        }
+      };
+    }
+  });
+  return latest ? latest.item : null;
+}
+
+function buildProjectUrl_(mapping, tasks) {
+  if (mapping.project_url) return mapping.project_url;
+  if (mapping.view_id) return 'https://app.clickup.com/v/o/' + mapping.view_id;
+  var firstTask = tasks && tasks[0];
+  if (firstTask && firstTask.url) return firstTask.url;
+  return '';
+}
