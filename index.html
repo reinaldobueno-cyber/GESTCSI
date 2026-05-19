@@ -170,6 +170,13 @@ nav{background:var(--nav);height:58px;display:flex;align-items:center;justify-co
 .project-section .prazo-grid{grid-template-columns:repeat(auto-fit,minmax(180px,1fr));}
 .project-section .dbar{margin:0;}
 .project-empty-note{border:1px dashed var(--border);border-radius:8px;padding:10px 12px;color:var(--muted);font-size:12px;font-weight:700;background:var(--surf2);}
+.project-full-detail{margin-top:10px;border:1px solid var(--border);border-radius:8px;background:var(--surf2);overflow:hidden;}
+.project-full-detail>summary{list-style:none;cursor:pointer;padding:10px 12px;font-size:10px;font-weight:900;letter-spacing:.08em;text-transform:uppercase;color:var(--text2);display:flex;justify-content:space-between;gap:10px;}
+.project-full-detail>summary::-webkit-details-marker{display:none;}
+.project-full-detail>summary:after{content:'+';color:var(--muted);font-weight:900;}
+.project-full-detail[open]>summary{border-bottom:1px solid var(--border);}
+.project-full-detail[open]>summary:after{content:'-';}
+.project-full-detail-body{padding:0 10px 10px;}
 @media (max-width:760px){
   .px-inner{padding:12px;}
   .project-section>summary{align-items:flex-start;gap:8px;padding:11px 12px;}
@@ -6429,7 +6436,7 @@ function setProjectAccordionAll(expandId, open) {
   return false;
 }
 window.setProjectAccordionAll = setProjectAccordionAll;
-function buildProjectAccordion(p, id, barHtml, prazoH, followupsH, logH, obsH) {
+function buildProjectAccordion(p, id, barHtml, prazoH, gerH, followupsH, logH, obsH) {
   var qtd = quantidadesResumoUI(p || {});
   var fase = obterFaseAtualClickupProjeto(p || {}) || etapaTrilhaProjeto(p || {});
   var latestFollowup = projectLatestFollowup(p || {});
@@ -6459,7 +6466,8 @@ function buildProjectAccordion(p, id, barHtml, prazoH, followupsH, logH, obsH) {
       projectField('Formato', p && p.formato)+
       projectField('Progresso', progresso, { html:true })+
       projectField('Fase atual', fase)+
-    '</div>';
+    '</div>'+
+    (gerH ? '<details class="project-full-detail"><summary>Detalhamento gerencial completo</summary><div class="project-full-detail-body">'+gerH+'</div></details>' : '');
   var comercialBody = '<div class="project-field-grid">'+
     projectField('Pacote', p && p.pacote)+
     projectField('Adicionais', p && p.adicionais)+
@@ -6530,10 +6538,11 @@ function buildRows(list, pfx) {
       barHtml='<div class="dbar"><div class="dbar-info'+(over?' exc':'')+'"><span>'+(over?'EXCEDIDO - ':'')+fn(real)+' de '+fn(cont)+' di&aacute;rias</span><span>'+fn(p.diarias_rest)+' restantes</span></div><div class="dbar-bg"><div class="dbar-fill" style="width:'+w+'%;background:'+fc+'"></div></div></div>';
     }
     var prazoH = buildPrazoCards(p);
+    var gerH = buildGerencialProjeto(p);
     var followupsH = renderProjectFollowupsForProjectTab(p);
     var logH = p.acompanhamento ? '<div class="sec-l">Observa&ccedil;&atilde;o</div><div class="log-box">'+escapeHtml(p.acompanhamento)+'</div>' : '';
     var obsH = p.obs ? '<div class="sec-l">Observa&ccedil;&otilde;es internas</div><div class="obs-box">'+escapeHtml(p.obs)+'</div>' : '';
-    var projectAccordionH = buildProjectAccordion(p, id, barHtml, prazoH, followupsH, logH, obsH);
+    var projectAccordionH = buildProjectAccordion(p, id, barHtml, prazoH, gerH, followupsH, logH, obsH);
     var projectKeyAttr = escapeHtml(projectMonthKey(p));
     out += '<div class="prow '+info.rc+'" id="'+id+'" data-project-key="'+projectKeyAttr+'" onclick="togRow(\''+id+'\')">';
     var projetoLinkBtn = p.projeto_link ? '<a class=\"project-link project-link-btn\" href=\"'+p.projeto_link+'\" target=\"_blank\" rel=\"noopener noreferrer\" onclick=\"event.stopPropagation()\">Abrir Projeto</a>' : '';
