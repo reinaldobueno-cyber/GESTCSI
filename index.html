@@ -3286,11 +3286,18 @@ function ordenarProjetosPainel(projetos) {
     var ma = indiceMesPainel(a && a.mes);
     var mb = indiceMesPainel(b && b.mes);
     if (ma !== mb) return ma - mb;
-    var oa = Number(a && a._sheet_order);
-    var ob = Number(b && b._sheet_order);
+    var oa = ordemProjetoNoMes(a);
+    var ob = ordemProjetoNoMes(b);
     if (!isNaN(oa) && !isNaN(ob) && oa !== ob) return oa - ob;
     return String((a && a.cliente) || '').localeCompare(String((b && b.cliente) || ''));
   });
+}
+function ordemProjetoNoMes(p) {
+  var row = Number(p && p._sheet_row);
+  if (!isNaN(row) && row > 0) return row;
+  var order = Number(p && p._sheet_order);
+  if (!isNaN(order) && order >= 0) return order;
+  return NaN;
 }
 
 // ---- Helpers ----
@@ -5007,7 +5014,7 @@ function projectMonthKey(p){
 function annotateMonthSequence(list){
   var ordem = {};
   var contagem = {};
-  projetosVisiveisParaUsuario(DATA.projetos || []).forEach(function(item){
+  ordenarProjetosPainel(projetosVisiveisParaUsuario(DATA.projetos || [])).forEach(function(item){
     if(!item || !item.cliente) return;
     var mes = String(item.mes || 'SEM MES').toUpperCase();
     if(!contagem[mes]) contagem[mes] = 0;
@@ -6627,7 +6634,12 @@ function buildMonthGroupedRows(list, pfx) {
   });
   var meses = ordenarMesesPainel(Object.keys(groups));
   return meses.map(function(mes, idx) {
-    var projetos = groups[mes];
+    var projetos = groups[mes].slice().sort(function(a, b) {
+      var sa = Number(a && a._monthSeq);
+      var sb = Number(b && b._monthSeq);
+      if (!isNaN(sa) && !isNaN(sb) && sa !== sb) return sa - sb;
+      return ordenarProjetosPainel([a, b])[0] === a ? -1 : 1;
+    });
     var primeiraSeq = projetos.length ? projetos[0]._monthSeq : 0;
     var ultimaSeq = projetos.length ? projetos[projetos.length - 1]._monthSeq : 0;
     return '<div class="month-group">'+
@@ -10859,13 +10871,14 @@ function linhaProjetoMensalValida(ro) {
 function carregarProjetosDiretoPlanilha() {
   var abas = Object.keys(ABAS_GID_FIXAS).map(function(m){ return {title:m, gid:ABAS_GID_FIXAS[m]}; });
   var projetos = [];
-  var seq = 0;
   return Promise.all(abas.map(function(aba){
     var url = 'https://docs.google.com/spreadsheets/d/' + SHEET_ID + '/gviz/tq?gid=' + aba.gid + '&_ts=' + Date.now();
     return loadGvizTableJsonp(url, 15000).then(function(table){
       if (!table) return;
       var normalizada = normalizarTabelaGviz(table);
       var ultimaDataVendaAba = '';
+      var seqAba = 0;
+      var ordemAba = indiceMesPainel(aba.title);
       (normalizada.rows || []).forEach(function(row){
         var ro = mapearGvizRow(normalizada.cols, row);
         ro = Object.assign(ro, mapearProjetoMensalPorIndice(row, aba.title));
@@ -10873,7 +10886,9 @@ function carregarProjetosDiretoPlanilha() {
         if (ro.data_venda) ultimaDataVendaAba = ro.data_venda;
         else if (ultimaDataVendaAba) ro.data_venda = ultimaDataVendaAba;
         ro._aba_origem = aba.title;
-        ro._sheet_order = seq++;
+        seqAba += 1;
+        ro._sheet_row = seqAba + 1;
+        ro._sheet_order = (ordemAba * 10000) + seqAba;
         projetos.push(ro);
       });
       console.log('[SHEET DIRECT] '+aba.title+': projetos lidos', projetos.filter(function(p){ return p._aba_origem === aba.title; }).length);
