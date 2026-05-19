@@ -3991,6 +3991,14 @@ function acompUpdateFollowupLocal(followup) {
   if (!updated) ACOMP_REMOTE_FOLLOWUPS.unshift(followup);
   ACOMP_REMOTE_LOADED = true;
 }
+function acompFindFollowupLocal(rowNumber, followupId) {
+  var id = String(followupId || '');
+  var row = String(rowNumber || '');
+  return (ACOMP_REMOTE_FOLLOWUPS || []).filter(function(item){
+    return (id && String(item.followup_id || '') === id) ||
+      (row && String(item.row_number || item.row || '') === row);
+  })[0] || null;
+}
 function acompRemoveFollowupLocal(target) {
   if (!target) return;
   var removed = false;
@@ -4048,7 +4056,7 @@ function acompFollowupStatusControls(projectKey, followup) {
     ['parcial','Parcial'],
     ['concluido','Conclu&iacute;do']
   ].map(function(item){
-    return '<button type="button" class="acom-status-btn '+(item[0] === 'concluido' ? 'done' : item[0])+' '+(current === item[0] ? 'on' : '')+'" onclick="return acompSetFollowupStatus(\''+jsQuote(projectKey)+'\',\''+jsQuote(rowId)+'\',\''+jsQuote(followupId)+'\',\''+item[0]+'\',\''+domId+'\')">'+item[1]+'</button>';
+    return '<button type="button" class="acom-status-btn '+(item[0] === 'concluido' ? 'done' : item[0])+' '+(current === item[0] ? 'on' : '')+'" onclick="return acompSetFollowupStatus(\''+jsQuote(projectKey)+'\',\''+jsQuote(rowId)+'\',\''+jsQuote(followupId)+'\',\''+item[0]+'\',\''+domId+'\',this)">'+item[1]+'</button>';
   }).join('');
   return retorno+
     '<div class="acom-status-editor">'+
@@ -4056,10 +4064,42 @@ function acompFollowupStatusControls(projectKey, followup) {
       '<div class="acom-status-buttons">'+buttons+'</div>'+
     '</div>';
 }
-function acompSetFollowupStatus(projectKey, rowNumber, followupId, status, commentId) {
+function acompCommentFromStatusButton(commentId, btn) {
+  if (btn) {
+    var editor = btn.closest ? btn.closest('.acom-status-editor') : null;
+    var local = editor ? editor.querySelector('textarea') : null;
+    if (local) return String(local.value || '').trim();
+  }
+  return String((document.getElementById(commentId) || {}).value || '').trim();
+}
+function acompRerenderCurrentProjectSurfaces(projectKey) {
+  var popup = document.querySelector('.history-modal .history-body');
+  if (popup) acompProjectInfoPopup(projectKey);
+  var page = document.querySelector('.page.on');
+  var pageId = page && page.id || '';
+  if (pageId === 'page-acomp') initAcomp();
+  else if (pageId === 'page-all') {
+    applyF();
+    abrirProjetoAtualizadoAposSync({projectKey: projectKey}, false);
+  }
+}
+function acompSetFollowupStatus(projectKey, rowNumber, followupId, status, commentId, btn) {
   if (window.event && window.event.stopPropagation) window.event.stopPropagation();
   if (!authTokenParam()) { showToast('Entre no painel para atualizar a observa&ccedil;&atilde;o', 'err'); return false; }
-  var comment = String((document.getElementById(commentId) || {}).value || '').trim();
+  var comment = acompCommentFromStatusButton(commentId, btn);
+  var existing = acompFindFollowupLocal(rowNumber, followupId) || {};
+  var existingSnapshot = Object.assign({}, existing);
+  var optimistic = Object.assign({}, existing, {
+    row_number: rowNumber || existing.row_number || existing.row || '',
+    followup_id: followupId || existing.followup_id || '',
+    project_key: projectKey || existing.project_key || '',
+    followup_status: status,
+    status_comment: comment,
+    status_updated_at: new Date().toISOString(),
+    status_updated_by: (AUTH_STATE.user && (AUTH_STATE.user.name || AUTH_STATE.user.username)) || ''
+  });
+  acompUpdateFollowupLocal(optimistic);
+  acompRerenderCurrentProjectSurfaces(projectKey);
   showToast('Salvando status da observa&ccedil;&atilde;o...', 'ok');
   chamarAppsScriptJsonp('setProjectFollowupStatus', {
     auth_token: authTokenParam(),
@@ -4070,11 +4110,14 @@ function acompSetFollowupStatus(projectKey, rowNumber, followupId, status, comme
   }, 15000).then(function(resp){
     if (!resp || resp.ok === false || !resp.saved) throw new Error((resp && (resp.error || resp.message)) || 'Atualiza&ccedil;&atilde;o recusada');
     if (resp.followup) acompUpdateFollowupLocal(resp.followup);
-    initAcomp();
-    acompProjectInfoPopup(projectKey);
+    acompRerenderCurrentProjectSurfaces(projectKey);
     showToast('Status da observa&ccedil;&atilde;o salvo', 'ok');
     acompRefreshFollowupsInBackground(900);
   }).catch(function(error){
+    if (existingSnapshot && (existingSnapshot.followup_id || existingSnapshot.row_number || existingSnapshot.row)) {
+      acompUpdateFollowupLocal(existingSnapshot);
+      acompRerenderCurrentProjectSurfaces(projectKey);
+    }
     showToast('N&atilde;o salvou o status: ' + ((error && error.message) || 'tente novamente'), 'err');
   });
   return false;

@@ -1995,6 +1995,7 @@ function setProjectFollowupStatus_(params) {
   sheet.getRange(found.row, updatedAtCol).setValue(updatedAt);
   sheet.getRange(found.row, updatedByCol).setValue(updatedBy);
   sheet.getRange(found.row, commentCol).setValue(comment);
+  SpreadsheetApp.flush();
   found.item.followup_status = status;
   found.item.status_updated_at = updatedAt;
   found.item.status_updated_by = updatedBy;
