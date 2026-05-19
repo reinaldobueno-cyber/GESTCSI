@@ -4025,6 +4025,7 @@ function acompFollowupStatusControls(projectKey, followup) {
     '</div>';
 }
 function acompSetFollowupStatus(projectKey, rowNumber, followupId, status, commentId) {
+  if (window.event && window.event.stopPropagation) window.event.stopPropagation();
   if (!authTokenParam()) { showToast('Entre no painel para atualizar a observa&ccedil;&atilde;o', 'err'); return false; }
   var comment = String((document.getElementById(commentId) || {}).value || '').trim();
   showToast('Salvando status da observa&ccedil;&atilde;o...', 'ok');
@@ -6213,7 +6214,11 @@ function renderProjectFollowupsForProjectTab(p) {
       followupStatus,
       kanbanStage ? acompKanbanStageLabel(kanbanStage) : ''
     ].filter(Boolean).map(escapeHtml).join(' &bull; ');
-    return '<div style="padding:8px 0;border-top:1px solid var(--border)"><div style="font-size:10px;font-weight:800;color:var(--muted);text-transform:uppercase;letter-spacing:.08em">'+meta+'</div><div style="font-size:12px;color:var(--text2);line-height:1.55;margin-top:4px">'+(texto || '-')+'</div></div>';
+    return '<div style="padding:8px 0;border-top:1px solid var(--border)" onclick="event.stopPropagation()">'+
+      '<div class="acom-follow-head"><div style="font-size:10px;font-weight:800;color:var(--muted);text-transform:uppercase;letter-spacing:.08em">'+meta+'</div>'+acompFollowupStatusBadge(item)+'</div>'+
+      '<div style="font-size:12px;color:var(--text2);line-height:1.55;margin-top:4px">'+(texto || '-')+'</div>'+
+      acompFollowupStatusControls(key, item)+
+    '</div>';
   }).join('');
   var more = list.length > 4 ? '<div style="font-size:10px;color:var(--muted);margin-top:6px">+'+(list.length - 4)+' acompanhamento(s) anterior(es) no hist&oacute;rico do projeto.</div>' : '';
   return '<div class="sec-l">Acompanhamentos do site</div><div class="log-box">'+rows+more+'</div>';
