@@ -177,11 +177,25 @@ nav{background:var(--nav);height:58px;display:flex;align-items:center;justify-co
 .project-section .prazo-grid{grid-template-columns:repeat(auto-fit,minmax(180px,1fr));}
 .project-section .dbar{margin:0;}
 .project-empty-note{border:1px dashed var(--border);border-radius:8px;padding:10px 12px;color:var(--muted);font-size:12px;font-weight:700;background:var(--surf2);}
+.project-summary-card{background:linear-gradient(180deg,var(--surf) 0%,var(--surf2) 100%);border:1px solid rgba(45,110,78,.30);border-radius:10px;padding:14px 16px;}
+.project-summary-head{display:flex;justify-content:space-between;align-items:flex-start;gap:12px;margin-bottom:10px;}
+.project-summary-title{font-size:13px;font-weight:900;letter-spacing:.10em;text-transform:uppercase;color:var(--green);}
+.project-summary-sub{font-size:12px;font-weight:700;color:var(--text2);margin-top:3px;}
+.project-box-grid{display:grid;grid-template-columns:repeat(3,minmax(160px,1fr));gap:8px;}
+.project-box{border:1px solid var(--border);background:var(--surf);border-radius:9px;padding:11px 12px;text-align:left;cursor:pointer;color:var(--text);min-height:76px;display:flex;flex-direction:column;justify-content:space-between;gap:8px;}
+.project-box:hover,.project-box.on{border-color:rgba(45,110,78,.38);background:var(--green-s);box-shadow:0 8px 18px rgba(20,32,24,.06);}
+.project-box-title{font-size:11px;font-weight:900;text-transform:uppercase;letter-spacing:.08em;color:var(--text);}
+.project-box-sub{font-size:10px;font-weight:700;color:var(--muted);line-height:1.35;}
+.project-box-badge{align-self:flex-start;border:1px solid var(--border);border-radius:999px;background:var(--surf2);padding:3px 8px;font-size:9px;font-weight:900;color:var(--text2);}
+.project-box-panel{display:none;border:1px solid var(--border);border-radius:9px;background:var(--surf);padding:12px;margin-top:2px;}
+.project-box-panel.on{display:block;}
+.project-box-placeholder{border:1px dashed var(--border);border-radius:9px;background:var(--surf2);padding:14px;color:var(--muted);font-size:12px;font-weight:750;text-align:center;}
+.project-box-panel-title{font-size:11px;font-weight:900;text-transform:uppercase;letter-spacing:.08em;color:var(--green);margin-bottom:8px;}
 @media (max-width:760px){
   .px-inner{padding:12px;}
   .project-section>summary{align-items:flex-start;gap:8px;padding:11px 12px;}
   .project-section-badge{order:3;width:100%;text-align:center;margin-left:0;}
-  .project-field-grid,.project-risk-strip{grid-template-columns:1fr;}
+  .project-field-grid,.project-risk-strip,.project-box-grid{grid-template-columns:1fr;}
 }
 /* TAGS */
 .tag{display:inline-flex;align-items:center;font-size:10px;font-weight:700;font-family:'JetBrains Mono',monospace;padding:3px 8px;border-radius:4px;white-space:nowrap;}
@@ -6427,6 +6441,32 @@ function projectCompletenessSection(title, subtitle, values, body, open, extraCl
     '<div class="project-section-body">'+(body || '<div class="project-empty-note">N&atilde;o informado</div>')+'</div>'+
   '</details>';
 }
+function projectBoxButton(containerId, key, title, subtitle, values) {
+  return '<button type="button" class="project-box" data-section="'+key+'" onclick="return setProjectBox(\''+containerId+'\', \''+key+'\')">'+
+    '<div><div class="project-box-title">'+title+'</div><div class="project-box-sub">'+subtitle+'</div></div>'+
+    '<span class="project-box-badge">'+projectFilledBadge(values)+'</span>'+
+  '</button>';
+}
+function projectBoxPanel(key, title, body) {
+  return '<div class="project-box-panel" data-section="'+key+'">'+
+    '<div class="project-box-panel-title">'+title+'</div>'+
+    (body || '<div class="project-empty-note">N&atilde;o informado</div>')+
+  '</div>';
+}
+function setProjectBox(containerId, key) {
+  var box = document.getElementById(containerId);
+  if (!box) return false;
+  box.querySelectorAll('.project-box').forEach(function(item) {
+    item.classList.toggle('on', item.getAttribute('data-section') === key);
+  });
+  box.querySelectorAll('.project-box-panel').forEach(function(panel) {
+    panel.classList.toggle('on', panel.getAttribute('data-section') === key);
+  });
+  var placeholder = box.querySelector('.project-box-placeholder');
+  if (placeholder) placeholder.style.display = 'none';
+  return false;
+}
+window.setProjectBox = setProjectBox;
 function setProjectAccordionAll(expandId, open) {
   var box = document.getElementById(expandId);
   if (!box) return false;
@@ -6503,18 +6543,28 @@ function buildProjectAccordion(p, id, barHtml, prazoH, gerH, followupsH, logH, o
   var acompBody = acompFields + (followupsH || '<div class="project-empty-note">N&atilde;o informado</div>');
   var obsBody = (logH || '') + (obsH || '');
   if (!obsBody) obsBody = '<div class="project-empty-note">N&atilde;o informado</div>';
-  return '<div class="project-accordion-shell">'+
-    '<div class="project-accordion-toolbar" onclick="event.stopPropagation()">'+
-      '<button type="button" class="project-accordion-btn" onclick="return setProjectAccordionAll(\'xp-'+id+'\', true)">Expandir tudo</button>'+
-      '<button type="button" class="project-accordion-btn" onclick="return setProjectAccordionAll(\'xp-'+id+'\', false)">Recolher tudo</button>'+
+  var containerId = 'project-boxes-' + id;
+  var nav = '<div class="project-box-grid">'+
+    projectBoxButton(containerId, 'comercial', 'Comercial', 'Venda e escopo contratado', [p && p.pacote, p && p.adicionais, p && p.vendedor, p && p.data_venda])+
+    projectBoxButton(containerId, 'cronograma', 'Cronograma', 'Prazos, kickoff e marcos', [p && p.kickoff, p && p.data_kick, p && p.data_inicio, marcosRaw])+
+    projectBoxButton(containerId, 'operacao', 'Opera&ccedil;&atilde;o / Di&aacute;rias', 'Consumo e atualiza&ccedil;&atilde;o', [p && p.diarias_cont, p && p.diarias_real, p && p.diarias_rest, diasSemAtualizacao])+
+    projectBoxButton(containerId, 'acompanhamentos', 'Acompanhamentos', 'Registros e pr&oacute;xima a&ccedil;&atilde;o', [latestFollowup && latestFollowup.data_acompanhamento, latestFollowup && latestFollowup.proxima_acao, latestFollowup && latestFollowup.responsavel, latestFollowup && latestFollowup.consideracao])+
+    projectBoxButton(containerId, 'observacoes', 'Observa&ccedil;&otilde;es internas', 'Notas livres e contexto', [p && p.acompanhamento, p && p.obs])+
+    (gerH ? projectBoxButton(containerId, 'detalhe', 'Detalhamento completo', 'Conte&uacute;do original preservado', ['preservado']) : '')+
+  '</div>';
+  return '<div class="project-accordion-shell" id="'+containerId+'" onclick="event.stopPropagation()">'+
+    '<div class="project-summary-card">'+
+      '<div class="project-summary-head"><div><div class="project-summary-title">Resumo Executivo</div><div class="project-summary-sub">Contexto essencial, risco e pr&oacute;xima a&ccedil;&atilde;o.</div></div><span class="project-section-badge">'+projectFilledBadge([p && p.status, p && p.cliente, p && p.consultor, p && p.tipo, p && p.formato, progressoRaw])+'</span></div>'+
+      summaryBody+
     '</div>'+
-    projectCompletenessSection('Resumo Executivo', 'Contexto essencial, risco e pr&oacute;xima a&ccedil;&atilde;o.', [p && p.status, p && p.cliente, p && p.consultor, p && p.tipo, p && p.formato, progressoRaw], summaryBody, true, 'is-primary')+
-    projectCompletenessSection('Comercial', 'Origem da venda e escopo contratado.', [p && p.pacote, p && p.adicionais, p && p.vendedor, p && p.data_venda], comercialBody, false)+
-    projectCompletenessSection('Cronograma', 'Kickoff, in&iacute;cio da implanta&ccedil;&atilde;o e marcos.', [p && p.kickoff, p && p.data_kick, p && p.data_inicio, marcosRaw], cronogramaBody, false)+
-    projectCompletenessSection('Opera&ccedil;&atilde;o / Di&aacute;rias', 'Consumo de di&aacute;rias e rec&ecirc;ncia da atualiza&ccedil;&atilde;o.', [p && p.diarias_cont, p && p.diarias_real, p && p.diarias_rest, diasSemAtualizacao], operacaoBody, false)+
-    projectCompletenessSection('Acompanhamentos', 'Registros recentes, retorno e pr&oacute;ximo movimento.', [latestFollowup && latestFollowup.data_acompanhamento, latestFollowup && latestFollowup.proxima_acao, latestFollowup && latestFollowup.responsavel, latestFollowup && latestFollowup.consideracao], acompBody, false)+
-    projectCompletenessSection('Observa&ccedil;&otilde;es internas', 'Notas livres da planilha e contexto operacional.', [p && p.acompanhamento, p && p.obs], obsBody, false)+
-    (gerH ? projectCompletenessSection('Detalhamento completo', 'Conte&uacute;do original preservado para consulta profunda.', ['preservado'], gerH, false, 'is-archive') : '')+
+    nav+
+    '<div class="project-box-placeholder">Nenhum grupo selecionado.</div>'+
+    projectBoxPanel('comercial', 'Comercial', comercialBody)+
+    projectBoxPanel('cronograma', 'Cronograma', cronogramaBody)+
+    projectBoxPanel('operacao', 'Opera&ccedil;&atilde;o / Di&aacute;rias', operacaoBody)+
+    projectBoxPanel('acompanhamentos', 'Acompanhamentos', acompBody)+
+    projectBoxPanel('observacoes', 'Observa&ccedil;&otilde;es internas', obsBody)+
+    (gerH ? projectBoxPanel('detalhe', 'Detalhamento completo', gerH) : '')+
   '</div>';
 }
 
