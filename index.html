@@ -3333,7 +3333,7 @@ function diasDesdeDataProjeto(valor) {
   return data ? diasCalendarioEntreProjeto(data, new Date()) : null;
 }
 function filteredProj() {
-  var p = DATA.projetos.filter(function(x) { return x.cliente; });
+  var p = projetosVisiveisParaUsuario(DATA.projetos || []).filter(function(x) { return x.cliente; });
   if (activePeriod !== 'all') p = p.filter(function(x) { return x.mes === activePeriod; });
   return ordenarProjetosPainel(p);
 }
@@ -3417,6 +3417,38 @@ function authSet(session) {
 }
 function authTokenParam() {
   return AUTH_STATE.token || '';
+}
+function normalizarPessoaPainel(value) {
+  return String(value || '')
+    .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, ' ')
+    .trim();
+}
+function usuarioTemVisaoGeral() {
+  var role = String((AUTH_STATE.user && AUTH_STATE.user.role) || '').toLowerCase();
+  return role === 'admin' || role === 'coordenador' || role === 'coordenadora' || role === 'coordinator';
+}
+function usuarioCombinaComConsultor(consultor) {
+  if (!AUTH_STATE.user) return true;
+  if (usuarioTemVisaoGeral()) return true;
+  var alvo = normalizarPessoaPainel(consultor);
+  if (!alvo) return false;
+  var nome = normalizarPessoaPainel(AUTH_STATE.user.name);
+  var usuario = normalizarPessoaPainel(AUTH_STATE.user.username);
+  return (nome && (alvo === nome || alvo.indexOf(nome) >= 0 || nome.indexOf(alvo) >= 0)) ||
+    (usuario && (alvo === usuario || alvo.indexOf(usuario) >= 0 || usuario.indexOf(alvo) >= 0));
+}
+function usuarioPodeVerProjeto(p) {
+  if (!AUTH_STATE.user) return true;
+  if (usuarioTemVisaoGeral()) return true;
+  return usuarioCombinaComConsultor(p && p.consultor);
+}
+function projetosVisiveisParaUsuario(list) {
+  return (list || []).filter(usuarioPodeVerProjeto);
+}
+function rotuloEscopoUsuario() {
+  return usuarioTemVisaoGeral() ? 'Vis&atilde;o geral' : 'Minha carteira';
 }
 function sha256Hex(text) {
   var raw = new TextEncoder().encode(String(text || ''));
@@ -4053,7 +4085,7 @@ function acompStatusAtivo(p) {
   return s !== 'concluido' && s !== 'cancelado';
 }
 function acompProjetosNoRecorte() {
-  var base = (DATA.projetos || []).filter(function(p){ return p && p.cliente; });
+  var base = projetosVisiveisParaUsuario(DATA.projetos || []).filter(function(p){ return p && p.cliente; });
   if (activePeriod !== 'all') base = base.filter(function(p){ return String(p.mes || '').toUpperCase() === activePeriod; });
   return base;
 }
@@ -4262,13 +4294,21 @@ function acompSetKanbanStageLocal(projectKey, cycleKey, stage) {
   ACOMP_REMOTE_KANBAN_STAGES = ACOMP_REMOTE_KANBAN_STAGES || {};
   ACOMP_REMOTE_KANBAN_STAGES[String(cycleKey) + '|' + String(projectKey).toUpperCase()] = value;
 }
-function acompPersistKanbanStage(projectKey, cycleKey, stage) {
+function acompProjetoPorChave(projectKey) {
+  var key = String(projectKey || '').toUpperCase();
+  return projetosVisiveisParaUsuario(DATA.projetos || []).filter(function(p){
+    return projectMonthKey(p) === key || String(p && p.project_key || '').toUpperCase() === key;
+  })[0] || null;
+}
+function acompPersistKanbanStage(projectKey, cycleKey, stage, consultor) {
   if (!authTokenParam()) return Promise.reject(new Error('Login obrigatorio.'));
+  var projeto = consultor ? null : acompProjetoPorChave(projectKey);
   return chamarAppsScriptJsonp('setProjectKanbanStage', {
     auth_token:authTokenParam(),
     project_key:projectKey,
     cycle_key:cycleKey,
-    stage:stage
+    stage:stage,
+    consultor:consultor || (projeto && projeto.consultor) || ''
   }, 15000);
 }
 function acompDragStart(ev, projectKey, cycleKey) {
@@ -4460,7 +4500,7 @@ function salvarAcompanhamentoProjeto(btn) {
     var cycleKey = acompKanbanCycleKey(acompCicloAtual());
     acompAddFollowupLocal(savedFollowup);
     acompSetKanbanStageLocal(item.projectKey, cycleKey, stage);
-    acompPersistKanbanStage(item.projectKey, cycleKey, stage).then(function(kanbanResp){
+    acompPersistKanbanStage(item.projectKey, cycleKey, stage, item.consultor).then(function(kanbanResp){
       if (kanbanResp && kanbanResp.kanban_states) ACOMP_REMOTE_KANBAN_STAGES = kanbanResp.kanban_states;
       initAcomp();
     }).catch(function(error){
@@ -4495,7 +4535,7 @@ function acompRenderMonths(list) {
   var months = ['JAN','FEV','MAR','ABR','MAI','JUN','JUL','AGO','SET','OUT','NOV','DEZ'];
   var followupMap = acompLatestFollowupMap();
   return months.map(function(m){
-    var rows = (DATA.projetos || []).filter(function(p){ return p && p.cliente && acompStatusAtivo(p) && String(p.mes || '').toUpperCase() === m; }).map(function(p){ return acompProjetoView(p, followupMap); });
+    var rows = projetosVisiveisParaUsuario(DATA.projetos || []).filter(function(p){ return p && p.cliente && acompStatusAtivo(p) && String(p.mes || '').toUpperCase() === m; }).map(function(p){ return acompProjetoView(p, followupMap); });
     var ok = rows.filter(function(x){ return x.bucket !== 'sem'; }).length;
     return '<div class="acom-month"><div class="acom-month-name">'+m+'</div>'+
       '<div class="acom-month-row"><span>Acomp.</span><strong>'+ok+'/'+rows.length+'</strong></div>'+
@@ -4547,7 +4587,7 @@ function acompFindProjectView(projectKey) {
   var key = String(projectKey || '').toUpperCase();
   var followupMap = acompLatestFollowupMap();
   var found = null;
-  (DATA.projetos || []).some(function(p){
+  projetosVisiveisParaUsuario(DATA.projetos || []).some(function(p){
     if (projectMonthKey(p) === key) {
       found = acompProjetoView(p, followupMap);
       return true;
@@ -4774,7 +4814,7 @@ function initAdmin() {
           '<label>Nome</label><input name="name" required>'+
           '<label>Usu&aacute;rio</label><input name="username" autocomplete="off" required>'+
           '<label>Senha</label><input name="password" type="password" autocomplete="new-password" required>'+
-          '<label>Perfil</label><select name="role"><option value="user">Usu&aacute;rio</option><option value="admin">Administrador</option></select>'+
+          '<label>Perfil</label><select name="role"><option value="user">Consultor</option><option value="coordenador">Coordenador(a)</option><option value="admin">Administrador</option></select>'+
           '<div class="auth-error" id="admin-create-error"></div><button class="auth-btn" type="submit">Cadastrar</button>'+
         '</form></div></div>'+
         '<div class="acom-panel"><div class="acom-panel-head"><div><div class="acom-panel-title">Acessos liberados</div><div class="acom-panel-note" id="admin-users-note">Carregando...</div></div></div><div class="acom-panel-body" id="admin-users-list"></div></div>'+
@@ -4854,7 +4894,7 @@ function projectMonthKey(p){
 function annotateMonthSequence(list){
   var ordem = {};
   var contagem = {};
-  (DATA.projetos || []).forEach(function(item){
+  projetosVisiveisParaUsuario(DATA.projetos || []).forEach(function(item){
     if(!item || !item.cliente) return;
     var mes = String(item.mes || 'SEM MES').toUpperCase();
     if(!contagem[mes]) contagem[mes] = 0;
@@ -6569,7 +6609,7 @@ function dashOpenActionAudit(nome, mode) {
 function dashOpenCohortAudit(mes, etapa) {
   mes = String(mes || '').toUpperCase();
   etapa = String(etapa || '');
-  var list = ordenarProjetosPainel(Array.isArray(DATA.projetos) ? DATA.projetos.slice() : []).filter(function(p){
+  var list = ordenarProjetosPainel(projetosVisiveisParaUsuario(Array.isArray(DATA.projetos) ? DATA.projetos.slice() : [])).filter(function(p){
     if (String((p && p.mes) || '').toUpperCase() !== mes) return false;
     var s = dashProjectStageInfo(p);
     if (etapa === 'kickoff') return !(s.stage === 'kickoff' || s.stage === 'treinamento' || s.stage === 'ativacao');
@@ -6652,7 +6692,7 @@ function dashOpenDeliveryAudit(mes, consultor, tipo) {
   mes = String(mes || '').toUpperCase();
   consultor = String(consultor || '');
   tipo = String(tipo || 'todos');
-  var list = ordenarProjetosPainel(Array.isArray(DATA.projetos) ? DATA.projetos.slice() : []).filter(function(p) {
+  var list = ordenarProjetosPainel(projetosVisiveisParaUsuario(Array.isArray(DATA.projetos) ? DATA.projetos.slice() : [])).filter(function(p) {
     return String((p && p.consultor) || 'Sem consultor') === consultor;
   });
   var items = [];
@@ -7734,7 +7774,7 @@ function dashRenderCohort(cohort, list) {
 }
 
 function initDash() {
-  var sourceAll = Array.isArray(DATA.projetos) ? DATA.projetos.slice() : [];
+  var sourceAll = projetosVisiveisParaUsuario(Array.isArray(DATA.projetos) ? DATA.projetos.slice() : []);
   var list = ordenarProjetosPainel(sourceAll);
   var base = list.slice();
   var dc = document.getElementById('dash-content');
@@ -7780,7 +7820,7 @@ function initDash() {
     dashKpiCard('Taxa de ativação', activeRate === null ? '-' : dashPct(activeRate), activeRate === null ? 'Conversão indisponível.' : 'Conversão da jornada venda → ativação.', dashMetricClass(activeRate, 40, 70, false), 'funnel', dashDeltaChip(activeRate, null, false, 'pct'))+
     dashKpiCard('Saúde dos dados', health.completude === null ? '-' : dashPct(health.completude), health.completude === null ? 'Não há base suficiente.' : (health.inconsistencias.length+' problema(s) de cadastro e '+health.views.syncErrors.length+' falha(s) de sync.'), dashMetricClass(health.completude, 70, 90, false), 'dataHealthSummary', dashDeltaChip(health.completude, previousSnap.healthPct, false, 'pct'))+
   '</div>';
-  var hero = '<div class="dashx-hero"><div class="dashx-hero-top"><div class="dashx-title-wrap"><div class="dashx-eyebrow">Dashboard Executivo CSI</div><div class="dashx-title">Visão principal de comando</div><div class="dashx-sub">Primeira leitura executiva da carteira inteira: confiança dos dados, risco operacional, execução e evolução do cliente.</div></div><div class="dashx-meta"><span class="dashx-meta-chip"><b>Período</b> Todos os meses</span><span class="dashx-meta-chip"><b>Projetos</b> '+total+'</span><span class="dashx-meta-chip"><b>Última base</b> '+(TOWER_INFO_CONTEXT.ultima || '-')+'</span></div></div>'+dashRenderFilters(base)+'</div>';
+  var hero = '<div class="dashx-hero"><div class="dashx-hero-top"><div class="dashx-title-wrap"><div class="dashx-eyebrow">Dashboard Executivo CSI</div><div class="dashx-title">Visão principal de comando</div><div class="dashx-sub">Primeira leitura executiva do recorte permitido: confiança dos dados, risco operacional, execução e evolução do cliente.</div></div><div class="dashx-meta"><span class="dashx-meta-chip"><b>Escopo</b> '+rotuloEscopoUsuario()+'</span><span class="dashx-meta-chip"><b>Período</b> Todos os meses</span><span class="dashx-meta-chip"><b>Projetos</b> '+total+'</span><span class="dashx-meta-chip"><b>Última base</b> '+(TOWER_INFO_CONTEXT.ultima || '-')+'</span></div></div>'+dashRenderFilters(base)+'</div>';
   var trendSection = '<div class="dashx-exec-grid"><div class="dashx-stack"><div class="dashx-chart-grid">'+
     dashRenderConsultorDelivery(consultorDelivery)+
     '</div>'+dashRenderStatusStack(statusByMonth)+dashRenderClickUpTracker(operation, total)+dashRenderUntrackedClickUpList(operation.untrackedProjects || [], operation.untrackedTotal)+'</div>'+dashRenderActionNow(analyses, operation)+'</div>';
@@ -9726,8 +9766,8 @@ function gestaoNormalizeInventoryProject(p) {
   return out;
 }
 function gestaoBuildViewData(inventory) {
-  var hist = (Array.isArray(inventory) ? inventory : []).map(gestaoNormalizeInventoryProject);
-  var current = (Array.isArray(DATA.projetos) ? DATA.projetos : []).filter(function(p) {
+  var hist = projetosVisiveisParaUsuario((Array.isArray(inventory) ? inventory : []).map(gestaoNormalizeInventoryProject));
+  var current = projetosVisiveisParaUsuario(Array.isArray(DATA.projetos) ? DATA.projetos : []).filter(function(p) {
     return dashProjectHasClickUpTrace(p) && gestaoClickupBucketKey(p) === 'current';
   });
   return hist.concat(current);
@@ -9735,7 +9775,7 @@ function gestaoBuildViewData(inventory) {
 function gestaoLoadClickUpInventory() {
   if (GESTAO_CLICKUP_INVENTORY) return Promise.resolve(GESTAO_CLICKUP_INVENTORY);
   if (GESTAO_CLICKUP_INVENTORY_LOADING) return GESTAO_CLICKUP_INVENTORY_LOADING;
-  GESTAO_CLICKUP_INVENTORY_LOADING = chamarAppsScriptJsonp('getClickUpInventory', {}, 20000).then(function(resp) {
+  GESTAO_CLICKUP_INVENTORY_LOADING = chamarAppsScriptJsonp('getClickUpInventory', {auth_token:authTokenParam()}, 20000).then(function(resp) {
     if (!resp || resp.ok === false) {
       throw new Error((resp && (resp.error || resp.message)) || 'Apps Script nao retornou inventario ClickUp.');
     }
@@ -10138,7 +10178,7 @@ function normalizarTituloResumoImportado(v) {
     .replace(/\bPAINEL\b/ig, ' '));
 }
 function encontrarProjetoPorResumoImportado(bruto) {
-  var lista = (DATA && Array.isArray(DATA.projetos)) ? DATA.projetos : [];
+  var lista = projetosVisiveisParaUsuario((DATA && Array.isArray(DATA.projetos)) ? DATA.projetos : []);
   var titulo = normalizarTituloResumoImportado(bruto && (bruto.projeto || bruto.cliente || bruto.nome || ''));
   var melhor = null;
   var melhorScore = 0;
@@ -10279,7 +10319,7 @@ function montarProjectKeyClickup(p) {
 function encontrarProjetoPorChaveSync(key) {
   var chave = String(key || '').trim();
   if (!chave) return null;
-  return (DATA.projetos || []).filter(function(item) {
+  return projetosVisiveisParaUsuario(DATA.projetos || []).filter(function(item) {
     if (!item || typeof item !== 'object') return false;
     var keyInterna = String(item._key || '').trim();
     var keyProjeto = montarProjectKeyClickup(item);
@@ -10942,11 +10982,11 @@ function executarAuditoriaResumoProjetos(projetos, filtro) {
   return {resumo: resumo, itens: audit};
 }
 window.executarAuditoriaResumoProjetos = function(filtroCliente){
-  return executarAuditoriaResumoProjetos(DATA.projetos || [], filtroCliente || '');
+  return executarAuditoriaResumoProjetos(projetosVisiveisParaUsuario(DATA.projetos || []), filtroCliente || '');
 };
 window.debugResumoProjetoEstruturado = function(filtroCliente){
   var termo = String(filtroCliente || '').trim().toUpperCase();
-  var lista = Array.isArray(DATA.projetos) ? DATA.projetos : [];
+  var lista = projetosVisiveisParaUsuario(Array.isArray(DATA.projetos) ? DATA.projetos : []);
   var projeto = null;
   for (var i = 0; i < lista.length; i++) {
     var nome = String((lista[i] && lista[i].cliente) || '').toUpperCase();
@@ -10997,7 +11037,7 @@ function auditarTaxonomiaGlobal(projetos, limite) {
   };
 }
 window.auditarTaxonomiaGlobal = function(limite){
-  var out = auditarTaxonomiaGlobal(DATA.projetos || [], limite || 10);
+  var out = auditarTaxonomiaGlobal(projetosVisiveisParaUsuario(DATA.projetos || []), limite || 10);
   console.log('[AUDITORIA TAXONOMIA GLOBAL]', out);
   return out;
 };
@@ -11126,7 +11166,7 @@ function executarTesteQualidadeFases(projetos, filtro) {
   return { resumo: resumoGeral, itens: resultados };
 }
 window.executarTesteQualidadeFases = function(filtroCliente){
-  return executarTesteQualidadeFases(DATA.projetos || [], filtroCliente || '');
+  return executarTesteQualidadeFases(projetosVisiveisParaUsuario(DATA.projetos || []), filtroCliente || '');
 };
 
 function _limparJsonp(cb) {
