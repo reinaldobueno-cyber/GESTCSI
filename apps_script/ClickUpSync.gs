@@ -94,7 +94,7 @@ function doGet(e) {
       return jsonOutput_(validarClickUpConfig(), params.callback);
     }
     if (action === 'getClickUpInventory') {
-      return jsonOutput_(getClickUpInventory_(), params.callback);
+      return jsonOutput_(getClickUpInventory_(params), params.callback);
     }
     if (action === 'logPanelUpdate' || String(params.log_update || '') === '1') {
       var logResult = logPanelUpdate_(params);
@@ -1061,7 +1061,8 @@ function inventoryRowFromNormalized_(mapping, normalized, status, errorMessage) 
   };
 }
 
-function getClickUpInventory_() {
+function getClickUpInventory_(params) {
+  var user = requireUser_(params || {});
   var sheet = getClickUpInventorySheet_();
   var values = sheet.getDataRange().getValues();
   if (values.length <= 1) return { ok: true, projetos: [], total: 0 };
@@ -1071,7 +1072,7 @@ function getClickUpInventory_() {
     if (item.ultima_sync_clickup instanceof Date) item.ultima_sync_clickup = item.ultima_sync_clickup.toISOString();
     return item;
   }).filter(function(item) {
-    return !!sanitizeText_(item.cliente);
+    return !!sanitizeText_(item.cliente) && canUserAccessProjectItem_(user, item);
   });
   return { ok: true, projetos: projetos, total: projetos.length };
 }
@@ -1644,10 +1645,38 @@ function publicUser_(user) {
   return {
     username: String(user.username || ''),
     name: String(user.name || ''),
-    role: String(user.role || 'user'),
+    role: normalizePanelRole_(user.role),
     enabled: String(user.enabled || '').toUpperCase() !== 'FALSE',
     last_login: user.last_login instanceof Date ? user.last_login.toISOString() : String(user.last_login || '')
   };
+}
+
+function normalizePanelRole_(role) {
+  var key = normalizeKey_(role);
+  if (key === 'ADMIN' || key === 'ADMINISTRADOR') return 'admin';
+  if (key === 'COORDENADOR' || key === 'COORDENADORA' || key === 'COORDINATOR') return 'coordenador';
+  return 'user';
+}
+
+function userHasFullProjectAccess_(user) {
+  var role = normalizePanelRole_(user && user.role);
+  return role === 'admin' || role === 'coordenador';
+}
+
+function userMatchesConsultor_(user, consultor) {
+  if (!user) return false;
+  if (userHasFullProjectAccess_(user)) return true;
+  var target = normalizeKey_(consultor);
+  if (!target) return false;
+  var name = normalizeKey_(user.name);
+  var username = normalizeKey_(user.username);
+  return (name && (target === name || target.indexOf(name) >= 0 || name.indexOf(target) >= 0)) ||
+    (username && (target === username || target.indexOf(username) >= 0 || username.indexOf(target) >= 0));
+}
+
+function canUserAccessProjectItem_(user, item) {
+  if (userHasFullProjectAccess_(user)) return true;
+  return userMatchesConsultor_(user, item && item.consultor);
 }
 
 function findUserRow_(username) {
@@ -1741,7 +1770,7 @@ function createUser_(params) {
   params = params || {};
   var username = sanitizeText_(params.username).toLowerCase();
   var name = sanitizeText_(params.name);
-  var role = sanitizeText_(params.role) === 'admin' ? 'admin' : 'user';
+  var role = normalizePanelRole_(params.role);
   var passwordSha = sanitizeText_(params.password_sha);
   if (!username || !name || !passwordSha) throw new Error('Nome, usuario e senha sao obrigatorios.');
   if (findUserRow_(username)) throw new Error('Usuario ja existe.');
@@ -1781,6 +1810,10 @@ function logProjectFollowup_(params) {
   var user = requireUser_(params);
   var cliente = sanitizeText_(params.cliente);
   if (!cliente) throw new Error('cliente is required');
+  var consultor = sanitizeText_(params.consultor);
+  if (!canUserAccessProjectItem_(user, { consultor: consultor })) {
+    throw new Error('Este usuario so pode registrar acompanhamentos da propria carteira.');
+  }
   var consideracao = sanitizeText_(params.consideracao || params.observacao);
   var proximaAcao = sanitizeText_(params.proxima_acao);
   if (!consideracao && !proximaAcao) throw new Error('consideracao or proxima_acao is required');
@@ -1792,7 +1825,7 @@ function logProjectFollowup_(params) {
     dataAcompanhamento,
     sanitizeMonth_(params.mes),
     cliente,
-    sanitizeText_(params.consultor),
+    consultor,
     sanitizeText_(params.project_key),
     sanitizeText_(params.link_projeto),
     consideracao,
@@ -1882,7 +1915,7 @@ function publicProjectFollowup_(item, rowNumber) {
 }
 
 function getProjectFollowups_(params, limit) {
-  requireUser_(params);
+  var user = requireUser_(params);
   var sheet = getProjectFollowupSheet_();
   var values = sheet.getDataRange().getValues();
   if (values.length <= 1) {
@@ -1891,16 +1924,27 @@ function getProjectFollowups_(params, limit) {
   var header = values[0];
   var rows = values.slice(1);
   var max = Math.max(1, Math.min(Number(limit || 1000), 5000));
-  var start = Math.max(0, rows.length - max);
-  var followups = rows.slice(start).map(function(row, index) {
+  var visibleProjectKeys = {};
+  var visibleEntries = rows.map(function(row, index) {
     var item = rowToObject_(header, row);
-    return publicProjectFollowup_(item, start + index + 2);
+    return {
+      item: item,
+      row_number: index + 2
+    };
+  }).filter(function(entry) {
+    return canUserAccessProjectItem_(user, entry.item);
+  });
+  var start = Math.max(0, visibleEntries.length - max);
+  var followups = visibleEntries.slice(start).map(function(entry) {
+    var projectKey = sanitizeText_(entry.item.project_key).toUpperCase();
+    if (projectKey) visibleProjectKeys[projectKey] = true;
+    return publicProjectFollowup_(entry.item, entry.row_number);
   }).reverse();
   return {
     ok: true,
-    total: rows.length,
+    total: visibleEntries.length,
     followups: followups,
-    kanban_states: getProjectKanbanStates_()
+    kanban_states: getProjectKanbanStates_(userHasFullProjectAccess_(user) ? null : visibleProjectKeys)
   };
 }
 
@@ -1934,6 +1978,9 @@ function setProjectFollowupStatus_(params) {
   var sheet = getProjectFollowupSheet_();
   var found = findProjectFollowupRow_(sheet, followupId, rowNumber);
   if (!found) throw new Error('Acompanhamento nao encontrado.');
+  if (!canUserAccessProjectItem_(user, found.item)) {
+    throw new Error('Este usuario so pode atualizar acompanhamentos da propria carteira.');
+  }
   var status = normalizeFollowupStatus_(params.followup_status || params.status);
   var comment = sanitizeText_(params.status_comment || params.comment || params.comentario);
   var updatedAt = new Date();
@@ -1966,7 +2013,7 @@ function normalizeKanbanStage_(value) {
   return 'pending';
 }
 
-function getProjectKanbanStates_() {
+function getProjectKanbanStates_(allowedProjectKeys) {
   var sheet = getProjectKanbanStateSheet_();
   var values = sheet.getDataRange().getValues();
   if (values.length <= 1) return {};
@@ -1977,6 +2024,7 @@ function getProjectKanbanStates_() {
     var cycleKey = sanitizeText_(item.cycle_key);
     var projectKey = sanitizeText_(item.project_key).toUpperCase();
     if (!cycleKey || !projectKey) return;
+    if (allowedProjectKeys && !allowedProjectKeys[projectKey]) return;
     map[cycleKey + '|' + projectKey] = normalizeKanbanStage_(item.stage);
   });
   return map;
@@ -2001,6 +2049,9 @@ function setProjectKanbanStage_(params) {
   var projectKey = sanitizeText_(params.project_key).toUpperCase();
   var cycleKey = sanitizeText_(params.cycle_key);
   if (!projectKey || !cycleKey) throw new Error('project_key and cycle_key are required');
+  if (!canUserAccessProjectItem_(user, { consultor: sanitizeText_(params.consultor) })) {
+    throw new Error('Este usuario so pode alterar o Kanban da propria carteira.');
+  }
   var stage = normalizeKanbanStage_(params.stage);
   var sheet = getProjectKanbanStateSheet_();
   var found = findProjectKanbanStateRow_(sheet, cycleKey, projectKey);
@@ -2016,13 +2067,18 @@ function setProjectKanbanStage_(params) {
   } else {
     sheet.appendRow(row);
   }
+  var allowedProjectKeys = null;
+  if (!userHasFullProjectAccess_(user)) {
+    allowedProjectKeys = {};
+    allowedProjectKeys[projectKey] = true;
+  }
   return {
     ok: true,
     saved: true,
     cycle_key: cycleKey,
     project_key: projectKey,
     stage: stage,
-    kanban_states: getProjectKanbanStates_()
+    kanban_states: getProjectKanbanStates_(allowedProjectKeys)
   };
 }
 
