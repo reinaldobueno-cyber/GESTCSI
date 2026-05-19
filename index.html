@@ -136,6 +136,46 @@ nav{background:var(--nav);height:58px;display:flex;align-items:center;justify-co
 .exec-pill{display:inline-flex;align-items:center;gap:6px;padding:6px 10px;border-radius:999px;font-size:11px;font-weight:700;}
 .exec-pill.t{background:var(--blue-s);color:var(--blue);}
 .exec-pill.m{background:var(--purple-s);color:var(--purple);}
+.project-accordion-shell{display:flex;flex-direction:column;gap:10px;}
+.project-accordion-toolbar{display:flex;justify-content:flex-end;gap:6px;flex-wrap:wrap;margin-bottom:2px;}
+.project-accordion-btn{border:1px solid var(--border);background:var(--surf);color:var(--text2);border-radius:999px;padding:6px 10px;font:800 10px 'Inter',sans-serif;cursor:pointer;}
+.project-accordion-btn:hover{border-color:rgba(45,110,78,.35);color:var(--green);background:var(--green-s);}
+.project-section{background:var(--surf);border:1px solid var(--border);border-radius:8px;overflow:hidden;}
+.project-section[open]{box-shadow:0 8px 22px rgba(20,32,24,.05);}
+.project-section>summary{list-style:none;display:flex;align-items:center;justify-content:space-between;gap:14px;padding:12px 14px;background:var(--surf);cursor:pointer;}
+.project-section>summary::-webkit-details-marker{display:none;}
+.project-section>summary:after{content:'+';width:22px;height:22px;border:1px solid var(--border);border-radius:999px;display:flex;align-items:center;justify-content:center;color:var(--muted);font-weight:900;flex:0 0 auto;}
+.project-section[open]>summary{border-bottom:1px solid var(--border);background:var(--surf2);}
+.project-section[open]>summary:after{content:'-';}
+.project-section-head{min-width:0;display:flex;flex-direction:column;gap:3px;}
+.project-section-title{font-size:11px;font-weight:900;text-transform:uppercase;letter-spacing:.08em;color:var(--text);}
+.project-section-sub{font-size:11px;font-weight:650;color:var(--muted);line-height:1.35;}
+.project-section-badge{margin-left:auto;border-radius:999px;background:var(--surf2);border:1px solid var(--border);padding:4px 8px;font-size:10px;font-weight:900;color:var(--text2);white-space:nowrap;}
+.project-section-body{padding:12px 14px 14px;}
+.project-field-grid{display:grid;grid-template-columns:repeat(3,minmax(150px,1fr));gap:8px;}
+.project-field{border:1px solid var(--border);border-radius:8px;background:var(--surf2);padding:9px 10px;min-width:0;}
+.project-field-label{font-size:9px;font-weight:900;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);margin-bottom:4px;}
+.project-field-value{font-size:13px;font-weight:750;color:var(--text);line-height:1.35;word-break:break-word;}
+.project-field-value.muted{color:var(--muted);font-weight:700;}
+.project-risk-strip{display:grid;grid-template-columns:repeat(4,minmax(150px,1fr));gap:8px;margin-bottom:10px;}
+.project-risk-pill{border-radius:8px;border:1px solid var(--border);background:var(--surf2);padding:9px 10px;min-width:0;}
+.project-risk-label{font-size:9px;font-weight:900;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);margin-bottom:4px;}
+.project-risk-value{font-size:12px;font-weight:850;color:var(--text);line-height:1.35;}
+.project-risk-pill.ok{border-color:rgba(39,174,96,.28);background:var(--green-s);}
+.project-risk-pill.warn{border-color:rgba(230,126,34,.34);background:var(--orange-s);}
+.project-risk-pill.bad{border-color:rgba(192,57,43,.36);background:var(--red-s);}
+.project-risk-pill.ok .project-risk-value{color:var(--green);}
+.project-risk-pill.warn .project-risk-value{color:var(--orange);}
+.project-risk-pill.bad .project-risk-value{color:var(--red);}
+.project-section .prazo-grid{grid-template-columns:repeat(auto-fit,minmax(180px,1fr));}
+.project-section .dbar{margin:0;}
+.project-empty-note{border:1px dashed var(--border);border-radius:8px;padding:10px 12px;color:var(--muted);font-size:12px;font-weight:700;background:var(--surf2);}
+@media (max-width:760px){
+  .px-inner{padding:12px;}
+  .project-section>summary{align-items:flex-start;gap:8px;padding:11px 12px;}
+  .project-section-badge{order:3;width:100%;text-align:center;margin-left:0;}
+  .project-field-grid,.project-risk-strip{grid-template-columns:1fr;}
+}
 /* TAGS */
 .tag{display:inline-flex;align-items:center;font-size:10px;font-weight:700;font-family:'JetBrains Mono',monospace;padding:3px 8px;border-radius:4px;white-space:nowrap;}
 .tag-g{background:var(--green-s);color:var(--green);}.tag-r{background:var(--red-s);color:var(--red);}.tag-o{background:var(--orange-s);color:var(--orange);}.tag-b{background:var(--blue-s);color:var(--blue);}.tag-p{background:var(--purple-s);color:var(--purple);}.tag-gray{background:var(--surf2);color:var(--muted);}
@@ -6307,6 +6347,169 @@ function renderProjectFollowupsForProjectTab(p) {
   return '<div class="sec-l">Acompanhamentos do site</div><div class="log-box">'+rows+more+'</div>';
 }
 
+function projectHasInfo(v) {
+  if (v === null || v === undefined) return false;
+  var s = String(v).trim();
+  var low = s.toLowerCase();
+  return !!s && s !== '-' && low !== 'nat' && low !== 'null' && low !== 'undefined' && low !== 'n&atilde;o informado';
+}
+function projectInfoText(v) {
+  return projectHasInfo(v) ? escapeHtml(String(v).trim()) : 'N&atilde;o informado';
+}
+function projectDateText(v) {
+  var d = fd(v);
+  return projectHasInfo(d) ? escapeHtml(d) : 'N&atilde;o informado';
+}
+function projectNumText(v) {
+  if (v === null || v === undefined || v === '') return 'N&atilde;o informado';
+  var n = Number(v);
+  if (isNaN(n)) return projectInfoText(v);
+  return escapeHtml(fn(n));
+}
+function projectField(label, value, opts) {
+  opts = opts || {};
+  var html = opts.html ? (projectHasInfo(value) ? String(value) : 'N&atilde;o informado') : projectInfoText(value);
+  var muted = html === 'N&atilde;o informado' ? ' muted' : '';
+  return '<div class="project-field">'+
+    '<div class="project-field-label">'+label+'</div>'+
+    '<div class="project-field-value'+muted+'">'+html+'</div>'+
+  '</div>';
+}
+function projectFilledBadge(values) {
+  var total = (values || []).length;
+  var filled = (values || []).filter(projectHasInfo).length;
+  return filled + '/' + total + ' preenchidos';
+}
+function projectRiskPill(label, value, tone) {
+  tone = tone || 'ok';
+  return '<div class="project-risk-pill '+tone+'">'+
+    '<div class="project-risk-label">'+label+'</div>'+
+    '<div class="project-risk-value">'+projectInfoText(value)+'</div>'+
+  '</div>';
+}
+function projectStatusLabelPlain(status) {
+  var n = String(status || '').toLowerCase();
+  if (!n) return '';
+  if (n.indexOf('atras') >= 0) return 'Atrasado';
+  if (n.indexOf('parado') >= 0) return 'Parado';
+  if (n.indexOf('andamento') >= 0) return 'Em andamento';
+  if (n.indexOf('aguardando') >= 0) return 'Aguardando inicio';
+  if (n.indexOf('conclu') >= 0) return 'Concluido';
+  return status;
+}
+function projectLatestFollowup(p) {
+  var list = (acompFollowupsByProjectMap()[projectMonthKey(p || {})] || []).slice();
+  return list.length ? list.reverse()[0] : null;
+}
+function projectMainRisk(p, qtd) {
+  var dias = p && p.dias_sem_atualizacao !== null && p.dias_sem_atualizacao !== undefined ? Number(p.dias_sem_atualizacao) : Number(qtd && qtd.dias_sem_atualizacao);
+  var rest = p && p.diarias_rest !== null && p.diarias_rest !== undefined ? Number(p.diarias_rest) : null;
+  var pendencias = Number(qtd && qtd.tarefas_pendentes || 0) + Number(qtd && qtd.marcos_pendentes || 0);
+  var status = String(p && p.status || '').toLowerCase();
+  if (rest !== null && !isNaN(rest) && rest < 0) return { text:'Diarias excedidas', tone:'bad' };
+  if (status.indexOf('atras') >= 0) return { text:'Projeto atrasado', tone:'bad' };
+  if (rest !== null && !isNaN(rest) && rest <= 0 && pendencias > 0) return { text:'Diarias esgotadas com pendencias', tone:'bad' };
+  if (!isNaN(dias) && dias > 15) return { text:'Sem atualizacao recente', tone:'bad' };
+  if (!parseD(p && p.data_kick)) return { text:'Kickoff nao registrado', tone:'warn' };
+  if (!isNaN(dias) && dias > 7) return { text:'Atualizacao em atencao', tone:'warn' };
+  return { text:'Sem risco critico identificado', tone:'ok' };
+}
+function projectCompletenessSection(title, subtitle, values, body, open) {
+  return '<details class="project-section" '+(open ? 'open' : '')+'>'+
+    '<summary><div class="project-section-head"><div class="project-section-title">'+title+'</div><div class="project-section-sub">'+subtitle+'</div></div><span class="project-section-badge">'+projectFilledBadge(values)+'</span></summary>'+
+    '<div class="project-section-body">'+(body || '<div class="project-empty-note">N&atilde;o informado</div>')+'</div>'+
+  '</details>';
+}
+function setProjectAccordionAll(expandId, open) {
+  var box = document.getElementById(expandId);
+  if (!box) return false;
+  box.querySelectorAll('.project-section').forEach(function(section) {
+    section.open = !!open;
+  });
+  return false;
+}
+window.setProjectAccordionAll = setProjectAccordionAll;
+function buildProjectAccordion(p, id, barHtml, prazoH, followupsH, logH, obsH) {
+  var qtd = quantidadesResumoUI(p || {});
+  var fase = obterFaseAtualClickupProjeto(p || {}) || etapaTrilhaProjeto(p || {});
+  var latestFollowup = projectLatestFollowup(p || {});
+  var risco = projectMainRisk(p || {}, qtd);
+  var progressoRaw = qtd.progresso !== null && qtd.progresso !== undefined && !isNaN(Number(qtd.progresso)) ? Number(qtd.progresso) : null;
+  var progresso = progressoRaw !== null ? progressoRaw + '%' : 'N&atilde;o informado';
+  var diasSemAtualizacao = p && p.dias_sem_atualizacao !== null && p.dias_sem_atualizacao !== undefined ? p.dias_sem_atualizacao : qtd.dias_sem_atualizacao;
+  var marcosRaw = qtd.marcos === null ? '' : qtd.marcos;
+  var marcosResumo = qtd.marcos === null ? 'N&atilde;o informado' : (qtd.marcos_concluidos + ' conclu&iacute;dos / ' + qtd.marcos_pendentes + ' pendentes');
+  var diariasStatus = 'N&atilde;o informado';
+  if (p && p.diarias_cont) {
+    var rest = Number(p.diarias_rest);
+    diariasStatus = !isNaN(rest) && rest < 0 ? 'Excedido' : (!isNaN(rest) && rest <= 0 ? 'Sem saldo' : 'Dentro do contratado');
+  }
+  var nextAction = latestFollowup && latestFollowup.proxima_acao ? latestFollowup.proxima_acao : '';
+  var summaryBody =
+    '<div class="project-risk-strip">'+
+      projectRiskPill('Status atual', projectStatusLabelPlain(p && p.status), risco.tone === 'bad' ? 'bad' : (risco.tone === 'warn' ? 'warn' : 'ok'))+
+      projectRiskPill('Est&aacute;gio do cronograma', fase, 'ok')+
+      projectRiskPill('Risco principal', risco.text, risco.tone)+
+      projectRiskPill('Pr&oacute;xima a&ccedil;&atilde;o', nextAction, nextAction ? 'warn' : 'ok')+
+    '</div>'+
+    '<div class="project-field-grid">'+
+      projectField('Cliente', p && p.cliente)+
+      projectField('Consultor', p && p.consultor)+
+      projectField('Tipo', p && p.tipo)+
+      projectField('Formato', p && p.formato)+
+      projectField('Progresso', progresso, { html:true })+
+      projectField('Fase atual', fase)+
+    '</div>';
+  var comercialBody = '<div class="project-field-grid">'+
+    projectField('Pacote', p && p.pacote)+
+    projectField('Adicionais', p && p.adicionais)+
+    projectField('Vendedor', p && p.vendedor)+
+    projectField('Data da venda', projectDateText(p && p.data_venda), { html:true })+
+  '</div>';
+  var cronogramaExtra = [
+    prazoH || '',
+    renderAuditoriaUltimaAlteracaoProjeto(p || {}),
+    renderResumoPorFaseProjeto(p || {})
+  ].filter(Boolean).join('');
+  var cronogramaBody = '<div class="project-field-grid">'+
+    projectField('Kickoff planejado/realizado', p && p.kickoff)+
+    projectField('Data do kickoff', projectDateText(p && p.data_kick), { html:true })+
+    projectField('In&iacute;cio da implanta&ccedil;&atilde;o', projectDateText(p && p.data_inicio), { html:true })+
+    projectField('Data estimada', projectDateText(p && p.data_estimada), { html:true })+
+    projectField('Marcos', marcosResumo, { html:true })+
+    projectField('Fase atual', fase)+
+  '</div>'+cronogramaExtra;
+  var operacaoBody = '<div class="project-field-grid">'+
+    projectField('Di&aacute;rias contratadas', projectNumText(p && p.diarias_cont), { html:true })+
+    projectField('Di&aacute;rias realizadas', projectNumText(p && p.diarias_real), { html:true })+
+    projectField('Saldo de di&aacute;rias', projectNumText(p && p.diarias_rest), { html:true })+
+    projectField('Status de consumo', diariasStatus)+
+    projectField('&Uacute;ltima atualiza&ccedil;&atilde;o', formatarDataHoraProjeto(p && p.data_ultima_atualizacao))+
+    projectField('Dias sem atualiza&ccedil;&atilde;o', diasSemAtualizacao)+
+  '</div>'+(barHtml || '');
+  var acompFields = '<div class="project-field-grid">'+
+    projectField('&Uacute;ltimo registro', latestFollowup ? (latestFollowup.data_acompanhamento || latestFollowup.logged_at) : '')+
+    projectField('Pr&oacute;xima a&ccedil;&atilde;o', latestFollowup && latestFollowup.proxima_acao)+
+    projectField('Respons&aacute;vel', latestFollowup && latestFollowup.responsavel)+
+    projectField('Data', latestFollowup ? (latestFollowup.data_acompanhamento || latestFollowup.logged_at) : '')+
+  '</div>';
+  var acompBody = acompFields + (followupsH || '<div class="project-empty-note">N&atilde;o informado</div>');
+  var obsBody = (logH || '') + (obsH || '');
+  if (!obsBody) obsBody = '<div class="project-empty-note">N&atilde;o informado</div>';
+  return '<div class="project-accordion-shell">'+
+    '<div class="project-accordion-toolbar" onclick="event.stopPropagation()">'+
+      '<button type="button" class="project-accordion-btn" onclick="return setProjectAccordionAll(\'xp-'+id+'\', true)">Expandir tudo</button>'+
+      '<button type="button" class="project-accordion-btn" onclick="return setProjectAccordionAll(\'xp-'+id+'\', false)">Recolher tudo</button>'+
+    '</div>'+
+    projectCompletenessSection('Resumo Executivo', 'Contexto essencial, risco e pr&oacute;xima a&ccedil;&atilde;o.', [p && p.status, p && p.cliente, p && p.consultor, p && p.tipo, p && p.formato, progressoRaw], summaryBody, true)+
+    projectCompletenessSection('Comercial', 'Origem da venda e escopo contratado.', [p && p.pacote, p && p.adicionais, p && p.vendedor, p && p.data_venda], comercialBody, false)+
+    projectCompletenessSection('Cronograma', 'Kickoff, in&iacute;cio da implanta&ccedil;&atilde;o e marcos.', [p && p.kickoff, p && p.data_kick, p && p.data_inicio, marcosRaw], cronogramaBody, false)+
+    projectCompletenessSection('Opera&ccedil;&atilde;o / Di&aacute;rias', 'Consumo de di&aacute;rias e rec&ecirc;ncia da atualiza&ccedil;&atilde;o.', [p && p.diarias_cont, p && p.diarias_real, p && p.diarias_rest, diasSemAtualizacao], operacaoBody, false)+
+    projectCompletenessSection('Acompanhamentos', 'Registros recentes, retorno e pr&oacute;ximo movimento.', [latestFollowup && latestFollowup.data_acompanhamento, latestFollowup && latestFollowup.proxima_acao, latestFollowup && latestFollowup.responsavel, latestFollowup && latestFollowup.consideracao], acompBody, false)+
+    projectCompletenessSection('Observa&ccedil;&otilde;es internas', 'Notas livres da planilha e contexto operacional.', [p && p.acompanhamento, p && p.obs], obsBody, false)+
+  '</div>';
+}
+
 // ---- Build table rows ----
 function buildRows(list, pfx) {
   if (!list || !list.length) return '<div class="empty">Nenhum projeto encontrado</div>';
@@ -6327,10 +6530,10 @@ function buildRows(list, pfx) {
       barHtml='<div class="dbar"><div class="dbar-info'+(over?' exc':'')+'"><span>'+(over?'EXCEDIDO - ':'')+fn(real)+' de '+fn(cont)+' di&aacute;rias</span><span>'+fn(p.diarias_rest)+' restantes</span></div><div class="dbar-bg"><div class="dbar-fill" style="width:'+w+'%;background:'+fc+'"></div></div></div>';
     }
     var prazoH = buildPrazoCards(p);
-    var gerH = buildGerencialProjeto(p);
     var followupsH = renderProjectFollowupsForProjectTab(p);
     var logH = p.acompanhamento ? '<div class="sec-l">Observa&ccedil;&atilde;o</div><div class="log-box">'+escapeHtml(p.acompanhamento)+'</div>' : '';
     var obsH = p.obs ? '<div class="sec-l">Observa&ccedil;&otilde;es internas</div><div class="obs-box">'+escapeHtml(p.obs)+'</div>' : '';
+    var projectAccordionH = buildProjectAccordion(p, id, barHtml, prazoH, followupsH, logH, obsH);
     var projectKeyAttr = escapeHtml(projectMonthKey(p));
     out += '<div class="prow '+info.rc+'" id="'+id+'" data-project-key="'+projectKeyAttr+'" onclick="togRow(\''+id+'\')">';
     var projetoLinkBtn = p.projeto_link ? '<a class=\"project-link project-link-btn\" href=\"'+p.projeto_link+'\" target=\"_blank\" rel=\"noopener noreferrer\" onclick=\"event.stopPropagation()\">Abrir Projeto</a>' : '';
@@ -6341,16 +6544,7 @@ function buildRows(list, pfx) {
     out += '<div class="pcell" style="font-size:12px;color:var(--text2)">'+(p.formato||'-')+'</div>';
     out += '<div class="pcell" style="font-size:12px;font-family:\'JetBrains Mono\',monospace">'+dCell+'</div>';
     out += '<div class="pcell chev">&#x203A;</div></div>';
-    out += '<div class="pexpand" id="xp-'+id+'"><div class="px-inner">'+prazoH+barHtml;
-    out += '<div class="exp-grid">';
-    out += '<div><div class="ef-l">Pacote</div><div class="ef-v">'+(p.pacote||'-')+'</div></div>';
-    out += '<div><div class="ef-l">Adicionais</div><div class="ef-v" style="font-size:11px">'+(p.adicionais&&p.adicionais!=='-'?p.adicionais:'-')+'</div></div>';
-    out += '<div><div class="ef-l">Vendedor</div><div class="ef-v">'+(p.vendedor||'-')+'</div></div>';
-    out += '<div><div class="ef-l">Kickoff</div><div class="ef-v">'+fd(p.data_kick)+'</div></div>';
-    out += '<div><div class="ef-l">In&iacute;cio Implant.</div><div class="ef-v">'+fd(p.data_inicio)+'</div></div>';
-    out += '<div><div class="ef-l">Data Venda</div><div class="ef-v">'+fd(p.data_venda)+'</div></div>';
-    out += '<div><div class="ef-l">KO Realiz.?</div><div class="ef-v">'+(p.kickoff||'-')+'</div></div>';
-    out += '</div>'+gerH+followupsH+logH+obsH+'</div></div>';
+    out += '<div class="pexpand" id="xp-'+id+'"><div class="px-inner">'+projectAccordionH+'</div></div>';
   }
   return out;
 }
