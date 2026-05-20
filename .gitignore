@@ -1,0 +1,12 @@
+# Local backup snapshots and debug artifacts
+backups/
+*.backup*.html
+*.backup*.gs
+.tmp_*
+*_dump*.html
+gestao_check_*
+published_page.html
+remote_index*.html
+script.extract.js
+style.extract.css
+GESTCSI-codex-pr/
