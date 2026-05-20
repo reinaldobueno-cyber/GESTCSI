@@ -566,6 +566,7 @@ nav{background:var(--nav);height:58px;display:flex;align-items:center;justify-co
 .snb-icon{font-size:16px;flex-shrink:0;width:20px;text-align:center;}
 .snb-label{overflow:hidden;text-overflow:ellipsis;flex:1;}
 .snb-badge{background:#e74c3c;color:#fff;border-radius:10px;font-size:10px;font-weight:800;padding:1px 6px;min-width:16px;text-align:center;flex-shrink:0;}
+.snb-badge[hidden]{display:none!important;}
 .main-content{min-width:0;width:100%;}
 .tabs{display:none!important;}
 .page{display:none;padding:18px 22px 80px;}
@@ -3162,15 +3163,15 @@ body.theme-dark *{
 <div class="sidenav">
 <button class="snb on" onclick="goTab('dash',this)"><span class="snb-icon">&#128200;</span><span class="snb-label">Dashboard</span></button>
 <button class="snb" onclick="goTab('exec',this)"><span class="snb-icon">&#127775;</span><span class="snb-label">Executivo</span></button>
-<button class="snb" onclick="goTab('tower',this)"><span class="snb-icon">&#128737;</span><span class="snb-label">Gest&atilde;o</span><span class="snb-badge" id="n-tower">0</span></button>
-<button class="snb" onclick="goTab('acom',this)"><span class="snb-icon">&#128221;</span><span class="snb-label">Acompanhamento</span><span class="snb-badge" id="n-acom">0</span></button>
-<button class="snb" onclick="goTab('all',this)"><span class="snb-icon">&#128203;</span><span class="snb-label">Projetos</span><span class="snb-badge" id="n-all">0</span></button>
+<button class="snb" onclick="goTab('tower',this)"><span class="snb-icon">&#128737;</span><span class="snb-label">Gest&atilde;o</span><span class="snb-badge" id="n-tower" hidden>0</span></button>
+<button class="snb" onclick="goTab('acom',this)"><span class="snb-icon">&#128221;</span><span class="snb-label">Acompanhamento</span><span class="snb-badge" id="n-acom" hidden>0</span></button>
+<button class="snb" onclick="goTab('all',this)"><span class="snb-icon">&#128203;</span><span class="snb-label">Projetos</span><span class="snb-badge" id="n-all" hidden>0</span></button>
 <button class="snb" onclick="goTab('cons',this)"><span class="snb-icon">&#128100;</span><span class="snb-label">Consultores</span></button>
 <button class="snb" onclick="goTab('vend',this)"><span class="snb-icon">&#129309;</span><span class="snb-label">Vendedores</span></button>
 <button class="snb" onclick="goTab('avul',this)"><span class="snb-icon">&#128181;</span><span class="snb-label">Avulso/Novo</span></button>
-<button class="snb" onclick="goTab('log',this)"><span class="snb-icon">&#128506;</span><span class="snb-label">Log&iacute;stica</span><span class="snb-badge" id="n-log">0</span></button>
-<button class="snb" onclick="goTab('praz',this)"><span class="snb-icon">&#8987;</span><span class="snb-label">Prazos</span><span class="snb-badge" id="n-praz">0</span></button>
-<button class="snb" onclick="goTab('alert',this)"><span class="snb-icon">&#128680;</span><span class="snb-label">Alertas</span><span class="snb-badge" id="n-alert">0</span></button>
+<button class="snb" onclick="goTab('log',this)"><span class="snb-icon">&#128506;</span><span class="snb-label">Log&iacute;stica</span><span class="snb-badge" id="n-log" hidden>0</span></button>
+<button class="snb" onclick="goTab('praz',this)"><span class="snb-icon">&#8987;</span><span class="snb-label">Prazos</span><span class="snb-badge" id="n-praz" hidden>0</span></button>
+<button class="snb" onclick="goTab('alert',this)"><span class="snb-icon">&#128680;</span><span class="snb-label">Alertas</span><span class="snb-badge" id="n-alert" hidden>0</span></button>
 </div>
 <div class="main-content">
 <div class="page on" id="page-dash"><div id="dash-content"></div></div>
@@ -3263,6 +3264,25 @@ var fS='all', fC='all', fM='all', fQ='';
 var DASH_FILTERS = { consultor:'all', vendedor:'all', status:'all', tipo:'all' };
 var DASH_HEALTH_VIEW = 'issues';
 var DASH_CLICKUP_CONSULTOR = '';
+
+function setSidebarAlertBadge(id, value, title) {
+  var badge = document.getElementById(id);
+  if (!badge) return;
+  var count = Number(value || 0);
+  if (count > 0) {
+    badge.textContent = count > 99 ? '99+' : String(count);
+    badge.hidden = false;
+    if (title) badge.title = title;
+  } else {
+    badge.textContent = '0';
+    badge.hidden = true;
+    badge.removeAttribute('title');
+  }
+}
+
+function hideSidebarBadge(id) {
+  setSidebarAlertBadge(id, 0);
+}
 var DASH_ACTION_CONSULTOR = '';
 var DASH_ACTION_MODE = 'projetos';
 var DASH_AUDIT_MODAL_HTML = '';
@@ -4882,8 +4902,7 @@ function initAcomp() {
   var acompanhados = list.filter(function(x){ return x.temRegistro; }).length;
   var pendentes = total - acompanhados;
   var criticos = list.filter(function(x){ return x.bucket === '31-45' || x.bucket === '45+' || x.bucket === 'sem'; }).length;
-  var badge = document.getElementById('n-acom');
-  if (badge) badge.textContent = pendentes;
+  hideSidebarBadge('n-acom');
   var periodo = activePeriod === 'all' ? 'Todos os meses' : activePeriod;
   var syncNote = ACOMP_REMOTE_ERROR ? 'Hist&oacute;rico do site indispon&iacute;vel' : (ACOMP_REMOTE_LOADED ? 'Hist&oacute;rico do site carregado' : (ACOMP_REMOTE_LOADING ? 'Carregando hist&oacute;rico do site...' : 'Hist&oacute;rico do site ainda n&atilde;o carregado'));
   var filters = [
@@ -8240,7 +8259,7 @@ function initAll() {
     '<div class="kpi kpi-btn b '+(fS==='aguardando'?'active':'')+'" data-project-status="aguardando" onclick="setProjectStatusFilter(\'aguardando\')"><div class="kpi-l">Aguardando In&iacute;cio</div><div class="kpi-v">'+ag+'</div><div class="kpi-hint">Clique para visualizar</div></div>'+
     '<div class="kpi kpi-btn r '+(fS==='atrasado'?'active':'')+'" data-project-status="atrasado" onclick="setProjectStatusFilter(\'atrasado\')"><div class="kpi-l">Atrasados</div><div class="kpi-v">'+atr+'</div><div class="kpi-hint">Clique para visualizar</div></div>'+
     '<div class="kpi kpi-btn o '+(fS==='excedido'?'active':'')+'" data-project-status="excedido" onclick="setProjectStatusFilter(\'excedido\')"><div class="kpi-l">Di&aacute;rias Excedidas</div><div class="kpi-v">'+exc+'</div><div class="kpi-hint">Clique para visualizar</div></div>';
-  document.getElementById('n-all').textContent=p.length;
+  hideSidebarBadge('n-all');
   var cons=[],cm={};
   p.forEach(function(x){if(x.consultor&&!cm[x.consultor]){cm[x.consultor]=1;cons.push(x.consultor);}});cons.sort();
   var meses=[],mm={};
@@ -8656,8 +8675,7 @@ function initLog() {
   var ufsSet     = {};
   comCidade.forEach(function(x){ var u=getUF(x.cidade); if(u) ufsSet[u]=1; });
 
-  var n = document.getElementById('n-log');
-  if (n) n.textContent = totalBruto;
+  setSidebarAlertBadge('n-log', semFormato.length + semCidade, 'Projetos de logistica com formato ou cidade para corrigir');
 
   document.getElementById('kpis-log').innerHTML =
     kpi('Total projetos', totalBruto, 'g', '', 'Online + In Loco + sem formato') +
@@ -9305,7 +9323,7 @@ function initPraz(){
   var vkV=viols.filter(function(x){return x.v.some(function(v){return v.tipo==='vk';});});
   var vtV=viols.filter(function(x){return x.v.some(function(v){return v.tipo==='vt';});});
   var ktV=viols.filter(function(x){return x.v.some(function(v){return v.tipo==='kt';});});
-  var n=document.getElementById('n-praz');if(n)n.textContent=viols.length;
+  setSidebarAlertBadge('n-praz', viols.length, 'Projetos fora do prazo');
   document.getElementById('kpis-praz').innerHTML=
     kpi('Projetos Fora do Prazo',viols.length,'r','onclick="abrirPrazosComFiltro(\'all\')"','Clique para visualizar')+
     kpi('Venda Nova - Kickoff',vkV.length,'o','onclick="abrirPrazosComFiltro(\'vk\')"','Clique para visualizar')+
@@ -10199,13 +10217,11 @@ function initControlTower() {
     var viewData = gestaoBuildViewData(projetos);
     GESTAO_CLICKUP_VIEW_DATA = viewData;
     el.innerHTML = gestaoRenderClickupProductivity(viewData);
-    var nTowerNew = document.getElementById('n-tower');
-    if (nTowerNew) nTowerNew.textContent = gestaoBuildClickupProductivity(viewData).buckets.total.atrasados;
+    hideSidebarBadge('n-tower');
   }).catch(function(error) {
     var msg = error && error.message ? error.message : String(error || 'Erro desconhecido');
     el.innerHTML = gestaoRenderClickupProductivity([], { erro: msg });
-    var nTowerNew = document.getElementById('n-tower');
-    if (nTowerNew) nTowerNew.textContent = '0';
+    hideSidebarBadge('n-tower');
   });
   return;
   var projetos = filteredProj();
@@ -10234,7 +10250,7 @@ function initControlTower() {
     ultima: datasUpdate.length ? datasUpdate.sort().slice(-1)[0] : ((document.getElementById('nav-date') || {}).textContent || '-'),
     origem: 'Sheets/ClickUp em ' + listIds + ' de ' + total + ' projeto(s) + MRR ' + (CONTRACTS_MRR.loaded ? CONTRACTS_MRR.source : 'nao carregado')
   };
-  var nTower = document.getElementById('n-tower'); if (nTower) nTower.textContent = riscos.length;
+  hideSidebarBadge('n-tower');
   var topRiscos = acaoHoje.slice().sort(function(a,b){ if (a.score !== b.score) return a.score - b.score; return b.mrr - a.mrr; }).slice(0,10);
   var clientesRisco = riscos.slice().sort(function(a,b){ return a.score - b.score || b.mrr - a.mrr; }).slice(0,12);
   var maxCons = consultores.reduce(function(m,c){ return Math.max(m,c.total); }, 0);
@@ -10267,7 +10283,7 @@ function initAlert(){
   var p=filteredProj();
   var atr=p.filter(function(x){return x.status.indexOf('Atrasado')>=0;});
   var exc=p.filter(function(x){return x.diarias_rest!==null&&x.diarias_rest<0;});
-  var n=document.getElementById('n-alert');if(n)n.textContent=atr.length+exc.length;
+  setSidebarAlertBadge('n-alert', atr.length + exc.length, 'Projetos atrasados ou com diarias excedidas');
   document.getElementById('kpis-alert').innerHTML=
     kpi('Projetos Atrasados',atr.length,'r','onclick="abrirAlertasComFiltro(\'atrasados\')"','Clique para visualizar')+
     kpi('Di&aacute;rias Excedidas',exc.length,'o','onclick="abrirAlertasComFiltro(\'excedidos\')"','Clique para visualizar')+
