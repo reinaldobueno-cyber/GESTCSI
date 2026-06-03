@@ -18,11 +18,15 @@
  * - CLICKUP_DIRTY_SHEET         default: CLICKUP_DIRTY_QUEUE
  * - CLICKUP_SYNC_BATCH_SIZE     default: 10
  * - CLICKUP_WEBHOOK_ENDPOINT    full deployed Apps Script web app URL
- * - CLICKUP_TEAM_ID             required only for webhook registration
+ * - CLICKUP_TEAM_ID             required for webhook registration and user activity audit
  * - CLICKUP_WEBHOOK_TOKEN       shared token appended to webhook endpoint
+ * - CLICKUP_USER_ACTIVITY_SHEET default: CLICKUP_USER_ACTIVITY
+ * - CLICKUP_AUDIT_LOG_SHEET     default: CLICKUP_AUDIT_LOGS
+ * - CLICKUP_ACTIVITY_DAYS       default: 90
  */
 
 var CLICKUP_API_BASE = 'https://api.clickup.com/api/v2';
+var CLICKUP_DEFAULT_WORKSPACE_ID = '9007083069';
 var MONTHS = ['JAN', 'FEV', 'MAR', 'ABR', 'MAI', 'JUN', 'JUL', 'AGO', 'SET', 'OUT', 'NOV', 'DEZ'];
 var HISTORICAL_CLICKUP_SPACES = [
   { name: 'CSI-PROJETOS-ENGORDA', space_id: '90130063112', url: 'https://app.clickup.com/9007083069/v/s/90130063112' },
@@ -55,6 +59,7 @@ function onOpen() {
     .addItem('Validar CLICKUP_CONFIG', 'validarClickUpConfig')
     .addItem('Importar projetos dos spaces históricos', 'inserirSpacesHistoricosClickUp')
     .addItem('Sincronizar inventário ClickUp', 'sincronizarInventarioClickUp')
+    .addItem('Sincronizar atividade dos usuários ClickUp', 'sincronizarAtividadeUsuariosClickUp')
     .addItem('Sincronizar todos habilitados', 'syncAllProjectsTrigger')
     .addItem('Sincronizar primeiro configurado', 'syncPrimeiroProjetoConfigurado')
     .addToUi();
@@ -96,6 +101,14 @@ function doGet(e) {
     if (action === 'getClickUpInventory') {
       return jsonOutput_(getClickUpInventory_(params), params.callback);
     }
+    if (action === 'syncClickUpUserActivity') {
+      requireAdmin_(params);
+      return jsonOutput_(syncClickUpUserActivity_(params), params.callback);
+    }
+    if (action === 'getClickUpUserActivity') {
+      requireAdmin_(params);
+      return jsonOutput_(getClickUpUserActivity_(params), params.callback);
+    }
     if (action === 'logPanelUpdate' || String(params.log_update || '') === '1') {
       var logResult = logPanelUpdate_(params);
       return jsonOutput_(logResult, params.callback);
@@ -118,6 +131,12 @@ function doGet(e) {
     }
     if (action === 'setUserEnabled') {
       return jsonOutput_(setUserEnabled_(params), params.callback);
+    }
+    if (action === 'changePassword') {
+      return jsonOutput_(changePassword_(params), params.callback);
+    }
+    if (action === 'resetUserPassword') {
+      return jsonOutput_(resetUserPassword_(params), params.callback);
     }
     if (action === 'logProjectFollowup') {
       var followupResult = logProjectFollowup_(params);
@@ -143,7 +162,7 @@ function doGet(e) {
     var payload = {
       ok: true,
       service: 'clickup-sync',
-      message: 'Use action=getMonthlyProjects|syncProject|syncAll|processDirty|validateConfig|getClickUpInventory|logPanelUpdate|getPanelUpdateHistory|login|me|listUsers|createUser|setUserEnabled|logProjectFollowup|getProjectFollowups|setProjectFollowupStatus|setProjectKanbanStage|deleteProjectFollowup'
+      message: 'Use action=getMonthlyProjects|syncProject|syncAll|processDirty|validateConfig|getClickUpInventory|syncClickUpUserActivity|getClickUpUserActivity|logPanelUpdate|getPanelUpdateHistory|login|me|listUsers|createUser|setUserEnabled|changePassword|resetUserPassword|logProjectFollowup|getProjectFollowups|setProjectFollowupStatus|setProjectKanbanStage|deleteProjectFollowup'
     };
     return jsonOutput_(payload, params.callback);
   } catch (error) {
@@ -1077,6 +1096,706 @@ function getClickUpInventory_(params) {
   return { ok: true, projetos: projetos, total: projetos.length };
 }
 
+function sincronizarAtividadeUsuariosClickUp() {
+  var result = syncClickUpUserActivity_({});
+  SpreadsheetApp.getUi().alert(
+    'Atividade ClickUp sincronizada',
+    'Resumo: ' + result.users + ' usuarios.\nModo: ' + (result.mode || 'audit_log') + '.\nEventos/sinais lidos: ' + result.events + '.\n\nVeja a aba "' + result.summary_sheet + '".',
+    SpreadsheetApp.getUi().ButtonSet.OK
+  );
+  return result;
+}
+
+function syncClickUpUserActivity_(params) {
+  params = params || {};
+  var workspaceId = normalizeClickUpId_(params.workspace_id) || getClickUpWorkspaceId_();
+  if (!workspaceId) throw new Error('Configure CLICKUP_TEAM_ID nas propriedades do Apps Script ou informe workspace_id.');
+
+  var now = new Date();
+  var days = Math.max(1, Math.min(toInt_(params.days, toInt_(getScriptProperty_('CLICKUP_ACTIVITY_DAYS', 90), 90)), 365));
+  var endMs = parseClickUpAuditTimeParam_(params.end_time, now.getTime());
+  var startMs = parseClickUpAuditTimeParam_(params.start_time, endMs - days * 24 * 60 * 60 * 1000);
+  if (startMs >= endMs) throw new Error('Periodo invalido para auditoria ClickUp.');
+
+  var members = fetchClickUpWorkspaceMembers_(workspaceId);
+  if (String(params.force_estimated || '') === '1') {
+    return syncClickUpUserActivityApprox_(params, {
+      workspace_id: workspaceId,
+      start_ms: startMs,
+      end_ms: endMs,
+      fetched_at: now,
+      members: members,
+      audit_warnings: ['Modo estimado solicitado pelo painel.']
+    });
+  }
+  var audit = fetchClickUpAuditEvents_(workspaceId, {
+    start_ms: startMs,
+    end_ms: endMs,
+    max_events: toInt_(params.max_events, toInt_(getScriptProperty_('CLICKUP_ACTIVITY_MAX_EVENTS', 2000), 2000)),
+    page_rows: toInt_(params.page_rows, toInt_(getScriptProperty_('CLICKUP_ACTIVITY_PAGE_ROWS', 100), 100)),
+    max_pages: toInt_(params.max_pages, toInt_(getScriptProperty_('CLICKUP_ACTIVITY_MAX_PAGES', 8), 8)),
+    applicabilities: getClickUpAuditApplicabilities_(params.applicabilities)
+  });
+  if (!audit.events.length) {
+    return syncClickUpUserActivityApprox_(params, {
+      workspace_id: workspaceId,
+      start_ms: startMs,
+      end_ms: endMs,
+      fetched_at: now,
+      members: members,
+      audit_warnings: audit.warnings
+    });
+  }
+  var summary = buildClickUpUserActivitySummary_(members, audit.events, {
+    start_ms: startMs,
+    end_ms: endMs,
+    fetched_at: now
+  });
+
+  writeClickUpUserActivitySummary_(summary.rows);
+  writeClickUpAuditLogRows_(audit.events, {
+    start_ms: startMs,
+    end_ms: endMs,
+    fetched_at: now
+  });
+
+  return {
+    ok: true,
+    workspace_id: workspaceId,
+    start_time: new Date(startMs).toISOString(),
+    end_time: new Date(endMs).toISOString(),
+    mode: 'audit_log',
+    users: summary.rows.length,
+    events: audit.events.length,
+    warnings: audit.warnings,
+    summary_sheet: getClickUpUserActivitySheetName_(),
+    raw_sheet: getClickUpAuditLogSheetName_()
+  };
+}
+
+function syncClickUpUserActivityApprox_(params, meta) {
+  params = params || {};
+  meta = meta || {};
+  var maxProjects = Math.max(1, Math.min(toInt_(params.max_projects, toInt_(getScriptProperty_('CLICKUP_ACTIVITY_PROJECT_LIMIT', 30), 30)), 250));
+  var mappings = loadProjectMappings_().filter(function(mapping) {
+    return mapping.enabled && (mapping.list_id || mapping.view_id || mapping.folder_id || mapping.space_id);
+  }).slice(0, maxProjects);
+  var approx = buildApproxClickUpUserActivityFromTasks_(mappings, {
+    members: meta.members || [],
+    start_ms: meta.start_ms,
+    end_ms: meta.end_ms,
+    fetched_at: meta.fetched_at || new Date()
+  });
+
+  writeClickUpUserActivitySummary_(approx.rows);
+  writeClickUpAuditLogRows_([], {
+    start_ms: meta.start_ms,
+    end_ms: meta.end_ms,
+    fetched_at: meta.fetched_at || new Date()
+  });
+
+  return {
+    ok: true,
+    workspace_id: meta.workspace_id || '',
+    start_time: new Date(meta.start_ms).toISOString(),
+    end_time: new Date(meta.end_ms).toISOString(),
+    mode: 'estimated_from_tasks',
+    users: approx.rows.length,
+    events: approx.events,
+    projects_read: approx.projects_read,
+    errors: approx.errors,
+    warnings: (meta.audit_warnings || []).concat([
+      'Audit Log indisponivel no plano atual. Controle gerado por estimativa usando tarefas, responsaveis, criadores e datas de atualizacao.'
+    ]),
+    summary_sheet: getClickUpUserActivitySheetName_(),
+    raw_sheet: getClickUpAuditLogSheetName_()
+  };
+}
+
+function getClickUpUserActivity_(params) {
+  requireAdmin_(params || {});
+  var ss = SpreadsheetApp.openById(getScriptProperty_('SHEET_ID'));
+  var sheet = ss.getSheetByName(getClickUpUserActivitySheetName_());
+  if (!sheet) return { ok: true, users: [], total: 0, needs_generate: true, sheet: getClickUpUserActivitySheetName_() };
+  var values = sheet.getDataRange().getValues();
+  if (values.length <= 1) return { ok: true, users: [], total: 0, needs_generate: true, sheet: getClickUpUserActivitySheetName_() };
+  var header = values[0];
+  var users = values.slice(1).map(function(row) {
+    return rowToObject_(header, row);
+  });
+  var stale = users.length > 0 && !users.some(function(user) {
+    return String(user.modo_controle || '') === 'estimado_por_tarefas';
+  });
+  return {
+    ok: true,
+    users: users,
+    total: users.length,
+    stale_schema: stale,
+    needs_generate: stale,
+    sheet: getClickUpUserActivitySheetName_()
+  };
+}
+
+function fetchClickUpWorkspaceMembers_(workspaceId) {
+  var response = clickupRequest_('get', '/team', null);
+  var teams = response && response.teams ? response.teams : [];
+  var members = [];
+  teams.forEach(function(team) {
+    if (String(team.id || '') !== String(workspaceId)) return;
+    (team.members || []).forEach(function(member) {
+      var user = member.user || member || {};
+      members.push({
+        id: String(user.id || ''),
+        name: sanitizeText_(user.username || user.name || ''),
+        email: sanitizeText_(user.email || '').toLowerCase(),
+        role: sanitizeText_(user.role_key || user.role || user.role_subtype || ''),
+        last_active: normalizeClickUpEventDate_(user.last_active),
+        date_joined: normalizeClickUpEventDate_(user.date_joined),
+        date_invited: normalizeClickUpEventDate_(user.date_invited)
+      });
+    });
+  });
+  return members;
+}
+
+function buildApproxClickUpUserActivityFromTasks_(mappings, options) {
+  options = options || {};
+  var byKey = {};
+  var errors = [];
+  var eventCount = 0;
+  var projectsRead = 0;
+  options.day_start_ms = startOfDayMillis_(options.fetched_at || new Date());
+  options.day_end_ms = options.day_start_ms + 24 * 60 * 60 * 1000 - 1;
+
+  (options.members || []).forEach(function(member) {
+    ensureApproxUser_(byKey, member.email, member.id, member.name, member.role, {
+      clickup_last_active: member.last_active,
+      date_joined: member.date_joined,
+      date_invited: member.date_invited
+    });
+  });
+
+  (mappings || []).forEach(function(mapping) {
+    try {
+      var payload = fetchProjectTasks_(mapping);
+      var tasks = payload.tasks || [];
+      projectsRead += 1;
+      tasks.forEach(function(task) {
+        eventCount += aggregateApproxTaskForUsers_(byKey, task, mapping, options);
+      });
+    } catch (error) {
+      errors.push({
+        project_key: mapping.project_key,
+        cliente: mapping.cliente,
+        error: simplifyErrorMessage_(error)
+      });
+    }
+  });
+
+  var rows = Object.keys(byKey).map(function(key) {
+    var item = byKey[key];
+    var first = item._first_action ? new Date(item._first_action).toISOString() : '';
+    var last = item._last_action ? new Date(item._last_action).toISOString() : '';
+    var taskCreated = item._first_created ? new Date(item._first_created).toISOString() : '';
+    item.sincronizado_em = options.fetched_at.toISOString();
+    item.periodo_inicio = new Date(options.start_ms).toISOString();
+    item.periodo_fim = new Date(options.end_ms).toISOString();
+    item.primeiro_login = '';
+    item.ultimo_login = '';
+    item.primeiro_evento = taskCreated || first;
+    item.ultimo_evento = last;
+    item.primeira_acao = first || taskCreated;
+    item.ultima_acao = last || taskCreated;
+    item.tipo_primeira_acao = first ? 'Primeira tarefa atribuida/atualizada no periodo' : (taskCreated ? 'Primeira tarefa criada no periodo' : '');
+    item.tipo_ultima_acao = last ? 'Ultima tarefa atribuida/atualizada no periodo' : (taskCreated ? 'Tarefa criada no periodo' : '');
+    item.primeira_acao_link = (item._first_action_ctx || item._first_created_ctx || {}).link || '';
+    item.primeira_acao_contexto = (item._first_action_ctx || item._first_created_ctx || {}).contexto || '';
+    item.ultima_acao_link = (item._last_action_ctx || item._first_created_ctx || {}).link || '';
+    item.ultima_acao_contexto = (item._last_action_ctx || item._first_created_ctx || {}).contexto || '';
+    item.dias_sem_login = '';
+    item.dias_sem_acao = item.ultima_acao ? daysBetween_(new Date(item.ultima_acao), options.fetched_at) : '';
+    item.total_eventos_periodo = item.total_eventos_periodo || 0;
+    item.total_acoes_periodo = item.total_acoes_periodo || 0;
+    item.projetos_associados = Object.keys(item._projects || {}).length;
+    item.tarefas_atribuidas = item.tarefas_atribuidas || 0;
+    item.tarefas_concluidas_estimadas = item.tarefas_concluidas_estimadas || 0;
+    item.tarefas_criadas_estimadas = item.tarefas_criadas_estimadas || 0;
+    item.tarefas_atualizadas_hoje = item.tarefas_atualizadas_hoje || 0;
+    item.tarefas_concluidas_hoje = item.tarefas_concluidas_hoje || 0;
+    item.tarefas_criadas_hoje = item.tarefas_criadas_hoje || 0;
+    item.atividades_hoje_json = JSON.stringify(item._today_actions || []);
+    item.modo_controle = 'estimado_por_tarefas';
+    delete item._projects;
+    delete item._first_action;
+    delete item._last_action;
+    delete item._first_created;
+    delete item._first_action_ctx;
+    delete item._last_action_ctx;
+    delete item._first_created_ctx;
+    delete item._today_actions;
+    return item;
+  }).filter(function(item) {
+    return item.total_eventos_periodo || item.clickup_last_active || item.email || item.nome;
+  });
+
+  rows.sort(function(a, b) {
+    var aLast = a.ultima_acao || a.clickup_last_active || '';
+    var bLast = b.ultima_acao || b.clickup_last_active || '';
+    return String(bLast).localeCompare(String(aLast));
+  });
+
+  return {
+    rows: rows,
+    events: eventCount,
+    projects_read: projectsRead,
+    errors: errors
+  };
+}
+
+function ensureApproxUser_(byKey, email, id, name, role, extras) {
+  var key = clickUpUserActivityKey_(email, id);
+  if (!key) return null;
+  extras = extras || {};
+  if (!byKey[key]) {
+    byKey[key] = {
+      user_id: sanitizeText_(id),
+      nome: sanitizeText_(name),
+      email: sanitizeText_(email).toLowerCase(),
+      role: sanitizeText_(role),
+      clickup_last_active: extras.clickup_last_active || '',
+      date_joined: extras.date_joined || '',
+      date_invited: extras.date_invited || '',
+      total_eventos_periodo: 0,
+      total_acoes_periodo: 0,
+      tarefas_atribuidas: 0,
+      tarefas_concluidas_estimadas: 0,
+      tarefas_criadas_estimadas: 0,
+      tarefas_atualizadas_hoje: 0,
+      tarefas_concluidas_hoje: 0,
+      tarefas_criadas_hoje: 0,
+      projetos_associados: 0,
+      _projects: {},
+      _first_action: 0,
+      _last_action: 0,
+      _first_created: 0,
+      _first_action_ctx: null,
+      _last_action_ctx: null,
+      _first_created_ctx: null,
+      _today_actions: []
+    };
+  }
+  var item = byKey[key];
+  if (!item.user_id && id) item.user_id = sanitizeText_(id);
+  if (!item.nome && name) item.nome = sanitizeText_(name);
+  if (!item.email && email) item.email = sanitizeText_(email).toLowerCase();
+  if (!item.role && role) item.role = sanitizeText_(role);
+  if (!item.clickup_last_active && extras.clickup_last_active) item.clickup_last_active = extras.clickup_last_active;
+  if (!item.date_joined && extras.date_joined) item.date_joined = extras.date_joined;
+  if (!item.date_invited && extras.date_invited) item.date_invited = extras.date_invited;
+  return item;
+}
+
+function aggregateApproxTaskForUsers_(byKey, task, mapping, options) {
+  options = options || {};
+  task = task || {};
+  var count = 0;
+  var updated = Number(task.date_updated || 0);
+  var created = Number(task.date_created || 0);
+  var updatedInPeriod = updated && updated >= Number(options.start_ms || 0) && updated <= Number(options.end_ms || new Date().getTime());
+  var createdInPeriod = created && created >= Number(options.start_ms || 0) && created <= Number(options.end_ms || new Date().getTime());
+  var updatedToday = updated && updated >= Number(options.day_start_ms || 0) && updated <= Number(options.day_end_ms || 0);
+  var createdToday = created && created >= Number(options.day_start_ms || 0) && created <= Number(options.day_end_ms || 0);
+  var done = isClosedStatus_(task.status && (task.status.status || task.status.type || task.status.label) || '');
+  var projectKey = sanitizeText_(mapping.project_key || mapping.cliente || '');
+  var context = buildApproxTaskContext_(task, mapping);
+  var seen = {};
+
+  (task.assignees || []).forEach(function(user) {
+    var item = ensureApproxUser_(
+      byKey,
+      user && user.email,
+      user && user.id,
+      user && (user.username || user.name || user.email),
+      user && (user.role || user.role_key),
+      {}
+    );
+    if (!item) return;
+    var key = clickUpUserActivityKey_(item.email, item.user_id);
+    if (seen[key]) return;
+    seen[key] = true;
+    item.tarefas_atribuidas += 1;
+    if (updatedInPeriod || createdInPeriod) {
+      item.total_eventos_periodo += 1;
+      item.total_acoes_periodo += 1;
+    }
+    if (done) item.tarefas_concluidas_estimadas += 1;
+    if (updatedToday) item.tarefas_atualizadas_hoje += 1;
+    if (done && updatedToday) item.tarefas_concluidas_hoje += 1;
+    if (createdToday) item.tarefas_criadas_hoje += 1;
+    if (updatedToday || createdToday) {
+      addApproxTodayAction_(item, task, mapping, context, {
+        updated: !!updatedToday,
+        created: !!createdToday,
+        completed: !!(done && updatedToday),
+        timestamp: updated || created
+      });
+    }
+    if (projectKey) item._projects[projectKey] = true;
+    if (created && (!item._first_created || created < item._first_created)) {
+      item._first_created = created;
+      item._first_created_ctx = context;
+    }
+    if (updated && (!item._first_action || updated < item._first_action)) {
+      item._first_action = updated;
+      item._first_action_ctx = context;
+    }
+    if (updated && updated > item._last_action) {
+      item._last_action = updated;
+      item._last_action_ctx = context;
+    }
+    count += 1;
+  });
+
+  var creator = task.creator || task.created_by || null;
+  if (creator) {
+    var creatorItem = ensureApproxUser_(
+      byKey,
+      creator.email,
+      creator.id,
+      creator.username || creator.name || creator.email,
+      creator.role || creator.role_key,
+      {}
+    );
+    if (creatorItem) {
+      creatorItem.tarefas_criadas_estimadas += 1;
+      if (createdToday) creatorItem.tarefas_criadas_hoje += 1;
+      if (updatedToday) creatorItem.tarefas_atualizadas_hoje += 1;
+      if (createdToday || updatedToday) {
+        addApproxTodayAction_(creatorItem, task, mapping, context, {
+          updated: !!updatedToday,
+          created: !!createdToday,
+          completed: false,
+          timestamp: created || updated
+        });
+      }
+      if (updatedInPeriod || createdInPeriod) {
+        creatorItem.total_eventos_periodo += 1;
+        creatorItem.total_acoes_periodo += 1;
+      }
+      if (projectKey) creatorItem._projects[projectKey] = true;
+      if (created && (!creatorItem._first_created || created < creatorItem._first_created)) {
+        creatorItem._first_created = created;
+        creatorItem._first_created_ctx = context;
+      }
+      if (updated && updated > creatorItem._last_action) {
+        creatorItem._last_action = updated;
+        creatorItem._last_action_ctx = context;
+      }
+      count += 1;
+    }
+  }
+
+  return count;
+}
+
+function addApproxTodayAction_(item, task, mapping, context, flags) {
+  flags = flags || {};
+  if (!item._today_actions) item._today_actions = [];
+  var tipo = flags.completed ? 'Concluida' : flags.created ? 'Criada' : 'Atualizada';
+  var taskId = sanitizeText_(task && task.id);
+  var key = [taskId, tipo, flags.timestamp || ''].join('|');
+  if (item._today_actions.some(function(action) { return action.key === key; })) return;
+  item._today_actions.push({
+    key: key,
+    horario: flags.timestamp ? new Date(flags.timestamp).toISOString() : '',
+    tipo: tipo,
+    projeto: sanitizeText_(mapping && mapping.cliente || mapping && mapping.project_key || ''),
+    item_tipo: isMilestoneTask_(task || {}) ? 'Marco' : 'Task',
+    item_nome: sanitizeText_(task && task.name || ''),
+    lista: sanitizeText_(task && task.list && task.list.name || ''),
+    link: context && context.link || '',
+    contexto: context && context.contexto || ''
+  });
+}
+
+function buildApproxTaskContext_(task, mapping) {
+  task = task || {};
+  mapping = mapping || {};
+  var taskId = sanitizeText_(task.id);
+  var projectName = sanitizeText_(mapping.cliente || mapping.project_key || '');
+  var itemName = sanitizeText_(task.name || '');
+  var typeName = isMilestoneTask_(task) ? 'Marco' : 'Task';
+  var listName = sanitizeText_(task.list && task.list.name || '');
+  var link =
+    sanitizeText_(task.url || task.permalink || task.link || task.html_url) ||
+    (taskId ? ('https://app.clickup.com/' + getClickUpWorkspaceId_() + '/t/' + taskId) : '') ||
+    sanitizeText_(mapping.project_url);
+  return {
+    link: link,
+    contexto: [projectName, typeName + ': ' + itemName, listName ? ('Lista: ' + listName) : ''].filter(function(part) {
+      return !!sanitizeText_(part);
+    }).join(' | ')
+  };
+}
+
+function getClickUpWorkspaceId_() {
+  return normalizeClickUpId_(getScriptProperty_('CLICKUP_TEAM_ID', '')) || normalizeClickUpId_(CLICKUP_DEFAULT_WORKSPACE_ID);
+}
+
+function fetchClickUpAuditEvents_(workspaceId, options) {
+  options = options || {};
+  var applicabilities = options.applicabilities || [];
+  var maxEvents = Math.max(1, Math.min(Number(options.max_events || 2000), 10000));
+  var pageRows = Math.max(1, Math.min(Number(options.page_rows || 100), 500));
+  var maxPages = Math.max(1, Math.min(Number(options.max_pages || 8), 50));
+  var events = [];
+  var warnings = [];
+  var seen = {};
+
+  applicabilities.forEach(function(applicability) {
+    var pageTimestamp = Number(options.end_ms || new Date().getTime());
+    for (var page = 0; page < maxPages && events.length < maxEvents; page++) {
+      var body = {
+        applicability: applicability,
+        filter: {
+          workspaceId: String(workspaceId),
+          startTime: Number(options.start_ms),
+          endTime: Number(options.end_ms)
+        },
+        pagination: {
+          pageRows: pageRows,
+          pageTimestamp: pageTimestamp,
+          pageDirection: 'before'
+        }
+      };
+      var response;
+      try {
+        response = clickupRequestAbsolute_('post', 'https://api.clickup.com/api/v3/workspaces/' + workspaceId + '/auditlogs', body);
+      } catch (error) {
+        warnings.push(applicability + ': ' + simplifyErrorMessage_(error));
+        break;
+      }
+      var rows = extractClickUpAuditRows_(response);
+      if (!rows.length) break;
+
+      var oldestTs = pageTimestamp;
+      rows.forEach(function(row) {
+        var event = normalizeClickUpAuditEvent_(row, applicability);
+        if (!event.timestamp_ms) return;
+        var key = event.id || [event.timestamp_ms, event.user_email, event.event_type, event.title, event.entity_id].join('|');
+        if (seen[key]) return;
+        seen[key] = true;
+        events.push(event);
+        if (event.timestamp_ms < oldestTs) oldestTs = event.timestamp_ms;
+      });
+
+      if (rows.length < pageRows || oldestTs >= pageTimestamp) break;
+      pageTimestamp = oldestTs - 1;
+    }
+  });
+
+  events.sort(function(a, b) { return a.timestamp_ms - b.timestamp_ms; });
+  return { events: events.slice(0, maxEvents), warnings: warnings };
+}
+
+function buildClickUpUserActivitySummary_(members, events, meta) {
+  var byKey = {};
+  (members || []).forEach(function(member) {
+    var key = clickUpUserActivityKey_(member.email, member.id);
+    if (!key) return;
+    byKey[key] = {
+      user_id: member.id,
+      nome: member.name,
+      email: member.email,
+      role: member.role,
+      clickup_last_active: member.last_active,
+      date_joined: member.date_joined,
+      date_invited: member.date_invited,
+      primeiro_login: '',
+      ultimo_login: '',
+      primeiro_evento: '',
+      ultimo_evento: '',
+      primeira_acao: '',
+      ultima_acao: '',
+      tipo_primeira_acao: '',
+      tipo_ultima_acao: '',
+      total_eventos_periodo: 0,
+      total_acoes_periodo: 0
+    };
+  });
+
+  (events || []).forEach(function(event) {
+    var key = clickUpUserActivityKey_(event.user_email, event.user_id);
+    if (!key) return;
+    if (!byKey[key]) {
+      byKey[key] = {
+        user_id: event.user_id,
+        nome: event.user_name,
+        email: event.user_email,
+        role: event.user_role,
+        clickup_last_active: '',
+        date_joined: '',
+        date_invited: '',
+        primeiro_login: '',
+        ultimo_login: '',
+        primeiro_evento: '',
+        ultimo_evento: '',
+        primeira_acao: '',
+        ultima_acao: '',
+        tipo_primeira_acao: '',
+        tipo_ultima_acao: '',
+        total_eventos_periodo: 0,
+        total_acoes_periodo: 0
+      };
+    }
+    var item = byKey[key];
+    if (!item.nome) item.nome = event.user_name;
+    if (!item.email) item.email = event.user_email;
+    if (!item.role) item.role = event.user_role;
+    item.total_eventos_periodo += 1;
+    item.primeiro_evento = earlierIso_(item.primeiro_evento, event.timestamp);
+    item.ultimo_evento = laterIso_(item.ultimo_evento, event.timestamp);
+    if (isClickUpLoginEvent_(event)) {
+      item.primeiro_login = earlierIso_(item.primeiro_login, event.timestamp);
+      item.ultimo_login = laterIso_(item.ultimo_login, event.timestamp);
+    }
+    if (isClickUpUsageActionEvent_(event)) {
+      item.total_acoes_periodo += 1;
+      if (!item.primeira_acao || event.timestamp < item.primeira_acao) {
+        item.primeira_acao = event.timestamp;
+        item.tipo_primeira_acao = event.title || event.event_type;
+      }
+      if (!item.ultima_acao || event.timestamp > item.ultima_acao) {
+        item.ultima_acao = event.timestamp;
+        item.tipo_ultima_acao = event.title || event.event_type;
+      }
+    }
+  });
+
+  var rows = Object.keys(byKey).map(function(key) {
+    var item = byKey[key];
+    item.periodo_inicio = new Date(meta.start_ms).toISOString();
+    item.periodo_fim = new Date(meta.end_ms).toISOString();
+    item.sincronizado_em = meta.fetched_at.toISOString();
+    item.dias_sem_acao = item.ultima_acao ? daysBetween_(new Date(item.ultima_acao), meta.fetched_at) : '';
+    item.dias_sem_login = item.ultimo_login ? daysBetween_(new Date(item.ultimo_login), meta.fetched_at) : '';
+    return item;
+  });
+  rows.sort(function(a, b) {
+    var aLast = a.ultima_acao || a.ultimo_login || a.clickup_last_active || '';
+    var bLast = b.ultima_acao || b.ultimo_login || b.clickup_last_active || '';
+    return String(bLast).localeCompare(String(aLast));
+  });
+  return { rows: rows };
+}
+
+function writeClickUpUserActivitySummary_(rows) {
+  var sheet = getClickUpUserActivitySheet_();
+  var headers = getClickUpUserActivityHeaders_();
+  sheet.clearContents();
+  sheet.getRange(1, 1, 1, headers.length).setValues([headers]);
+  if (rows && rows.length) {
+    sheet.getRange(2, 1, rows.length, headers.length).setValues(rows.map(function(item) {
+      return headers.map(function(header) {
+        return item[header] === undefined ? '' : item[header];
+      });
+    }));
+  }
+  sheet.setFrozenRows(1);
+  sheet.autoResizeColumns(1, headers.length);
+}
+
+function writeClickUpAuditLogRows_(events, meta) {
+  var sheet = getClickUpAuditLogSheet_();
+  var headers = getClickUpAuditLogHeaders_();
+  sheet.clearContents();
+  sheet.getRange(1, 1, 1, headers.length).setValues([headers]);
+  if (events && events.length) {
+    sheet.getRange(2, 1, events.length, headers.length).setValues(events.map(function(event) {
+      var item = {
+        sincronizado_em: meta.fetched_at.toISOString(),
+        periodo_inicio: new Date(meta.start_ms).toISOString(),
+        periodo_fim: new Date(meta.end_ms).toISOString(),
+        timestamp: event.timestamp,
+        applicability: event.applicability,
+        user_id: event.user_id,
+        user_name: event.user_name,
+        user_email: event.user_email,
+        user_role: event.user_role,
+        event_type: event.event_type,
+        title: event.title,
+        event_status: event.event_status,
+        entity_id: event.entity_id,
+        raw_json: JSON.stringify(event.raw || {})
+      };
+      return headers.map(function(header) {
+        return item[header] === undefined ? '' : item[header];
+      });
+    }));
+  }
+  sheet.setFrozenRows(1);
+  sheet.autoResizeColumns(1, Math.min(headers.length, 12));
+}
+
+function getClickUpUserActivityHeaders_() {
+  return [
+    'sincronizado_em',
+    'periodo_inicio',
+    'periodo_fim',
+    'user_id',
+    'nome',
+    'email',
+    'role',
+    'clickup_last_active',
+    'date_joined',
+    'date_invited',
+    'primeiro_login',
+    'ultimo_login',
+    'primeiro_evento',
+    'ultimo_evento',
+    'primeira_acao',
+    'tipo_primeira_acao',
+    'primeira_acao_contexto',
+    'primeira_acao_link',
+    'ultima_acao',
+    'tipo_ultima_acao',
+    'ultima_acao_contexto',
+    'ultima_acao_link',
+    'dias_sem_login',
+    'dias_sem_acao',
+    'total_eventos_periodo',
+    'total_acoes_periodo',
+    'tarefas_atribuidas',
+    'tarefas_concluidas_estimadas',
+    'tarefas_criadas_estimadas',
+    'tarefas_atualizadas_hoje',
+    'tarefas_concluidas_hoje',
+    'tarefas_criadas_hoje',
+    'atividades_hoje_json',
+    'projetos_associados',
+    'modo_controle'
+  ];
+}
+
+function getClickUpAuditLogHeaders_() {
+  return [
+    'sincronizado_em',
+    'periodo_inicio',
+    'periodo_fim',
+    'timestamp',
+    'applicability',
+    'user_id',
+    'user_name',
+    'user_email',
+    'user_role',
+    'event_type',
+    'title',
+    'event_status',
+    'entity_id',
+    'raw_json'
+  ];
+}
+
 function getClickUpInventoryHeaders_() {
   return [
     'mes', 'cliente', 'consultor', 'status', 'project_key', 'project_url', 'view_id', 'list_id', 'folder_id', 'space_id',
@@ -1148,6 +1867,185 @@ function clickupRequest_(method, path, body) {
   }
 
   throw lastError || new Error('Falha desconhecida ao consultar o ClickUp.');
+}
+
+function clickupRequestAbsolute_(method, url, body) {
+  var token = getScriptProperty_('CLICKUP_TOKEN');
+  if (!token) throw new Error('Missing CLICKUP_TOKEN script property');
+  var options = {
+    method: String(method || 'get').toUpperCase(),
+    muteHttpExceptions: true,
+    headers: {
+      Authorization: token,
+      Accept: 'application/json',
+      'Content-Type': 'application/json'
+    }
+  };
+  if (body) options.payload = JSON.stringify(body);
+
+  var maxAttempts = 3;
+  var lastError = null;
+  for (var attempt = 1; attempt <= maxAttempts; attempt++) {
+    try {
+      var response = UrlFetchApp.fetch(url, options);
+      var code = response.getResponseCode();
+      var text = response.getContentText() || '{}';
+      if (code >= 200 && code < 300) {
+        return text ? JSON.parse(text) : {};
+      }
+      lastError = new Error('ClickUp API error ' + code + ': ' + text);
+      if (attempt >= maxAttempts || !isRecoverableClickUpHttpError_(code, text)) {
+        throw lastError;
+      }
+    } catch (error) {
+      lastError = error;
+      if (attempt >= maxAttempts || !isRecoverableClickUpTransportError_(error)) {
+        throw error;
+      }
+    }
+    Utilities.sleep(500 * attempt);
+  }
+  throw lastError || new Error('Falha desconhecida ao consultar o ClickUp.');
+}
+
+function getClickUpAuditApplicabilities_(value) {
+  var raw = sanitizeText_(value || getScriptProperty_('CLICKUP_AUDIT_APPLICABILITIES', 'auth-and-security,user-activity,hierarchy-activity,custom-fields'));
+  return raw.split(',').map(function(item) {
+    return sanitizeText_(item);
+  }).filter(function(item, index, arr) {
+    return item && arr.indexOf(item) === index;
+  });
+}
+
+function extractClickUpAuditRows_(response) {
+  if (!response) return [];
+  if (Array.isArray(response)) return response;
+  var directKeys = ['data', 'events', 'logs', 'audit_logs', 'items', 'results', 'rows'];
+  for (var i = 0; i < directKeys.length; i++) {
+    if (Array.isArray(response[directKeys[i]])) return response[directKeys[i]];
+  }
+  var best = [];
+  Object.keys(response).forEach(function(key) {
+    if (Array.isArray(response[key]) && response[key].length > best.length) best = response[key];
+  });
+  return best;
+}
+
+function normalizeClickUpAuditEvent_(row, applicability) {
+  row = row || {};
+  var timestampValue = deepFindFirst_(row, ['startTime', 'start_time', 'timestamp', 'time', 'date', 'created_at', 'createdAt', 'endTime']);
+  var timestamp = normalizeClickUpEventDate_(timestampValue);
+  var eventType = sanitizeText_(deepFindFirst_(row, ['eventType', 'event_type', 'type', 'action']));
+  var title = sanitizeText_(deepFindFirst_(row, ['title', 'event', 'name', 'actionName']));
+  return {
+    id: sanitizeText_(deepFindFirst_(row, ['id', 'eventId', 'event_id', 'uuid'])),
+    applicability: applicability,
+    timestamp: timestamp,
+    timestamp_ms: timestamp ? new Date(timestamp).getTime() : 0,
+    user_id: sanitizeText_(deepFindFirst_(row, ['userId', 'user_id', 'actorId', 'actor_id'])),
+    user_name: sanitizeText_(deepFindFirst_(row, ['userName', 'user_name', 'username', 'actorName', 'actor_name'])),
+    user_email: sanitizeText_(deepFindFirst_(row, ['userEmail', 'user_email', 'email', 'actorEmail', 'actor_email'])).toLowerCase(),
+    user_role: sanitizeText_(deepFindFirst_(row, ['userRole', 'user_role', 'role'])),
+    event_type: eventType,
+    title: title || eventType,
+    event_status: sanitizeText_(deepFindFirst_(row, ['eventStatus', 'event_status', 'status'])),
+    entity_id: sanitizeText_(deepFindFirst_(row, ['entityId', 'entity_id', 'taskId', 'task_id', 'listId', 'list_id', 'folderId', 'folder_id'])),
+    raw: row
+  };
+}
+
+function deepFindFirst_(value, keys) {
+  var keyMap = {};
+  (keys || []).forEach(function(key) {
+    keyMap[String(key).toLowerCase()] = true;
+  });
+  return deepFindFirstInValue_(value, keyMap, 0);
+}
+
+function deepFindFirstInValue_(value, keyMap, depth) {
+  if (value === null || value === undefined || depth > 6) return '';
+  if (Array.isArray(value)) {
+    for (var i = 0; i < value.length; i++) {
+      var fromArray = deepFindFirstInValue_(value[i], keyMap, depth + 1);
+      if (fromArray !== '' && fromArray !== null && fromArray !== undefined) return fromArray;
+    }
+    return '';
+  }
+  if (typeof value !== 'object') return '';
+  var keys = Object.keys(value);
+  for (var j = 0; j < keys.length; j++) {
+    if (keyMap[String(keys[j]).toLowerCase()]) return value[keys[j]];
+  }
+  for (var k = 0; k < keys.length; k++) {
+    var found = deepFindFirstInValue_(value[keys[k]], keyMap, depth + 1);
+    if (found !== '' && found !== null && found !== undefined) return found;
+  }
+  return '';
+}
+
+function normalizeClickUpEventDate_(value) {
+  if (value === null || value === undefined || value === '') return '';
+  if (value instanceof Date) return value.toISOString();
+  if (typeof value === 'number' || /^\d+$/.test(String(value))) {
+    var n = Number(value);
+    if (!n) return '';
+    if (n < 10000000000) n = n * 1000;
+    return new Date(n).toISOString();
+  }
+  var date = new Date(String(value));
+  return isNaN(date.getTime()) ? String(value) : date.toISOString();
+}
+
+function parseClickUpAuditTimeParam_(value, fallback) {
+  if (value === null || value === undefined || value === '') return fallback;
+  if (typeof value === 'number' || /^\d+$/.test(String(value))) {
+    var n = Number(value);
+    return n < 10000000000 ? n * 1000 : n;
+  }
+  var date = new Date(String(value));
+  if (isNaN(date.getTime())) return fallback;
+  return date.getTime();
+}
+
+function clickUpUserActivityKey_(email, id) {
+  email = sanitizeText_(email).toLowerCase();
+  id = sanitizeText_(id);
+  return email || (id ? 'id:' + id : '');
+}
+
+function isClickUpLoginEvent_(event) {
+  var text = normalizeKey_((event.event_type || '') + ' ' + (event.title || ''));
+  return text.indexOf('USER_LOGIN') >= 0 || /\bLOGIN\b/.test(text);
+}
+
+function isClickUpUsageActionEvent_(event) {
+  var text = normalizeKey_((event.event_type || '') + ' ' + (event.title || ''));
+  if (!text) return false;
+  if (text.indexOf('USER_LOGIN') >= 0 || text.indexOf('USER_LOGOUT') >= 0) return false;
+  if (/\bLOGIN\b/.test(text) || /\bLOGOUT\b/.test(text)) return false;
+  return true;
+}
+
+function earlierIso_(current, candidate) {
+  if (!candidate) return current || '';
+  if (!current) return candidate;
+  return new Date(candidate).getTime() < new Date(current).getTime() ? candidate : current;
+}
+
+function laterIso_(current, candidate) {
+  if (!candidate) return current || '';
+  if (!current) return candidate;
+  return new Date(candidate).getTime() > new Date(current).getTime() ? candidate : current;
+}
+
+function daysBetween_(fromDate, toDate) {
+  if (!fromDate || isNaN(fromDate.getTime())) return '';
+  return Math.floor((toDate.getTime() - fromDate.getTime()) / (24 * 60 * 60 * 1000));
+}
+
+function startOfDayMillis_(date) {
+  date = date instanceof Date ? date : new Date(date || new Date());
+  return new Date(date.getFullYear(), date.getMonth(), date.getDate()).getTime();
 }
 
 function loadProjectMappings_() {
@@ -1422,6 +2320,28 @@ function getClickUpInventorySheet_() {
   return sheet;
 }
 
+function getClickUpUserActivitySheetName_() {
+  return getScriptProperty_('CLICKUP_USER_ACTIVITY_SHEET', 'CLICKUP_USER_ACTIVITY');
+}
+
+function getClickUpUserActivitySheet_() {
+  var ss = SpreadsheetApp.openById(getScriptProperty_('SHEET_ID'));
+  var sheet = ss.getSheetByName(getClickUpUserActivitySheetName_()) || ss.insertSheet(getClickUpUserActivitySheetName_());
+  ensureHeaders_(sheet, getClickUpUserActivityHeaders_());
+  return sheet;
+}
+
+function getClickUpAuditLogSheetName_() {
+  return getScriptProperty_('CLICKUP_AUDIT_LOG_SHEET', 'CLICKUP_AUDIT_LOGS');
+}
+
+function getClickUpAuditLogSheet_() {
+  var ss = SpreadsheetApp.openById(getScriptProperty_('SHEET_ID'));
+  var sheet = ss.getSheetByName(getClickUpAuditLogSheetName_()) || ss.insertSheet(getClickUpAuditLogSheetName_());
+  ensureHeaders_(sheet, getClickUpAuditLogHeaders_());
+  return sheet;
+}
+
 function getOrCreateSheet_(name) {
   var ss = SpreadsheetApp.openById(getScriptProperty_('SHEET_ID'));
   return ss.getSheetByName(name) || ss.insertSheet(name);
@@ -1658,25 +2578,8 @@ function normalizePanelRole_(role) {
   return 'user';
 }
 
-function userHasFullProjectAccess_(user) {
-  var role = normalizePanelRole_(user && user.role);
-  return role === 'admin' || role === 'coordenador';
-}
-
-function userMatchesConsultor_(user, consultor) {
-  if (!user) return false;
-  if (userHasFullProjectAccess_(user)) return true;
-  var target = normalizeKey_(consultor);
-  if (!target) return false;
-  var name = normalizeKey_(user.name);
-  var username = normalizeKey_(user.username);
-  return (name && (target === name || target.indexOf(name) >= 0 || name.indexOf(target) >= 0)) ||
-    (username && (target === username || target.indexOf(username) >= 0 || username.indexOf(target) >= 0));
-}
-
 function canUserAccessProjectItem_(user, item) {
-  if (userHasFullProjectAccess_(user)) return true;
-  return userMatchesConsultor_(user, item && item.consultor);
+  return !!user;
 }
 
 function findUserRow_(username) {
@@ -1793,6 +2696,46 @@ function createUser_(params) {
   };
 }
 
+function updateUserPassword_(found, passwordSha) {
+  if (!found) throw new Error('Usuario nao encontrado.');
+  passwordSha = sanitizeText_(passwordSha);
+  if (!passwordSha) throw new Error('Senha obrigatoria.');
+  var saltCol = found.header.indexOf('password_salt') + 1;
+  var hashCol = found.header.indexOf('password_hash') + 1;
+  if (!saltCol || !hashCol) throw new Error('Colunas password_salt/password_hash nao encontradas.');
+  var salt = makeAuthToken_().slice(0, 16);
+  found.sheet.getRange(found.row, saltCol).setValue(salt);
+  found.sheet.getRange(found.row, hashCol).setValue(hashPassword_(salt, passwordSha));
+}
+
+function changePassword_(params) {
+  params = params || {};
+  var sessionUser = requireUser_(params);
+  var username = sanitizeText_(sessionUser.username).toLowerCase();
+  var currentPasswordSha = sanitizeText_(params.current_password_sha);
+  var newPasswordSha = sanitizeText_(params.new_password_sha);
+  if (!currentPasswordSha || !newPasswordSha) throw new Error('Senha atual e nova senha sao obrigatorias.');
+  var found = findUserRow_(username);
+  if (!found) throw new Error('Usuario nao encontrado.');
+  var user = found.user;
+  var expected = hashPassword_(user.password_salt, currentPasswordSha);
+  if (expected !== String(user.password_hash || '')) throw new Error('Senha atual invalida.');
+  updateUserPassword_(found, newPasswordSha);
+  return { ok: true, username: username, changed: true };
+}
+
+function resetUserPassword_(params) {
+  params = params || {};
+  var admin = requireAdmin_(params);
+  var username = sanitizeText_(params.username).toLowerCase();
+  var newPasswordSha = sanitizeText_(params.new_password_sha);
+  if (!username || !newPasswordSha) throw new Error('Usuario e nova senha sao obrigatorios.');
+  var found = findUserRow_(username);
+  if (!found) throw new Error('Usuario nao encontrado.');
+  updateUserPassword_(found, newPasswordSha);
+  return { ok: true, username: username, changed: true, changed_by: admin.username };
+}
+
 function setUserEnabled_(params) {
   requireAdmin_(params);
   params = params || {};
@@ -1811,9 +2754,6 @@ function logProjectFollowup_(params) {
   var cliente = sanitizeText_(params.cliente);
   if (!cliente) throw new Error('cliente is required');
   var consultor = sanitizeText_(params.consultor);
-  if (!canUserAccessProjectItem_(user, { consultor: consultor })) {
-    throw new Error('Este usuario so pode registrar acompanhamentos da propria carteira.');
-  }
   var consideracao = sanitizeText_(params.consideracao || params.observacao);
   var proximaAcao = sanitizeText_(params.proxima_acao);
   if (!consideracao && !proximaAcao) throw new Error('consideracao or proxima_acao is required');
@@ -1924,7 +2864,6 @@ function getProjectFollowups_(params, limit) {
   var header = values[0];
   var rows = values.slice(1);
   var max = Math.max(1, Math.min(Number(limit || 1000), 5000));
-  var visibleProjectKeys = {};
   var visibleEntries = rows.map(function(row, index) {
     var item = rowToObject_(header, row);
     return {
@@ -1936,15 +2875,13 @@ function getProjectFollowups_(params, limit) {
   });
   var start = Math.max(0, visibleEntries.length - max);
   var followups = visibleEntries.slice(start).map(function(entry) {
-    var projectKey = sanitizeText_(entry.item.project_key).toUpperCase();
-    if (projectKey) visibleProjectKeys[projectKey] = true;
     return publicProjectFollowup_(entry.item, entry.row_number);
   }).reverse();
   return {
     ok: true,
     total: visibleEntries.length,
     followups: followups,
-    kanban_states: getProjectKanbanStates_(userHasFullProjectAccess_(user) ? null : visibleProjectKeys)
+    kanban_states: getProjectKanbanStates_(null)
   };
 }
 
@@ -1978,9 +2915,6 @@ function setProjectFollowupStatus_(params) {
   var sheet = getProjectFollowupSheet_();
   var found = findProjectFollowupRow_(sheet, followupId, rowNumber);
   if (!found) throw new Error('Acompanhamento nao encontrado.');
-  if (!canUserAccessProjectItem_(user, found.item)) {
-    throw new Error('Este usuario so pode atualizar acompanhamentos da propria carteira.');
-  }
   var status = normalizeFollowupStatus_(params.followup_status || params.status);
   var comment = sanitizeText_(params.status_comment || params.comment || params.comentario);
   var updatedAt = new Date();
@@ -2050,9 +2984,6 @@ function setProjectKanbanStage_(params) {
   var projectKey = sanitizeText_(params.project_key).toUpperCase();
   var cycleKey = sanitizeText_(params.cycle_key);
   if (!projectKey || !cycleKey) throw new Error('project_key and cycle_key are required');
-  if (!canUserAccessProjectItem_(user, { consultor: sanitizeText_(params.consultor) })) {
-    throw new Error('Este usuario so pode alterar o Kanban da propria carteira.');
-  }
   var stage = normalizeKanbanStage_(params.stage);
   var sheet = getProjectKanbanStateSheet_();
   var found = findProjectKanbanStateRow_(sheet, cycleKey, projectKey);
@@ -2068,18 +2999,13 @@ function setProjectKanbanStage_(params) {
   } else {
     sheet.appendRow(row);
   }
-  var allowedProjectKeys = null;
-  if (!userHasFullProjectAccess_(user)) {
-    allowedProjectKeys = {};
-    allowedProjectKeys[projectKey] = true;
-  }
   return {
     ok: true,
     saved: true,
     cycle_key: cycleKey,
     project_key: projectKey,
     stage: stage,
-    kanban_states: getProjectKanbanStates_(allowedProjectKeys)
+    kanban_states: getProjectKanbanStates_(null)
   };
 }
 
@@ -2277,6 +3203,9 @@ function simplifyErrorMessage_(error) {
     return 'CLICKUP_TOKEN invalido ou expirado nas propriedades do Apps Script.';
   }
   if (/ClickUp API error 403/i.test(message)) {
+    if (/auditlogs|audit logs|Enterprise Plan|Enterprise/i.test(message)) {
+      return 'O Audit Log do ClickUp exige Workspace Enterprise e permissao de owner/admin com acesso aos logs.';
+    }
     return 'O token nao tem permissao para acessar esta lista/view do ClickUp.';
   }
   if (/ClickUp API error 404/i.test(message)) {
