@@ -3451,7 +3451,7 @@ var UPDATE_DEVICE_KEY = 'gestcsi_update_device_id_v1';
 var UPDATE_ACTOR_KEY = 'gestcsi_update_actor_v1';
 var LAST_UPDATE_KEY = 'gestcsi_last_update_label_v1';
 var PANEL_CACHE_KEY = 'gestcsi_panel_cache_v1';
-var PANEL_APP_VERSION = '2026-05-19-order-v2';
+var PANEL_APP_VERSION = '2026-06-03-clickup-adoption-v1';
 var THEME_MODE_KEY = 'gestcsi_theme_mode_v1';
 var AUTH_SESSION_KEY = 'gestcsi_auth_session_v1';
 var AUTH_STATE = { token:'', user:null };
@@ -3811,6 +3811,14 @@ function chamarAppsScriptJsonp(action, params, timeoutMs) {
     };
     document.head.appendChild(script);
   });
+}
+function montarUrlComQuery(baseUrl, params) {
+  var query = params || {};
+  var sep = String(baseUrl || '').indexOf('?') >= 0 ? '&' : '?';
+  return String(baseUrl || '') + sep + Object.keys(query).map(function(key){
+    var value = query[key];
+    return encodeURIComponent(key) + '=' + encodeURIComponent(value === undefined || value === null ? '' : String(value));
+  }).join('&');
 }
 function registrarHistoricoGlobal(entry) {
   if (!entry) return;
@@ -9736,6 +9744,12 @@ function towerInitContractsMrr(payload) {
 }
 function loadContractsMrr() {
   if (CONTRACTS_MRR.promise) return CONTRACTS_MRR.promise;
+  if (!window.fetch) {
+    CONTRACTS_MRR.promise = Promise.resolve(CONTRACTS_MRR);
+    CONTRACTS_MRR.loaded = false;
+    console.warn('[MRR] Fetch indisponivel neste navegador; seguindo sem contracts_mrr.json.');
+    return CONTRACTS_MRR.promise;
+  }
   CONTRACTS_MRR.promise = fetch('contracts_mrr.json?v=20260423-1', {cache:'no-store'})
     .then(function(r){ if (!r.ok) throw new Error('contracts_mrr.json '+r.status); return r.json(); })
     .then(function(payload){
@@ -10090,11 +10104,251 @@ function gestaoRenderClickupProductivity(list, meta) {
   }).join('') || '<div class="tower-empty">Nenhum projeto com rastreio ClickUp encontrado.</div>';
   var legacyNote = b.legacy.projetos.length ? '' : '<div class="dashx-focus-note" style="margin-bottom:14px"><div><strong>Atenção:</strong> nenhum projeto histórico foi encontrado no inventário ClickUp.</div><div class="dashx-focus-hint">Rode no Sheets: ClickUp Sync > Importar projetos dos spaces históricos e depois Sincronizar inventário ClickUp.</div></div>';
   var erro = meta.erro ? '<div class="dashx-focus-note" style="margin-bottom:14px"><div><strong>Inventário indisponível:</strong> '+escapeHtml(meta.erro)+'</div><div class="dashx-focus-hint">A Gestão não usa a base mensal 2026 como fallback para evitar confusão no controle aprovado.</div></div>' : '';
-  return '<div class="dashx-shell"><div class="dashx-hero"><div class="dashx-hero-top"><div class="dashx-title-wrap"><div class="dashx-eyebrow">Gestão ClickUp</div><div class="dashx-title">Produtividade ClickUp por consultor</div><div class="dashx-sub">Visão isolada da Gestão: histórico vem do CLICKUP_INVENTARIO e 2026 vem da base mensal aprovada. Não altera Dashboard, Projetos ou Executivo.</div></div><div class="dashx-meta"><span class="dashx-meta-chip"><b>Fonte</b> Gestão isolada</span><span class="dashx-meta-chip"><b>Projetos</b> '+data.base.length+'</span></div></div></div>'+erro+legacyNote+'<div class="tower-kpis">'+cards+'</div><div class="dashx-stack">'+rows+'</div></div>';
+  return '<div class="dashx-shell"><div class="dashx-hero"><div class="dashx-hero-top"><div class="dashx-title-wrap"><div class="dashx-eyebrow">Gestão ClickUp</div><div class="dashx-title">Produtividade ClickUp por consultor</div><div class="dashx-sub">Visão isolada da Gestão: histórico vem do CLICKUP_INVENTARIO e 2026 vem da base mensal aprovada. Não altera Dashboard, Projetos ou Executivo.</div></div><div class="dashx-meta"><span class="dashx-meta-chip"><b>Fonte</b> Gestão isolada</span><span class="dashx-meta-chip"><b>Projetos</b> '+data.base.length+'</span></div></div></div>'+erro+legacyNote+'<div class="tower-kpis">'+cards+'</div>'+gestaoRenderClickupUserActivityShell()+'<div class="dashx-stack">'+rows+'</div></div>';
 }
 var GESTAO_CLICKUP_INVENTORY = null;
 var GESTAO_CLICKUP_INVENTORY_LOADING = null;
 var GESTAO_CLICKUP_VIEW_DATA = [];
+var GESTAO_CLICKUP_USER_ACTIVITY = null;
+var GESTAO_CLICKUP_USER_ACTIVITY_LOADING = null;
+var GESTAO_CLICKUP_ACTIVITY_DAY_KEY = '';
+function gestaoRenderClickupUserActivityShell() {
+  if (!AUTH_STATE.user || AUTH_STATE.user.role !== 'admin') {
+    return '<div class="dashx-focus-note" style="margin-bottom:14px"><div><strong>Uso dos usuários ClickUp.</strong> Esta visão fica disponível para administrador do painel.</div><div class="dashx-focus-hint">controle restrito</div></div>';
+  }
+  return '<div class="dashx-section" id="clickup-user-activity-section" style="margin-bottom:16px"><div class="dashx-section-head"><div><div class="dashx-section-kicker">Uso dos usuários</div><div class="dashx-section-title">Adoção do ClickUp</div><div class="dashx-section-sub">Uso estimado por tarefas, responsáveis, conclusões e datas de atualização.</div></div><div class="dashx-section-answer"><button type="button" class="dashx-mini-chip" onclick="return gestaoSyncClickUpUserActivity(this)">Gerar estimativa</button><button type="button" class="dashx-mini-chip" onclick="return gestaoReloadClickUpUserActivity(true)">Recarregar</button></div></div><div class="dashx-section-body" id="clickup-user-activity-content"><div class="tower-empty">Carregando uso dos usuários ClickUp...</div></div></div>';
+}
+function gestaoLoadClickUpUserActivity(force) {
+  if (!AUTH_STATE.user || AUTH_STATE.user.role !== 'admin') return Promise.resolve([]);
+  if (!force && GESTAO_CLICKUP_USER_ACTIVITY) return Promise.resolve(GESTAO_CLICKUP_USER_ACTIVITY);
+  if (!force && GESTAO_CLICKUP_USER_ACTIVITY_LOADING) return GESTAO_CLICKUP_USER_ACTIVITY_LOADING;
+  GESTAO_CLICKUP_USER_ACTIVITY_LOADING = chamarAppsScriptJsonp('getClickUpUserActivity', {auth_token:authTokenParam()}, 30000).then(function(resp) {
+    if (!resp || resp.ok === false) throw new Error((resp && (resp.error || resp.message)) || 'Apps Script nao retornou atividade ClickUp.');
+    var users = Array.isArray(resp.users) ? resp.users : [];
+    users._needsGenerate = !!(resp.needs_generate || resp.stale_schema);
+    GESTAO_CLICKUP_USER_ACTIVITY = users;
+    GESTAO_CLICKUP_USER_ACTIVITY_LOADING = null;
+    return users;
+  }).catch(function(error){
+    GESTAO_CLICKUP_USER_ACTIVITY_LOADING = null;
+    throw error;
+  });
+  return GESTAO_CLICKUP_USER_ACTIVITY_LOADING;
+}
+function gestaoActivityDate(value) {
+  if (!value) return null;
+  if (value instanceof Date) return isNaN(value.getTime()) ? null : value;
+  var text = String(value || '').trim();
+  var br = text.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})(?:\s+(\d{1,2}):(\d{2})(?::(\d{2}))?)?$/);
+  if (br) {
+    var bd = new Date(
+      Number(br[3]),
+      Number(br[2]) - 1,
+      Number(br[1]),
+      Number(br[4] || 0),
+      Number(br[5] || 0),
+      Number(br[6] || 0)
+    );
+    return isNaN(bd.getTime()) ? null : bd;
+  }
+  var d = new Date(text);
+  return isNaN(d.getTime()) ? null : d;
+}
+function gestaoActivityDateLabel(value) {
+  var d = gestaoActivityDate(value);
+  if (!d) return '-';
+  return d.toLocaleDateString('pt-BR')+' '+d.toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'});
+}
+function gestaoActivityDayKey(value) {
+  var d = gestaoActivityDate(value);
+  if (!d) return '';
+  return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
+}
+function gestaoActivityDays(value) {
+  var d = gestaoActivityDate(value);
+  if (!d) return null;
+  var now = new Date();
+  return Math.max(0, Math.floor((now.getTime() - d.getTime()) / 86400000));
+}
+function gestaoActivityLastSignal(user) {
+  user = user || {};
+  var candidates = [
+    user.clickup_last_active,
+    user.ultima_acao,
+    user.ultimo_evento,
+    user.primeira_acao
+  ].map(function(value) {
+    var d = gestaoActivityDate(value);
+    return d ? { value:value, ts:d.getTime() } : null;
+  }).filter(Boolean);
+  if (!candidates.length) return '';
+  candidates.sort(function(a,b){ return b.ts - a.ts; });
+  return candidates[0].value;
+}
+function gestaoActivityRiskClass(days) {
+  if (days === null || days === undefined || days === '') return 'neutral';
+  days = Number(days);
+  if (days <= 7) return 'good';
+  if (days <= 15) return 'warn';
+  return 'bad';
+}
+function gestaoActivityNum(value) {
+  var n = Number(value);
+  return isNaN(n) || !isFinite(n) ? 0 : n;
+}
+function gestaoActivityValidUrl(value) {
+  var text = String(value || '').trim();
+  return /^https?:\/\//i.test(text) ? text : '';
+}
+function gestaoActivitySourceCell(dateValue, typeValue, contextValue, linkValue) {
+  if (!dateValue) return '-';
+  var text = gestaoActivityDateLabel(dateValue)+' • '+escapeHtml(typeValue || '-');
+  var cleanContext = /^\d{4}-\d{2}-\d{2}T/i.test(String(contextValue || '')) ? '' : contextValue;
+  var cleanLink = gestaoActivityValidUrl(linkValue);
+  var context = cleanContext ? '<div class="dashx-list-sub">'+escapeHtml(cleanContext)+'</div>' : '';
+  var link = cleanLink ? '<div class="dashx-list-sub"><a class="project-link-btn" href="'+escapeHtml(cleanLink)+'" target="_blank" rel="noopener">Ver origem</a></div>' : '';
+  return text + context + link;
+}
+function gestaoUserDayActivities(user) {
+  var raw = user && user.atividades_hoje_json;
+  if (Array.isArray(raw)) return raw;
+  if (!raw) return [];
+  try {
+    var parsed = JSON.parse(String(raw));
+    return Array.isArray(parsed) ? parsed : [];
+  } catch(e) {
+    return [];
+  }
+}
+function gestaoUserDayActivitiesForDay(user, dayKey) {
+  user = user || {};
+  var actions = gestaoUserDayActivities(user);
+  if (actions.length) return actions;
+  var fallbackLast = user.ultima_acao || user.ultimo_evento || user.primeira_acao || user.clickup_last_active;
+  if (!fallbackLast || gestaoActivityDayKey(fallbackLast) !== dayKey) return [];
+  return [{
+    horario: fallbackLast,
+    tipo: user.tipo_ultima_acao || user.tipo_primeira_acao || 'Último sinal encontrado',
+    projeto: '',
+    item_tipo: '',
+    item_nome: user.ultima_acao_contexto || user.primeira_acao_contexto || 'Origem registrada',
+    lista: '',
+    link: user.ultima_acao_link || user.primeira_acao_link || '',
+    contexto: user.ultima_acao_contexto || user.primeira_acao_contexto || ''
+  }];
+}
+function gestaoOpenUserDayActivity(index) {
+  var users = Array.isArray(GESTAO_CLICKUP_USER_ACTIVITY) ? GESTAO_CLICKUP_USER_ACTIVITY : [];
+  var user = users[Number(index || 0)];
+  if (!user) return false;
+  var actions = gestaoUserDayActivitiesForDay(user, GESTAO_CLICKUP_ACTIVITY_DAY_KEY || gestaoActivityDayKey(new Date()));
+  var rows = actions.length ? actions.map(function(action) {
+    var link = gestaoActivityValidUrl(action.link);
+    return '<tr><td>'+gestaoActivityDateLabel(action.horario)+'</td><td><span class="dashx-score-pill neutral">'+escapeHtml(action.tipo || '-')+'</span></td><td><strong>'+escapeHtml(action.item_nome || '-')+'</strong><div class="dashx-list-sub">'+escapeHtml((action.projeto || '-')+' • '+(action.item_tipo || 'Item')+(action.lista ? ' • '+action.lista : ''))+'</div></td><td>'+(link ? '<a class="project-link-btn" href="'+escapeHtml(link)+'" target="_blank" rel="noopener">Abrir</a>' : '-')+'</td></tr>';
+  }).join('') : '<tr class="empty-row"><td colspan="4">Nenhuma movimentação registrada hoje para este usuário.</td></tr>';
+  var title = 'Movimento hoje — ' + (user.nome || user.email || 'Usuário');
+  var html = '<div class="dashx-focus-note"><div><strong>'+escapeHtml(user.nome || user.email || '-')+'</strong><br>Movimentações estimadas do dia, com base nas tasks retornadas pela API do ClickUp.</div><div class="dashx-focus-hint">'+actions.length+' item(ns)</div></div><div class="dashx-table-wrap" style="margin-top:12px"><table class="dashx-table"><thead><tr><th>Horário</th><th>Tipo</th><th>Origem</th><th>Ação</th></tr></thead><tbody>'+rows+'</tbody></table></div>';
+  dashOpenAuditModal(title, html);
+  return false;
+}
+window.gestaoOpenUserDayActivity = gestaoOpenUserDayActivity;
+function gestaoRenderClickUpUserActivity(users, meta) {
+  meta = meta || {};
+  users = Array.isArray(users) ? users : [];
+  if (meta.erro) {
+    if (/timeout/i.test(String(meta.erro || ''))) {
+      return '<div class="dashx-unavailable"><strong>Sem leitura pronta</strong><span>O Apps Script demorou para responder. Clique em “Sincronizar uso” para gerar a visão estimada por tarefas; depois o painel passa a carregar o resultado salvo.</span></div>';
+    }
+    return '<div class="dashx-unavailable"><strong>Atividade ClickUp indisponível</strong><span>'+escapeHtml(meta.erro)+'</span></div>';
+  }
+  if (!users.length) {
+    return '<div class="dashx-unavailable"><strong>Sem dados de uso ainda</strong><span>Clique em “Gerar estimativa” acima para criar a visão aproximada por tarefas.</span></div>';
+  }
+  var active7 = users.filter(function(u){ var d = gestaoActivityDays(gestaoActivityLastSignal(u)); return d !== null && d <= 7; }).length;
+  var stale15 = users.filter(function(u){ var d = gestaoActivityDays(gestaoActivityLastSignal(u)); return d === null || d > 15; }).length;
+  var estimatedMode = users.some(function(u){ return String(u.modo_controle || '') === 'estimado_por_tarefas'; });
+  var synced = users.map(function(u){ return u.sincronizado_em || ''; }).filter(Boolean).sort().slice(-1)[0] || '';
+  var todayKey = gestaoActivityDayKey(synced || new Date());
+  GESTAO_CLICKUP_ACTIVITY_DAY_KEY = todayKey;
+  var movedToday = users.filter(function(u){ return gestaoUserDayActivitiesForDay(u, todayKey).length > 0; }).length;
+  var notMovedToday = users.length - movedToday;
+  if (users._needsGenerate && !estimatedMode) {
+    return '<div class="dashx-unavailable"><strong>Base antiga detectada</strong><span>Essas linhas foram geradas antes do modo estimado por tarefas, por isso faltam links, aparecem campos vazios e os números podem ficar deslocados. Clique em “Gerar estimativa” para reescrever a base no formato correto.</span></div>';
+  }
+  var cards =
+    '<div class="dashx-top-grid" style="grid-template-columns:repeat(4,minmax(0,1fr));margin-bottom:14px">'+
+      '<div class="dashx-card good"><div class="dashx-card-label">Ativos em 7 dias</div><div class="dashx-card-value">'+active7+'</div><div class="dashx-card-note">'+(estimatedMode ? 'com tarefa atualizada recentemente' : 'com login, ação ou last active recente')+'</div></div>'+
+      '<div class="dashx-card warn"><div class="dashx-card-label">15+ dias sem sinal</div><div class="dashx-card-value">'+stale15+'</div><div class="dashx-card-note">sem atividade recente no controle</div></div>'+
+      '<div class="dashx-card neutral"><div class="dashx-card-label">Com movimento hoje</div><div class="dashx-card-value">'+movedToday+'</div><div class="dashx-card-note">última ação no dia da sync</div></div>'+
+      '<div class="dashx-card neutral"><div class="dashx-card-label">Sem movimento hoje</div><div class="dashx-card-value">'+notMovedToday+'</div><div class="dashx-card-note">última ação antes de hoje</div></div>'+
+    '</div>';
+  var sortedUsers = users.slice().sort(function(a,b){
+    return String(gestaoActivityLastSignal(b) || '').localeCompare(String(gestaoActivityLastSignal(a) || ''));
+  });
+  GESTAO_CLICKUP_USER_ACTIVITY = sortedUsers;
+  var rows = sortedUsers.map(function(u, idx){
+    var last = gestaoActivityLastSignal(u);
+    var days = gestaoActivityDays(last);
+    var cls = gestaoActivityRiskClass(days);
+    var label = days === null ? 'sem sinal' : (days+'d');
+    var fallbackLast = u.ultima_acao || u.ultimo_evento || u.primeira_acao || u.clickup_last_active;
+    var dayActions = gestaoUserDayActivitiesForDay(u, todayKey);
+    var movedTodayRow = dayActions.length > 0;
+    var firstAction = gestaoActivitySourceCell(u.primeira_acao, u.tipo_primeira_acao, u.primeira_acao_contexto, u.primeira_acao_link);
+    var lastAction = gestaoActivitySourceCell(fallbackLast, u.tipo_ultima_acao || u.tipo_primeira_acao || 'Último sinal encontrado', u.ultima_acao_contexto || u.primeira_acao_contexto, u.ultima_acao_link || u.primeira_acao_link);
+    var movedCell = movedTodayRow ? '<button type="button" class="dashx-score-pill action good" onclick="return gestaoOpenUserDayActivity('+idx+')">Sim ('+dayActions.length+')</button>' : '<span class="dashx-score-pill neutral">Não</span>';
+    return '<tr><td><strong>'+escapeHtml(u.nome || u.email || u.user_id || '-')+'</strong><div class="dashx-list-sub">'+escapeHtml(u.email || '-')+'</div></td>'+
+      '<td>'+gestaoActivityDateLabel(u.clickup_last_active)+'</td>'+
+      '<td>'+firstAction+'</td>'+
+      '<td>'+lastAction+'</td>'+
+      '<td><span class="dashx-score-pill '+cls+'">'+label+'</span></td>'+
+      '<td>'+movedCell+'</td>'+
+      '<td class="num">'+fn(gestaoActivityNum(u.projetos_associados))+'</td>'+
+      '</tr>';
+  }).join('');
+  var modeNote = estimatedMode ? 'Modo estimado: usa tarefas, responsáveis, criadores, status fechado e datas de atualização. Não mede login real.' : 'Modo Audit Log: usa eventos reais liberados pelo ClickUp.';
+  var numbersNote = estimatedMode ? 'Sem sinal usa o melhor sinal disponível entre last active e tarefas. Mov. hoje lista apenas tarefas/marcos movimentados hoje.' : 'Eventos e Ações vêm do período do Audit Log.';
+  return '<div class="dashx-focus-note" style="margin-bottom:14px"><div><strong>Controle de adoção.</strong> '+modeNote+' '+numbersNote+'</div><div class="dashx-focus-hint">última sync '+escapeHtml(gestaoActivityDateLabel(synced))+'</div></div>'+cards+'<div class="dashx-table-wrap"><table class="dashx-table"><thead><tr><th>Usuário</th><th>Last active</th><th>Primeira ação</th><th>Última ação</th><th>Sem sinal</th><th>Mov. hoje</th><th class="num">Projetos</th></tr></thead><tbody>'+rows+'</tbody></table></div>';
+}
+function gestaoReloadClickUpUserActivity(force) {
+  var box = document.getElementById('clickup-user-activity-content');
+  if (!box) return false;
+  if (!AUTH_STATE.user || AUTH_STATE.user.role !== 'admin') {
+    box.innerHTML = '<div class="tower-empty">Acesso restrito ao administrador.</div>';
+    return false;
+  }
+  box.innerHTML = '<div class="tower-empty">Carregando uso dos usuários ClickUp...</div>';
+  gestaoLoadClickUpUserActivity(!!force).then(function(users){
+    box.innerHTML = gestaoRenderClickUpUserActivity(users);
+  }).catch(function(error){
+    box.innerHTML = gestaoRenderClickUpUserActivity([], {erro:(error && error.message) || 'Erro ao carregar atividade'});
+  });
+  return false;
+}
+function gestaoSyncClickUpUserActivity(btn) {
+  if (!AUTH_STATE.user || AUTH_STATE.user.role !== 'admin') {
+    showToast('Somente admin pode sincronizar uso do ClickUp', 'err');
+    return false;
+  }
+  var original = btn ? btn.textContent : '';
+  if (btn) { btn.disabled = true; btn.textContent = 'Sincronizando...'; }
+  showToast('Sincronizando uso do ClickUp...', 'ok');
+  chamarAppsScriptJsonp('syncClickUpUserActivity', {auth_token:authTokenParam(), force_estimated:'1', max_projects:'30'}, 120000).then(function(resp){
+    if (!resp || resp.ok === false) throw new Error((resp && (resp.error || resp.message)) || 'Falha na sincronização');
+    GESTAO_CLICKUP_USER_ACTIVITY = null;
+    showToast('Uso ClickUp sincronizado: '+(resp.users || 0)+' usuários' + (resp.mode === 'estimated_from_tasks' ? ' (estimado por tarefas)' : ''), 'ok');
+    gestaoReloadClickUpUserActivity(true);
+  }).catch(function(error){
+    showToast((error && error.message) || 'Erro ao sincronizar uso ClickUp', 'err');
+    var box = document.getElementById('clickup-user-activity-content');
+    if (box) box.innerHTML = gestaoRenderClickUpUserActivity([], {erro:(error && error.message) || 'Erro ao sincronizar'});
+  }).finally(function(){
+    if (btn) { btn.disabled = false; btn.textContent = original || 'Sincronizar uso'; }
+  });
+  return false;
+}
+window.gestaoReloadClickUpUserActivity = gestaoReloadClickUpUserActivity;
+window.gestaoSyncClickUpUserActivity = gestaoSyncClickUpUserActivity;
 function gestaoNormalizeInventoryProject(p) {
   p = p || {};
   var out = Object.assign({}, p);
@@ -10217,10 +10471,12 @@ function initControlTower() {
     var viewData = gestaoBuildViewData(projetos);
     GESTAO_CLICKUP_VIEW_DATA = viewData;
     el.innerHTML = gestaoRenderClickupProductivity(viewData);
+    gestaoReloadClickUpUserActivity(false);
     hideSidebarBadge('n-tower');
   }).catch(function(error) {
     var msg = error && error.message ? error.message : String(error || 'Erro desconhecido');
     el.innerHTML = gestaoRenderClickupProductivity([], { erro: msg });
+    gestaoReloadClickUpUserActivity(false);
     hideSidebarBadge('n-tower');
   });
   return;
@@ -10608,14 +10864,17 @@ function abrirModalImportacaoResumo(keyPreferencial) {
   byId('clickup-import-close').onclick = function(){ fecharModalImportacaoResumo(); };
   byId('clickup-import-clear').onclick = function(){ byId('clickup-import-text').value = ''; };
   byId('clickup-import-paste').onclick = function(){
+    var textarea = byId('clickup-import-text');
     if (!navigator.clipboard || !navigator.clipboard.readText) {
-      showToast('Clipboard indisponivel neste navegador', 'err');
+      if (textarea) textarea.focus();
+      showToast('Cole manualmente com Ctrl+V/Cmd+V neste navegador', 'err');
       return;
     }
     navigator.clipboard.readText().then(function(txt){
-      byId('clickup-import-text').value = txt || '';
+      if (textarea) textarea.value = txt || '';
     }).catch(function(){
-      showToast('Nao foi possivel ler o clipboard', 'err');
+      if (textarea) textarea.focus();
+      showToast('Cole manualmente com Ctrl+V/Cmd+V neste navegador', 'err');
     });
   };
   byId('clickup-import-confirm').onclick = function(){
@@ -10778,7 +11037,6 @@ function loadGvizTableJsonp(url, timeoutMs) {
     var cbName = '_gviz_' + Date.now() + '_' + Math.floor(Math.random() * 10000);
     var script = document.createElement('script');
     var done = false;
-    var sep = url.indexOf('?') >= 0 ? '&' : '?';
     var timer = setTimeout(function(){
       if (done) return;
       done = true;
@@ -10795,7 +11053,7 @@ function loadGvizTableJsonp(url, timeoutMs) {
     };
 
     script.id = '_jsonp_' + cbName;
-    script.src = url + sep + 'tqx=' + encodeURIComponent('responseHandler:' + cbName);
+    script.src = montarUrlComQuery(url, {tqx:'responseHandler:' + cbName});
     script.onerror = function() {
       if (done) return;
       done = true;
@@ -11080,6 +11338,9 @@ function obterLinkProjeto(row, projeto) {
 function normalizarUrlProjeto(url) {
   var raw = String(url || '').trim();
   if (!raw) return '';
+  var hyperlink = raw.match(/HYPERLINK\(["']([^"']+)["']/i);
+  if (hyperlink && hyperlink[1]) raw = hyperlink[1].trim();
+  raw = raw.replace(/^["']|["']$/g, '').trim();
   if (!/^https?:\/\//i.test(raw)) raw = 'https://' + raw;
   return raw;
 }
@@ -11554,22 +11815,7 @@ function loadAll(tipoAtualizacao) {
     }
 
     console.log('[1B] Buscando origem via Apps Script');
-    var done  = false;
-    var cbName = '_cb' + Date.now();
-
-    var timer = setTimeout(function() {
-      if (done) return;
-      done = true;
-      _limparJsonp(cbName);
-      console.error('[INIT] Timeout na carga Apps Script (12s)');
-      finalizarFallback('timeout');
-    }, 12000);
-
-    window[cbName] = function(resp) {
-      if (done) return;
-      done = true;
-      clearTimeout(timer);
-      _limparJsonp(cbName);
+    chamarAppsScriptJsonp('getMonthlyProjects', {mes:'ALL'}, 12000).then(function(resp) {
       var qtd = resp && Array.isArray(resp.projetos) ? resp.projetos.length : 0;
       console.log('[2B] Resposta Apps Script recebida. Projetos brutos:', qtd);
       if (resp && resp.projetos && resp.projetos.length > 0) {
@@ -11577,20 +11823,10 @@ function loadAll(tipoAtualizacao) {
       } else {
         finalizarFallback('vazio');
       }
-    };
-
-    var s = document.createElement('script');
-    s.id  = '_jsonp_' + cbName;
-    s.src = APPS_SCRIPT_URL + '?mes=ALL&callback=' + cbName + '&_ts=' + Date.now();
-    s.onerror = function() {
-      if (done) return;
-      done = true;
-      clearTimeout(timer);
-      _limparJsonp(cbName);
-      console.error('[INIT] Erro de rede/JSONP ao carregar Apps Script');
-      finalizarFallback('erro');
-    };
-    document.head.appendChild(s);
+    }).catch(function(error) {
+      console.error('[INIT] Erro de rede/JSONP ao carregar Apps Script:', error);
+      finalizarFallback(error && /timeout/i.test(error.message || '') ? 'timeout' : 'erro');
+    });
   }
 
   try {
