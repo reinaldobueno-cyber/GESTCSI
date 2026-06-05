@@ -3451,7 +3451,7 @@ var UPDATE_DEVICE_KEY = 'gestcsi_update_device_id_v1';
 var UPDATE_ACTOR_KEY = 'gestcsi_update_actor_v1';
 var LAST_UPDATE_KEY = 'gestcsi_last_update_label_v1';
 var PANEL_CACHE_KEY = 'gestcsi_panel_cache_v1';
-var PANEL_APP_VERSION = '2026-05-29-access-all-projects-v1';
+var PANEL_APP_VERSION = '2026-06-03-clickup-adoption-v1';
 var THEME_MODE_KEY = 'gestcsi_theme_mode_v1';
 var AUTH_SESSION_KEY = 'gestcsi_auth_session_v1';
 var AUTH_STATE = { token:'', user:null };
@@ -3524,19 +3524,29 @@ function normalizarPessoaPainel(value) {
     .trim();
 }
 function usuarioTemVisaoGeral() {
-  return !!AUTH_STATE.user;
+  var role = String((AUTH_STATE.user && AUTH_STATE.user.role) || '').toLowerCase();
+  return role === 'admin' || role === 'coordenador' || role === 'coordenadora' || role === 'coordinator';
 }
 function usuarioCombinaComConsultor(consultor) {
-  return !!AUTH_STATE.user;
+  if (!AUTH_STATE.user) return true;
+  if (usuarioTemVisaoGeral()) return true;
+  var alvo = normalizarPessoaPainel(consultor);
+  if (!alvo) return false;
+  var nome = normalizarPessoaPainel(AUTH_STATE.user.name);
+  var usuario = normalizarPessoaPainel(AUTH_STATE.user.username);
+  return (nome && (alvo === nome || alvo.indexOf(nome) >= 0 || nome.indexOf(alvo) >= 0)) ||
+    (usuario && (alvo === usuario || alvo.indexOf(usuario) >= 0 || usuario.indexOf(alvo) >= 0));
 }
 function usuarioPodeVerProjeto(p) {
-  return true;
+  if (!AUTH_STATE.user) return true;
+  if (usuarioTemVisaoGeral()) return true;
+  return usuarioCombinaComConsultor(p && p.consultor);
 }
 function projetosVisiveisParaUsuario(list) {
-  return list || [];
+  return (list || []).filter(usuarioPodeVerProjeto);
 }
 function rotuloEscopoUsuario() {
-  return 'Vis&atilde;o geral';
+  return usuarioTemVisaoGeral() ? 'Vis&atilde;o geral' : 'Minha carteira';
 }
 function sha256Hex(text) {
   var raw = new TextEncoder().encode(String(text || ''));
@@ -4953,12 +4963,6 @@ function initAdmin() {
     '<div class="acom-shell">'+
       '<div class="acom-hero"><div><div class="acom-kicker">Gerenciamento</div><div class="acom-title">Usu&aacute;rios do painel</div><div class="acom-sub">Somente administrador cadastra, ativa e desativa acessos. O nome do usu&aacute;rio logado vira o respons&aacute;vel dos acompanhamentos.</div></div><div class="acom-hero-meta"><span class="acom-chip"><b>Admin</b> '+escapeHtml(AUTH_STATE.user.name || AUTH_STATE.user.username)+'</span></div></div>'+
       '<div class="admin-users">'+
-        '<div class="acom-panel"><div class="acom-panel-head"><div><div class="acom-panel-title">Minha senha</div><div class="acom-panel-note">Altere a senha do usu&aacute;rio logado</div></div></div><div class="acom-panel-body"><form class="auth-form" onsubmit="return alterarMinhaSenhaPainel(this)">'+
-          '<label>Senha atual</label><input name="current_password" type="password" autocomplete="current-password" required>'+
-          '<label>Nova senha</label><input name="new_password" type="password" autocomplete="new-password" minlength="4" required>'+
-          '<label>Confirmar nova senha</label><input name="confirm_password" type="password" autocomplete="new-password" minlength="4" required>'+
-          '<div class="auth-error" id="admin-password-error"></div><button class="auth-btn" type="submit">Alterar minha senha</button>'+
-        '</form></div></div>'+
         '<div class="acom-panel"><div class="acom-panel-head"><div><div class="acom-panel-title">Cadastrar usu&aacute;rio</div><div class="acom-panel-note">Defina a senha inicial</div></div></div><div class="acom-panel-body"><form class="auth-form" onsubmit="return criarUsuarioPainel(this)">'+
           '<label>Nome</label><input name="name" required>'+
           '<label>Usu&aacute;rio</label><input name="username" autocomplete="off" required>'+
@@ -4981,48 +4985,11 @@ function carregarUsuariosPainel() {
     if (note) note.textContent = users.length + ' usuário(s)';
     if (box) box.innerHTML = users.map(function(u){
       return '<div class="admin-user-row"><div><div class="admin-user-name">'+escapeHtml(u.name || u.username)+'</div><div class="admin-user-meta">'+escapeHtml(u.username)+' &bull; '+escapeHtml(u.role || 'user')+' &bull; '+(u.enabled ? 'ativo' : 'desativado')+'</div></div>'+
-        '<div style="display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end">'+
-          '<button class="admin-toggle" onclick="return redefinirSenhaUsuarioPainel(\''+jsQuote(u.username)+'\')">Redefinir senha</button>'+
-          '<button class="admin-toggle" onclick="return alternarUsuarioPainel(\''+jsQuote(u.username)+'\', '+(u.enabled ? 'false' : 'true')+')">'+(u.enabled ? 'Desativar' : 'Ativar')+'</button>'+
-        '</div></div>';
+        '<button class="admin-toggle" onclick="return alternarUsuarioPainel(\''+jsQuote(u.username)+'\', '+(u.enabled ? 'false' : 'true')+')">'+(u.enabled ? 'Desativar' : 'Ativar')+'</button></div>';
     }).join('') || '<div class="empty">Nenhum usu&aacute;rio cadastrado.</div>';
   }).catch(function(err){
     if (box) box.innerHTML = '<div class="empty">'+escapeHtml((err && err.message) || 'Erro ao carregar')+'</div>';
   });
-}
-function validarNovaSenhaPainel(password, confirmPassword) {
-  if (!password || String(password).length < 4) throw new Error('Use uma senha com pelo menos 4 caracteres.');
-  if (password !== confirmPassword) throw new Error('A confirmação da senha não confere.');
-}
-function alterarMinhaSenhaPainel(form) {
-  var err = document.getElementById('admin-password-error');
-  var btn = form && form.querySelector('button[type="submit"]');
-  var currentPassword = String(form.current_password.value || '');
-  var newPassword = String(form.new_password.value || '');
-  var confirmPassword = String(form.confirm_password.value || '');
-  if (err) err.textContent = '';
-  try { validarNovaSenhaPainel(newPassword, confirmPassword); } catch(error) {
-    if (err) err.textContent = error.message;
-    return false;
-  }
-  if (btn) { btn.disabled = true; btn.textContent = 'Alterando...'; }
-  Promise.all([sha256Hex(currentPassword), sha256Hex(newPassword)]).then(function(hashes){
-    return chamarAppsScriptJsonp('changePassword', {
-      auth_token: authTokenParam(),
-      current_password_sha: hashes[0],
-      new_password_sha: hashes[1]
-    }, 12000);
-  }).then(function(resp){
-    if (!resp || resp.ok === false) throw new Error((resp && (resp.error || resp.message)) || 'Alteração recusada');
-    form.reset();
-    showToast('Senha alterada. Entre novamente com a nova senha.', 'ok');
-    logoutPainel();
-  }).catch(function(error){
-    if (err) err.textContent = (error && error.message) || 'Erro ao alterar senha';
-  }).finally(function(){
-    if (btn) { btn.disabled = false; btn.textContent = 'Alterar minha senha'; }
-  });
-  return false;
 }
 function criarUsuarioPainel(form) {
   var err = document.getElementById('admin-create-error');
@@ -5055,36 +5022,8 @@ function alternarUsuarioPainel(username, enabled) {
   });
   return false;
 }
-function redefinirSenhaUsuarioPainel(username) {
-  if (!AUTH_STATE.user || AUTH_STATE.user.role !== 'admin') {
-    showToast('Somente admin pode redefinir senha', 'err');
-    return false;
-  }
-  var nova = window.prompt('Nova senha para ' + username + ':');
-  if (nova === null) return false;
-  var confirmar = window.prompt('Confirme a nova senha para ' + username + ':');
-  try { validarNovaSenhaPainel(String(nova || ''), String(confirmar || '')); } catch(error) {
-    showToast(error.message, 'err');
-    return false;
-  }
-  sha256Hex(String(nova || '')).then(function(passwordSha){
-    return chamarAppsScriptJsonp('resetUserPassword', {
-      auth_token: authTokenParam(),
-      username: username,
-      new_password_sha: passwordSha
-    }, 12000);
-  }).then(function(resp){
-    if (!resp || resp.ok === false) throw new Error((resp && (resp.error || resp.message)) || 'Redefinição recusada');
-    showToast('Senha redefinida para ' + username, 'ok');
-  }).catch(function(error){
-    showToast((error && error.message) || 'Erro ao redefinir senha', 'err');
-  });
-  return false;
-}
 window.criarUsuarioPainel = criarUsuarioPainel;
 window.alternarUsuarioPainel = alternarUsuarioPainel;
-window.alterarMinhaSenhaPainel = alterarMinhaSenhaPainel;
-window.redefinirSenhaUsuarioPainel = redefinirSenhaUsuarioPainel;
 
 function renderAll() {
   buildPeriodBar(); initDash(); initControlTower(); initAcomp(); initAdmin(); initAll(); initCons(); initVend(); initAvul(); initLog(); initPraz(); initAlert(); initExec();

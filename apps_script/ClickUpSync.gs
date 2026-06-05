@@ -132,12 +132,6 @@ function doGet(e) {
     if (action === 'setUserEnabled') {
       return jsonOutput_(setUserEnabled_(params), params.callback);
     }
-    if (action === 'changePassword') {
-      return jsonOutput_(changePassword_(params), params.callback);
-    }
-    if (action === 'resetUserPassword') {
-      return jsonOutput_(resetUserPassword_(params), params.callback);
-    }
     if (action === 'logProjectFollowup') {
       var followupResult = logProjectFollowup_(params);
       return jsonOutput_(followupResult, params.callback);
@@ -162,7 +156,7 @@ function doGet(e) {
     var payload = {
       ok: true,
       service: 'clickup-sync',
-      message: 'Use action=getMonthlyProjects|syncProject|syncAll|processDirty|validateConfig|getClickUpInventory|syncClickUpUserActivity|getClickUpUserActivity|logPanelUpdate|getPanelUpdateHistory|login|me|listUsers|createUser|setUserEnabled|changePassword|resetUserPassword|logProjectFollowup|getProjectFollowups|setProjectFollowupStatus|setProjectKanbanStage|deleteProjectFollowup'
+      message: 'Use action=getMonthlyProjects|syncProject|syncAll|processDirty|validateConfig|getClickUpInventory|syncClickUpUserActivity|getClickUpUserActivity|logPanelUpdate|getPanelUpdateHistory|login|me|listUsers|createUser|setUserEnabled|logProjectFollowup|getProjectFollowups|setProjectFollowupStatus|setProjectKanbanStage|deleteProjectFollowup'
     };
     return jsonOutput_(payload, params.callback);
   } catch (error) {
@@ -2578,8 +2572,25 @@ function normalizePanelRole_(role) {
   return 'user';
 }
 
+function userHasFullProjectAccess_(user) {
+  var role = normalizePanelRole_(user && user.role);
+  return role === 'admin' || role === 'coordenador';
+}
+
+function userMatchesConsultor_(user, consultor) {
+  if (!user) return false;
+  if (userHasFullProjectAccess_(user)) return true;
+  var target = normalizeKey_(consultor);
+  if (!target) return false;
+  var name = normalizeKey_(user.name);
+  var username = normalizeKey_(user.username);
+  return (name && (target === name || target.indexOf(name) >= 0 || name.indexOf(target) >= 0)) ||
+    (username && (target === username || target.indexOf(username) >= 0 || username.indexOf(target) >= 0));
+}
+
 function canUserAccessProjectItem_(user, item) {
-  return !!user;
+  if (userHasFullProjectAccess_(user)) return true;
+  return userMatchesConsultor_(user, item && item.consultor);
 }
 
 function findUserRow_(username) {
@@ -2696,46 +2707,6 @@ function createUser_(params) {
   };
 }
 
-function updateUserPassword_(found, passwordSha) {
-  if (!found) throw new Error('Usuario nao encontrado.');
-  passwordSha = sanitizeText_(passwordSha);
-  if (!passwordSha) throw new Error('Senha obrigatoria.');
-  var saltCol = found.header.indexOf('password_salt') + 1;
-  var hashCol = found.header.indexOf('password_hash') + 1;
-  if (!saltCol || !hashCol) throw new Error('Colunas password_salt/password_hash nao encontradas.');
-  var salt = makeAuthToken_().slice(0, 16);
-  found.sheet.getRange(found.row, saltCol).setValue(salt);
-  found.sheet.getRange(found.row, hashCol).setValue(hashPassword_(salt, passwordSha));
-}
-
-function changePassword_(params) {
-  params = params || {};
-  var sessionUser = requireUser_(params);
-  var username = sanitizeText_(sessionUser.username).toLowerCase();
-  var currentPasswordSha = sanitizeText_(params.current_password_sha);
-  var newPasswordSha = sanitizeText_(params.new_password_sha);
-  if (!currentPasswordSha || !newPasswordSha) throw new Error('Senha atual e nova senha sao obrigatorias.');
-  var found = findUserRow_(username);
-  if (!found) throw new Error('Usuario nao encontrado.');
-  var user = found.user;
-  var expected = hashPassword_(user.password_salt, currentPasswordSha);
-  if (expected !== String(user.password_hash || '')) throw new Error('Senha atual invalida.');
-  updateUserPassword_(found, newPasswordSha);
-  return { ok: true, username: username, changed: true };
-}
-
-function resetUserPassword_(params) {
-  params = params || {};
-  var admin = requireAdmin_(params);
-  var username = sanitizeText_(params.username).toLowerCase();
-  var newPasswordSha = sanitizeText_(params.new_password_sha);
-  if (!username || !newPasswordSha) throw new Error('Usuario e nova senha sao obrigatorios.');
-  var found = findUserRow_(username);
-  if (!found) throw new Error('Usuario nao encontrado.');
-  updateUserPassword_(found, newPasswordSha);
-  return { ok: true, username: username, changed: true, changed_by: admin.username };
-}
-
 function setUserEnabled_(params) {
   requireAdmin_(params);
   params = params || {};
@@ -2754,6 +2725,9 @@ function logProjectFollowup_(params) {
   var cliente = sanitizeText_(params.cliente);
   if (!cliente) throw new Error('cliente is required');
   var consultor = sanitizeText_(params.consultor);
+  if (!canUserAccessProjectItem_(user, { consultor: consultor })) {
+    throw new Error('Este usuario so pode registrar acompanhamentos da propria carteira.');
+  }
   var consideracao = sanitizeText_(params.consideracao || params.observacao);
   var proximaAcao = sanitizeText_(params.proxima_acao);
   if (!consideracao && !proximaAcao) throw new Error('consideracao or proxima_acao is required');
@@ -2864,6 +2838,7 @@ function getProjectFollowups_(params, limit) {
   var header = values[0];
   var rows = values.slice(1);
   var max = Math.max(1, Math.min(Number(limit || 1000), 5000));
+  var visibleProjectKeys = {};
   var visibleEntries = rows.map(function(row, index) {
     var item = rowToObject_(header, row);
     return {
@@ -2875,13 +2850,15 @@ function getProjectFollowups_(params, limit) {
   });
   var start = Math.max(0, visibleEntries.length - max);
   var followups = visibleEntries.slice(start).map(function(entry) {
+    var projectKey = sanitizeText_(entry.item.project_key).toUpperCase();
+    if (projectKey) visibleProjectKeys[projectKey] = true;
     return publicProjectFollowup_(entry.item, entry.row_number);
   }).reverse();
   return {
     ok: true,
     total: visibleEntries.length,
     followups: followups,
-    kanban_states: getProjectKanbanStates_(null)
+    kanban_states: getProjectKanbanStates_(userHasFullProjectAccess_(user) ? null : visibleProjectKeys)
   };
 }
 
@@ -2915,6 +2892,9 @@ function setProjectFollowupStatus_(params) {
   var sheet = getProjectFollowupSheet_();
   var found = findProjectFollowupRow_(sheet, followupId, rowNumber);
   if (!found) throw new Error('Acompanhamento nao encontrado.');
+  if (!canUserAccessProjectItem_(user, found.item)) {
+    throw new Error('Este usuario so pode atualizar acompanhamentos da propria carteira.');
+  }
   var status = normalizeFollowupStatus_(params.followup_status || params.status);
   var comment = sanitizeText_(params.status_comment || params.comment || params.comentario);
   var updatedAt = new Date();
@@ -2984,6 +2964,9 @@ function setProjectKanbanStage_(params) {
   var projectKey = sanitizeText_(params.project_key).toUpperCase();
   var cycleKey = sanitizeText_(params.cycle_key);
   if (!projectKey || !cycleKey) throw new Error('project_key and cycle_key are required');
+  if (!canUserAccessProjectItem_(user, { consultor: sanitizeText_(params.consultor) })) {
+    throw new Error('Este usuario so pode alterar o Kanban da propria carteira.');
+  }
   var stage = normalizeKanbanStage_(params.stage);
   var sheet = getProjectKanbanStateSheet_();
   var found = findProjectKanbanStateRow_(sheet, cycleKey, projectKey);
@@ -2999,13 +2982,18 @@ function setProjectKanbanStage_(params) {
   } else {
     sheet.appendRow(row);
   }
+  var allowedProjectKeys = null;
+  if (!userHasFullProjectAccess_(user)) {
+    allowedProjectKeys = {};
+    allowedProjectKeys[projectKey] = true;
+  }
   return {
     ok: true,
     saved: true,
     cycle_key: cycleKey,
     project_key: projectKey,
     stage: stage,
-    kanban_states: getProjectKanbanStates_(null)
+    kanban_states: getProjectKanbanStates_(allowedProjectKeys)
   };
 }
 
