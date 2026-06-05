@@ -3353,6 +3353,16 @@ function sl(s) {
   if (n.indexOf('conclu') >= 0) return 'Conclu&iacute;do';
   return s;
 }
+function projectMatchesStatusFilter(p, filtro) {
+  var status = String(p && p.status || '').toLowerCase();
+  if (filtro === 'andamento') return status.indexOf('andamento') >= 0;
+  if (filtro === 'aguardando') return status.indexOf('aguardando') >= 0;
+  if (filtro === 'atrasado') return status.indexOf('atras') >= 0;
+  if (filtro === 'parado') return status.indexOf('parado') >= 0;
+  if (filtro === 'concluido') return status.indexOf('conclu') >= 0;
+  if (filtro === 'excedido') return p && p.diarias_rest !== null && p.diarias_rest < 0;
+  return true;
+}
 function pad2DatePart_(n) {
   return ('0' + Number(n || 0)).slice(-2);
 }
@@ -8335,7 +8345,7 @@ function initCons(){
   var base=filteredProj();
   var p=base.filter(function(x){return x.consultor;});
   var cs={};
-  p.forEach(function(x){if(!cs[x.consultor])cs[x.consultor]={t:0,a:0,v:0,and:0,atr:0,ag:0,dc:0,dr:0,proj:[]};var c=cs[x.consultor];c.t++;c.proj.push(x);if(x.tipo==='AVULSO')c.a++;else if(x.tipo==='VENDA'||x.tipo==='VENDA NOVA')c.v++;if(x.status.indexOf('Andamento')>=0)c.and++;if(x.status.indexOf('Atrasado')>=0)c.atr++;if(x.status.indexOf('Aguardando')>=0)c.ag++;c.dc+=x.diarias_cont||0;c.dr+=x.diarias_real||0;});
+  p.forEach(function(x){if(!cs[x.consultor])cs[x.consultor]={t:0,a:0,v:0,and:0,atr:0,ag:0,par:0,con:0,dc:0,dr:0,proj:[]};var c=cs[x.consultor];c.t++;c.proj.push(x);if(x.tipo==='AVULSO')c.a++;else if(x.tipo==='VENDA'||x.tipo==='VENDA NOVA')c.v++;if(projectMatchesStatusFilter(x,'andamento'))c.and++;if(projectMatchesStatusFilter(x,'atrasado'))c.atr++;if(projectMatchesStatusFilter(x,'aguardando'))c.ag++;if(projectMatchesStatusFilter(x,'parado'))c.par++;if(projectMatchesStatusFilter(x,'concluido'))c.con++;c.dc+=x.diarias_cont||0;c.dr+=x.diarias_real||0;});
   window._cs=cs;
   document.getElementById('kpis-cons').innerHTML=kpi('Consultores',Object.keys(cs).length)+kpi('Total',base.length)+kpi('Atrasados',base.filter(function(x){return x.status.indexOf('Atrasado')>=0;}).length,'r')+kpi('Di&aacute;rias Excedidas',base.filter(function(x){return x.diarias_rest!==null&&x.diarias_rest<0;}).length,'o');
   var html='';
@@ -8370,12 +8380,9 @@ function selCons(name,filtro){
   var el=document.getElementById('cc-'+name.replace(/[^a-zA-Z0-9]/g,'_'));if(el)el.classList.add('on');
   var d=window._cs[name];if(!d)return;
   var col=ccol(name),list=d.proj;
-  if(filtro==='atrasado')list=list.filter(function(x){return x.status.indexOf('Atrasado')>=0;});
-  else if(filtro==='andamento')list=list.filter(function(x){return x.status.indexOf('Andamento')>=0;});
-  else if(filtro==='aguardando')list=list.filter(function(x){return x.status.indexOf('Aguardando')>=0;});
-  else if(filtro==='excedido')list=list.filter(function(x){return x.diarias_rest!==null&&x.diarias_rest<0;});
+  if(filtro!=='all')list=list.filter(function(x){return projectMatchesStatusFilter(x,filtro);});
   var excN=d.proj.filter(function(x){return x.diarias_rest!==null&&x.diarias_rest<0;}).length;
-  var pills=[['all','Todos',d.t],['andamento','Em Andamento',d.and],['atrasado','Atrasado',d.atr],['aguardando','Aguardando In&iacute;cio',d.ag],['excedido','Di&aacute;rias Excedidas',excN]].filter(function(x){return x[2]>0;}).map(function(v){return '<button class="fb '+(v[0]==='atrasado'?'r':v[0]==='aguardando'?'b':'')+' '+(filtro===v[0]?'on':'')+'" data-n="'+name+'" data-f="'+v[0]+'" onclick="selCons(this.dataset.n,this.dataset.f)">'+v[1]+' ('+v[2]+')</button>';}).join('');
+  var pills=[['all','Todos',d.t],['andamento','Em Andamento',d.and],['aguardando','Aguardando In&iacute;cio',d.ag],['atrasado','Atrasado',d.atr],['parado','Parado',d.par],['concluido','Conclu&iacute;do',d.con],['excedido','Di&aacute;rias Excedidas',excN]].map(function(v){return '<button class="fb '+(v[0]==='atrasado'?'r':v[0]==='aguardando'?'b':'')+' '+(filtro===v[0]?'on':'')+'" data-n="'+name+'" data-f="'+v[0]+'" onclick="selCons(this.dataset.n,this.dataset.f)">'+v[1]+' ('+v[2]+')</button>';}).join('');
   var wrap=document.getElementById('cons-detail');
   wrap.innerHTML='<div class="cdetail"><div class="cd-top" style="background:'+col+'"><div><div class="cd-name">'+name+'</div><div class="cd-sub">'+d.t+' projetos - '+fn(d.dc)+' di&aacute;rias contratadas</div></div><button class="cd-close" onclick="document.getElementById(\'cons-detail\').innerHTML=\'\';document.querySelectorAll(\'#cgrid-cons .cc\').forEach(function(c){c.classList.remove(\'on\');})">Fechar</button></div>'+
     '<div class="cd-body"><div class="kpis" style="margin-bottom:14px">'+kpi('Total',d.t)+kpi('Em Andamento',d.and,'o')+kpi('Aguardando In&iacute;cio',d.ag,'b')+kpi('Atrasados',d.atr,'r')+kpi('Avulso',d.a,'p')+kpi(vendaNovaLabel(d.v),d.v,'g')+'</div>'+
