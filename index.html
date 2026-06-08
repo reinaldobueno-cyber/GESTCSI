@@ -3164,7 +3164,7 @@ body.theme-dark *{
 <button class="snb on" onclick="goTab('dash',this)"><span class="snb-icon">&#128200;</span><span class="snb-label">Dashboard</span></button>
 <button class="snb" onclick="goTab('exec',this)"><span class="snb-icon">&#127775;</span><span class="snb-label">Executivo</span></button>
 <button class="snb" onclick="goTab('tower',this)"><span class="snb-icon">&#128737;</span><span class="snb-label">Gest&atilde;o</span><span class="snb-badge" id="n-tower" hidden>0</span></button>
-<button class="snb" onclick="goTab('acom',this)"><span class="snb-icon">&#128221;</span><span class="snb-label">Acompanhamento</span><span class="snb-badge" id="n-acom" hidden>0</span></button>
+<button class="snb" onclick="return abrirAcompanhamentosPendentes(this)" title="Abrir acompanhamentos pendentes"><span class="snb-icon">&#128276;</span><span class="snb-label">Acompanhamento</span><span class="snb-badge" id="n-acom" hidden>0</span></button>
 <button class="snb" onclick="goTab('all',this)"><span class="snb-icon">&#128203;</span><span class="snb-label">Projetos</span><span class="snb-badge" id="n-all" hidden>0</span></button>
 <button class="snb" onclick="goTab('cons',this)"><span class="snb-icon">&#128100;</span><span class="snb-label">Consultores</span></button>
 <button class="snb" onclick="goTab('vend',this)"><span class="snb-icon">&#129309;</span><span class="snb-label">Vendedores</span></button>
@@ -4352,6 +4352,13 @@ function setAcompFilter(filter) {
   initAcomp();
   return false;
 }
+function abrirAcompanhamentosPendentes(btn) {
+  ACOMP_VIEW_FILTER = 'pendentes';
+  goTab('acom', btn || null);
+  initAcomp();
+  return false;
+}
+window.abrirAcompanhamentosPendentes = abrirAcompanhamentosPendentes;
 function acompTodayIso() {
   var d = new Date();
   return d.getFullYear() + '-' + ('0' + (d.getMonth()+1)).slice(-2) + '-' + ('0' + d.getDate()).slice(-2);
@@ -4918,9 +4925,9 @@ function initAcomp() {
   var resumoBase = acompResumoBase();
   var total = list.length;
   var acompanhados = list.filter(function(x){ return x.temRegistro; }).length;
-  var pendentes = total - acompanhados;
-  var criticos = list.filter(function(x){ return x.bucket === '31-45' || x.bucket === '45+' || x.bucket === 'sem'; }).length;
-  hideSidebarBadge('n-acom');
+  var pendentes = list.filter(function(x){ return x.bucket === 'sem' || x.bucket === '31-45' || x.bucket === '45+'; }).length;
+  var criticos = pendentes;
+  setSidebarAlertBadge('n-acom', pendentes, pendentes + ' projeto(s) com acompanhamento pendente');
   var periodo = activePeriod === 'all' ? 'Todos os meses' : activePeriod;
   var syncNote = ACOMP_REMOTE_ERROR ? 'Hist&oacute;rico do site indispon&iacute;vel' : (ACOMP_REMOTE_LOADED ? 'Hist&oacute;rico do site carregado' : (ACOMP_REMOTE_LOADING ? 'Carregando hist&oacute;rico do site...' : 'Hist&oacute;rico do site ainda n&atilde;o carregado'));
   var filters = [
@@ -10230,7 +10237,10 @@ function gestaoUserDayActivities(user) {
 function gestaoUserDayActivitiesForDay(user, dayKey) {
   user = user || {};
   var actions = gestaoUserDayActivities(user);
-  if (actions.length) return actions;
+  var dayActions = actions.filter(function(action) {
+    return gestaoActivityDayKey(action && action.horario) === dayKey;
+  });
+  if (dayActions.length) return dayActions;
   var fallbackLast = user.ultima_acao || user.ultimo_evento || user.primeira_acao || user.clickup_last_active;
   if (!fallbackLast || gestaoActivityDayKey(fallbackLast) !== dayKey) return [];
   return [{
@@ -10279,6 +10289,12 @@ function gestaoRenderClickUpUserActivity(users, meta) {
   GESTAO_CLICKUP_ACTIVITY_DAY_KEY = todayKey;
   var movedToday = users.filter(function(u){ return gestaoUserDayActivitiesForDay(u, todayKey).length > 0; }).length;
   var notMovedToday = users.length - movedToday;
+  var coverageUser = users[0] || {};
+  var projectsConfigured = gestaoActivityNum(coverageUser.projetos_configurados_controle);
+  var projectsEligible = gestaoActivityNum(coverageUser.projetos_elegiveis_controle);
+  var projectsSelected = gestaoActivityNum(coverageUser.projetos_selecionados_controle);
+  var projectsRead = gestaoActivityNum(coverageUser.projetos_lidos_controle);
+  var projectsWithError = gestaoActivityNum(coverageUser.projetos_com_erro_controle);
   if (users._needsGenerate && !estimatedMode) {
     return '<div class="dashx-unavailable"><strong>Base antiga detectada</strong><span>Essas linhas foram geradas antes do modo estimado por tarefas, por isso faltam links, aparecem campos vazios e os números podem ficar deslocados. Clique em “Gerar estimativa” para reescrever a base no formato correto.</span></div>';
   }
@@ -10314,8 +10330,10 @@ function gestaoRenderClickUpUserActivity(users, meta) {
       '</tr>';
   }).join('');
   var modeNote = estimatedMode ? 'Modo estimado: usa tarefas, responsáveis, criadores, status fechado e datas de atualização. Não mede login real.' : 'Modo Audit Log: usa eventos reais liberados pelo ClickUp.';
-  var numbersNote = estimatedMode ? 'Sem sinal usa o melhor sinal disponível entre last active e tarefas. Mov. hoje lista apenas tarefas/marcos movimentados hoje.' : 'Eventos e Ações vêm do período do Audit Log.';
-  return '<div class="dashx-focus-note" style="margin-bottom:14px"><div><strong>Controle de adoção.</strong> '+modeNote+' '+numbersNote+'</div><div class="dashx-focus-hint">última sync '+escapeHtml(gestaoActivityDateLabel(synced))+'</div></div>'+cards+'<div class="dashx-table-wrap"><table class="dashx-table"><thead><tr><th>Usuário</th><th>Last active</th><th>Primeira ação</th><th>Última ação</th><th>Sem sinal</th><th>Mov. hoje</th><th class="num">Projetos</th></tr></thead><tbody>'+rows+'</tbody></table></div>';
+  var numbersNote = estimatedMode ? 'Sem sinal usa o melhor sinal disponível entre last active e tarefas. Mov. hoje lista tarefas/marcos movimentados e os associa aos responsáveis/criador; não identifica com certeza quem fez a alteração.' : 'Eventos e Ações vêm do período do Audit Log.';
+  var projectsMissingId = Math.max(0, projectsConfigured - projectsEligible);
+  var coverageNote = projectsConfigured ? ' Cobertura: '+projectsRead+' de '+projectsSelected+' projetos elegíveis lidos'+(projectsWithError ? ', '+projectsWithError+' com erro' : '')+(projectsMissingId ? ', '+projectsMissingId+' habilitados sem ID ClickUp' : '')+'.' : '';
+  return '<div class="dashx-focus-note" style="margin-bottom:14px"><div><strong>Controle de adoção.</strong> '+modeNote+' '+numbersNote+coverageNote+'</div><div class="dashx-focus-hint">última sync '+escapeHtml(gestaoActivityDateLabel(synced))+'</div></div>'+cards+'<div class="dashx-table-wrap"><table class="dashx-table"><thead><tr><th>Usuário</th><th>Last active</th><th>Primeira ação</th><th>Última ação</th><th>Sem sinal</th><th>Mov. hoje</th><th class="num">Projetos</th></tr></thead><tbody>'+rows+'</tbody></table></div>';
 }
 function gestaoReloadClickUpUserActivity(force) {
   var box = document.getElementById('clickup-user-activity-content');
@@ -10339,16 +10357,33 @@ function gestaoSyncClickUpUserActivity(btn) {
   }
   var original = btn ? btn.textContent : '';
   if (btn) { btn.disabled = true; btn.textContent = 'Sincronizando...'; }
-  showToast('Sincronizando uso do ClickUp...', 'ok');
-  chamarAppsScriptJsonp('syncClickUpUserActivity', {auth_token:authTokenParam(), force_estimated:'1', max_projects:'30'}, 120000).then(function(resp){
-    if (!resp || resp.ok === false) throw new Error((resp && (resp.error || resp.message)) || 'Falha na sincronização');
+  var batchSize = 5;
+  function runBatch(offset) {
+    if (btn) btn.textContent = offset ? ('Sincronizando '+offset+'...') : 'Preparando...';
+    return chamarAppsScriptJsonp('syncClickUpUserActivity', {
+      auth_token:authTokenParam(),
+      force_estimated:'1',
+      scan_offset:String(offset || 0),
+      scan_batch_size:String(batchSize)
+    }, 150000).then(function(resp){
+      if (!resp || resp.ok === false) throw new Error((resp && (resp.error || resp.message)) || 'Falha na sincronização');
+      var total = gestaoActivityNum(resp.projects_selected || resp.projects_eligible);
+      var read = gestaoActivityNum(resp.projects_read);
+      var errors = gestaoActivityNum(resp.projects_errors);
+      if (btn) btn.textContent = 'Sincronizando '+Math.min(gestaoActivityNum(resp.next_offset), total)+'/'+total;
+      if (!resp.done) return runBatch(gestaoActivityNum(resp.next_offset));
+      return {resp:resp, total:total, read:read, errors:errors};
+    });
+  }
+  showToast('Iniciando leitura completa do ClickUp em lotes...', 'ok');
+  runBatch(0).then(function(result){
     GESTAO_CLICKUP_USER_ACTIVITY = null;
-    showToast('Uso ClickUp sincronizado: '+(resp.users || 0)+' usuários' + (resp.mode === 'estimated_from_tasks' ? ' (estimado por tarefas)' : ''), 'ok');
+    showToast('Uso ClickUp sincronizado: '+result.read+' de '+result.total+' projetos lidos'+(result.errors ? ', '+result.errors+' com erro' : ''), result.errors ? 'warn' : 'ok');
     gestaoReloadClickUpUserActivity(true);
   }).catch(function(error){
     showToast((error && error.message) || 'Erro ao sincronizar uso ClickUp', 'err');
     var box = document.getElementById('clickup-user-activity-content');
-    if (box) box.innerHTML = gestaoRenderClickUpUserActivity([], {erro:(error && error.message) || 'Erro ao sincronizar'});
+    if (box) box.innerHTML = '<div class="dashx-unavailable"><strong>Sincronização interrompida</strong><span>'+escapeHtml((error && error.message) || 'Erro ao sincronizar')+'. Os lotes concluídos foram preservados; clique em Gerar estimativa para reiniciar a leitura completa.</span></div>';
   }).finally(function(){
     if (btn) { btn.disabled = false; btn.textContent = original || 'Sincronizar uso'; }
   });
