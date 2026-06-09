@@ -10214,6 +10214,68 @@ function gestaoActivityValidUrl(value) {
   var text = String(value || '').trim();
   return /^https?:\/\//i.test(text) ? text : '';
 }
+function gestaoClickUpErrorDetails(users) {
+  var raw = users && users.length ? users[0].projetos_erros_json_controle : '';
+  if (Array.isArray(raw)) return raw;
+  if (!raw) return [];
+  try {
+    var parsed = JSON.parse(String(raw));
+    return Array.isArray(parsed) ? parsed : [];
+  } catch(e) {
+    return [];
+  }
+}
+function gestaoOpenClickUpErrors() {
+  var errors = gestaoClickUpErrorDetails(GESTAO_CLICKUP_USER_ACTIVITY || []);
+  var rows = errors.length ? errors.map(function(item) {
+    var link = gestaoActivityValidUrl(item.project_url);
+    return '<tr><td><strong>'+escapeHtml(item.cliente || item.project_key || '-')+'</strong><div class="dashx-list-sub">'+escapeHtml(item.project_key || '-')+'</div></td><td>'+escapeHtml(item.error || 'Erro não identificado')+'</td><td>'+gestaoActivityDateLabel(item.ocorrido_em)+'</td><td>'+(link ? '<a class="project-link-btn" href="'+escapeHtml(link)+'" target="_blank" rel="noopener">Abrir</a>' : '-')+'</td></tr>';
+  }).join('') : '<tr class="empty-row"><td colspan="4">Nenhum projeto com erro registrado.</td></tr>';
+  var retry = errors.length ? '<button type="button" class="project-link-btn warn" onclick="return gestaoRetryClickUpErrors(this)">Tentar erros novamente</button>' : '';
+  dashOpenAuditModal('Erros da estimativa ClickUp', '<div class="dashx-focus-note"><div><strong>'+errors.length+' projeto(s) com erro</strong><br>A retentativa consulta somente estes projetos.</div><div>'+retry+'</div></div><div class="dashx-table-wrap" style="margin-top:12px"><table class="dashx-table"><thead><tr><th>Projeto</th><th>Motivo</th><th>Data</th><th>Ação</th></tr></thead><tbody>'+rows+'</tbody></table></div>');
+  return false;
+}
+function gestaoRetryClickUpErrors(btn) {
+  var errors = gestaoClickUpErrorDetails(GESTAO_CLICKUP_USER_ACTIVITY || []);
+  if (!errors.length) {
+    showToast('Não há projetos com erro para tentar novamente.', 'ok');
+    return false;
+  }
+  if (btn) { btn.disabled = true; btn.textContent = 'Tentando 0/'+errors.length; }
+  function retryAt(index) {
+    if (index >= errors.length) return Promise.resolve();
+    if (btn) btn.textContent = 'Tentando '+(index+1)+'/'+errors.length;
+    return chamarAppsScriptJsonp('syncClickUpUserActivity', {
+      auth_token:authTokenParam(),
+      force_estimated:'1',
+      retry_errors:'1',
+      retry_project_key:String(errors[index].project_key || '')
+    }, 300000).then(function(resp) {
+      if (resp && resp.busy) {
+        return new Promise(function(resolve){ setTimeout(resolve, 15000); }).then(function(){ return retryAt(index); });
+      }
+      if (!resp || resp.ok === false) throw new Error((resp && (resp.error || resp.message)) || 'Falha ao tentar projeto novamente');
+      return retryAt(index + 1);
+    }, function(error) {
+      if (/timeout|ainda esta em andamento/i.test(String(error && error.message || error || ''))) {
+        return new Promise(function(resolve){ setTimeout(resolve, 15000); }).then(function(){ return retryAt(index); });
+      }
+      throw error;
+    });
+  }
+  retryAt(0).then(function() {
+    showToast('Retentativa dos projetos com erro concluída.', 'ok');
+    GESTAO_CLICKUP_USER_ACTIVITY = null;
+    gestaoReloadClickUpUserActivity(true);
+  }).catch(function(error) {
+    showToast((error && error.message) || 'Erro durante a retentativa', 'err');
+  }).finally(function() {
+    if (btn) { btn.disabled = false; btn.textContent = 'Tentar erros novamente'; }
+  });
+  return false;
+}
+window.gestaoOpenClickUpErrors = gestaoOpenClickUpErrors;
+window.gestaoRetryClickUpErrors = gestaoRetryClickUpErrors;
 function gestaoActivitySourceCell(dateValue, typeValue, contextValue, linkValue) {
   if (!dateValue) return '-';
   var text = gestaoActivityDateLabel(dateValue)+' • '+escapeHtml(typeValue || '-');
@@ -10295,6 +10357,7 @@ function gestaoRenderClickUpUserActivity(users, meta) {
   var projectsSelected = gestaoActivityNum(coverageUser.projetos_selecionados_controle);
   var projectsRead = gestaoActivityNum(coverageUser.projetos_lidos_controle);
   var projectsWithError = gestaoActivityNum(coverageUser.projetos_com_erro_controle);
+  var projectErrorDetails = gestaoClickUpErrorDetails(users);
   var projectsNextOffset = gestaoActivityNum(coverageUser.projetos_proximo_offset_controle);
   var syncComplete = String(coverageUser.sincronizacao_completa_controle || '').toLowerCase() === 'sim';
   if (users._needsGenerate && !estimatedMode) {
@@ -10319,12 +10382,10 @@ function gestaoRenderClickUpUserActivity(users, meta) {
     var fallbackLast = u.ultima_acao || u.ultimo_evento || u.primeira_acao || u.clickup_last_active;
     var dayActions = gestaoUserDayActivitiesForDay(u, todayKey);
     var movedTodayRow = dayActions.length > 0;
-    var firstAction = gestaoActivitySourceCell(u.primeira_acao, u.tipo_primeira_acao, u.primeira_acao_contexto, u.primeira_acao_link);
     var lastAction = gestaoActivitySourceCell(fallbackLast, u.tipo_ultima_acao || u.tipo_primeira_acao || 'Último sinal encontrado', u.ultima_acao_contexto || u.primeira_acao_contexto, u.ultima_acao_link || u.primeira_acao_link);
     var movedCell = movedTodayRow ? '<button type="button" class="dashx-score-pill action good" onclick="return gestaoOpenUserDayActivity('+idx+')">Sim ('+dayActions.length+')</button>' : '<span class="dashx-score-pill neutral">Não</span>';
     return '<tr><td><strong>'+escapeHtml(u.nome || u.email || u.user_id || '-')+'</strong><div class="dashx-list-sub">'+escapeHtml(u.email || '-')+'</div></td>'+
       '<td>'+gestaoActivityDateLabel(u.clickup_last_active)+'</td>'+
-      '<td>'+firstAction+'</td>'+
       '<td>'+lastAction+'</td>'+
       '<td><span class="dashx-score-pill '+cls+'">'+label+'</span></td>'+
       '<td>'+movedCell+'</td>'+
@@ -10337,8 +10398,11 @@ function gestaoRenderClickUpUserActivity(users, meta) {
   var coverageState = projectsConfigured && !syncComplete && projectsNextOffset < projectsSelected
     ? ' Sincronização incompleta; Gerar estimativa continuará do projeto '+projectsNextOffset+'.'
     : (syncComplete && projectsWithError ? ' Leitura concluída, mas os projetos com erro precisam de uma nova tentativa.' : '');
-  var coverageNote = projectsConfigured ? ' Cobertura: '+projectsRead+' de '+projectsSelected+' projetos elegíveis lidos'+(projectsWithError ? ', '+projectsWithError+' com erro' : '')+(projectsMissingId ? ', '+projectsMissingId+' habilitados sem ID ClickUp' : '')+'.'+coverageState : '';
-  return '<div class="dashx-focus-note" style="margin-bottom:14px"><div><strong>Controle de adoção.</strong> '+modeNote+' '+numbersNote+coverageNote+'</div><div class="dashx-focus-hint">última sync '+escapeHtml(gestaoActivityDateLabel(synced))+'</div></div>'+cards+'<div class="dashx-table-wrap"><table class="dashx-table"><thead><tr><th>Usuário</th><th>Last active</th><th>Primeira ação</th><th>Última ação</th><th>Sem sinal</th><th>Mov. hoje</th><th class="num">Projetos</th></tr></thead><tbody>'+rows+'</tbody></table></div>';
+  var errorAction = projectErrorDetails.length
+    ? ' <button type="button" class="project-link-btn warn" onclick="return gestaoOpenClickUpErrors()">'+projectErrorDetails.length+' com erro</button>'
+    : (projectsWithError ? ' '+projectsWithError+' erro(s) antigos; gere novamente para detalhar.' : '');
+  var coverageNote = projectsConfigured ? ' Cobertura: '+projectsRead+' de '+projectsSelected+' projetos elegíveis lidos'+(projectsMissingId ? ', '+projectsMissingId+' habilitados sem ID ClickUp' : '')+'.'+coverageState : '';
+  return '<div class="dashx-focus-note" style="margin-bottom:14px"><div><strong>Controle de adoção.</strong> '+modeNote+' '+numbersNote+coverageNote+errorAction+'</div><div class="dashx-focus-hint">última sync '+escapeHtml(gestaoActivityDateLabel(synced))+'</div></div>'+cards+'<div class="dashx-table-wrap"><table class="dashx-table"><thead><tr><th>Usuário</th><th>Last active</th><th>Última ação</th><th>Sem sinal</th><th>Mov. hoje</th><th class="num">Projetos</th></tr></thead><tbody>'+rows+'</tbody></table></div>';
 }
 function gestaoReloadClickUpUserActivity(force) {
   var box = document.getElementById('clickup-user-activity-content');
