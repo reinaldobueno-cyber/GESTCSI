@@ -1129,7 +1129,7 @@ function syncClickUpUserActivity_(params) {
   var startMs = parseClickUpAuditTimeParam_(params.start_time, endMs - days * 24 * 60 * 60 * 1000);
   if (startMs >= endMs) throw new Error('Periodo invalido para auditoria ClickUp.');
 
-  var members = fetchClickUpWorkspaceMembers_(workspaceId, toInt_(params.scan_offset, 0) === 0);
+  var members = fetchClickUpWorkspaceMembers_(workspaceId, toInt_(params.scan_offset, 0) === 0 && String(params.retry_errors || '') !== '1');
   if (String(params.force_estimated || '') === '1') {
     return syncClickUpUserActivityApprox_(params, {
       workspace_id: workspaceId,
@@ -1205,17 +1205,22 @@ function syncClickUpUserActivityApprox_(params, meta) {
     return mapping.list_id || mapping.view_id || mapping.folder_id || mapping.space_id;
   });
   var existingRows = readClickUpUserActivityRows_();
+  var retryProjectKey = sanitizeText_(params.retry_project_key);
+  var retryMode = String(params.retry_errors || '') === '1' && !!retryProjectKey;
+  var existingErrorDetails = existingRows.length ? parseClickUpActivityErrors_(existingRows[0].projetos_erros_json_controle) : [];
   var resumeScan = String(params.resume_scan || '') === '1';
   var storedNextOffset = existingRows.length ? toInt_(existingRows[0].projetos_proximo_offset_controle, 0) : 0;
   var storedComplete = existingRows.length && String(existingRows[0].sincronizacao_completa_controle || '').toLowerCase() === 'sim';
-  var scanOffset = resumeScan && storedNextOffset > 0 && !storedComplete
+  var scanOffset = retryMode ? storedNextOffset : (resumeScan && storedNextOffset > 0 && !storedComplete
     ? storedNextOffset
-    : Math.max(0, toInt_(params.scan_offset, 0));
+    : Math.max(0, toInt_(params.scan_offset, 0)));
   var scanBatchSize = Math.max(0, Math.min(toInt_(params.scan_batch_size, 0), 30));
   var requestedLimit = toInt_(params.max_projects, 0);
-  var mappings = scanBatchSize > 0
+  var mappings = retryMode
+    ? eligibleMappings.filter(function(mapping) { return String(mapping.project_key || '') === retryProjectKey; }).slice(0, 1)
+    : (scanBatchSize > 0
     ? eligibleMappings.slice(scanOffset, scanOffset + scanBatchSize)
-    : (requestedLimit > 0 ? eligibleMappings.slice(0, requestedLimit) : eligibleMappings);
+    : (requestedLimit > 0 ? eligibleMappings.slice(0, requestedLimit) : eligibleMappings));
   var approx = buildApproxClickUpUserActivityFromTasks_(mappings, {
     members: meta.members || [],
     start_ms: meta.start_ms,
@@ -1224,21 +1229,24 @@ function syncClickUpUserActivityApprox_(params, meta) {
     execution_deadline_ms: new Date().getTime() + 240000,
     project_timeout_ms: 150000
   });
-  var accumulatedRows = scanOffset > 0
+  var accumulatedRows = (scanOffset > 0 || retryMode)
     ? mergeClickUpUserActivityRows_(existingRows, approx.rows, meta.fetched_at || new Date())
     : approx.rows;
-  var previousRead = scanOffset > 0 && existingRows.length ? toInt_(existingRows[0].projetos_lidos_controle, 0) : 0;
-  var previousErrors = scanOffset > 0 && existingRows.length ? toInt_(existingRows[0].projetos_com_erro_controle, 0) : 0;
+  var previousRead = (scanOffset > 0 || retryMode) && existingRows.length ? toInt_(existingRows[0].projetos_lidos_controle, 0) : 0;
   var cumulativeRead = previousRead + approx.projects_read;
-  var cumulativeErrors = previousErrors + approx.errors.length;
-  var nextOffset = scanOffset + mappings.length;
-  var scanDone = nextOffset >= eligibleMappings.length;
+  var errorDetails = retryMode
+    ? mergeClickUpActivityErrors_(existingErrorDetails.filter(function(item) { return String(item.project_key || '') !== retryProjectKey; }), approx.errors)
+    : mergeClickUpActivityErrors_(scanOffset > 0 ? existingErrorDetails : [], approx.errors);
+  var cumulativeErrors = errorDetails.length;
+  var nextOffset = retryMode ? storedNextOffset : scanOffset + mappings.length;
+  var scanDone = retryMode ? storedComplete : nextOffset >= eligibleMappings.length;
   accumulatedRows.forEach(function(item) {
     item.projetos_configurados_controle = configuredMappings.length;
     item.projetos_elegiveis_controle = eligibleMappings.length;
     item.projetos_selecionados_controle = eligibleMappings.length;
     item.projetos_lidos_controle = cumulativeRead;
     item.projetos_com_erro_controle = cumulativeErrors;
+    item.projetos_erros_json_controle = JSON.stringify(errorDetails);
     item.projetos_proximo_offset_controle = nextOffset;
     item.sincronizacao_completa_controle = scanDone ? 'sim' : 'nao';
   });
@@ -1270,6 +1278,8 @@ function syncClickUpUserActivityApprox_(params, meta) {
     next_offset: nextOffset,
     done: scanDone,
     resumed: scanOffset > 0,
+    retry_mode: retryMode,
+    remaining_errors: cumulativeErrors,
     errors: approx.errors,
     warnings: (meta.audit_warnings || []).concat([
       'Audit Log indisponivel no plano atual. Controle gerado por estimativa usando tarefas, responsaveis, criadores e datas de atualizacao.'
@@ -1497,6 +1507,8 @@ function buildApproxClickUpUserActivityFromTasks_(mappings, options) {
       errors.push({
         project_key: mapping.project_key,
         cliente: mapping.cliente,
+        project_url: mapping.project_url || buildProjectUrl_(mapping, []),
+        ocorrido_em: new Date().toISOString(),
         error: simplifyErrorMessage_(error)
       });
     }
@@ -1560,6 +1572,34 @@ function buildApproxClickUpUserActivityFromTasks_(mappings, options) {
     projects_read: projectsRead,
     errors: errors
   };
+}
+
+function parseClickUpActivityErrors_(raw) {
+  if (Array.isArray(raw)) return raw;
+  if (!raw) return [];
+  try {
+    var parsed = JSON.parse(String(raw));
+    return Array.isArray(parsed) ? parsed : [];
+  } catch (e) {
+    return [];
+  }
+}
+
+function mergeClickUpActivityErrors_(current, incoming) {
+  var byKey = {};
+  (current || []).concat(incoming || []).forEach(function(item) {
+    item = item || {};
+    var key = sanitizeText_(item.project_key || item.cliente);
+    if (!key) return;
+    byKey[key] = {
+      project_key: key,
+      cliente: sanitizeText_(item.cliente || key),
+      project_url: sanitizeText_(item.project_url),
+      ocorrido_em: item.ocorrido_em || new Date().toISOString(),
+      error: sanitizeText_(item.error || 'Erro não identificado')
+    };
+  });
+  return Object.keys(byKey).map(function(key) { return byKey[key]; });
 }
 
 function ensureApproxUser_(byKey, email, id, name, role, extras) {
@@ -1989,6 +2029,7 @@ function getClickUpUserActivityHeaders_() {
     'projetos_selecionados_controle',
     'projetos_lidos_controle',
     'projetos_com_erro_controle',
+    'projetos_erros_json_controle',
     'projetos_proximo_offset_controle',
     'sincronizacao_completa_controle',
     'modo_controle'
