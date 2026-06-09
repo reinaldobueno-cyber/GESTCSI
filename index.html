@@ -8048,6 +8048,26 @@ function dashRenderConsultorAgingTable(rows) {
   }).join('') : '<tr class="empty-row"><td colspan="8">Nenhum consultor encontrado no recorte atual.</td></tr>';
   return '<div class="dashx-table-wrap"><table class="dashx-table"><thead><tr><th>Consultor</th><th class="num">Rastreados</th><th class="num">Sem ClickUp</th><th class="num">&lt; 7 dias</th><th class="num">7–15</th><th class="num">15–30</th><th class="num">30–45</th><th class="num">45+</th></tr></thead><tbody>'+body+'</tbody></table></div>';
 }
+function dashProjectEntryInfo(p) {
+  p = p || {};
+  var date = dashParseDate(p.data_venda || p.data_inicio || p.data_kick || '');
+  var month = String(p.mes || p.mes_origem || '').toUpperCase();
+  var year = date ? date.getFullYear() : gestaoClickupProjectYear(p);
+  var monthIndex = date ? date.getMonth() : ORDEM_MESES.indexOf(month);
+  var label = date
+    ? date.toLocaleDateString('pt-BR', {month:'short', year:'numeric'}).replace('.', '')
+    : (month && year ? month+'/'+year : (month || '-'));
+  if (monthIndex < 0 || !year) return {label:label, months:null};
+  var now = new Date();
+  var months = Math.max(0, (now.getFullYear() - year) * 12 + now.getMonth() - monthIndex);
+  return {label:label, months:months};
+}
+function dashProjectEntryAgeLabel(months) {
+  if (months === null || months === undefined) return '-';
+  if (months === 0) return 'este mês';
+  if (months === 1) return '1 mês';
+  return months+' meses';
+}
 function dashRenderUntrackedClickUpList(items, totalUntracked) {
   var total = Number(totalUntracked || 0);
   if (!total) {
@@ -8056,9 +8076,10 @@ function dashRenderUntrackedClickUpList(items, totalUntracked) {
   var list = (items || []).slice();
   var rows = list.length ? list.map(function(item){
     var p = item.projeto || {};
-    return '<tr><td><strong>'+String(p.cliente || '-')+'</strong></td><td>'+(item.consultor || p.consultor || '-')+'</td><td>'+sl(String(p.status || '-'))+'</td><td>'+(item.motivo || 'Sem rastreio técnico.')+'</td><td>'+dashProjectActionCell(p)+'</td></tr>';
-  }).join('') : '<tr class="empty-row"><td colspan="5">Nenhum projeto sem rastreio técnico encontrado no recorte atual.</td></tr>';
-  return '<div class="dashx-chart-card"><div class="dashx-chart-head"><div><div class="dashx-chart-title">Projetos sem rastreio técnico '+towerInfoButton('aging')+'</div><div class="dashx-chart-sub">Projetos que precisam de list_id/view_id ou de resumo sincronizado para entrar na auditoria ClickUp.</div></div><div class="dashx-chart-meta"><span class="dashx-chart-note">'+total+' sem ClickUp</span></div></div><div class="dashx-table-wrap"><table class="dashx-table"><thead><tr><th>Projeto</th><th>Consultor</th><th>Status</th><th>Motivo</th><th>Ação</th></tr></thead><tbody>'+rows+'</tbody></table></div></div>';
+    var entry = dashProjectEntryInfo(p);
+    return '<tr><td><strong>'+String(p.cliente || '-')+'</strong></td><td>'+escapeHtml(entry.label)+'</td><td>'+escapeHtml(dashProjectEntryAgeLabel(entry.months))+'</td><td>'+(item.consultor || p.consultor || '-')+'</td><td>'+sl(String(p.status || '-'))+'</td><td>'+(item.motivo || 'Sem rastreio técnico.')+'</td><td>'+dashProjectActionCell(p)+'</td></tr>';
+  }).join('') : '<tr class="empty-row"><td colspan="7">Nenhum projeto sem rastreio técnico encontrado no recorte atual.</td></tr>';
+  return '<div class="dashx-chart-card"><div class="dashx-chart-head"><div><div class="dashx-chart-title">Projetos sem rastreio técnico '+towerInfoButton('aging')+'</div><div class="dashx-chart-sub">Projetos que precisam de list_id/view_id ou de resumo sincronizado para entrar na auditoria ClickUp. Entrada considera primeiro a data da venda e, na falta dela, o mês de origem.</div></div><div class="dashx-chart-meta"><span class="dashx-chart-note">'+total+' sem ClickUp</span></div></div><div class="dashx-table-wrap"><table class="dashx-table"><thead><tr><th>Projeto</th><th>Entrada</th><th>Tempo</th><th>Consultor</th><th>Status</th><th>Motivo</th><th>Ação</th></tr></thead><tbody>'+rows+'</tbody></table></div></div>';
 }
 function dashRenderClickUpTracker(operation, totalProjetos) {
   var rows = operation.agingByConsultor || [];
