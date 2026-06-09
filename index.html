@@ -7921,9 +7921,12 @@ function dashRenderActionNow(analyses, operation) {
     return (b.diasSem || 0) - (a.diasSem || 0);
   }).slice(0, 10);
   var consultores = (operation && operation.ranking ? operation.ranking : []).filter(function(c){ return c.classe !== 'good' || c.riscos > 0 || c.esquecidos > 0; }).slice(0, 5);
-  var contas = (analyses || []).filter(function(a){ return a.risco || a.premium || a.semContato; }).sort(function(a, b){
-    if ((b.receitaRisco || 0) !== (a.receitaRisco || 0)) return (b.receitaRisco || 0) - (a.receitaRisco || 0);
-    return a.score - b.score;
+  var contas = (analyses || []).filter(function(a){
+    return a.score < 70 || a.pendenciasVencidas || a.semContato || a.semProximaAcao || !a.ownerAtivo;
+  }).sort(function(a, b){
+    if (a.score !== b.score) return a.score - b.score;
+    if ((b.pendencias || 0) !== (a.pendencias || 0)) return (b.pendencias || 0) - (a.pendencias || 0);
+    return (b.diasSem || 0) - (a.diasSem || 0);
   }).slice(0, 5);
   function item(nome, reason, tags, score, cls) {
     return '<div class="dashx-action-item"><div class="dashx-action-main"><div class="dashx-action-name">'+nome+'</div><div class="dashx-action-reason">'+reason+'</div><div class="dashx-action-meta">'+tags.join('')+'</div></div><span class="dashx-action-score '+cls+'">'+score+'</span></div>';
@@ -7966,7 +7969,6 @@ function dashRenderActionNow(analyses, operation) {
   var consultorAudit = selectedConsultor ? '<div id="dashx-action-audit"><div class="dashx-focus-note" style="margin-top:12px"><div><strong>Auditoria do consultor:</strong> '+selectedConsultor.nome+' • '+selectedConsultor.projetos+' projeto(s) na carteira, '+selectedConsultor.riscos+' em risco e '+selectedConsultor.esquecidos+' esquecidos. Clique nos chips acima para alternar a auditoria.</div><div class="dashx-focus-hint">Lista atual: '+actionModeLabel+'</div></div><div class="dashx-table-wrap" style="margin-top:12px"><table class="dashx-table"><thead><tr><th>Projeto</th><th>Status</th><th class="num">Dias sem update</th><th class="num">Pendências</th><th>Motivo</th><th>Ação</th></tr></thead><tbody>'+actionTable+'</tbody></table></div></div>' : '';
   var contasHtml = contas.length ? contas.map(function(a){
     var tags = [];
-    if (a.receitaRisco) tags.push('<span class="dashx-mini-chip">MRR '+fn(a.receitaRisco)+'</span>');
     if (a.diasSem !== null) tags.push('<span class="dashx-mini-chip">'+a.diasSem+'d sem update</span>');
     if (a.semProximaAcao) tags.push('<span class="dashx-mini-chip">Sem próxima ação</span>');
     return item(a.projeto.cliente || '-', a.sinais.slice(0, 2).map(function(s){ return s.texto; }).join(' • ') || 'Conta sensível pela exposição operacional.', tags, a.score, a.classe);
