@@ -10356,6 +10356,8 @@ function gestaoRenderClickUpUserActivity(users, meta) {
   var projectsSelected = gestaoActivityNum(coverageUser.projetos_selecionados_controle);
   var projectsRead = gestaoActivityNum(coverageUser.projetos_lidos_controle);
   var projectsWithError = gestaoActivityNum(coverageUser.projetos_com_erro_controle);
+  var projectsNextOffset = gestaoActivityNum(coverageUser.projetos_proximo_offset_controle);
+  var syncComplete = String(coverageUser.sincronizacao_completa_controle || '').toLowerCase() === 'sim';
   if (users._needsGenerate && !estimatedMode) {
     return '<div class="dashx-unavailable"><strong>Base antiga detectada</strong><span>Essas linhas foram geradas antes do modo estimado por tarefas, por isso faltam links, aparecem campos vazios e os números podem ficar deslocados. Clique em “Gerar estimativa” para reescrever a base no formato correto.</span></div>';
   }
@@ -10393,7 +10395,10 @@ function gestaoRenderClickUpUserActivity(users, meta) {
   var modeNote = estimatedMode ? 'Modo estimado: usa tarefas, responsáveis, criadores, status fechado e datas de atualização. Não mede login real.' : 'Modo Audit Log: usa eventos reais liberados pelo ClickUp.';
   var numbersNote = estimatedMode ? 'Sem sinal usa o melhor sinal disponível entre last active e tarefas. Mov. hoje lista tarefas/marcos movimentados e os associa aos responsáveis/criador; não identifica com certeza quem fez a alteração.' : 'Eventos e Ações vêm do período do Audit Log.';
   var projectsMissingId = Math.max(0, projectsConfigured - projectsEligible);
-  var coverageNote = projectsConfigured ? ' Cobertura: '+projectsRead+' de '+projectsSelected+' projetos elegíveis lidos'+(projectsWithError ? ', '+projectsWithError+' com erro' : '')+(projectsMissingId ? ', '+projectsMissingId+' habilitados sem ID ClickUp' : '')+'.' : '';
+  var coverageState = projectsConfigured && !syncComplete && projectsNextOffset < projectsSelected
+    ? ' Sincronização incompleta; Gerar estimativa continuará do projeto '+projectsNextOffset+'.'
+    : (syncComplete && projectsWithError ? ' Leitura concluída, mas os projetos com erro precisam de uma nova tentativa.' : '');
+  var coverageNote = projectsConfigured ? ' Cobertura: '+projectsRead+' de '+projectsSelected+' projetos elegíveis lidos'+(projectsWithError ? ', '+projectsWithError+' com erro' : '')+(projectsMissingId ? ', '+projectsMissingId+' habilitados sem ID ClickUp' : '')+'.'+coverageState : '';
   return '<div class="dashx-focus-note" style="margin-bottom:14px"><div><strong>Controle de adoção.</strong> '+modeNote+' '+numbersNote+coverageNote+'</div><div class="dashx-focus-hint">última sync '+escapeHtml(gestaoActivityDateLabel(synced))+'</div></div>'+cards+'<div class="dashx-table-wrap"><table class="dashx-table"><thead><tr><th>Usuário</th><th>Last active</th><th>Primeira ação</th><th>Última ação</th><th>Sem sinal</th><th>Mov. hoje</th><th class="num">Projetos</th></tr></thead><tbody>'+rows+'</tbody></table></div>';
 }
 function gestaoReloadClickUpUserActivity(force) {
@@ -10418,33 +10423,38 @@ function gestaoSyncClickUpUserActivity(btn) {
   }
   var original = btn ? btn.textContent : '';
   if (btn) { btn.disabled = true; btn.textContent = 'Sincronizando...'; }
-  var batchSize = 5;
-  function runBatch(offset) {
+  var initialBatchSize = 4;
+  function runBatch(offset, batchSize) {
+    var startedAt = Date.now();
     if (btn) btn.textContent = offset ? ('Sincronizando '+offset+'...') : 'Preparando...';
     return chamarAppsScriptJsonp('syncClickUpUserActivity', {
       auth_token:authTokenParam(),
       force_estimated:'1',
+      resume_scan:'1',
       scan_offset:String(offset || 0),
       scan_batch_size:String(batchSize)
-    }, 150000).then(function(resp){
+    }, 180000).then(function(resp){
       if (!resp || resp.ok === false) throw new Error((resp && (resp.error || resp.message)) || 'Falha na sincronização');
       var total = gestaoActivityNum(resp.projects_selected || resp.projects_eligible);
       var read = gestaoActivityNum(resp.projects_read);
       var errors = gestaoActivityNum(resp.projects_errors);
       if (btn) btn.textContent = 'Sincronizando '+Math.min(gestaoActivityNum(resp.next_offset), total)+'/'+total;
-      if (!resp.done) return runBatch(gestaoActivityNum(resp.next_offset));
+      var elapsed = Date.now() - startedAt;
+      var nextBatchSize = elapsed < 45000 ? Math.min(8, batchSize + 1) : (elapsed > 110000 ? Math.max(2, batchSize - 1) : batchSize);
+      if (!resp.done) return runBatch(gestaoActivityNum(resp.next_offset), nextBatchSize);
       return {resp:resp, total:total, read:read, errors:errors};
     });
   }
-  showToast('Iniciando leitura completa do ClickUp em lotes...', 'ok');
-  runBatch(0).then(function(result){
+  showToast('Iniciando ou retomando leitura completa do ClickUp...', 'ok');
+  runBatch(0, initialBatchSize).then(function(result){
     GESTAO_CLICKUP_USER_ACTIVITY = null;
     showToast('Uso ClickUp sincronizado: '+result.read+' de '+result.total+' projetos lidos'+(result.errors ? ', '+result.errors+' com erro' : ''), result.errors ? 'warn' : 'ok');
     gestaoReloadClickUpUserActivity(true);
   }).catch(function(error){
-    showToast((error && error.message) || 'Erro ao sincronizar uso ClickUp', 'err');
+    showToast('Sincronização pausada. Clique novamente em Gerar estimativa para continuar.', 'warn');
     var box = document.getElementById('clickup-user-activity-content');
-    if (box) box.innerHTML = '<div class="dashx-unavailable"><strong>Sincronização interrompida</strong><span>'+escapeHtml((error && error.message) || 'Erro ao sincronizar')+'. Os lotes concluídos foram preservados; clique em Gerar estimativa para reiniciar a leitura completa.</span></div>';
+    if (box) box.innerHTML = '<div class="dashx-unavailable"><strong>Sincronização pausada sem perder progresso</strong><span>'+escapeHtml((error && error.message) || 'O Apps Script demorou além do limite')+'. Clique em Gerar estimativa novamente para continuar do último lote confirmado.</span></div>';
+    setTimeout(function(){ gestaoReloadClickUpUserActivity(true); }, 800);
   }).finally(function(){
     if (btn) { btn.disabled = false; btn.textContent = original || 'Sincronizar uso'; }
   });
