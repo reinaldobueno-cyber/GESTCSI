@@ -1111,7 +1111,7 @@ function syncClickUpUserActivity_(params) {
   var startMs = parseClickUpAuditTimeParam_(params.start_time, endMs - days * 24 * 60 * 60 * 1000);
   if (startMs >= endMs) throw new Error('Periodo invalido para auditoria ClickUp.');
 
-  var members = fetchClickUpWorkspaceMembers_(workspaceId);
+  var members = fetchClickUpWorkspaceMembers_(workspaceId, toInt_(params.scan_offset, 0) === 0);
   if (String(params.force_estimated || '') === '1') {
     return syncClickUpUserActivityApprox_(params, {
       workspace_id: workspaceId,
@@ -1170,13 +1170,24 @@ function syncClickUpUserActivity_(params) {
 function syncClickUpUserActivityApprox_(params, meta) {
   params = params || {};
   meta = meta || {};
+  var syncLock = LockService.getScriptLock();
+  if (!syncLock.tryLock(3000)) {
+    throw new Error('Uma sincronizacao ClickUp ainda esta em andamento. Aguarde alguns segundos e tente continuar.');
+  }
+  try {
   var configuredMappings = loadProjectMappings_().filter(function(mapping) {
     return mapping.enabled;
   });
   var eligibleMappings = configuredMappings.filter(function(mapping) {
     return mapping.list_id || mapping.view_id || mapping.folder_id || mapping.space_id;
   });
-  var scanOffset = Math.max(0, toInt_(params.scan_offset, 0));
+  var existingRows = readClickUpUserActivityRows_();
+  var resumeScan = String(params.resume_scan || '') === '1';
+  var storedNextOffset = existingRows.length ? toInt_(existingRows[0].projetos_proximo_offset_controle, 0) : 0;
+  var storedComplete = existingRows.length && String(existingRows[0].sincronizacao_completa_controle || '').toLowerCase() === 'sim';
+  var scanOffset = resumeScan && storedNextOffset > 0 && !storedComplete
+    ? storedNextOffset
+    : Math.max(0, toInt_(params.scan_offset, 0));
   var scanBatchSize = Math.max(0, Math.min(toInt_(params.scan_batch_size, 0), 30));
   var requestedLimit = toInt_(params.max_projects, 0);
   var mappings = scanBatchSize > 0
@@ -1188,7 +1199,6 @@ function syncClickUpUserActivityApprox_(params, meta) {
     end_ms: meta.end_ms,
     fetched_at: meta.fetched_at || new Date()
   });
-  var existingRows = scanOffset > 0 ? readClickUpUserActivityRows_() : [];
   var accumulatedRows = scanOffset > 0
     ? mergeClickUpUserActivityRows_(existingRows, approx.rows, meta.fetched_at || new Date())
     : approx.rows;
@@ -1204,9 +1214,11 @@ function syncClickUpUserActivityApprox_(params, meta) {
     item.projetos_selecionados_controle = eligibleMappings.length;
     item.projetos_lidos_controle = cumulativeRead;
     item.projetos_com_erro_controle = cumulativeErrors;
+    item.projetos_proximo_offset_controle = nextOffset;
+    item.sincronizacao_completa_controle = scanDone ? 'sim' : 'nao';
   });
 
-  writeClickUpUserActivitySummary_(accumulatedRows);
+  writeClickUpUserActivitySummary_(accumulatedRows, { auto_resize: scanDone });
   if (scanOffset === 0) {
     writeClickUpAuditLogRows_([], {
       start_ms: meta.start_ms,
@@ -1232,6 +1244,7 @@ function syncClickUpUserActivityApprox_(params, meta) {
     scan_offset: scanOffset,
     next_offset: nextOffset,
     done: scanDone,
+    resumed: scanOffset > 0,
     errors: approx.errors,
     warnings: (meta.audit_warnings || []).concat([
       'Audit Log indisponivel no plano atual. Controle gerado por estimativa usando tarefas, responsaveis, criadores e datas de atualizacao.'
@@ -1239,6 +1252,9 @@ function syncClickUpUserActivityApprox_(params, meta) {
     summary_sheet: getClickUpUserActivitySheetName_(),
     raw_sheet: getClickUpAuditLogSheetName_()
   };
+  } finally {
+    syncLock.releaseLock();
+  }
 }
 
 function getClickUpUserActivity_(params) {
@@ -1390,7 +1406,17 @@ function mergeClickUpTodayActionsJson_(currentJson, batchJson) {
   return JSON.stringify(merged);
 }
 
-function fetchClickUpWorkspaceMembers_(workspaceId) {
+function fetchClickUpWorkspaceMembers_(workspaceId, forceRefresh) {
+  var cache = CacheService.getScriptCache();
+  var cacheKey = 'clickup_workspace_members_' + String(workspaceId);
+  if (!forceRefresh) {
+    var cached = cache.get(cacheKey);
+    if (cached) {
+      try {
+        return JSON.parse(cached);
+      } catch (e) {}
+    }
+  }
   var response = clickupRequest_('get', '/team', null);
   var teams = response && response.teams ? response.teams : [];
   var members = [];
@@ -1409,6 +1435,9 @@ function fetchClickUpWorkspaceMembers_(workspaceId) {
       });
     });
   });
+  try {
+    cache.put(cacheKey, JSON.stringify(members), 600);
+  } catch (e) {}
   return members;
 }
 
@@ -1843,7 +1872,8 @@ function buildClickUpUserActivitySummary_(members, events, meta) {
   return { rows: rows };
 }
 
-function writeClickUpUserActivitySummary_(rows) {
+function writeClickUpUserActivitySummary_(rows, options) {
+  options = options || {};
   var sheet = getClickUpUserActivitySheet_();
   var headers = getClickUpUserActivityHeaders_();
   sheet.clearContents();
@@ -1856,7 +1886,7 @@ function writeClickUpUserActivitySummary_(rows) {
     }));
   }
   sheet.setFrozenRows(1);
-  sheet.autoResizeColumns(1, headers.length);
+  if (options.auto_resize !== false) sheet.autoResizeColumns(1, headers.length);
 }
 
 function writeClickUpAuditLogRows_(events, meta) {
@@ -1932,6 +1962,8 @@ function getClickUpUserActivityHeaders_() {
     'projetos_selecionados_controle',
     'projetos_lidos_controle',
     'projetos_com_erro_controle',
+    'projetos_proximo_offset_controle',
+    'sincronizacao_completa_controle',
     'modo_controle'
   ];
 }
