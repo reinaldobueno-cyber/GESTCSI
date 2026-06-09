@@ -6778,6 +6778,7 @@ function dashStatusKey(status) {
   if (n.indexOf('parado') >= 0) return 'parado';
   if (n.indexOf('aguard') >= 0) return 'aguardando';
   if (n.indexOf('conclu') >= 0) return 'concluido';
+  if (n.indexOf('cancel') >= 0) return 'cancelado';
   if (n.indexOf('andamento') >= 0) return 'andamento';
   return n || 'sem_status';
 }
@@ -7391,12 +7392,15 @@ function dashOperation(list, analyses) {
   var trackedTotal = 0;
   var untrackedTotal = 0;
   var untrackedProjects = [];
-  var agingList = analyses.filter(function(a){
+  var clickUpAnalyses = analyses.filter(function(a){
+    return dashStatusKey(a.projeto && a.projeto.status) !== 'cancelado';
+  });
+  var agingList = clickUpAnalyses.filter(function(a){
     return dashClickUpAgingDays(a.projeto) !== null;
   }).map(function(a){
     return Object.assign({}, a, { diasSemClickUp: dashClickUpAgingDays(a.projeto) });
   }).sort(function(a,b){ return (b.diasSemClickUp || 0) - (a.diasSemClickUp || 0); }).slice(0,12);
-  analyses.forEach(function(a){
+  clickUpAnalyses.forEach(function(a){
     var d = dashClickUpAgingDays(a.projeto);
     var nomeConsultor = (a.projeto && a.projeto.consultor) || 'Sem consultor';
     if (!agingByConsultor[nomeConsultor]) {
