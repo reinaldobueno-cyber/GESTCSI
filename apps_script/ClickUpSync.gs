@@ -729,13 +729,20 @@ function buildNormalizedProjectFromClickUp_(mapping) {
   };
 }
 
-function fetchProjectTasks_(mapping) {
+function assertClickUpActivityDeadline_(options) {
+  if (options && options.deadline_ms && new Date().getTime() >= Number(options.deadline_ms)) {
+    throw new Error('Projeto excedeu o tempo seguro de leitura e foi marcado para nova tentativa.');
+  }
+}
+
+function fetchProjectTasks_(mapping, options) {
+  options = options || {};
   var listError = null;
   if (mapping.list_id) {
     try {
       return {
         source: 'list',
-        tasks: fetchAllListTasks_(mapping.list_id)
+        tasks: fetchAllListTasks_(mapping.list_id, options)
       };
     } catch (error) {
       listError = error;
@@ -748,7 +755,7 @@ function fetchProjectTasks_(mapping) {
     try {
       return {
         source: listError ? 'view_fallback' : 'view',
-        tasks: fetchAllViewTasks_(mapping.view_id),
+        tasks: fetchAllViewTasks_(mapping.view_id, options),
         warning: listError ? simplifyErrorMessage_(listError) : ''
       };
     } catch (viewError) {
@@ -764,24 +771,25 @@ function fetchProjectTasks_(mapping) {
   if (mapping.folder_id) {
     return {
       source: 'folder',
-      tasks: fetchAllFolderTasks_(mapping.folder_id)
+      tasks: fetchAllFolderTasks_(mapping.folder_id, options)
     };
   }
   if (mapping.space_id) {
     return {
       source: 'space',
-      tasks: fetchAllSpaceTasks_(mapping.space_id)
+      tasks: fetchAllSpaceTasks_(mapping.space_id, options)
     };
   }
   throw new Error('Project mapping must have list_id, view_id, folder_id or space_id: ' + mapping.project_key);
 }
 
-function fetchAllListTasks_(listId) {
+function fetchAllListTasks_(listId, options) {
   listId = normalizeClickUpId_(listId);
   if (!listId) throw new Error('CLICKUP_CONFIG com list_id invalido ou vazio.');
   var page = 0;
   var all = [];
   while (true) {
+    assertClickUpActivityDeadline_(options);
     var query = [
       'include_closed=true',
       'subtasks=true',
@@ -797,12 +805,13 @@ function fetchAllListTasks_(listId) {
   return dedupeTasks_(all);
 }
 
-function fetchAllViewTasks_(viewId) {
+function fetchAllViewTasks_(viewId, options) {
   viewId = normalizeClickUpId_(viewId);
   if (!viewId) throw new Error('CLICKUP_CONFIG com view_id invalido ou vazio.');
   var page = 0;
   var all = [];
   while (true) {
+    assertClickUpActivityDeadline_(options);
     var response = clickupRequest_('get', '/view/' + viewId + '/task?page=' + page);
     var batch = response.tasks || [];
     all = all.concat(batch);
@@ -812,36 +821,39 @@ function fetchAllViewTasks_(viewId) {
   return dedupeTasks_(all);
 }
 
-function fetchAllFolderTasks_(folderId) {
+function fetchAllFolderTasks_(folderId, options) {
   folderId = normalizeClickUpId_(folderId);
   if (!folderId) throw new Error('CLICKUP_CONFIG com folder_id invalido ou vazio.');
   var response = clickupRequest_('get', '/folder/' + folderId + '/list?archived=false');
   var lists = response.lists || [];
   var all = [];
   lists.forEach(function(list) {
+    assertClickUpActivityDeadline_(options);
     if (list && list.id) {
-      all = all.concat(fetchAllListTasks_(list.id));
+      all = all.concat(fetchAllListTasks_(list.id, options));
     }
   });
   return dedupeTasks_(all);
 }
 
-function fetchAllSpaceTasks_(spaceId) {
+function fetchAllSpaceTasks_(spaceId, options) {
   spaceId = normalizeClickUpId_(spaceId);
   if (!spaceId) throw new Error('CLICKUP_CONFIG com space_id invalido ou vazio.');
   var all = [];
   var folderResponse = clickupRequest_('get', '/space/' + spaceId + '/folder?archived=false');
   var folders = folderResponse.folders || [];
   folders.forEach(function(folder) {
+    assertClickUpActivityDeadline_(options);
     if (folder && folder.id) {
-      all = all.concat(fetchAllFolderTasks_(folder.id));
+      all = all.concat(fetchAllFolderTasks_(folder.id, options));
     }
   });
   var listResponse = clickupRequest_('get', '/space/' + spaceId + '/list?archived=false');
   var lists = listResponse.lists || [];
   lists.forEach(function(list) {
+    assertClickUpActivityDeadline_(options);
     if (list && list.id) {
-      all = all.concat(fetchAllListTasks_(list.id));
+      all = all.concat(fetchAllListTasks_(list.id, options));
     }
   });
   return dedupeTasks_(all);
@@ -1172,7 +1184,12 @@ function syncClickUpUserActivityApprox_(params, meta) {
   meta = meta || {};
   var syncLock = LockService.getScriptLock();
   if (!syncLock.tryLock(3000)) {
-    throw new Error('Uma sincronizacao ClickUp ainda esta em andamento. Aguarde alguns segundos e tente continuar.');
+    return {
+      ok: false,
+      busy: true,
+      error: 'Uma sincronizacao ClickUp ainda esta em andamento.',
+      retry_after_seconds: 15
+    };
   }
   try {
   var configuredMappings = loadProjectMappings_().filter(function(mapping) {
@@ -1197,7 +1214,9 @@ function syncClickUpUserActivityApprox_(params, meta) {
     members: meta.members || [],
     start_ms: meta.start_ms,
     end_ms: meta.end_ms,
-    fetched_at: meta.fetched_at || new Date()
+    fetched_at: meta.fetched_at || new Date(),
+    execution_deadline_ms: new Date().getTime() + 240000,
+    project_timeout_ms: 150000
   });
   var accumulatedRows = scanOffset > 0
     ? mergeClickUpUserActivityRows_(existingRows, approx.rows, meta.fetched_at || new Date())
@@ -1460,7 +1479,9 @@ function buildApproxClickUpUserActivityFromTasks_(mappings, options) {
 
   (mappings || []).forEach(function(mapping) {
     try {
-      var payload = fetchProjectTasks_(mapping);
+      var projectDeadline = new Date().getTime() + Math.max(30000, Number(options.project_timeout_ms || 150000));
+      if (options.execution_deadline_ms) projectDeadline = Math.min(projectDeadline, Number(options.execution_deadline_ms));
+      var payload = fetchProjectTasks_(mapping, { deadline_ms: projectDeadline });
       var tasks = payload.tasks || [];
       projectsRead += 1;
       tasks.forEach(function(task) {

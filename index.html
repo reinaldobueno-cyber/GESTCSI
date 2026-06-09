@@ -10362,8 +10362,20 @@ function gestaoSyncClickUpUserActivity(btn) {
   }
   var original = btn ? btn.textContent : '';
   if (btn) { btn.disabled = true; btn.textContent = 'Sincronizando...'; }
-  var initialBatchSize = 4;
-  function runBatch(offset, batchSize) {
+  var initialBatchSize = 1;
+  var maxRecoveryRetries = 24;
+  function waitBeforeRetry(offset, batchSize, recoveryRetries, message) {
+    if (recoveryRetries >= maxRecoveryRetries) return Promise.reject(new Error(message || 'Não foi possível retomar automaticamente'));
+    var waitSeconds = 15;
+    if (btn) btn.textContent = 'Aguardando execução...';
+    return new Promise(function(resolve) {
+      setTimeout(resolve, waitSeconds * 1000);
+    }).then(function() {
+      return runBatch(offset, 1, recoveryRetries + 1);
+    });
+  }
+  function runBatch(offset, batchSize, recoveryRetries) {
+    recoveryRetries = recoveryRetries || 0;
     var startedAt = Date.now();
     if (btn) btn.textContent = offset ? ('Sincronizando '+offset+'...') : 'Preparando...';
     return chamarAppsScriptJsonp('syncClickUpUserActivity', {
@@ -10372,20 +10384,27 @@ function gestaoSyncClickUpUserActivity(btn) {
       resume_scan:'1',
       scan_offset:String(offset || 0),
       scan_batch_size:String(batchSize)
-    }, 180000).then(function(resp){
+    }, 300000).then(function(resp){
+      if (resp && resp.busy) return waitBeforeRetry(offset, batchSize, recoveryRetries, resp.error);
       if (!resp || resp.ok === false) throw new Error((resp && (resp.error || resp.message)) || 'Falha na sincronização');
       var total = gestaoActivityNum(resp.projects_selected || resp.projects_eligible);
       var read = gestaoActivityNum(resp.projects_read);
       var errors = gestaoActivityNum(resp.projects_errors);
       if (btn) btn.textContent = 'Sincronizando '+Math.min(gestaoActivityNum(resp.next_offset), total)+'/'+total;
       var elapsed = Date.now() - startedAt;
-      var nextBatchSize = elapsed < 45000 ? Math.min(8, batchSize + 1) : (elapsed > 110000 ? Math.max(2, batchSize - 1) : batchSize);
-      if (!resp.done) return runBatch(gestaoActivityNum(resp.next_offset), nextBatchSize);
+      var nextBatchSize = elapsed < 40000 ? Math.min(3, batchSize + 1) : (elapsed > 120000 ? 1 : batchSize);
+      if (!resp.done) return runBatch(gestaoActivityNum(resp.next_offset), nextBatchSize, 0);
       return {resp:resp, total:total, read:read, errors:errors};
+    }, function(error) {
+      var message = String(error && error.message || error || '');
+      if (/timeout|ainda esta em andamento/i.test(message)) {
+        return waitBeforeRetry(offset, batchSize, recoveryRetries, message);
+      }
+      throw error;
     });
   }
   showToast('Iniciando ou retomando leitura completa do ClickUp...', 'ok');
-  runBatch(0, initialBatchSize).then(function(result){
+  runBatch(0, initialBatchSize, 0).then(function(result){
     GESTAO_CLICKUP_USER_ACTIVITY = null;
     showToast('Uso ClickUp sincronizado: '+result.read+' de '+result.total+' projetos lidos'+(result.errors ? ', '+result.errors+' com erro' : ''), result.errors ? 'warn' : 'ok');
     gestaoReloadClickUpUserActivity(true);
