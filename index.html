@@ -3461,7 +3461,7 @@ var UPDATE_DEVICE_KEY = 'gestcsi_update_device_id_v1';
 var UPDATE_ACTOR_KEY = 'gestcsi_update_actor_v1';
 var LAST_UPDATE_KEY = 'gestcsi_last_update_label_v1';
 var PANEL_CACHE_KEY = 'gestcsi_panel_cache_v1';
-var PANEL_APP_VERSION = '2026-06-03-clickup-adoption-v1';
+var PANEL_APP_VERSION = '2026-06-10-access-all-projects-v2';
 var THEME_MODE_KEY = 'gestcsi_theme_mode_v1';
 var AUTH_SESSION_KEY = 'gestcsi_auth_session_v1';
 var AUTH_STATE = { token:'', user:null };
@@ -3534,29 +3534,19 @@ function normalizarPessoaPainel(value) {
     .trim();
 }
 function usuarioTemVisaoGeral() {
-  var role = String((AUTH_STATE.user && AUTH_STATE.user.role) || '').toLowerCase();
-  return role === 'admin' || role === 'coordenador' || role === 'coordenadora' || role === 'coordinator';
+  return !!AUTH_STATE.user;
 }
 function usuarioCombinaComConsultor(consultor) {
-  if (!AUTH_STATE.user) return true;
-  if (usuarioTemVisaoGeral()) return true;
-  var alvo = normalizarPessoaPainel(consultor);
-  if (!alvo) return false;
-  var nome = normalizarPessoaPainel(AUTH_STATE.user.name);
-  var usuario = normalizarPessoaPainel(AUTH_STATE.user.username);
-  return (nome && (alvo === nome || alvo.indexOf(nome) >= 0 || nome.indexOf(alvo) >= 0)) ||
-    (usuario && (alvo === usuario || alvo.indexOf(usuario) >= 0 || usuario.indexOf(alvo) >= 0));
+  return !!AUTH_STATE.user;
 }
 function usuarioPodeVerProjeto(p) {
-  if (!AUTH_STATE.user) return true;
-  if (usuarioTemVisaoGeral()) return true;
-  return usuarioCombinaComConsultor(p && p.consultor);
+  return true;
 }
 function projetosVisiveisParaUsuario(list) {
-  return (list || []).filter(usuarioPodeVerProjeto);
+  return list || [];
 }
 function rotuloEscopoUsuario() {
-  return usuarioTemVisaoGeral() ? 'Vis&atilde;o geral' : 'Minha carteira';
+  return 'Vis&atilde;o geral';
 }
 function sha256Hex(text) {
   var raw = new TextEncoder().encode(String(text || ''));
