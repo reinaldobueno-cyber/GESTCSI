@@ -10165,7 +10165,7 @@ function gestaoRenderClickupUserActivityShell() {
   if (!AUTH_STATE.user || AUTH_STATE.user.role !== 'admin') {
     return '<div class="dashx-focus-note" style="margin-bottom:14px"><div><strong>Uso dos usuários ClickUp.</strong> Esta visão fica disponível para administrador do painel.</div><div class="dashx-focus-hint">controle restrito</div></div>';
   }
-  return '<div class="dashx-section" id="clickup-user-activity-section" style="margin-bottom:16px"><div class="dashx-section-head"><div><div class="dashx-section-kicker">Uso dos usuários</div><div class="dashx-section-title">Adoção do ClickUp</div><div class="dashx-section-sub">Uso estimado por tarefas, responsáveis, conclusões e datas de atualização.</div></div><div class="dashx-section-answer"><button type="button" class="dashx-mini-chip" onclick="return gestaoSyncClickUpUserActivity(this)">Gerar estimativa</button><button type="button" class="dashx-mini-chip" onclick="return gestaoReloadClickUpUserActivity(true)">Recarregar</button></div></div><div class="dashx-section-body" id="clickup-user-activity-content"><div class="tower-empty">Carregando uso dos usuários ClickUp...</div></div></div>';
+  return '<div class="dashx-section" id="clickup-user-activity-section" style="margin-bottom:16px"><div class="dashx-section-head"><div><div class="dashx-section-kicker">Uso dos usuários</div><div class="dashx-section-title">Adoção do ClickUp</div><div class="dashx-section-sub">Uso estimado por tarefas, responsáveis, conclusões e datas de atualização.</div></div><div class="dashx-section-answer"><button type="button" class="dashx-mini-chip" onclick="return gestaoSyncClickUpUserActivity(this)">Gerar estimativa</button><button type="button" class="dashx-mini-chip" onclick="return gestaoForceClickUpUserActivity(this)">Forçar em segundo plano</button><button type="button" class="dashx-mini-chip" onclick="return gestaoReloadClickUpUserActivity(true)">Recarregar</button></div></div><div class="dashx-section-body" id="clickup-user-activity-content"><div class="tower-empty">Carregando uso dos usuários ClickUp...</div></div></div>';
 }
 function gestaoLoadClickUpUserActivity(force) {
   if (!AUTH_STATE.user || AUTH_STATE.user.role !== 'admin') return Promise.resolve([]);
@@ -10175,6 +10175,7 @@ function gestaoLoadClickUpUserActivity(force) {
     if (!resp || resp.ok === false) throw new Error((resp && (resp.error || resp.message)) || 'Apps Script nao retornou atividade ClickUp.');
     var users = Array.isArray(resp.users) ? resp.users : [];
     users._needsGenerate = !!(resp.needs_generate || resp.stale_schema);
+    users._backgroundSync = resp.background_sync || {};
     GESTAO_CLICKUP_USER_ACTIVITY = users;
     GESTAO_CLICKUP_USER_ACTIVITY_LOADING = null;
     return users;
@@ -10369,6 +10370,7 @@ window.gestaoOpenUserDayActivity = gestaoOpenUserDayActivity;
 function gestaoRenderClickUpUserActivity(users, meta) {
   meta = meta || {};
   users = Array.isArray(users) ? users : [];
+  var backgroundSync = users._backgroundSync || {};
   if (meta.erro) {
     if (/timeout/i.test(String(meta.erro || ''))) {
       return '<div class="dashx-unavailable"><strong>Sem leitura pronta</strong><span>O Apps Script demorou para responder. Clique em “Sincronizar uso” para gerar a visão estimada por tarefas; depois o painel passa a carregar o resultado salvo.</span></div>';
@@ -10376,6 +10378,9 @@ function gestaoRenderClickUpUserActivity(users, meta) {
     return '<div class="dashx-unavailable"><strong>Atividade ClickUp indisponível</strong><span>'+escapeHtml(meta.erro)+'</span></div>';
   }
   if (!users.length) {
+    if (backgroundSync.active) {
+      return '<div class="dashx-unavailable"><strong>Estimativa em segundo plano ativa</strong><span>O Apps Script continuará processando sozinho. Você pode fechar a página e voltar depois.</span></div>';
+    }
     return '<div class="dashx-unavailable"><strong>Sem dados de uso ainda</strong><span>Clique em “Gerar estimativa” acima para criar a visão aproximada por tarefas.</span></div>';
   }
   var active7 = users.filter(function(u){ var d = gestaoActivityDays(gestaoActivityLastSignal(u)); return d !== null && d <= 7; }).length;
@@ -10396,6 +10401,9 @@ function gestaoRenderClickUpUserActivity(users, meta) {
   var projectsNextOffset = gestaoActivityNum(coverageUser.projetos_proximo_offset_controle);
   var syncComplete = String(coverageUser.sincronizacao_completa_controle || '').toLowerCase() === 'sim';
   if (users._needsGenerate && !estimatedMode) {
+    if (backgroundSync.active) {
+      return '<div class="dashx-unavailable"><strong>Estimativa em segundo plano ativa</strong><span>A base antiga será substituída conforme os lotes forem concluídos. Você pode fechar a página e voltar depois.</span></div>';
+    }
     return '<div class="dashx-unavailable"><strong>Base antiga detectada</strong><span>Essas linhas foram geradas antes do modo estimado por tarefas, por isso faltam links, aparecem campos vazios e os números podem ficar deslocados. Clique em “Gerar estimativa” para reescrever a base no formato correto.</span></div>';
   }
   var cards =
@@ -10433,6 +10441,11 @@ function gestaoRenderClickUpUserActivity(users, meta) {
   var coverageState = projectsConfigured && !syncComplete && projectsNextOffset < projectsSelected
     ? ' Sincronização incompleta; Gerar estimativa continuará do projeto '+projectsNextOffset+'.'
     : (syncComplete && projectsWithError ? ' Leitura concluída, mas os projetos com erro precisam de uma nova tentativa.' : '');
+  if (backgroundSync.active) {
+    coverageState += ' Processamento em segundo plano ativo; você pode fechar a página e voltar depois.';
+  } else if (backgroundSync.error) {
+    coverageState += ' A última tentativa em segundo plano encontrou erro: '+escapeHtml(backgroundSync.error)+'.';
+  }
   var errorAction = projectErrorDetails.length
     ? ' <button type="button" class="project-link-btn warn" onclick="return gestaoOpenClickUpErrors()">'+projectErrorDetails.length+' com erro</button>'
     : (projectsWithError ? ' '+projectsWithError+' erro(s) antigos; gere novamente para detalhar.' : '');
@@ -10517,8 +10530,29 @@ function gestaoSyncClickUpUserActivity(btn) {
   });
   return false;
 }
+function gestaoForceClickUpUserActivity(btn) {
+  if (!AUTH_STATE.user || AUTH_STATE.user.role !== 'admin') {
+    showToast('Somente admin pode forçar a estimativa do ClickUp', 'err');
+    return false;
+  }
+  var original = btn ? btn.textContent : '';
+  if (btn) { btn.disabled = true; btn.textContent = 'Agendando...'; }
+  chamarAppsScriptJsonp('startClickUpUserActivityBackground', {
+    auth_token:authTokenParam()
+  }, 30000).then(function(resp) {
+    if (!resp || resp.ok === false) throw new Error((resp && (resp.error || resp.message)) || 'Não foi possível agendar a estimativa');
+    showToast('Estimativa forçada em segundo plano. Pode fechar a página.', 'ok');
+    setTimeout(function(){ gestaoReloadClickUpUserActivity(true); }, 1200);
+  }).catch(function(error) {
+    showToast((error && error.message) || 'Erro ao forçar estimativa em segundo plano', 'err');
+  }).finally(function() {
+    if (btn) { btn.disabled = false; btn.textContent = original || 'Forçar em segundo plano'; }
+  });
+  return false;
+}
 window.gestaoReloadClickUpUserActivity = gestaoReloadClickUpUserActivity;
 window.gestaoSyncClickUpUserActivity = gestaoSyncClickUpUserActivity;
+window.gestaoForceClickUpUserActivity = gestaoForceClickUpUserActivity;
 function gestaoNormalizeInventoryProject(p) {
   p = p || {};
   var out = Object.assign({}, p);
