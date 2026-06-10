@@ -1213,7 +1213,7 @@ function continueClickUpUserActivityBackgroundTrigger() {
     var result = syncClickUpUserActivity_({
       force_estimated: '1',
       resume_scan: '1',
-      scan_batch_size: '2'
+      scan_batch_size: '5'
     });
     if (result && result.busy) {
       scheduleClickUpUserActivityBackground_(60000);
@@ -1228,7 +1228,7 @@ function continueClickUpUserActivityBackgroundTrigger() {
       clearClickUpUserActivityBackgroundTriggers_();
       return;
     }
-    scheduleClickUpUserActivityBackground_(60000);
+    scheduleClickUpUserActivityBackground_(15000);
   } catch (error) {
     var failures = toInt_(props.getProperty('CLICKUP_ACTIVITY_BACKGROUND_FAILURES'), 0) + 1;
     props.setProperty('CLICKUP_ACTIVITY_BACKGROUND_FAILURES', String(failures));
@@ -1238,7 +1238,7 @@ function continueClickUpUserActivityBackgroundTrigger() {
       clearClickUpUserActivityBackgroundTriggers_();
       return;
     }
-    scheduleClickUpUserActivityBackground_(60000);
+    scheduleClickUpUserActivityBackground_(15000);
   }
 }
 
@@ -1284,9 +1284,10 @@ function syncClickUpUserActivityApprox_(params, meta) {
   var resumeScan = String(params.resume_scan || '') === '1';
   var storedNextOffset = existingRows.length ? toInt_(existingRows[0].projetos_proximo_offset_controle, 0) : 0;
   var storedComplete = existingRows.length && String(existingRows[0].sincronizacao_completa_controle || '').toLowerCase() === 'sim';
-  var scanOffset = retryMode ? storedNextOffset : (resumeScan && storedNextOffset > 0 && !storedComplete
+  var requiresSchemaReset = !retryMode && (!existingRows.length || String(existingRows[0].atividade_schema_controle || '') !== 'mov_7d_v1');
+  var scanOffset = requiresSchemaReset ? 0 : (retryMode ? storedNextOffset : (resumeScan && storedNextOffset > 0 && !storedComplete
     ? storedNextOffset
-    : Math.max(0, toInt_(params.scan_offset, 0)));
+    : Math.max(0, toInt_(params.scan_offset, 0))));
   var scanBatchSize = Math.max(0, Math.min(toInt_(params.scan_batch_size, 0), 30));
   var requestedLimit = toInt_(params.max_projects, 0);
   var mappings = retryMode
@@ -1322,6 +1323,7 @@ function syncClickUpUserActivityApprox_(params, meta) {
     item.projetos_erros_json_controle = JSON.stringify(errorDetails);
     item.projetos_proximo_offset_controle = nextOffset;
     item.sincronizacao_completa_controle = scanDone ? 'sim' : 'nao';
+    item.atividade_schema_controle = 'mov_7d_v1';
   });
 
   writeClickUpUserActivitySummary_(accumulatedRows, { auto_resize: scanDone });
@@ -1351,6 +1353,7 @@ function syncClickUpUserActivityApprox_(params, meta) {
     next_offset: nextOffset,
     done: scanDone,
     resumed: scanOffset > 0,
+    schema_reset: requiresSchemaReset,
     retry_mode: retryMode,
     remaining_errors: cumulativeErrors,
     errors: approx.errors,
@@ -1499,6 +1502,7 @@ function normalizeClickUpDateMillis_(value) {
 function mergeClickUpTodayActionsJson_(currentJson, batchJson) {
   var seen = {};
   var merged = [];
+  var recentStartMs = startOfDayMillis_(new Date()) - 6 * 24 * 60 * 60 * 1000;
   [currentJson, batchJson].forEach(function(raw) {
     var actions = [];
     if (Array.isArray(raw)) {
@@ -1511,6 +1515,7 @@ function mergeClickUpTodayActionsJson_(currentJson, batchJson) {
       }
     }
     (Array.isArray(actions) ? actions : []).forEach(function(action) {
+      if (normalizeClickUpDateMillis_(action && action.horario) < recentStartMs) return;
       var key = sanitizeText_(action && action.key) || [
         sanitizeText_(action && action.link),
         sanitizeText_(action && action.tipo),
@@ -1524,6 +1529,7 @@ function mergeClickUpTodayActionsJson_(currentJson, batchJson) {
   merged.sort(function(a, b) {
     return normalizeClickUpDateMillis_(b && b.horario) - normalizeClickUpDateMillis_(a && a.horario);
   });
+  while (merged.length && JSON.stringify(merged).length > 45000) merged.pop();
   return JSON.stringify(merged);
 }
 
@@ -1570,6 +1576,7 @@ function buildApproxClickUpUserActivityFromTasks_(mappings, options) {
   var projectsRead = 0;
   options.day_start_ms = startOfDayMillis_(options.fetched_at || new Date());
   options.day_end_ms = options.day_start_ms + 24 * 60 * 60 * 1000 - 1;
+  options.recent_start_ms = options.day_start_ms - 6 * 24 * 60 * 60 * 1000;
 
   (options.members || []).forEach(function(member) {
     ensureApproxUser_(byKey, member.email, member.id, member.name, member.role, {
@@ -1741,6 +1748,8 @@ function aggregateApproxTaskForUsers_(byKey, task, mapping, options) {
   var createdInPeriod = created && created >= Number(options.start_ms || 0) && created <= Number(options.end_ms || new Date().getTime());
   var updatedToday = updated && updated >= Number(options.day_start_ms || 0) && updated <= Number(options.day_end_ms || 0);
   var createdToday = created && created >= Number(options.day_start_ms || 0) && created <= Number(options.day_end_ms || 0);
+  var updatedRecent = updated && updated >= Number(options.recent_start_ms || 0) && updated <= Number(options.day_end_ms || 0);
+  var createdRecent = created && created >= Number(options.recent_start_ms || 0) && created <= Number(options.day_end_ms || 0);
   var done = isClosedStatus_(task.status && (task.status.status || task.status.type || task.status.label) || '');
   var projectKey = sanitizeText_(mapping.project_key || mapping.cliente || '');
   var context = buildApproxTaskContext_(task, mapping);
@@ -1768,12 +1777,12 @@ function aggregateApproxTaskForUsers_(byKey, task, mapping, options) {
     if (updatedToday) item.tarefas_atualizadas_hoje += 1;
     if (done && updatedToday) item.tarefas_concluidas_hoje += 1;
     if (createdToday) item.tarefas_criadas_hoje += 1;
-    if (updatedToday || createdToday) {
+    if (updatedRecent || createdRecent) {
       addApproxTodayAction_(item, task, mapping, context, {
-        updated: !!updatedToday,
-        created: !!createdToday,
-        completed: !!(done && updatedToday),
-        timestamp: updated || created
+        updated: !!updatedRecent,
+        created: !!createdRecent,
+        completed: !!(done && updatedRecent),
+        timestamp: updatedRecent ? updated : created
       });
     }
     if (projectKey) item._projects[projectKey] = true;
@@ -1806,12 +1815,12 @@ function aggregateApproxTaskForUsers_(byKey, task, mapping, options) {
       creatorItem.tarefas_criadas_estimadas += 1;
       if (createdToday) creatorItem.tarefas_criadas_hoje += 1;
       if (updatedToday) creatorItem.tarefas_atualizadas_hoje += 1;
-      if (createdToday || updatedToday) {
+      if (createdRecent || updatedRecent) {
         addApproxTodayAction_(creatorItem, task, mapping, context, {
-          updated: !!updatedToday,
-          created: !!createdToday,
+          updated: !!updatedRecent,
+          created: !!createdRecent,
           completed: false,
-          timestamp: updatedToday ? updated : created
+          timestamp: updatedRecent ? updated : created
         });
       }
       if (updatedInPeriod || createdInPeriod) {
@@ -2118,6 +2127,7 @@ function getClickUpUserActivityHeaders_() {
     'projetos_erros_json_controle',
     'projetos_proximo_offset_controle',
     'sincronizacao_completa_controle',
+    'atividade_schema_controle',
     'modo_controle'
   ];
 }

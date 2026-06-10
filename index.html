@@ -10352,6 +10352,29 @@ function gestaoUserDayActivitiesForDay(user, dayKey) {
     contexto: user.ultima_acao_contexto || user.primeira_acao_contexto || ''
   }];
 }
+function gestaoUserRecentActivities(user, days) {
+  var cutoff = new Date().getTime() - Math.max(1, Number(days || 7)) * 86400000;
+  return gestaoUserDayActivities(user).filter(function(action) {
+    var date = gestaoActivityDate(action && action.horario);
+    return date && date.getTime() >= cutoff;
+  }).sort(function(a, b) {
+    return gestaoActivityDate(b && b.horario).getTime() - gestaoActivityDate(a && a.horario).getTime();
+  });
+}
+function gestaoOpenUserRecentActivity(index) {
+  var users = Array.isArray(GESTAO_CLICKUP_USER_ACTIVITY) ? GESTAO_CLICKUP_USER_ACTIVITY : [];
+  var user = users[Number(index || 0)];
+  if (!user) return false;
+  var actions = gestaoUserRecentActivities(user, 7);
+  var rows = actions.length ? actions.map(function(action) {
+    var link = gestaoActivityValidUrl(action.link);
+    return '<tr><td>'+gestaoActivityDateLabel(action.horario)+'</td><td><span class="dashx-score-pill neutral">'+escapeHtml(action.tipo || '-')+'</span></td><td><strong>'+escapeHtml(action.item_nome || '-')+'</strong><div class="dashx-list-sub">'+escapeHtml((action.projeto || '-')+' • '+(action.item_tipo || 'Item')+(action.lista ? ' • '+action.lista : ''))+'</div></td><td>'+(link ? '<a class="project-link-btn" href="'+escapeHtml(link)+'" target="_blank" rel="noopener">Abrir</a>' : '-')+'</td></tr>';
+  }).join('') : '<tr class="empty-row"><td colspan="4">Nenhuma movimentação estimada nos últimos 7 dias.</td></tr>';
+  var title = 'Movimentações dos últimos 7 dias — ' + (user.nome || user.email || 'Usuário');
+  var html = '<div class="dashx-focus-note"><div><strong>'+escapeHtml(user.nome || user.email || '-')+'</strong><br>Lista estimada por criação, conclusão ou última atualização das tarefas retornadas pela API do ClickUp.</div><div class="dashx-focus-hint">'+actions.length+' movimentação(ões)</div></div><div class="dashx-table-wrap" style="margin-top:12px"><table class="dashx-table"><thead><tr><th>Data</th><th>Tipo</th><th>Origem</th><th>Ação</th></tr></thead><tbody>'+rows+'</tbody></table></div>';
+  dashOpenAuditModal(title, html);
+  return false;
+}
 function gestaoOpenUserDayActivity(index) {
   var users = Array.isArray(GESTAO_CLICKUP_USER_ACTIVITY) ? GESTAO_CLICKUP_USER_ACTIVITY : [];
   var user = users[Number(index || 0)];
@@ -10367,6 +10390,7 @@ function gestaoOpenUserDayActivity(index) {
   return false;
 }
 window.gestaoOpenUserDayActivity = gestaoOpenUserDayActivity;
+window.gestaoOpenUserRecentActivity = gestaoOpenUserRecentActivity;
 function gestaoRenderClickUpUserActivity(users, meta) {
   meta = meta || {};
   users = Array.isArray(users) ? users : [];
@@ -10424,14 +10448,17 @@ function gestaoRenderClickUpUserActivity(users, meta) {
     var label = days === null ? 'sem sinal' : (days+'d');
     var fallbackLast = u.ultima_acao || u.ultimo_evento || u.primeira_acao || u.clickup_last_active;
     var dayActions = gestaoUserDayActivitiesForDay(u, todayKey);
+    var recentActions = gestaoUserRecentActivities(u, 7);
     var movedTodayRow = dayActions.length > 0;
     var lastAction = gestaoActivitySourceCell(fallbackLast, u.tipo_ultima_acao || u.tipo_primeira_acao || 'Último sinal encontrado', u.ultima_acao_contexto || u.primeira_acao_contexto, u.ultima_acao_link || u.primeira_acao_link);
     var movedCell = movedTodayRow ? '<button type="button" class="dashx-score-pill action good" onclick="return gestaoOpenUserDayActivity('+idx+')">Sim ('+dayActions.length+')</button>' : '<span class="dashx-score-pill neutral">Não</span>';
+    var recentCell = recentActions.length ? '<button type="button" class="dashx-score-pill action good" onclick="return gestaoOpenUserRecentActivity('+idx+')">'+recentActions.length+' mov.</button>' : '<span class="dashx-score-pill neutral">0</span>';
     return '<tr><td><strong>'+escapeHtml(u.nome || u.email || u.user_id || '-')+'</strong><div class="dashx-list-sub">'+escapeHtml(u.email || '-')+'</div></td>'+
       '<td>'+gestaoActivityDateLabel(u.clickup_last_active)+'</td>'+
       '<td>'+lastAction+'</td>'+
       '<td><span class="dashx-score-pill '+cls+'">'+label+'</span></td>'+
       '<td>'+movedCell+'</td>'+
+      '<td>'+recentCell+'</td>'+
       '<td class="num">'+fn(gestaoActivityNum(u.projetos_associados))+'</td>'+
       '</tr>';
   }).join('');
@@ -10450,7 +10477,7 @@ function gestaoRenderClickUpUserActivity(users, meta) {
     ? ' <button type="button" class="project-link-btn warn" onclick="return gestaoOpenClickUpErrors()">'+projectErrorDetails.length+' com erro</button>'
     : (projectsWithError ? ' '+projectsWithError+' erro(s) antigos; gere novamente para detalhar.' : '');
   var coverageNote = projectsConfigured ? ' Cobertura: '+projectsRead+' de '+projectsSelected+' projetos elegíveis lidos'+(projectsMissingId ? ', '+projectsMissingId+' habilitados sem ID ClickUp' : '')+'.'+coverageState : '';
-  return '<div class="dashx-focus-note" style="margin-bottom:14px"><div><strong>Controle de adoção.</strong> '+modeNote+' '+numbersNote+coverageNote+errorAction+'</div><div class="dashx-focus-hint">última sync '+escapeHtml(gestaoActivityDateLabel(synced))+'</div></div>'+cards+'<div class="dashx-table-wrap"><table class="dashx-table"><thead><tr><th>Usuário</th><th>Last active</th><th>Última ação</th><th>Sem sinal</th><th>Mov. hoje</th><th class="num">Projetos</th></tr></thead><tbody>'+rows+'</tbody></table></div>';
+  return '<div class="dashx-focus-note" style="margin-bottom:14px"><div><strong>Controle de adoção.</strong> '+modeNote+' '+numbersNote+coverageNote+errorAction+'</div><div class="dashx-focus-hint">última sync '+escapeHtml(gestaoActivityDateLabel(synced))+'</div></div>'+cards+'<div class="dashx-table-wrap"><table class="dashx-table"><thead><tr><th>Usuário</th><th>Last active</th><th>Última ação</th><th>Sem sinal</th><th>Mov. hoje</th><th>Mov. últ. 7 dias</th><th class="num">Projetos</th></tr></thead><tbody>'+rows+'</tbody></table></div>';
 }
 function gestaoReloadClickUpUserActivity(force) {
   var box = document.getElementById('clickup-user-activity-content');
@@ -10474,7 +10501,7 @@ function gestaoSyncClickUpUserActivity(btn) {
   }
   var original = btn ? btn.textContent : '';
   if (btn) { btn.disabled = true; btn.textContent = 'Sincronizando...'; }
-  var initialBatchSize = 1;
+  var initialBatchSize = 3;
   var maxRecoveryRetries = 24;
   function waitBeforeRetry(offset, batchSize, recoveryRetries, message) {
     if (recoveryRetries >= maxRecoveryRetries) return Promise.reject(new Error(message || 'Não foi possível retomar automaticamente'));
@@ -10504,7 +10531,7 @@ function gestaoSyncClickUpUserActivity(btn) {
       var errors = gestaoActivityNum(resp.projects_errors);
       if (btn) btn.textContent = 'Sincronizando '+Math.min(gestaoActivityNum(resp.next_offset), total)+'/'+total;
       var elapsed = Date.now() - startedAt;
-      var nextBatchSize = elapsed < 40000 ? Math.min(3, batchSize + 1) : (elapsed > 120000 ? 1 : batchSize);
+      var nextBatchSize = elapsed < 40000 ? Math.min(6, batchSize + 1) : (elapsed > 120000 ? 2 : batchSize);
       if (!resp.done) return runBatch(gestaoActivityNum(resp.next_offset), nextBatchSize, 0);
       return {resp:resp, total:total, read:read, errors:errors};
     }, function(error) {
