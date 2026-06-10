@@ -10218,7 +10218,22 @@ function gestaoActivityDays(value) {
   var d = gestaoActivityDate(value);
   if (!d) return null;
   var now = new Date();
-  return Math.max(0, Math.floor((now.getTime() - d.getTime()) / 86400000));
+  var today = Date.UTC(now.getFullYear(), now.getMonth(), now.getDate());
+  var actionDay = Date.UTC(d.getFullYear(), d.getMonth(), d.getDate());
+  return Math.max(0, Math.round((today - actionDay) / 86400000));
+}
+function gestaoActivityLastAction(user) {
+  user = user || {};
+  var candidates = [
+    user.ultima_acao,
+    user.primeira_acao
+  ].map(function(value) {
+    var d = gestaoActivityDate(value);
+    return d ? { value:value, ts:d.getTime() } : null;
+  }).filter(Boolean);
+  if (!candidates.length) return '';
+  candidates.sort(function(a,b){ return b.ts - a.ts; });
+  return candidates[0].value;
 }
 function gestaoActivityLastSignal(user) {
   user = user || {};
@@ -10407,8 +10422,8 @@ function gestaoRenderClickUpUserActivity(users, meta) {
     }
     return '<div class="dashx-unavailable"><strong>Sem dados de uso ainda</strong><span>Clique em “Gerar estimativa” acima para criar a visão aproximada por tarefas.</span></div>';
   }
-  var active7 = users.filter(function(u){ var d = gestaoActivityDays(gestaoActivityLastSignal(u)); return d !== null && d <= 7; }).length;
-  var stale15 = users.filter(function(u){ var d = gestaoActivityDays(gestaoActivityLastSignal(u)); return d === null || d > 15; }).length;
+  var active7 = users.filter(function(u){ var d = gestaoActivityDays(gestaoActivityLastAction(u)); return d !== null && d <= 7; }).length;
+  var stale15 = users.filter(function(u){ var d = gestaoActivityDays(gestaoActivityLastAction(u)); return d === null || d >= 15; }).length;
   var estimatedMode = users.some(function(u){ return String(u.modo_controle || '') === 'estimado_por_tarefas'; });
   var synced = users.map(function(u){ return u.sincronizado_em || ''; }).filter(Boolean).sort().slice(-1)[0] || '';
   var todayKey = gestaoActivityDayKey(synced || new Date());
@@ -10432,21 +10447,21 @@ function gestaoRenderClickUpUserActivity(users, meta) {
   }
   var cards =
     '<div class="dashx-top-grid" style="grid-template-columns:repeat(4,minmax(0,1fr));margin-bottom:14px">'+
-      '<div class="dashx-card good"><div class="dashx-card-label">Ativos em 7 dias</div><div class="dashx-card-value">'+active7+'</div><div class="dashx-card-note">'+(estimatedMode ? 'com tarefa atualizada recentemente' : 'com login, ação ou last active recente')+'</div></div>'+
-      '<div class="dashx-card warn"><div class="dashx-card-label">15+ dias sem sinal</div><div class="dashx-card-value">'+stale15+'</div><div class="dashx-card-note">sem atividade recente no controle</div></div>'+
+      '<div class="dashx-card good"><div class="dashx-card-label">Com ação em 7 dias</div><div class="dashx-card-value">'+active7+'</div><div class="dashx-card-note">última ação operacional dentro dos últimos 7 dias</div></div>'+
+      '<div class="dashx-card warn"><div class="dashx-card-label">15+ dias sem ação</div><div class="dashx-card-value">'+stale15+'</div><div class="dashx-card-note">sem ação operacional recente</div></div>'+
       '<div class="dashx-card neutral"><div class="dashx-card-label">Com movimento hoje</div><div class="dashx-card-value">'+movedToday+'</div><div class="dashx-card-note">última ação no dia da sync</div></div>'+
       '<div class="dashx-card neutral"><div class="dashx-card-label">Sem movimento hoje</div><div class="dashx-card-value">'+notMovedToday+'</div><div class="dashx-card-note">última ação antes de hoje</div></div>'+
     '</div>';
   var sortedUsers = users.slice().sort(function(a,b){
-    return String(gestaoActivityLastSignal(b) || '').localeCompare(String(gestaoActivityLastSignal(a) || ''));
+    return String(gestaoActivityLastAction(b) || '').localeCompare(String(gestaoActivityLastAction(a) || ''));
   });
   GESTAO_CLICKUP_USER_ACTIVITY = sortedUsers;
   var rows = sortedUsers.map(function(u, idx){
-    var last = gestaoActivityLastSignal(u);
+    var last = gestaoActivityLastAction(u);
     var days = gestaoActivityDays(last);
     var cls = gestaoActivityRiskClass(days);
-    var label = days === null ? 'sem sinal' : (days+'d');
-    var fallbackLast = u.ultima_acao || u.ultimo_evento || u.primeira_acao || u.clickup_last_active;
+    var label = days === null ? 'sem ação' : (days+'d');
+    var fallbackLast = gestaoActivityLastAction(u);
     var dayActions = gestaoUserDayActivitiesForDay(u, todayKey);
     var recentActions = gestaoUserRecentActivities(u, 7);
     var movedTodayRow = dayActions.length > 0;
@@ -10463,7 +10478,7 @@ function gestaoRenderClickUpUserActivity(users, meta) {
       '</tr>';
   }).join('');
   var modeNote = estimatedMode ? 'Modo estimado: usa tarefas, responsáveis, criadores, status fechado e datas de atualização. Não mede login real.' : 'Modo Audit Log: usa eventos reais liberados pelo ClickUp.';
-  var numbersNote = estimatedMode ? 'Sem sinal usa o melhor sinal disponível entre last active e tarefas. Mov. hoje lista tarefas/marcos movimentados e os associa aos responsáveis/criador; não identifica com certeza quem fez a alteração.' : 'Eventos e Ações vêm do período do Audit Log.';
+  var numbersNote = estimatedMode ? 'Dias sem ação considera somente a última movimentação operacional estimada por tarefa; Last active é exibido separadamente e não altera essa contagem. Mov. hoje associa tarefas/marcos aos responsáveis/criador, sem garantir quem fez a alteração.' : 'Dias sem ação considera a última ação do Audit Log; Last active é exibido separadamente.';
   var projectsMissingId = Math.max(0, projectsConfigured - projectsEligible);
   var coverageState = projectsConfigured && !syncComplete && projectsNextOffset < projectsSelected
     ? ' Sincronização incompleta; Gerar estimativa continuará do projeto '+projectsNextOffset+'.'
@@ -10477,7 +10492,7 @@ function gestaoRenderClickUpUserActivity(users, meta) {
     ? ' <button type="button" class="project-link-btn warn" onclick="return gestaoOpenClickUpErrors()">'+projectErrorDetails.length+' com erro</button>'
     : (projectsWithError ? ' '+projectsWithError+' erro(s) antigos; gere novamente para detalhar.' : '');
   var coverageNote = projectsConfigured ? ' Cobertura: '+projectsRead+' de '+projectsSelected+' projetos elegíveis lidos'+(projectsMissingId ? ', '+projectsMissingId+' habilitados sem ID ClickUp' : '')+'.'+coverageState : '';
-  return '<div class="dashx-focus-note" style="margin-bottom:14px"><div><strong>Controle de adoção.</strong> '+modeNote+' '+numbersNote+coverageNote+errorAction+'</div><div class="dashx-focus-hint">última sync '+escapeHtml(gestaoActivityDateLabel(synced))+'</div></div>'+cards+'<div class="dashx-table-wrap"><table class="dashx-table"><thead><tr><th>Usuário</th><th>Last active</th><th>Última ação</th><th>Sem sinal</th><th>Mov. hoje</th><th>Mov. últ. 7 dias</th><th class="num">Projetos</th></tr></thead><tbody>'+rows+'</tbody></table></div>';
+  return '<div class="dashx-focus-note" style="margin-bottom:14px"><div><strong>Controle de adoção.</strong> '+modeNote+' '+numbersNote+coverageNote+errorAction+'</div><div class="dashx-focus-hint">última sync '+escapeHtml(gestaoActivityDateLabel(synced))+'</div></div>'+cards+'<div class="dashx-table-wrap"><table class="dashx-table"><thead><tr><th>Usuário</th><th>Last active</th><th>Última ação</th><th>Dias sem ação</th><th>Mov. hoje</th><th>Mov. últ. 7 dias</th><th class="num">Projetos</th></tr></thead><tbody>'+rows+'</tbody></table></div>';
 }
 function gestaoReloadClickUpUserActivity(force) {
   var box = document.getElementById('clickup-user-activity-content');
