@@ -105,6 +105,10 @@ function doGet(e) {
       requireAdmin_(params);
       return jsonOutput_(syncClickUpUserActivity_(params), params.callback);
     }
+    if (action === 'startClickUpUserActivityBackground') {
+      requireAdmin_(params);
+      return jsonOutput_(startClickUpUserActivityBackground_(params), params.callback);
+    }
     if (action === 'getClickUpUserActivity') {
       requireAdmin_(params);
       return jsonOutput_(getClickUpUserActivity_(params), params.callback);
@@ -156,7 +160,7 @@ function doGet(e) {
     var payload = {
       ok: true,
       service: 'clickup-sync',
-      message: 'Use action=getMonthlyProjects|syncProject|syncAll|processDirty|validateConfig|getClickUpInventory|syncClickUpUserActivity|getClickUpUserActivity|logPanelUpdate|getPanelUpdateHistory|login|me|listUsers|createUser|setUserEnabled|logProjectFollowup|getProjectFollowups|setProjectFollowupStatus|setProjectKanbanStage|deleteProjectFollowup'
+      message: 'Use action=getMonthlyProjects|syncProject|syncAll|processDirty|validateConfig|getClickUpInventory|syncClickUpUserActivity|startClickUpUserActivityBackground|getClickUpUserActivity|logPanelUpdate|getPanelUpdateHistory|login|me|listUsers|createUser|setUserEnabled|logProjectFollowup|getProjectFollowups|setProjectFollowupStatus|setProjectKanbanStage|deleteProjectFollowup'
     };
     return jsonOutput_(payload, params.callback);
   } catch (error) {
@@ -1123,7 +1127,12 @@ function syncClickUpUserActivity_(params) {
   var startMs = parseClickUpAuditTimeParam_(params.start_time, endMs - days * 24 * 60 * 60 * 1000);
   if (startMs >= endMs) throw new Error('Periodo invalido para auditoria ClickUp.');
 
-  var members = fetchClickUpWorkspaceMembers_(workspaceId, toInt_(params.scan_offset, 0) === 0 && String(params.retry_errors || '') !== '1');
+  var members = fetchClickUpWorkspaceMembers_(
+    workspaceId,
+    toInt_(params.scan_offset, 0) === 0 &&
+      String(params.resume_scan || '') !== '1' &&
+      String(params.retry_errors || '') !== '1'
+  );
   if (String(params.force_estimated || '') === '1') {
     return syncClickUpUserActivityApprox_(params, {
       workspace_id: workspaceId,
@@ -1177,6 +1186,76 @@ function syncClickUpUserActivity_(params) {
     summary_sheet: getClickUpUserActivitySheetName_(),
     raw_sheet: getClickUpAuditLogSheetName_()
   };
+}
+
+function startClickUpUserActivityBackground_(params) {
+  params = params || {};
+  var props = PropertiesService.getScriptProperties();
+  props.setProperty('CLICKUP_ACTIVITY_BACKGROUND_ACTIVE', '1');
+  props.setProperty('CLICKUP_ACTIVITY_BACKGROUND_FAILURES', '0');
+  props.setProperty('CLICKUP_ACTIVITY_BACKGROUND_STARTED_AT', new Date().toISOString());
+  props.deleteProperty('CLICKUP_ACTIVITY_BACKGROUND_ERROR');
+  scheduleClickUpUserActivityBackground_(60000);
+  return {
+    ok: true,
+    scheduled: true,
+    message: 'Estimativa agendada em segundo plano. A pagina pode ser fechada.'
+  };
+}
+
+function continueClickUpUserActivityBackgroundTrigger() {
+  var props = PropertiesService.getScriptProperties();
+  if (props.getProperty('CLICKUP_ACTIVITY_BACKGROUND_ACTIVE') !== '1') {
+    clearClickUpUserActivityBackgroundTriggers_();
+    return;
+  }
+  try {
+    var result = syncClickUpUserActivity_({
+      force_estimated: '1',
+      resume_scan: '1',
+      scan_batch_size: '2'
+    });
+    if (result && result.busy) {
+      scheduleClickUpUserActivityBackground_(60000);
+      return;
+    }
+    props.setProperty('CLICKUP_ACTIVITY_BACKGROUND_FAILURES', '0');
+    props.setProperty('CLICKUP_ACTIVITY_BACKGROUND_UPDATED_AT', new Date().toISOString());
+    props.deleteProperty('CLICKUP_ACTIVITY_BACKGROUND_ERROR');
+    if (result && result.done) {
+      props.setProperty('CLICKUP_ACTIVITY_BACKGROUND_ACTIVE', '0');
+      props.setProperty('CLICKUP_ACTIVITY_BACKGROUND_COMPLETED_AT', new Date().toISOString());
+      clearClickUpUserActivityBackgroundTriggers_();
+      return;
+    }
+    scheduleClickUpUserActivityBackground_(60000);
+  } catch (error) {
+    var failures = toInt_(props.getProperty('CLICKUP_ACTIVITY_BACKGROUND_FAILURES'), 0) + 1;
+    props.setProperty('CLICKUP_ACTIVITY_BACKGROUND_FAILURES', String(failures));
+    props.setProperty('CLICKUP_ACTIVITY_BACKGROUND_ERROR', simplifyErrorMessage_(error));
+    if (failures >= 20) {
+      props.setProperty('CLICKUP_ACTIVITY_BACKGROUND_ACTIVE', '0');
+      clearClickUpUserActivityBackgroundTriggers_();
+      return;
+    }
+    scheduleClickUpUserActivityBackground_(60000);
+  }
+}
+
+function scheduleClickUpUserActivityBackground_(delayMs) {
+  clearClickUpUserActivityBackgroundTriggers_();
+  ScriptApp.newTrigger('continueClickUpUserActivityBackgroundTrigger')
+    .timeBased()
+    .after(Math.max(1000, Number(delayMs || 60000)))
+    .create();
+}
+
+function clearClickUpUserActivityBackgroundTriggers_() {
+  ScriptApp.getProjectTriggers().forEach(function(trigger) {
+    if (trigger.getHandlerFunction() === 'continueClickUpUserActivityBackgroundTrigger') {
+      ScriptApp.deleteTrigger(trigger);
+    }
+  });
 }
 
 function syncClickUpUserActivityApprox_(params, meta) {
@@ -1290,9 +1369,10 @@ function getClickUpUserActivity_(params) {
   requireAdmin_(params || {});
   var ss = SpreadsheetApp.openById(getScriptProperty_('SHEET_ID'));
   var sheet = ss.getSheetByName(getClickUpUserActivitySheetName_());
-  if (!sheet) return { ok: true, users: [], total: 0, needs_generate: true, sheet: getClickUpUserActivitySheetName_() };
+  var backgroundSync = getClickUpUserActivityBackgroundStatus_();
+  if (!sheet) return { ok: true, users: [], total: 0, needs_generate: true, background_sync: backgroundSync, sheet: getClickUpUserActivitySheetName_() };
   var values = sheet.getDataRange().getValues();
-  if (values.length <= 1) return { ok: true, users: [], total: 0, needs_generate: true, sheet: getClickUpUserActivitySheetName_() };
+  if (values.length <= 1) return { ok: true, users: [], total: 0, needs_generate: true, background_sync: backgroundSync, sheet: getClickUpUserActivitySheetName_() };
   var header = values[0];
   var users = values.slice(1).map(function(row) {
     return rowToObject_(header, row);
@@ -1306,7 +1386,19 @@ function getClickUpUserActivity_(params) {
     total: users.length,
     stale_schema: stale,
     needs_generate: stale,
+    background_sync: backgroundSync,
     sheet: getClickUpUserActivitySheetName_()
+  };
+}
+
+function getClickUpUserActivityBackgroundStatus_() {
+  var props = PropertiesService.getScriptProperties();
+  return {
+    active: props.getProperty('CLICKUP_ACTIVITY_BACKGROUND_ACTIVE') === '1',
+    started_at: props.getProperty('CLICKUP_ACTIVITY_BACKGROUND_STARTED_AT') || '',
+    updated_at: props.getProperty('CLICKUP_ACTIVITY_BACKGROUND_UPDATED_AT') || '',
+    completed_at: props.getProperty('CLICKUP_ACTIVITY_BACKGROUND_COMPLETED_AT') || '',
+    error: props.getProperty('CLICKUP_ACTIVITY_BACKGROUND_ERROR') || ''
   };
 }
 
