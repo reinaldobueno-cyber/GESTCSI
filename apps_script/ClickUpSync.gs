@@ -636,8 +636,11 @@ function buildNormalizedProjectFromClickUp_(mapping) {
     var phaseInfo = resolvePhaseForTask_(task, byId, phaseMap);
     var phase = phaseInfo.phase;
     var countInSummary = shouldCountTaskInSummary_(task, phaseInfo, byId);
+    var milestoneTask = isMilestoneTask_(task);
 
-    if (!countInSummary) {
+    // Marcos podem ter subtarefas de evidencia/validacao. Eles ainda precisam
+    // entrar no fechamento, mesmo quando nao contam como task folha no resumo.
+    if (!countInSummary && !milestoneTask) {
       ignoredNestedItems += 1;
       return;
     }
@@ -659,7 +662,7 @@ function buildNormalizedProjectFromClickUp_(mapping) {
       due_date: task.due_date ? fromMillisIso_(task.due_date) : ''
     };
 
-    if (isMilestoneTask_(task)) {
+    if (milestoneTask) {
       item.tipo = 'marco';
       item.concluido = isClosedStatus_(item.status_original);
       normalizedMilestones.push(item);
@@ -1220,8 +1223,8 @@ function upsertClickUpMilestoneClosing_(mapping, normalized) {
 
 function clickUpMilestoneSituation_(status) {
   var key = normalizeKey_(status);
-  if (/REPROVADO.*GESTAO|GESTAO.*REPROVADO/.test(key)) return 'reprovado';
-  if (/APROVADO.*GESTAO|GESTAO.*APROVADO/.test(key)) return 'aprovado';
+  if (/REPROVAD/.test(key) && /GESTAO/.test(key)) return 'reprovado';
+  if (/APROVAD/.test(key) && /GESTAO/.test(key)) return 'aprovado';
   if (/CLOSED|CLOSE|CONCLUID|FINALIZ|DONE|COMPLETE/.test(key)) return 'aguardando';
   return 'outro';
 }
@@ -4026,6 +4029,10 @@ function isClosedStatus_(status) {
 }
 
 function isMilestoneTask_(task) {
+  var statusKey = normalizeKey_(task.status && (task.status.status || task.status.type || task.status.label) || '');
+  // Estes status foram criados especificamente para a validacao de marcos.
+  // A regra tambem protege leituras de views que omitem o tipo customizado.
+  if (/(APROVAD|REPROVAD)/.test(statusKey) && /GESTAO/.test(statusKey)) return true;
   var typeName = sanitizeText_(
     task.custom_item && task.custom_item.name ||
     task.custom_task_type && task.custom_task_type.name ||

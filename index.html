@@ -3127,6 +3127,10 @@ body.theme-dark *{
 .closing-status.aprovado{background:var(--green-s);color:var(--green)}
 .closing-status.reprovado{background:var(--red-s);color:var(--red)}
 .closing-justification{max-width:320px;font-size:10px;line-height:1.4;color:var(--text2)}
+.closing-summary-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:18px}
+.closing-section-title{font-size:11px;font-weight:900;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);margin:12px 0 7px}
+.closing-summary-table td,.closing-summary-table th{padding:8px 10px}
+@media(max-width:1100px){.closing-summary-grid{grid-template-columns:1fr}}
 @media(max-width:900px){.closing-kpis{grid-template-columns:repeat(2,1fr)}.closing-head{flex-direction:column}}
 </style>
 </head>
@@ -4983,7 +4987,7 @@ var FECHAMENTO_MARCOS = [];
 var FECHAMENTO_META = {};
 var FECHAMENTO_LOADED = false;
 var FECHAMENTO_LOADING = false;
-var FECHAMENTO_FILTER = { month:'', consultor:'todos', situacao:'todos' };
+var FECHAMENTO_FILTER = { month:'todos', consultor:'todos', projeto:'todos', situacao:'todos' };
 function fechamentoCurrentMonth() {
   var d = new Date();
   return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0');
@@ -5011,7 +5015,7 @@ function fechamentoLoad(force) {
     FECHAMENTO_LOADING = false;
     var nav = document.getElementById('nav-fech');
     if (nav) nav.style.display = '';
-    if (!FECHAMENTO_FILTER.month) FECHAMENTO_FILTER.month = fechamentoCurrentMonth();
+    if (!FECHAMENTO_FILTER.month) FECHAMENTO_FILTER.month = 'todos';
     initFechamento();
     return resp;
   }).catch(function(error) {
@@ -5033,8 +5037,9 @@ function fechamentoSetFilter(key, value) {
 function fechamentoFilteredRows() {
   return (FECHAMENTO_MARCOS || []).filter(function(item) {
     var month = String(FECHAMENTO_FILTER.month || '');
-    if (month && String(item.mes_fechamento || '') !== month && String(item.mes_validacao || '') !== month) return false;
+    if (month && month !== 'todos' && String(item.mes_fechamento || '') !== month && String(item.mes_validacao || '') !== month) return false;
     if (FECHAMENTO_FILTER.consultor !== 'todos' && String(item.consultor || '') !== FECHAMENTO_FILTER.consultor) return false;
+    if (FECHAMENTO_FILTER.projeto !== 'todos' && String(item.projeto || '') !== FECHAMENTO_FILTER.projeto) return false;
     if (FECHAMENTO_FILTER.situacao !== 'todos' && String(item.situacao || '') !== FECHAMENTO_FILTER.situacao) return false;
     return true;
   });
@@ -5077,12 +5082,14 @@ function initFechamento() {
   }
   var months = {};
   var consultants = {};
+  var projects = {};
   (FECHAMENTO_MARCOS || []).forEach(function(item) {
     if (item.mes_fechamento) months[item.mes_fechamento] = true;
     if (item.mes_validacao) months[item.mes_validacao] = true;
     if (item.consultor) consultants[item.consultor] = true;
+    if (item.projeto) projects[item.projeto] = true;
   });
-  if (!FECHAMENTO_FILTER.month) FECHAMENTO_FILTER.month = fechamentoCurrentMonth();
+  if (!FECHAMENTO_FILTER.month) FECHAMENTO_FILTER.month = 'todos';
   var list = fechamentoFilteredRows();
   var waiting = list.filter(function(x){ return x.situacao === 'aguardando'; }).length;
   var approved = list.filter(function(x){ return x.situacao === 'aprovado'; }).length;
@@ -5090,13 +5097,32 @@ function initFechamento() {
   var bonus = list.reduce(function(sum, x){ return sum + Number(x.valor_bonus || 0); }, 0);
   var badge = document.getElementById('n-fech');
   if (badge) { badge.hidden = waiting === 0; badge.textContent = waiting; }
-  var monthOptions = Object.keys(months).sort().reverse().map(function(month) {
+  var monthOptions = '<option value="todos" '+(FECHAMENTO_FILTER.month === 'todos' ? 'selected' : '')+'>Todos os meses</option>'+Object.keys(months).sort().reverse().map(function(month) {
     return '<option value="'+escapeHtml(month)+'" '+(month === FECHAMENTO_FILTER.month ? 'selected' : '')+'>'+escapeHtml(month)+'</option>';
   }).join('');
-  if (!months[FECHAMENTO_FILTER.month]) monthOptions = '<option value="'+escapeHtml(FECHAMENTO_FILTER.month)+'">'+escapeHtml(FECHAMENTO_FILTER.month)+'</option>'+monthOptions;
   var consultorOptions = '<option value="todos">Todos os consultores</option>'+Object.keys(consultants).sort().map(function(name) {
     return '<option value="'+escapeHtml(name)+'" '+(name === FECHAMENTO_FILTER.consultor ? 'selected' : '')+'>'+escapeHtml(name)+'</option>';
   }).join('');
+  var projetoOptions = '<option value="todos">Todos os projetos</option>'+Object.keys(projects).sort().map(function(name) {
+    return '<option value="'+escapeHtml(name)+'" '+(name === FECHAMENTO_FILTER.projeto ? 'selected' : '')+'>'+escapeHtml(name)+'</option>';
+  }).join('');
+  function closingSummary(groupKey, emptyLabel) {
+    var grouped = {};
+    list.forEach(function(item) {
+      var name = String(item[groupKey] || emptyLabel);
+      var row = grouped[name] || (grouped[name] = {name:name, total:0, aguardando:0, aprovado:0, reprovado:0, bonus:0});
+      row.total += 1;
+      if (item.situacao === 'aguardando') row.aguardando += 1;
+      if (item.situacao === 'aprovado') row.aprovado += 1;
+      if (item.situacao === 'reprovado') row.reprovado += 1;
+      row.bonus += Number(item.valor_bonus || 0);
+    });
+    var summaryRows = Object.keys(grouped).sort().map(function(name) {
+      var row = grouped[name];
+      return '<tr><td><strong>'+escapeHtml(row.name)+'</strong></td><td class="num">'+row.total+'</td><td class="num">'+row.aguardando+'</td><td class="num">'+row.aprovado+'</td><td class="num">'+row.reprovado+'</td><td class="num">'+fechamentoMoney(row.bonus)+'</td></tr>';
+    }).join('');
+    return '<div class="dashx-table-wrap"><table class="dashx-table closing-summary-table"><thead><tr><th>'+escapeHtml(groupKey === 'consultor' ? 'Consultor' : 'Projeto')+'</th><th class="num">Marcos</th><th class="num">Aguardando</th><th class="num">Aprovados</th><th class="num">Reprovados</th><th class="num">Bônus</th></tr></thead><tbody>'+summaryRows+'</tbody></table></div>';
+  }
   var rows = list.length ? list.map(function(item) {
     var status = String(item.situacao || 'outro');
     var justification = item.justificativa
@@ -5118,10 +5144,13 @@ function initFechamento() {
   box.innerHTML = '<div class="closing-head"><div><div class="closing-title">Fechamento de marcos</div><div class="closing-sub">Acompanha diariamente marcos que chegaram em Closed e a validação técnica em Aprovado Gestão ou Reprovado Gestão. Somente aprovados entram na bonificação de R$ 30 por marco.</div></div>'+
     '<div class="closing-actions"><select class="closing-select" onchange="fechamentoSetFilter(\'month\',this.value)">'+monthOptions+'</select>'+
     '<select class="closing-select" onchange="fechamentoSetFilter(\'consultor\',this.value)">'+consultorOptions+'</select>'+
+    '<select class="closing-select" onchange="fechamentoSetFilter(\'projeto\',this.value)">'+projetoOptions+'</select>'+
     '<select class="closing-select" onchange="fechamentoSetFilter(\'situacao\',this.value)"><option value="todos">Todos os status</option><option value="aguardando" '+(FECHAMENTO_FILTER.situacao==='aguardando'?'selected':'')+'>Aguardando validação</option><option value="aprovado" '+(FECHAMENTO_FILTER.situacao==='aprovado'?'selected':'')+'>Aprovados</option><option value="reprovado" '+(FECHAMENTO_FILTER.situacao==='reprovado'?'selected':'')+'>Reprovados</option></select>'+
     (AUTH_STATE.user && AUTH_STATE.user.role === 'admin' ? '<button class="btn-syncall" onclick="return fechamentoStartSync(this)">Atualizar ClickUp</button>' : '')+
     '<button class="btn-reload" onclick="fechamentoLoad(true)">Recarregar</button></div></div>'+error+syncNote+
     '<div class="closing-kpis"><div class="closing-kpi"><span>Marcos no recorte</span><strong>'+list.length+'</strong></div><div class="closing-kpi"><span>Aguardando validação</span><strong>'+waiting+'</strong></div><div class="closing-kpi"><span>Aprovados / Reprovados</span><strong>'+approved+' / '+rejected+'</strong></div><div class="closing-kpi"><span>Bonificação aprovada</span><strong>'+fechamentoMoney(bonus)+'</strong></div></div>'+
+    '<div class="closing-summary-grid"><div><div class="closing-section-title">Resumo por consultor</div>'+closingSummary('consultor','Sem consultor')+'</div><div><div class="closing-section-title">Resumo por projeto</div>'+closingSummary('projeto','Sem projeto')+'</div></div>'+
+    '<div class="closing-section-title">Detalhamento dos marcos</div>'+
     '<div class="dashx-table-wrap"><table class="dashx-table"><thead><tr><th>Projeto / fase</th><th>Consultor</th><th>Marco</th><th>Closed em</th><th>Validação</th><th>Validado em</th><th>Justificativa</th><th class="num">Bônus</th><th>Ação</th></tr></thead><tbody>'+rows+'</tbody></table></div>';
 }
 window.fechamentoLoad = fechamentoLoad;
