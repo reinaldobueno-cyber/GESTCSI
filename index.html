@@ -3180,7 +3180,7 @@ body.theme-dark *{
 <button class="snb" onclick="goTab('exec',this)"><span class="snb-icon">&#127775;</span><span class="snb-label">Executivo</span></button>
 <button class="snb" onclick="goTab('tower',this)"><span class="snb-icon">&#128737;</span><span class="snb-label">Gest&atilde;o</span><span class="snb-badge" id="n-tower" hidden>0</span></button>
 <button class="snb" onclick="return abrirAcompanhamentosPendentes(this)" title="Abrir acompanhamentos pendentes"><span class="snb-icon">&#128276;</span><span class="snb-label">Acompanhamento</span><span class="snb-badge" id="n-acom" hidden>0</span></button>
-<button class="snb" onclick="goTab('fech',this)"><span class="snb-icon">&#9989;</span><span class="snb-label">Fechamento</span><span class="snb-badge" id="n-fech" hidden>0</span></button>
+<button class="snb" id="nav-fech" style="display:none" onclick="goTab('fech',this)"><span class="snb-icon">&#9989;</span><span class="snb-label">Fechamento</span><span class="snb-badge" id="n-fech" hidden>0</span></button>
 <button class="snb" onclick="goTab('all',this)"><span class="snb-icon">&#128203;</span><span class="snb-label">Projetos</span><span class="snb-badge" id="n-all" hidden>0</span></button>
 <button class="snb" onclick="goTab('cons',this)"><span class="snb-icon">&#128100;</span><span class="snb-label">Consultores</span></button>
 <button class="snb" onclick="goTab('vend',this)"><span class="snb-icon">&#129309;</span><span class="snb-label">Vendedores</span></button>
@@ -5003,18 +5003,24 @@ function fechamentoLoad(force) {
     auth_token: authTokenParam()
   }, 30000).then(function(resp) {
     if (!resp || resp.ok === false || !Array.isArray(resp.marcos)) {
-      throw new Error((resp && (resp.error || resp.message)) || 'Base de fechamento indisponível');
+      throw new Error('Fechamento ainda não está disponível no Apps Script publicado.');
     }
     FECHAMENTO_MARCOS = resp.marcos;
     FECHAMENTO_META = resp;
     FECHAMENTO_LOADED = true;
     FECHAMENTO_LOADING = false;
+    var nav = document.getElementById('nav-fech');
+    if (nav) nav.style.display = '';
     if (!FECHAMENTO_FILTER.month) FECHAMENTO_FILTER.month = fechamentoCurrentMonth();
     initFechamento();
     return resp;
   }).catch(function(error) {
     FECHAMENTO_LOADING = false;
-    FECHAMENTO_META.error = (error && error.message) || 'Base de fechamento indisponível';
+    FECHAMENTO_META.error = 'Fechamento ainda não está disponível.';
+    var nav = document.getElementById('nav-fech');
+    if (nav) nav.style.display = 'none';
+    var page = document.getElementById('page-fech');
+    if (page && page.classList.contains('on')) goTab('dash');
     initFechamento();
     return null;
   });
@@ -5193,6 +5199,7 @@ window.alternarUsuarioPainel = alternarUsuarioPainel;
 
 function renderAll() {
   buildPeriodBar(); initDash(); initControlTower(); initAcomp(); initFechamento(); initAdmin(); initAll(); initCons(); initVend(); initAvul(); initLog(); initPraz(); initAlert(); initExec();
+  if (!FECHAMENTO_LOADED && !FECHAMENTO_LOADING) fechamentoLoad(false);
 }
 function abrirProjetosComFiltro(status, clienteBusca) {
   fS = status || 'all';
