@@ -3899,9 +3899,13 @@ function getCmaxDailyEvents_(params) {
   var events = values.slice(1).map(function(row) {
     var item = {};
     headers.forEach(function(header, index) { item[header] = row[index]; });
+    item.data = normalizeCmaxSheetDate_(item.data);
+    item.mes = normalizeCmaxSheetMonth_(item.mes || item.data);
+    item.ano = item.mes ? item.mes.slice(0, 4) : String(item.ano || '');
+    delete item.raw_json;
     return item;
   }).filter(function(item) {
-    if (month && String(item.mes || '') !== month) return false;
+    if (month && item.mes !== month) return false;
     if (consultant && sanitizeText_(item.consultor).toUpperCase() !== consultant) return false;
     return true;
   });
@@ -4078,7 +4082,7 @@ function replaceCmaxDailyMonth_(month, events) {
   var headers = getCmaxDailyHeaders_();
   var values = sheet.getDataRange().getValues();
   var monthIndex = headers.indexOf('mes');
-  var retained = values.slice(1).filter(function(row) { return String(row[monthIndex] || '') !== month; });
+  var retained = values.slice(1).filter(function(row) { return normalizeCmaxSheetMonth_(row[monthIndex]) !== month; });
   var added = events.map(function(item) { return headers.map(function(header) { return item[header] === undefined ? '' : item[header]; }); });
   sheet.clearContents();
   sheet.getRange(1, 1, 1, headers.length).setValues([headers]);
@@ -4090,6 +4094,23 @@ function replaceCmaxDailyMonth_(month, events) {
 function sanitizeCmaxMonth_(value) {
   var match = String(value || '').trim().match(/^(\d{4})-(0[1-9]|1[0-2])$/);
   return match ? match[0] : '';
+}
+
+function normalizeCmaxSheetMonth_(value) {
+  if (value instanceof Date && !isNaN(value.getTime())) {
+    return Utilities.formatDate(value, Session.getScriptTimeZone(), 'yyyy-MM');
+  }
+  var text = String(value || '').trim();
+  var match = text.match(/^(\d{4})-(0[1-9]|1[0-2])/);
+  return match ? match[1] + '-' + match[2] : '';
+}
+
+function normalizeCmaxSheetDate_(value) {
+  if (value instanceof Date && !isNaN(value.getTime())) {
+    return Utilities.formatDate(value, Session.getScriptTimeZone(), 'yyyy-MM-dd');
+  }
+  var parsed = parseCmaxDate_(value);
+  return parsed ? Utilities.formatDate(parsed, Session.getScriptTimeZone(), 'yyyy-MM-dd') : String(value || '');
 }
 
 function cmaxMonthRange_(month) {
