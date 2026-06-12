@@ -28,7 +28,7 @@
 var CLICKUP_API_BASE = 'https://api.clickup.com/api/v2';
 var CLICKUP_DEFAULT_WORKSPACE_ID = '9007083069';
 var CLICKUP_MILESTONE_BONUS_VALUE = 30;
-var CLICKUP_MILESTONE_AUDIT_TASK_IDS = ['86a6bhumn'];
+var CLICKUP_MILESTONE_AUDIT_TASK_IDS = ['86a6bhumn', '86ag3xkqw'];
 var MONTHS = ['JAN', 'FEV', 'MAR', 'ABR', 'MAI', 'JUN', 'JUL', 'AGO', 'SET', 'OUT', 'NOV', 'DEZ'];
 var HISTORICAL_CLICKUP_SPACES = [
   { name: 'CSI-PROJETOS-ENGORDA', space_id: '90130063112', url: 'https://app.clickup.com/9007083069/v/s/90130063112' },
@@ -881,6 +881,31 @@ function fetchClickUpMilestoneCoverageTasks_() {
   return dedupeTasks_(all);
 }
 
+function fetchClickUpRecentMilestoneCoverageTasks_(days) {
+  var workspaceId = getClickUpWorkspaceId_();
+  if (!workspaceId) throw new Error('CLICKUP_TEAM_ID nao configurado para atualizacao recente de marcos.');
+  var since = new Date().getTime() - Math.max(1, Number(days || 14)) * 86400000;
+  var page = 0;
+  var all = [];
+  while (page < 1) {
+    var query = [
+      'include_closed=true',
+      'subtasks=true',
+      'date_updated_gt=' + since,
+      'page=' + page
+    ].join('&');
+    var response = clickupRequest_('get', '/team/' + workspaceId + '/task?' + query);
+    var batch = response.tasks || [];
+    all = all.concat(batch.filter(function(task) {
+      var status = task && task.status && (task.status.status || task.status.type || task.status.label) || '';
+      return clickUpMilestoneSituation_(status) !== 'outro';
+    }));
+    if (batch.length < 100) break;
+    page += 1;
+  }
+  return dedupeTasks_(all);
+}
+
 function fetchAllFolderTasks_(folderId, options) {
   folderId = normalizeClickUpId_(folderId);
   if (!folderId) throw new Error('CLICKUP_CONFIG com folder_id invalido ou vazio.');
@@ -1342,8 +1367,17 @@ function fetchLatestClickUpTaskComment_(taskId) {
 function startClickUpMilestoneClosingBackground_(params) {
   var props = PropertiesService.getScriptProperties();
   if (props.getProperty('CLICKUP_MILESTONE_CLOSING_ACTIVE') === '1') {
+    var activeRefresh = syncClickUpRecentMilestoneCoverage_();
+    props.setProperty('CLICKUP_MILESTONE_CLOSING_UPDATED_AT', new Date().toISOString());
+    if (activeRefresh.last_error) props.setProperty('CLICKUP_MILESTONE_CLOSING_ERROR', activeRefresh.last_error);
     scheduleClickUpMilestoneClosingBackground_(1000);
-    return { ok: true, scheduled: true, already_active: true, background_sync: getClickUpMilestoneClosingBackgroundStatus_() };
+    return {
+      ok: true,
+      scheduled: true,
+      already_active: true,
+      recent_refresh: activeRefresh,
+      background_sync: getClickUpMilestoneClosingBackgroundStatus_()
+    };
   }
   props.setProperty('CLICKUP_MILESTONE_CLOSING_ACTIVE', '1');
   props.setProperty('CLICKUP_MILESTONE_CLOSING_OFFSET', '0');
@@ -1352,10 +1386,19 @@ function startClickUpMilestoneClosingBackground_(params) {
   props.setProperty('CLICKUP_MILESTONE_CLOSING_DETECTED', '0');
   props.setProperty('CLICKUP_MILESTONE_CLOSING_STARTED_AT', new Date().toISOString());
   props.deleteProperty('CLICKUP_MILESTONE_CLOSING_ERROR');
+  var recentRefresh = syncClickUpRecentMilestoneCoverage_();
+  props.setProperty('CLICKUP_MILESTONE_CLOSING_DETECTED', String(recentRefresh.detected));
+  props.setProperty('CLICKUP_MILESTONE_CLOSING_ERRORS', String(recentRefresh.errors));
+  if (recentRefresh.last_error) props.setProperty('CLICKUP_MILESTONE_CLOSING_ERROR', recentRefresh.last_error);
   props.setProperty('CLICKUP_MILESTONE_CLOSING_TOTAL', String(loadClickUpMilestoneClosingMappings_().length));
   props.setProperty('CLICKUP_MILESTONE_CLOSING_UPDATED_AT', new Date().toISOString());
   scheduleClickUpMilestoneClosingBackground_(1000);
-  return { ok: true, scheduled: true, background_sync: getClickUpMilestoneClosingBackgroundStatus_() };
+  return {
+    ok: true,
+    scheduled: true,
+    recent_refresh: recentRefresh,
+    background_sync: getClickUpMilestoneClosingBackgroundStatus_()
+  };
 }
 
 function sincronizarFechamentoMarcosClickUp() {
@@ -1506,6 +1549,48 @@ function syncClickUpMilestoneAuditTasks_() {
     }
   });
   return { detected: detected, errors: errors, last_error: lastError };
+}
+
+function syncClickUpRecentMilestoneCoverage_() {
+  var mappings = loadClickUpMilestoneClosingMappings_();
+  var tasks = [];
+  var errors = 0;
+  var lastError = '';
+  try {
+    tasks = fetchClickUpRecentMilestoneCoverageTasks_(3);
+  } catch (error) {
+    errors += 1;
+    lastError = 'Atualizacao recente: ' + simplifyErrorMessage_(error);
+  }
+  getClickUpMilestoneAuditTaskIds_().forEach(function(taskId) {
+    try {
+      tasks.push(clickupRequest_('get', '/task/' + normalizeClickUpId_(taskId)));
+    } catch (error) {
+      errors += 1;
+      lastError = 'Leitura direta do marco ' + taskId + ': ' + simplifyErrorMessage_(error);
+    }
+  });
+  tasks = dedupeTasks_(tasks);
+  tasks.sort(function(a, b) {
+    return Number(b && b.date_updated || 0) - Number(a && a.date_updated || 0);
+  });
+  var auditIds = {};
+  getClickUpMilestoneAuditTaskIds_().forEach(function(id) { auditIds[String(id)] = true; });
+  var recentTasks = tasks.filter(function(task) {
+    return !auditIds[String(task && task.id || '')];
+  }).slice(0, 15);
+  tasks = recentTasks.concat(tasks.filter(function(task) {
+    return !!auditIds[String(task && task.id || '')];
+  }));
+  var entries = tasks.filter(function(task) {
+    var status = task && task.status && (task.status.status || task.status.type || task.status.label) || '';
+    return clickUpMilestoneSituation_(status) !== 'outro';
+  }).map(function(task) {
+    var mapping = findProjectMappingForTask_(task, mappings) || fallbackProjectMappingForTask_(task);
+    return { mapping: mapping, normalized: buildNormalizedMilestoneCoverageProject_(mapping, task) };
+  });
+  upsertClickUpMilestoneClosingEntries_(entries);
+  return { detected: entries.length, errors: errors, last_error: lastError };
 }
 
 function findProjectMappingForTask_(task, mappings) {
