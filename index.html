@@ -3084,6 +3084,22 @@ body.theme-dark .pz-card [style*="background:#fff"],
 body.theme-dark .tower-kpis [style*="background:#fff"]{
   background:#111827!important;
 }
+.cmax-shell{display:flex;flex-direction:column;gap:16px}
+.cmax-hero{display:flex;align-items:flex-start;justify-content:space-between;gap:16px;flex-wrap:wrap}
+.cmax-title{font-size:26px;font-weight:900;color:var(--text);letter-spacing:-.04em}
+.cmax-sub{font-size:12px;color:var(--text2);line-height:1.55;max-width:720px;margin-top:5px}
+.cmax-actions{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.cmax-actions select,.cmax-actions input{border:1px solid var(--border);border-radius:9px;background:var(--surf);color:var(--text);padding:9px 11px;font:inherit}
+.cmax-summary{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px}
+.cmax-card{background:var(--surf);border:1px solid var(--border);border-radius:14px;padding:16px}
+.cmax-card span{display:block;font-size:9px;text-transform:uppercase;letter-spacing:.12em;font-weight:900;color:var(--muted)}
+.cmax-card strong{display:block;margin-top:7px;font-size:25px;color:var(--text)}
+.cmax-group{background:var(--surf);border:1px solid var(--border);border-radius:14px;overflow:hidden}
+.cmax-group-head{display:flex;justify-content:space-between;gap:12px;padding:14px 16px;border-bottom:1px solid var(--border);font-weight:900;color:var(--text)}
+.cmax-empty{padding:28px;text-align:center;color:var(--text2)}
+.cmax-status{padding:10px 12px;border:1px solid var(--border);background:var(--surf);border-radius:10px;color:var(--text2);font-size:11px}
+@media(max-width:900px){.cmax-summary{grid-template-columns:repeat(2,1fr)}}
+@media(max-width:560px){.cmax-summary{grid-template-columns:1fr}}
 body.theme-dark .pb.on,
 body.theme-dark .fb.on,
 body.theme-dark .pf-btn.on,
@@ -3165,6 +3181,7 @@ body.theme-dark *{
 <button class="snb" onclick="goTab('exec',this)"><span class="snb-icon">&#127775;</span><span class="snb-label">Executivo</span></button>
 <button class="snb" onclick="goTab('tower',this)"><span class="snb-icon">&#128737;</span><span class="snb-label">Gest&atilde;o</span><span class="snb-badge" id="n-tower" hidden>0</span></button>
 <button class="snb" onclick="return abrirAcompanhamentosPendentes(this)" title="Abrir acompanhamentos pendentes"><span class="snb-icon">&#128276;</span><span class="snb-label">Acompanhamento</span><span class="snb-badge" id="n-acom" hidden>0</span></button>
+<button class="snb" onclick="goTab('cmax',this)"><span class="snb-icon">&#128197;</span><span class="snb-label">Di&aacute;rias CMAX</span></button>
 <button class="snb" onclick="goTab('all',this)"><span class="snb-icon">&#128203;</span><span class="snb-label">Projetos</span><span class="snb-badge" id="n-all" hidden>0</span></button>
 <button class="snb" onclick="goTab('cons',this)"><span class="snb-icon">&#128100;</span><span class="snb-label">Consultores</span></button>
 <button class="snb" onclick="goTab('vend',this)"><span class="snb-icon">&#129309;</span><span class="snb-label">Vendedores</span></button>
@@ -3177,6 +3194,7 @@ body.theme-dark *{
 <div class="page on" id="page-dash"><div id="dash-content"></div></div>
 <div class="page tower-page" id="page-tower"><div id="tower-content"></div></div>
 <div class="page" id="page-acom"><div id="acom-content"></div></div>
+<div class="page" id="page-cmax"><div id="cmax-content"></div></div>
 <div class="page" id="page-admin"><div id="admin-content"></div></div>
 <div class="page" id="page-all">
   <div class="kpis" id="kpis-all"></div>
@@ -3970,6 +3988,7 @@ function goTab(id, btn) {
       } catch(e) {}
     }, 220);
   }
+  if (id === 'cmax') carregarDiariasCmax(false);
 }
 function setPeriod(p, btn) {
   activePeriod = p;
@@ -10740,6 +10759,98 @@ function initAlert(){
     kpi('Total de Alertas',atr.length+exc.length,'r','onclick="abrirAlertasComFiltro(\'all\')"','Clique para visualizar');
   document.getElementById('rows-atr').innerHTML=buildMonthGroupedRows(atr,'alr-');
   document.getElementById('rows-exc').innerHTML=buildMonthGroupedRows(exc,'exc-');
+}
+
+var CMAX_DAILY_STATE = {events:[], loading:false, loaded:false, error:'', month:cmaxCurrentMonth(), consultant:'', search:'', bonus:50, syncedAt:''};
+
+function cmaxCurrentMonth() {
+  var date = new Date();
+  return date.getFullYear()+'-'+String(date.getMonth()+1).padStart(2,'0');
+}
+function cmaxMoney(value) {
+  return Number(value || 0).toLocaleString('pt-BR',{style:'currency',currency:'BRL'});
+}
+function cmaxDate(value) {
+  var parts=String(value||'').slice(0,10).split('-');
+  return parts.length===3 ? parts[2]+'/'+parts[1]+'/'+parts[0] : String(value||'-');
+}
+function cmaxAvailableMonths() {
+  var values=[];
+  var date=new Date();
+  date.setDate(1);
+  for(var i=0;i<36;i++){
+    values.push(date.getFullYear()+'-'+String(date.getMonth()+1).padStart(2,'0'));
+    date.setMonth(date.getMonth()-1);
+  }
+  return values;
+}
+function cmaxFilteredEvents() {
+  var s=CMAX_DAILY_STATE;
+  return (s.events||[]).filter(function(item){
+    if(s.month && String(item.mes||'')!==s.month)return false;
+    if(s.consultant && String(item.consultor||'')!==s.consultant)return false;
+    if(s.search){
+      var hay=(String(item.cliente||'')+' '+String(item.tipo||'')+' '+String(item.descricao||'')).toUpperCase();
+      if(hay.indexOf(s.search.toUpperCase())<0)return false;
+    }
+    return true;
+  });
+}
+function cmaxSelectOptions(values, selected, allLabel) {
+  return '<option value="">'+allLabel+'</option>'+values.map(function(value){
+    return '<option value="'+escapeHtml(value)+'"'+(value===selected?' selected':'')+'>'+escapeHtml(value)+'</option>';
+  }).join('');
+}
+function renderDiariasCmax() {
+  var box=document.getElementById('cmax-content');
+  if(!box)return;
+  var s=CMAX_DAILY_STATE;
+  var months=Array.from(new Set(cmaxAvailableMonths().concat((s.events||[]).map(function(x){return String(x.mes||'');}).filter(Boolean)))).sort().reverse();
+  var consultants=Array.from(new Set((s.events||[]).map(function(x){return String(x.consultor||'');}).filter(Boolean))).sort();
+  var list=cmaxFilteredEvents();
+  var byConsultant={};
+  list.forEach(function(item){
+    var key=String(item.consultor||'Sem consultor');
+    if(!byConsultant[key])byConsultant[key]=[];
+    byConsultant[key].push(item);
+  });
+  var totalBonus=list.reduce(function(sum,item){return sum+Number(item.valor_bonus||s.bonus||0);},0);
+  var clients=new Set(list.map(function(x){return String(x.cliente||'');}).filter(Boolean)).size;
+  var syncButton=AUTH_STATE.user&&AUTH_STATE.user.role==='admin'
+    ? '<button class="btn-syncall" onclick="sincronizarDiariasCmax(this)">Atualizar CMAX</button>'
+    : '';
+  var groups=Object.keys(byConsultant).sort().map(function(name){
+    var events=byConsultant[name].sort(function(a,b){return String(b.data||'').localeCompare(String(a.data||''));});
+    var rows=events.map(function(item){
+      return '<tr><td><strong>'+escapeHtml(item.cliente||'-')+'</strong><div class="search-note">'+escapeHtml(item.descricao||'')+'</div></td><td>'+escapeHtml(item.tipo||'-')+'</td><td>'+cmaxDate(item.data)+'</td><td>'+escapeHtml((item.hora_inicio||'-')+(item.hora_fim?' - '+item.hora_fim:''))+'</td><td><span class="dashx-table-chip">'+escapeHtml(item.resultado||'Positivo')+'</span></td><td class="num"><strong>'+cmaxMoney(item.valor_bonus||s.bonus)+'</strong></td></tr>';
+    }).join('');
+    var subtotal=events.reduce(function(sum,item){return sum+Number(item.valor_bonus||s.bonus||0);},0);
+    return '<section class="cmax-group"><div class="cmax-group-head"><span>'+escapeHtml(name)+'</span><span>'+events.length+' di&aacute;ria(s) &middot; '+cmaxMoney(subtotal)+'</span></div><div class="dashx-table-wrap"><table class="dashx-table"><thead><tr><th>Cliente</th><th>Tipo</th><th>Data</th><th>Hor&aacute;rio</th><th>Resultado</th><th class="num">B&ocirc;nus</th></tr></thead><tbody>'+rows+'</tbody></table></div></section>';
+  }).join('');
+  var status=s.loading?'Consultando a base salva...':s.error?escapeHtml(s.error):(s.syncedAt?'&Uacute;ltima sincroniza&ccedil;&atilde;o: '+escapeHtml(s.syncedAt):'Ainda sem sincroniza&ccedil;&atilde;o CMAX.');
+  box.innerHTML='<div class="cmax-shell"><div class="cmax-hero"><div><div class="cmax-title">Di&aacute;rias realizadas no CMAX</div><div class="cmax-sub">MVP de auditoria da agenda. Conta somente eventos com resultado <strong>Positivo</strong>, separados por consultor, cliente e data. O valor usa '+cmaxMoney(s.bonus)+' por di&aacute;ria.</div></div><div class="cmax-actions"><select onchange="CMAX_DAILY_STATE.month=this.value;renderDiariasCmax()">'+cmaxSelectOptions(months,s.month,'Todos os meses')+'</select><select onchange="CMAX_DAILY_STATE.consultant=this.value;renderDiariasCmax()">'+cmaxSelectOptions(consultants,s.consultant,'Todos os consultores')+'</select><input type="search" placeholder="Filtrar cliente..." value="'+escapeHtml(s.search)+'" oninput="CMAX_DAILY_STATE.search=this.value;renderDiariasCmax()">'+syncButton+'</div></div><div class="cmax-status">'+status+'</div><div class="cmax-summary"><div class="cmax-card"><span>Di&aacute;rias positivas</span><strong>'+list.length+'</strong></div><div class="cmax-card"><span>Consultores</span><strong>'+Object.keys(byConsultant).length+'</strong></div><div class="cmax-card"><span>Clientes atendidos</span><strong>'+clients+'</strong></div><div class="cmax-card"><span>Bonifica&ccedil;&atilde;o estimada</span><strong>'+cmaxMoney(totalBonus)+'</strong></div></div>'+(groups||'<div class="cmax-empty">Nenhuma di&aacute;ria positiva encontrada neste recorte.</div>')+'</div>';
+}
+function carregarDiariasCmax(force) {
+  if(CMAX_DAILY_STATE.loading||(!force&&CMAX_DAILY_STATE.loaded)){renderDiariasCmax();return;}
+  CMAX_DAILY_STATE.loading=true;CMAX_DAILY_STATE.error='';renderDiariasCmax();
+  chamarAppsScriptJsonp('getCmaxDailyEvents',{},30000).then(function(resp){
+    if(!resp||resp.ok===false)throw new Error((resp&&(resp.error||resp.raw_error))||'Falha ao carregar diárias CMAX');
+    CMAX_DAILY_STATE.events=Array.isArray(resp.events)?resp.events:[];
+    CMAX_DAILY_STATE.bonus=Number(resp.bonus_per_day||50);
+    CMAX_DAILY_STATE.syncedAt=String(resp.synced_at||'');
+    CMAX_DAILY_STATE.loaded=true;CMAX_DAILY_STATE.loading=false;renderDiariasCmax();
+  }).catch(function(error){CMAX_DAILY_STATE.loading=false;CMAX_DAILY_STATE.error=error.message||String(error);renderDiariasCmax();});
+}
+function sincronizarDiariasCmax(btn) {
+  var month=CMAX_DAILY_STATE.month||cmaxCurrentMonth();
+  if(btn){btn.disabled=true;btn.textContent='Atualizando...';}
+  CMAX_DAILY_STATE.error='';CMAX_DAILY_STATE.loading=true;renderDiariasCmax();
+  chamarAppsScriptJsonp('syncCmaxDailyEvents',{month:month,auth_token:authTokenParam()},120000).then(function(resp){
+    if(!resp||resp.ok===false)throw new Error((resp&&(resp.error||resp.raw_error))||'Falha ao sincronizar agenda CMAX');
+    CMAX_DAILY_STATE.loaded=false;CMAX_DAILY_STATE.loading=false;
+    showToast('CMAX atualizado: '+Number(resp.imported||0)+' diária(s) positiva(s).','ok');
+    carregarDiariasCmax(true);
+  }).catch(function(error){CMAX_DAILY_STATE.loading=false;CMAX_DAILY_STATE.error=error.message||String(error);renderDiariasCmax();showToast(CMAX_DAILY_STATE.error,'err');});
 }
 
 // ---- Google Sheets JSONP loader ----

@@ -60,6 +60,7 @@ function onOpen() {
     .addItem('Importar projetos dos spaces históricos', 'inserirSpacesHistoricosClickUp')
     .addItem('Sincronizar inventário ClickUp', 'sincronizarInventarioClickUp')
     .addItem('Sincronizar atividade dos usuários ClickUp', 'sincronizarAtividadeUsuariosClickUp')
+    .addItem('Sincronizar diárias CMAX do mês atual', 'sincronizarDiariasCmaxMesAtual')
     .addItem('Sincronizar todos habilitados', 'syncAllProjectsTrigger')
     .addItem('Sincronizar primeiro configurado', 'syncPrimeiroProjetoConfigurado')
     .addToUi();
@@ -113,6 +114,13 @@ function doGet(e) {
       requireAdmin_(params);
       return jsonOutput_(getClickUpUserActivity_(params), params.callback);
     }
+    if (action === 'getCmaxDailyEvents') {
+      return jsonOutput_(getCmaxDailyEvents_(params), params.callback);
+    }
+    if (action === 'syncCmaxDailyEvents') {
+      requireAdmin_(params);
+      return jsonOutput_(syncCmaxDailyEvents_(params), params.callback);
+    }
     if (action === 'logPanelUpdate' || String(params.log_update || '') === '1') {
       var logResult = logPanelUpdate_(params);
       return jsonOutput_(logResult, params.callback);
@@ -160,7 +168,7 @@ function doGet(e) {
     var payload = {
       ok: true,
       service: 'clickup-sync',
-      message: 'Use action=getMonthlyProjects|syncProject|syncAll|processDirty|validateConfig|getClickUpInventory|syncClickUpUserActivity|startClickUpUserActivityBackground|getClickUpUserActivity|logPanelUpdate|getPanelUpdateHistory|login|me|listUsers|createUser|setUserEnabled|logProjectFollowup|getProjectFollowups|setProjectFollowupStatus|setProjectKanbanStage|deleteProjectFollowup'
+      message: 'Use action=getMonthlyProjects|syncProject|syncAll|processDirty|validateConfig|getClickUpInventory|syncClickUpUserActivity|startClickUpUserActivityBackground|getClickUpUserActivity|getCmaxDailyEvents|syncCmaxDailyEvents|logPanelUpdate|getPanelUpdateHistory|login|me|listUsers|createUser|setUserEnabled|logProjectFollowup|getProjectFollowups|setProjectFollowupStatus|setProjectKanbanStage|deleteProjectFollowup'
     };
     return jsonOutput_(payload, params.callback);
   } catch (error) {
@@ -3856,6 +3864,266 @@ function getLatestUpdateItemFromRawTasks_(tasks, byId, phaseMap) {
     }
   });
   return latest ? latest.item : null;
+}
+
+function sincronizarDiariasCmaxMesAtual() {
+  return syncCmaxDailyEvents_({
+    month: Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'yyyy-MM')
+  });
+}
+
+var CMAX_DAILY_SHEET = 'CMAX_DIARIAS';
+var CMAX_AGENDA_URL = 'https://www.multbovinos.com/servicos/eventoscontato/obtenha-agenda/?format=json';
+
+function getCmaxDailyHeaders_() {
+  return [
+    'event_key', 'event_id', 'data', 'mes', 'ano', 'consultor', 'cliente',
+    'tipo', 'resultado', 'descricao', 'hora_inicio', 'hora_fim',
+    'valor_bonus', 'sincronizado_em', 'raw_json'
+  ];
+}
+
+function getCmaxDailySheet_() {
+  var sheet = getOrCreateSheet_(CMAX_DAILY_SHEET);
+  ensureHeaders_(sheet, getCmaxDailyHeaders_());
+  return sheet;
+}
+
+function getCmaxDailyEvents_(params) {
+  params = params || {};
+  var sheet = getCmaxDailySheet_();
+  var values = sheet.getDataRange().getValues();
+  var headers = values.length ? values[0].map(function(value) { return String(value || ''); }) : getCmaxDailyHeaders_();
+  var month = sanitizeCmaxMonth_(params.month || params.mes);
+  var consultant = sanitizeText_(params.consultant || params.consultor).toUpperCase();
+  var events = values.slice(1).map(function(row) {
+    var item = {};
+    headers.forEach(function(header, index) { item[header] = row[index]; });
+    return item;
+  }).filter(function(item) {
+    if (month && String(item.mes || '') !== month) return false;
+    if (consultant && sanitizeText_(item.consultor).toUpperCase() !== consultant) return false;
+    return true;
+  });
+
+  return {
+    ok: true,
+    events: events,
+    total: events.length,
+    month: month,
+    bonus_per_day: getCmaxDailyBonusValue_(),
+    synced_at: events.reduce(function(latest, item) {
+      var value = String(item.sincronizado_em || '');
+      return value > latest ? value : latest;
+    }, ''),
+    sheet: CMAX_DAILY_SHEET
+  };
+}
+
+function syncCmaxDailyEvents_(params) {
+  params = params || {};
+  var month = sanitizeCmaxMonth_(params.month || params.mes) || Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'yyyy-MM');
+  var range = cmaxMonthRange_(month);
+  var token = String(PropertiesService.getScriptProperties().getProperty('CMAX_JWT_TOKEN') || '').trim();
+  if (!token) {
+    throw new Error('CMAX_JWT_TOKEN não configurado nas propriedades do Apps Script.');
+  }
+
+  var response = UrlFetchApp.fetch(CMAX_AGENDA_URL, {
+    method: 'post',
+    contentType: 'application/json',
+    headers: {
+      Authorization: 'JWT ' + token,
+      Accept: 'application/json, text/plain, */*',
+      'Django-Timezone': 'America/Sao_Paulo',
+      Referer: 'https://www.multbovinos.com/'
+    },
+    payload: JSON.stringify({
+      origem: 'tela',
+      data_de: range.start,
+      data_ate: range.end
+    }),
+    muteHttpExceptions: true
+  });
+  var code = response.getResponseCode();
+  var text = response.getContentText();
+  if (code === 401 || code === 403) throw new Error('Token CMAX expirado ou sem permissão. Atualize CMAX_JWT_TOKEN.');
+  if (code < 200 || code >= 300) throw new Error('CMAX respondeu HTTP ' + code + ': ' + text.slice(0, 240));
+
+  var payload;
+  try { payload = JSON.parse(text); } catch (error) { throw new Error('CMAX retornou uma resposta que não é JSON.'); }
+  var candidates = collectCmaxAgendaCandidates_(payload);
+  var syncedAt = new Date().toISOString();
+  var events = candidates.map(function(item) {
+    return normalizeCmaxAgendaEvent_(item, syncedAt);
+  }).filter(function(item) {
+    return item && item.mes === month && isCmaxPositiveResult_(item.resultado);
+  });
+
+  var unique = {};
+  events.forEach(function(item) { unique[item.event_key] = item; });
+  events = Object.keys(unique).map(function(key) { return unique[key]; });
+  replaceCmaxDailyMonth_(month, events);
+
+  return {
+    ok: true,
+    month: month,
+    imported: events.length,
+    candidates: candidates.length,
+    ignored: Math.max(0, candidates.length - events.length),
+    synced_at: syncedAt
+  };
+}
+
+function collectCmaxAgendaCandidates_(value, depth, output, seen, inheritedDate) {
+  depth = depth || 0;
+  output = output || [];
+  seen = seen || {};
+  if (value === null || value === undefined || depth > 10) return output;
+  if (Array.isArray(value)) {
+    value.forEach(function(item) { collectCmaxAgendaCandidates_(item, depth + 1, output, seen, inheritedDate); });
+    return output;
+  }
+  if (typeof value !== 'object') return output;
+  var ownDate = cmaxOwnValue_(value, ['data', 'data_evento', 'data_inicio', 'start', 'date']);
+  var eventDate = ownDate || inheritedDate;
+  var result = cmaxOwnValue_(value, ['resultado_texto', 'resultado', 'status_texto', 'status']);
+  var id = cmaxOwnValue_(value, ['id', 'evento_id', 'event_id', 'uid']);
+  var eventSignal = cmaxOwnValue_(value, [
+    'contato', 'contato_texto', 'cliente', 'cliente_nome', 'responsavel', 'responsavel_texto',
+    'grupo_evento', 'grupo_evento_texto', 'tipo_evento_texto', 'tipo_comunicacao'
+  ]);
+  if (eventDate && result !== '' && eventSignal !== '') {
+    if (!ownDate) {
+      value = cmaxCloneWithParentDate_(value, eventDate);
+    }
+    var signature = String(id || '') + '|' + String(eventDate || '') + '|' + JSON.stringify(value).slice(0, 180);
+    if (!seen[signature]) {
+      seen[signature] = true;
+      output.push(value);
+    }
+  }
+  Object.keys(value).forEach(function(key) {
+    collectCmaxAgendaCandidates_(value[key], depth + 1, output, seen, eventDate);
+  });
+  return output;
+}
+
+function normalizeCmaxAgendaEvent_(raw, syncedAt) {
+  var rawDate = deepFindFirst_(raw, ['data', 'data_evento', 'data_inicio', 'start', 'date', '_cmax_parent_date']);
+  var date = parseCmaxDate_(rawDate);
+  if (!date) return null;
+  var eventId = sanitizeText_(deepFindFirst_(raw, ['id', 'evento_id', 'event_id', 'uid']));
+  var consultant = cmaxScalarText_(deepFindFirst_(raw, [
+    'responsavel_texto', 'responsavel_nome', 'consultor', 'usuario_texto', 'responsavel'
+  ]));
+  var client = cmaxScalarText_(deepFindFirst_(raw, [
+    'contato_texto', 'contato_nome', 'cliente', 'cliente_nome', 'contato'
+  ]));
+  var type = cmaxScalarText_(deepFindFirst_(raw, [
+    'grupo_evento_texto', 'tipo_evento_texto', 'tipo_texto', 'atividade_texto', 'descricao_tipo', 'titulo', 'grupo_evento'
+  ]));
+  var result = cmaxScalarText_(deepFindFirst_(raw, ['resultado_texto', 'resultado', 'status_texto', 'status']));
+  if (/^1(?:\.0)?$/.test(result)) result = 'Positivo';
+  var description = sanitizeText_(deepFindFirst_(raw, ['descricao', 'observacao', 'obs', 'assunto', 'titulo']));
+  var isoDate = Utilities.formatDate(date, Session.getScriptTimeZone(), 'yyyy-MM-dd');
+  var month = isoDate.slice(0, 7);
+  var key = eventId || [isoDate, consultant, client, type, result].join('|').toUpperCase();
+  return {
+    event_key: key,
+    event_id: eventId,
+    data: isoDate,
+    mes: month,
+    ano: month.slice(0, 4),
+    consultor: consultant || 'Sem consultor',
+    cliente: client || 'Cliente não identificado',
+    tipo: type || 'Agenda CMAX',
+    resultado: result,
+    descricao: description,
+    hora_inicio: sanitizeText_(deepFindFirst_(raw, ['hora_inicio', 'inicio_hora', 'start_time'])),
+    hora_fim: sanitizeText_(deepFindFirst_(raw, ['hora_fim', 'fim_hora', 'end_time'])),
+    valor_bonus: getCmaxDailyBonusValue_(),
+    sincronizado_em: syncedAt,
+    raw_json: JSON.stringify(raw)
+  };
+}
+
+function cmaxScalarText_(value) {
+  if (value === null || value === undefined) return '';
+  if (typeof value !== 'object') return sanitizeText_(value);
+  return sanitizeText_(deepFindFirst_(value, ['nome', 'name', 'texto', 'descricao', 'label', 'status', 'resultado', 'id']));
+}
+
+function cmaxOwnValue_(value, aliases) {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return '';
+  var aliasMap = {};
+  (aliases || []).forEach(function(alias) { aliasMap[String(alias).toLowerCase()] = true; });
+  var keys = Object.keys(value);
+  for (var i = 0; i < keys.length; i++) {
+    if (aliasMap[String(keys[i]).toLowerCase()]) {
+      var found = value[keys[i]];
+      return found === null || found === undefined ? '' : found;
+    }
+  }
+  return '';
+}
+
+function cmaxCloneWithParentDate_(value, date) {
+  var clone = {};
+  Object.keys(value || {}).forEach(function(key) { clone[key] = value[key]; });
+  clone._cmax_parent_date = date;
+  return clone;
+}
+
+function replaceCmaxDailyMonth_(month, events) {
+  var sheet = getCmaxDailySheet_();
+  var headers = getCmaxDailyHeaders_();
+  var values = sheet.getDataRange().getValues();
+  var monthIndex = headers.indexOf('mes');
+  var retained = values.slice(1).filter(function(row) { return String(row[monthIndex] || '') !== month; });
+  var added = events.map(function(item) { return headers.map(function(header) { return item[header] === undefined ? '' : item[header]; }); });
+  sheet.clearContents();
+  sheet.getRange(1, 1, 1, headers.length).setValues([headers]);
+  if (retained.length + added.length) {
+    sheet.getRange(2, 1, retained.length + added.length, headers.length).setValues(retained.concat(added));
+  }
+}
+
+function sanitizeCmaxMonth_(value) {
+  var match = String(value || '').trim().match(/^(\d{4})-(0[1-9]|1[0-2])$/);
+  return match ? match[0] : '';
+}
+
+function cmaxMonthRange_(month) {
+  var parts = month.split('-');
+  var year = Number(parts[0]);
+  var monthIndex = Number(parts[1]) - 1;
+  var lastDay = new Date(year, monthIndex + 1, 0).getDate();
+  return {
+    start: year + '-' + String(monthIndex + 1).padStart(2, '0') + '-01',
+    end: year + '-' + String(monthIndex + 1).padStart(2, '0') + '-' + String(lastDay).padStart(2, '0')
+  };
+}
+
+function parseCmaxDate_(value) {
+  if (value instanceof Date && !isNaN(value.getTime())) return value;
+  var text = String(value || '').trim();
+  var br = text.match(/^(\d{2})\/(\d{2})\/(\d{4})/);
+  if (br) return new Date(Number(br[3]), Number(br[2]) - 1, Number(br[1]));
+  var iso = text.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (iso) return new Date(Number(iso[1]), Number(iso[2]) - 1, Number(iso[3]));
+  var date = new Date(text);
+  return isNaN(date.getTime()) ? null : date;
+}
+
+function isCmaxPositiveResult_(value) {
+  var normalized = sanitizeText_(value).normalize('NFD').replace(/[\u0300-\u036f]/g, '').toUpperCase();
+  return normalized === 'POSITIVO' || normalized === 'POSITIVE' || normalized === '1';
+}
+
+function getCmaxDailyBonusValue_() {
+  var value = Number(PropertiesService.getScriptProperties().getProperty('CMAX_DIARIA_BONUS') || 50);
+  return isNaN(value) ? 50 : value;
 }
 
 function buildProjectUrl_(mapping, tasks) {
