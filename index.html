@@ -3113,6 +3113,21 @@ body.theme-dark *{
 .admin-user-meta{font-size:11px;color:var(--muted);margin-top:2px;}
 .admin-toggle{border:1px solid var(--border);background:var(--surf2);border-radius:999px;padding:6px 10px;font:900 11px 'Inter',sans-serif;color:var(--text2);cursor:pointer;}
 @media(max-width:860px){.admin-users{grid-template-columns:1fr}}
+.closing-head{display:flex;justify-content:space-between;align-items:flex-start;gap:16px;margin-bottom:16px}
+.closing-title{font-size:22px;font-weight:900;color:var(--text)}
+.closing-sub{font-size:12px;color:var(--muted);margin-top:4px;max-width:760px;line-height:1.5}
+.closing-actions{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.closing-select{border:1px solid var(--border);background:var(--surf);border-radius:8px;padding:8px 10px;font:800 11px 'Inter',sans-serif;color:var(--text)}
+.closing-kpis{display:grid;grid-template-columns:repeat(4,minmax(150px,1fr));gap:10px;margin-bottom:16px}
+.closing-kpi{background:var(--surf);border:1px solid var(--border);border-radius:10px;padding:14px}
+.closing-kpi span{display:block;font-size:9px;font-weight:900;text-transform:uppercase;letter-spacing:.08em;color:var(--muted)}
+.closing-kpi strong{display:block;font-size:25px;margin-top:5px;color:var(--text)}
+.closing-status{display:inline-flex;border-radius:999px;padding:4px 8px;font-size:9px;font-weight:900;text-transform:uppercase}
+.closing-status.aguardando{background:var(--orange-s);color:var(--orange)}
+.closing-status.aprovado{background:var(--green-s);color:var(--green)}
+.closing-status.reprovado{background:var(--red-s);color:var(--red)}
+.closing-justification{max-width:320px;font-size:10px;line-height:1.4;color:var(--text2)}
+@media(max-width:900px){.closing-kpis{grid-template-columns:repeat(2,1fr)}.closing-head{flex-direction:column}}
 </style>
 </head>
 <body>
@@ -3165,6 +3180,7 @@ body.theme-dark *{
 <button class="snb" onclick="goTab('exec',this)"><span class="snb-icon">&#127775;</span><span class="snb-label">Executivo</span></button>
 <button class="snb" onclick="goTab('tower',this)"><span class="snb-icon">&#128737;</span><span class="snb-label">Gest&atilde;o</span><span class="snb-badge" id="n-tower" hidden>0</span></button>
 <button class="snb" onclick="return abrirAcompanhamentosPendentes(this)" title="Abrir acompanhamentos pendentes"><span class="snb-icon">&#128276;</span><span class="snb-label">Acompanhamento</span><span class="snb-badge" id="n-acom" hidden>0</span></button>
+<button class="snb" onclick="goTab('fech',this)"><span class="snb-icon">&#9989;</span><span class="snb-label">Fechamento</span><span class="snb-badge" id="n-fech" hidden>0</span></button>
 <button class="snb" onclick="goTab('all',this)"><span class="snb-icon">&#128203;</span><span class="snb-label">Projetos</span><span class="snb-badge" id="n-all" hidden>0</span></button>
 <button class="snb" onclick="goTab('cons',this)"><span class="snb-icon">&#128100;</span><span class="snb-label">Consultores</span></button>
 <button class="snb" onclick="goTab('vend',this)"><span class="snb-icon">&#129309;</span><span class="snb-label">Vendedores</span></button>
@@ -3177,6 +3193,7 @@ body.theme-dark *{
 <div class="page on" id="page-dash"><div id="dash-content"></div></div>
 <div class="page tower-page" id="page-tower"><div id="tower-content"></div></div>
 <div class="page" id="page-acom"><div id="acom-content"></div></div>
+<div class="page" id="page-fech"><div id="fech-content"></div></div>
 <div class="page" id="page-admin"><div id="admin-content"></div></div>
 <div class="page" id="page-all">
   <div class="kpis" id="kpis-all"></div>
@@ -3969,6 +3986,9 @@ function goTab(id, btn) {
         } else { renderLog(); }
       } catch(e) {}
     }, 220);
+  }
+  if (id === 'fech') {
+    fechamentoLoad(false);
   }
 }
 function setPeriod(p, btn) {
@@ -4959,6 +4979,145 @@ function initAcomp() {
     '</div>';
 }
 
+var FECHAMENTO_MARCOS = [];
+var FECHAMENTO_META = {};
+var FECHAMENTO_LOADED = false;
+var FECHAMENTO_LOADING = false;
+var FECHAMENTO_FILTER = { month:'', consultor:'todos', situacao:'todos' };
+function fechamentoCurrentMonth() {
+  var d = new Date();
+  return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0');
+}
+function fechamentoMoney(value) {
+  return Number(value || 0).toLocaleString('pt-BR', {style:'currency', currency:'BRL'});
+}
+function fechamentoLoad(force) {
+  if (!authTokenParam()) return Promise.resolve(null);
+  if (FECHAMENTO_LOADING || (FECHAMENTO_LOADED && !force)) {
+    initFechamento();
+    return Promise.resolve(null);
+  }
+  FECHAMENTO_LOADING = true;
+  initFechamento();
+  return chamarAppsScriptJsonp('getClickUpMilestoneClosing', {
+    auth_token: authTokenParam()
+  }, 30000).then(function(resp) {
+    if (!resp || resp.ok === false || !Array.isArray(resp.marcos)) {
+      throw new Error((resp && (resp.error || resp.message)) || 'Base de fechamento indisponível');
+    }
+    FECHAMENTO_MARCOS = resp.marcos;
+    FECHAMENTO_META = resp;
+    FECHAMENTO_LOADED = true;
+    FECHAMENTO_LOADING = false;
+    if (!FECHAMENTO_FILTER.month) FECHAMENTO_FILTER.month = fechamentoCurrentMonth();
+    initFechamento();
+    return resp;
+  }).catch(function(error) {
+    FECHAMENTO_LOADING = false;
+    FECHAMENTO_META.error = (error && error.message) || 'Base de fechamento indisponível';
+    initFechamento();
+    return null;
+  });
+}
+function fechamentoSetFilter(key, value) {
+  FECHAMENTO_FILTER[key] = String(value || '');
+  initFechamento();
+  return false;
+}
+function fechamentoFilteredRows() {
+  return (FECHAMENTO_MARCOS || []).filter(function(item) {
+    var month = String(FECHAMENTO_FILTER.month || '');
+    if (month && String(item.mes_fechamento || '') !== month && String(item.mes_validacao || '') !== month) return false;
+    if (FECHAMENTO_FILTER.consultor !== 'todos' && String(item.consultor || '') !== FECHAMENTO_FILTER.consultor) return false;
+    if (FECHAMENTO_FILTER.situacao !== 'todos' && String(item.situacao || '') !== FECHAMENTO_FILTER.situacao) return false;
+    return true;
+  });
+}
+function fechamentoStartSync(btn) {
+  if (!AUTH_STATE.user || AUTH_STATE.user.role !== 'admin') {
+    showToast('Somente admin pode iniciar a leitura geral do ClickUp', 'err');
+    return false;
+  }
+  var original = btn && btn.textContent;
+  if (btn) { btn.disabled = true; btn.textContent = 'Agendando...'; }
+  chamarAppsScriptJsonp('startClickUpMilestoneClosingBackground', {
+    auth_token: authTokenParam()
+  }, 30000).then(function(resp) {
+    if (!resp || resp.ok === false) throw new Error((resp && (resp.error || resp.message)) || 'Não foi possível iniciar');
+    showToast('Fechamento ClickUp agendado em segundo plano', 'ok');
+    if (btn) btn.textContent = 'Sincronizando...';
+    function poll() {
+      return fechamentoLoad(true).then(function() {
+        var bg = FECHAMENTO_META.background_sync || {};
+        if (btn && bg.active) btn.textContent = 'Sync '+Number(bg.processed || 0)+'/'+Number(bg.total || 0);
+        if (bg.active) return sleep(15000).then(poll);
+        if (btn) { btn.disabled = false; btn.textContent = original || 'Atualizar ClickUp'; }
+        showToast('Fechamento ClickUp atualizado', 'ok');
+      });
+    }
+    return sleep(2500).then(poll);
+  }).catch(function(error) {
+    if (btn) { btn.disabled = false; btn.textContent = original || 'Atualizar ClickUp'; }
+    showToast((error && error.message) || 'Erro ao atualizar fechamento', 'err');
+  });
+  return false;
+}
+function initFechamento() {
+  var box = document.getElementById('fech-content');
+  if (!box) return;
+  if (FECHAMENTO_LOADING && !FECHAMENTO_LOADED) {
+    box.innerHTML = '<div class="empty">Carregando fechamento de marcos...</div>';
+    return;
+  }
+  var months = {};
+  var consultants = {};
+  (FECHAMENTO_MARCOS || []).forEach(function(item) {
+    if (item.mes_fechamento) months[item.mes_fechamento] = true;
+    if (item.mes_validacao) months[item.mes_validacao] = true;
+    if (item.consultor) consultants[item.consultor] = true;
+  });
+  if (!FECHAMENTO_FILTER.month) FECHAMENTO_FILTER.month = fechamentoCurrentMonth();
+  var list = fechamentoFilteredRows();
+  var waiting = list.filter(function(x){ return x.situacao === 'aguardando'; }).length;
+  var approved = list.filter(function(x){ return x.situacao === 'aprovado'; }).length;
+  var rejected = list.filter(function(x){ return x.situacao === 'reprovado'; }).length;
+  var bonus = list.reduce(function(sum, x){ return sum + Number(x.valor_bonus || 0); }, 0);
+  var badge = document.getElementById('n-fech');
+  if (badge) { badge.hidden = waiting === 0; badge.textContent = waiting; }
+  var monthOptions = Object.keys(months).sort().reverse().map(function(month) {
+    return '<option value="'+escapeHtml(month)+'" '+(month === FECHAMENTO_FILTER.month ? 'selected' : '')+'>'+escapeHtml(month)+'</option>';
+  }).join('');
+  if (!months[FECHAMENTO_FILTER.month]) monthOptions = '<option value="'+escapeHtml(FECHAMENTO_FILTER.month)+'">'+escapeHtml(FECHAMENTO_FILTER.month)+'</option>'+monthOptions;
+  var consultorOptions = '<option value="todos">Todos os consultores</option>'+Object.keys(consultants).sort().map(function(name) {
+    return '<option value="'+escapeHtml(name)+'" '+(name === FECHAMENTO_FILTER.consultor ? 'selected' : '')+'>'+escapeHtml(name)+'</option>';
+  }).join('');
+  var rows = list.length ? list.map(function(item) {
+    var status = String(item.situacao || 'outro');
+    var justification = item.justificativa
+      ? '<div class="closing-justification">'+escapeHtml(item.justificativa)+(item.justificativa_por ? '<div class="dashx-list-sub">por '+escapeHtml(item.justificativa_por)+'</div>' : '')+'</div>'
+      : (status === 'reprovado' ? '<span style="color:var(--red);font-weight:900">Sem justificativa</span>' : '-');
+    return '<tr><td><strong>'+escapeHtml(item.projeto || '-')+'</strong><div class="dashx-list-sub">'+escapeHtml(item.fase || '-')+'</div></td>'+
+      '<td>'+escapeHtml(item.consultor || '-')+'</td><td>'+escapeHtml(item.marco || '-')+'</td>'+
+      '<td>'+(item.closed_at ? formatarDataHoraProjeto(item.closed_at) : '-')+'</td>'+
+      '<td><span class="closing-status '+escapeHtml(status)+'">'+escapeHtml(item.status_atual || status)+'</span></td>'+
+      '<td>'+(item.validation_at ? formatarDataHoraProjeto(item.validation_at) : '-')+'</td><td>'+justification+'</td>'+
+      '<td class="num">'+fechamentoMoney(item.valor_bonus)+'</td>'+
+      '<td><a class="project-link-btn" href="'+escapeHtml(item.link || '#')+'" target="_blank" rel="noopener">Abrir</a></td></tr>';
+  }).join('') : '<tr class="empty-row"><td colspan="9">Nenhum marco encontrado neste recorte. Rode “Atualizar ClickUp” para iniciar a base histórica.</td></tr>';
+  var error = FECHAMENTO_META.error ? '<div class="dashx-focus-note" style="margin-bottom:12px"><strong>'+escapeHtml(FECHAMENTO_META.error)+'</strong></div>' : '';
+  box.innerHTML = '<div class="closing-head"><div><div class="closing-title">Fechamento de marcos</div><div class="closing-sub">Acompanha diariamente marcos que chegaram em Closed e a validação técnica em Aprovado Gestão ou Reprovado Gestão. Somente aprovados entram na bonificação de R$ 30 por marco.</div></div>'+
+    '<div class="closing-actions"><select class="closing-select" onchange="fechamentoSetFilter(\'month\',this.value)">'+monthOptions+'</select>'+
+    '<select class="closing-select" onchange="fechamentoSetFilter(\'consultor\',this.value)">'+consultorOptions+'</select>'+
+    '<select class="closing-select" onchange="fechamentoSetFilter(\'situacao\',this.value)"><option value="todos">Todos os status</option><option value="aguardando" '+(FECHAMENTO_FILTER.situacao==='aguardando'?'selected':'')+'>Aguardando validação</option><option value="aprovado" '+(FECHAMENTO_FILTER.situacao==='aprovado'?'selected':'')+'>Aprovados</option><option value="reprovado" '+(FECHAMENTO_FILTER.situacao==='reprovado'?'selected':'')+'>Reprovados</option></select>'+
+    (AUTH_STATE.user && AUTH_STATE.user.role === 'admin' ? '<button class="btn-syncall" onclick="return fechamentoStartSync(this)">Atualizar ClickUp</button>' : '')+
+    '<button class="btn-reload" onclick="fechamentoLoad(true)">Recarregar</button></div></div>'+error+
+    '<div class="closing-kpis"><div class="closing-kpi"><span>Marcos no recorte</span><strong>'+list.length+'</strong></div><div class="closing-kpi"><span>Aguardando validação</span><strong>'+waiting+'</strong></div><div class="closing-kpi"><span>Aprovados / Reprovados</span><strong>'+approved+' / '+rejected+'</strong></div><div class="closing-kpi"><span>Bonificação aprovada</span><strong>'+fechamentoMoney(bonus)+'</strong></div></div>'+
+    '<div class="dashx-table-wrap"><table class="dashx-table"><thead><tr><th>Projeto / fase</th><th>Consultor</th><th>Marco</th><th>Closed em</th><th>Validação</th><th>Validado em</th><th>Justificativa</th><th class="num">Bônus</th><th>Ação</th></tr></thead><tbody>'+rows+'</tbody></table></div>';
+}
+window.fechamentoLoad = fechamentoLoad;
+window.fechamentoSetFilter = fechamentoSetFilter;
+window.fechamentoStartSync = fechamentoStartSync;
+
 function initAdmin() {
   var el = document.getElementById('admin-content');
   if (!el) return;
@@ -5033,7 +5192,7 @@ window.criarUsuarioPainel = criarUsuarioPainel;
 window.alternarUsuarioPainel = alternarUsuarioPainel;
 
 function renderAll() {
-  buildPeriodBar(); initDash(); initControlTower(); initAcomp(); initAdmin(); initAll(); initCons(); initVend(); initAvul(); initLog(); initPraz(); initAlert(); initExec();
+  buildPeriodBar(); initDash(); initControlTower(); initAcomp(); initFechamento(); initAdmin(); initAll(); initCons(); initVend(); initAvul(); initLog(); initPraz(); initAlert(); initExec();
 }
 function abrirProjetosComFiltro(status, clienteBusca) {
   fS = status || 'all';
