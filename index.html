@@ -3131,8 +3131,24 @@ body.theme-dark *{
 .closing-section-title{font-size:11px;font-weight:900;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);margin:12px 0 7px}
 .closing-summary-table td,.closing-summary-table th{padding:8px 10px}
 .closing-consultant-row td{background:var(--green-s);color:var(--green);font-size:11px;font-weight:900;text-transform:uppercase;letter-spacing:.06em;padding:9px 12px}
+.closing-filter-block{background:var(--surf);border:1px solid var(--border);border-radius:12px;padding:12px;margin-bottom:14px}
+.closing-filter-label{font-size:9px;font-weight:900;text-transform:uppercase;letter-spacing:.09em;color:var(--muted);margin-bottom:8px}
+.closing-filter-chips{display:flex;gap:7px;flex-wrap:wrap}
+.closing-filter-chip{border:1px solid var(--border);background:var(--surf2);border-radius:999px;padding:7px 12px;font:900 10px 'Inter',sans-serif;color:var(--text2);cursor:pointer}
+.closing-filter-chip.on{background:var(--green);border-color:var(--green);color:#fff}
+.closing-consultant-card{background:var(--surf);border:1px solid var(--border);border-radius:14px;margin-bottom:16px;overflow:hidden}
+.closing-consultant-head{display:flex;justify-content:space-between;gap:12px;align-items:center;padding:15px 17px;border-bottom:1px solid var(--border);background:var(--surf2)}
+.closing-consultant-name{font-size:15px;font-weight:900;color:var(--text);text-transform:uppercase;letter-spacing:.04em}
+.closing-consultant-metrics{display:flex;gap:18px;flex-wrap:wrap}
+.closing-consultant-metric{text-align:right}.closing-consultant-metric strong{display:block;font-size:18px;color:var(--text)}.closing-consultant-metric span{font-size:8px;font-weight:900;color:var(--muted);text-transform:uppercase}
+.closing-project-list{padding:12px}
+.closing-project-card{display:grid;grid-template-columns:minmax(240px,1.4fr) minmax(220px,2fr) auto;gap:14px;align-items:center;border:1px solid var(--border);border-radius:12px;padding:12px 14px;margin-bottom:9px;background:var(--surf)}
+.closing-project-card:last-child{margin-bottom:0}
+.closing-project-title{font-size:12px;font-weight:900;color:var(--text)}.closing-project-marco{font-size:11px;font-weight:800;color:var(--text2);margin-top:3px}
+.closing-project-meta{font-size:9px;color:var(--muted);margin-top:4px;line-height:1.5}
+.closing-project-comment{font-size:10px;color:var(--text2);line-height:1.45}
 @media(max-width:1100px){.closing-summary-grid{grid-template-columns:1fr}}
-@media(max-width:900px){.closing-kpis{grid-template-columns:repeat(2,1fr)}.closing-head{flex-direction:column}}
+@media(max-width:900px){.closing-kpis{grid-template-columns:repeat(2,1fr)}.closing-head{flex-direction:column}.closing-project-card{grid-template-columns:1fr}.closing-consultant-head{align-items:flex-start;flex-direction:column}.closing-consultant-metric{text-align:left}}
 </style>
 </head>
 <body>
@@ -5119,67 +5135,58 @@ function initFechamento() {
   var bonus = list.reduce(function(sum, x){ return sum + Number(x.valor_bonus || 0); }, 0);
   var badge = document.getElementById('n-fech');
   if (badge) { badge.hidden = waiting === 0; badge.textContent = waiting; }
-  var monthOptions = '<option value="todos" '+(FECHAMENTO_FILTER.month === 'todos' ? 'selected' : '')+'>Todos os meses</option>'+Object.keys(months).sort().reverse().map(function(month) {
-    return '<option value="'+escapeHtml(month)+'" '+(month === FECHAMENTO_FILTER.month ? 'selected' : '')+'>'+escapeHtml(month)+'</option>';
-  }).join('');
   var consultorOptions = '<option value="todos">Todos os consultores</option>'+Object.keys(consultants).sort().map(function(name) {
     return '<option value="'+escapeHtml(name)+'" '+(name === FECHAMENTO_FILTER.consultor ? 'selected' : '')+'>'+escapeHtml(name)+'</option>';
   }).join('');
   var projetoOptions = '<option value="todos">Todos os projetos</option>'+Object.keys(projects).sort().map(function(name) {
     return '<option value="'+escapeHtml(name)+'" '+(name === FECHAMENTO_FILTER.projeto ? 'selected' : '')+'>'+escapeHtml(name)+'</option>';
   }).join('');
-  function closingSummary(groupKey, emptyLabel) {
-    var grouped = {};
-    list.forEach(function(item) {
-      var name = String(item[groupKey] || emptyLabel);
-      var row = grouped[name] || (grouped[name] = {name:name, total:0, aguardando:0, aprovado:0, reprovado:0, bonus:0});
-      row.total += 1;
-      if (item.situacao === 'aguardando') row.aguardando += 1;
-      if (item.situacao === 'aprovado') row.aprovado += 1;
-      if (item.situacao === 'reprovado') row.reprovado += 1;
-      row.bonus += Number(item.valor_bonus || 0);
-    });
-    var summaryRows = Object.keys(grouped).sort().map(function(name) {
-      var row = grouped[name];
-      return '<tr><td><strong>'+escapeHtml(row.name)+'</strong></td><td class="num">'+row.total+'</td><td class="num">'+row.aguardando+'</td><td class="num">'+row.aprovado+'</td><td class="num">'+row.reprovado+'</td><td class="num">'+fechamentoMoney(row.bonus)+'</td></tr>';
+  var monthChips = '<button class="closing-filter-chip '+(FECHAMENTO_FILTER.month === 'todos' ? 'on' : '')+'" onclick="return fechamentoSetFilter(\'month\',\'todos\')">Todos</button>'+Object.keys(months).sort().reverse().map(function(month) {
+    return '<button class="closing-filter-chip '+(month === FECHAMENTO_FILTER.month ? 'on' : '')+'" onclick="return fechamentoSetFilter(\'month\',\''+escapeHtml(month)+'\')">'+escapeHtml(month)+'</button>';
+  }).join('');
+  var statusChips = [
+    {key:'todos', label:'Todos os status'},
+    {key:'aguardando', label:'Aguardando validação'},
+    {key:'aprovado', label:'Aprovados'},
+    {key:'reprovado', label:'Reprovados'}
+  ].map(function(status) {
+    return '<button class="closing-filter-chip '+(status.key === FECHAMENTO_FILTER.situacao ? 'on' : '')+'" onclick="return fechamentoSetFilter(\'situacao\',\''+status.key+'\')">'+status.label+'</button>';
+  }).join('');
+  var byConsultant = {};
+  list.forEach(function(item) {
+    var name = String(item.consultor || 'Sem consultor');
+    (byConsultant[name] || (byConsultant[name] = [])).push(item);
+  });
+  var consultantCards = Object.keys(byConsultant).sort().map(function(consultant) {
+    var consultantRows = byConsultant[consultant];
+    var consultantApproved = consultantRows.filter(function(item){ return item.situacao === 'aprovado'; }).length;
+    var consultantRejected = consultantRows.filter(function(item){ return item.situacao === 'reprovado'; }).length;
+    var consultantWaiting = consultantRows.filter(function(item){ return item.situacao === 'aguardando'; }).length;
+    var consultantBonus = consultantRows.reduce(function(sum,item){ return sum + Number(item.valor_bonus || 0); },0);
+    var projectCards = consultantRows.map(function(item) {
+      var status = String(item.situacao || 'outro');
+      var comment = item.justificativa
+        ? escapeHtml(item.justificativa)+(item.justificativa_por ? '<div class="closing-project-meta">por '+escapeHtml(item.justificativa_por)+'</div>' : '')
+        : '<span style="color:var(--muted)">Nenhum comentário textual ou anexo encontrado.</span>';
+      return '<div class="closing-project-card"><div><div class="closing-project-title">'+escapeHtml(item.projeto || 'Projeto não mapeado')+'</div><div class="closing-project-marco">'+escapeHtml(item.marco || '-')+'</div><div class="closing-project-meta">'+escapeHtml(item.fase || '-')+'<br>Closed: '+(item.closed_at ? formatarDataHoraProjeto(item.closed_at) : '-')+(item.validation_at ? ' · Validado: '+formatarDataHoraProjeto(item.validation_at) : '')+'</div></div>'+
+        '<div><span class="closing-status '+escapeHtml(status)+'">'+escapeHtml(item.status_atual || status)+'</span><div class="closing-project-comment" style="margin-top:7px">'+comment+'</div></div>'+
+        '<div><strong>'+fechamentoMoney(item.valor_bonus)+'</strong><div style="margin-top:8px"><a class="project-link-btn" href="'+escapeHtml(item.link || '#')+'" target="_blank" rel="noopener">Abrir marco</a></div></div></div>';
     }).join('');
-    return '<div class="dashx-table-wrap"><table class="dashx-table closing-summary-table"><thead><tr><th>'+escapeHtml(groupKey === 'consultor' ? 'Consultor' : 'Projeto')+'</th><th class="num">Marcos</th><th class="num">Aguardando</th><th class="num">Aprovados</th><th class="num">Reprovados</th><th class="num">Bônus</th></tr></thead><tbody>'+summaryRows+'</tbody></table></div>';
-  }
-  var lastConsultant = null;
-  var rows = list.length ? list.map(function(item) {
-    var status = String(item.situacao || 'outro');
-    var consultant = String(item.consultor || 'Sem consultor');
-    var consultantHeader = consultant !== lastConsultant
-      ? '<tr class="closing-consultant-row"><td colspan="9">'+escapeHtml(consultant)+'</td></tr>'
-      : '';
-    lastConsultant = consultant;
-    var justification = item.justificativa
-      ? '<div class="closing-justification">'+escapeHtml(item.justificativa)+(item.justificativa_por ? '<div class="dashx-list-sub">por '+escapeHtml(item.justificativa_por)+'</div>' : '')+'</div>'
-      : (status === 'reprovado' ? '<span style="color:var(--red);font-weight:900">Sem justificativa</span>' : '-');
-    return consultantHeader+'<tr><td><strong>'+escapeHtml(item.projeto || '-')+'</strong><div class="dashx-list-sub">'+escapeHtml(item.fase || '-')+'</div></td>'+
-      '<td>'+escapeHtml(item.consultor || '-')+'</td><td>'+escapeHtml(item.marco || '-')+'</td>'+
-      '<td>'+(item.closed_at ? formatarDataHoraProjeto(item.closed_at) : '-')+'</td>'+
-      '<td><span class="closing-status '+escapeHtml(status)+'">'+escapeHtml(item.status_atual || status)+'</span></td>'+
-      '<td>'+(item.validation_at ? formatarDataHoraProjeto(item.validation_at) : '-')+'</td><td>'+justification+'</td>'+
-      '<td class="num">'+fechamentoMoney(item.valor_bonus)+'</td>'+
-      '<td><a class="project-link-btn" href="'+escapeHtml(item.link || '#')+'" target="_blank" rel="noopener">Abrir</a></td></tr>';
-  }).join('') : '<tr class="empty-row"><td colspan="9">Nenhum marco encontrado neste recorte. Rode “Atualizar ClickUp” para iniciar a base histórica.</td></tr>';
+    return '<section class="closing-consultant-card"><div class="closing-consultant-head"><div><div class="closing-consultant-name">'+escapeHtml(consultant)+'</div><div class="closing-project-meta">Marcos que entraram em Closed no período selecionado</div></div><div class="closing-consultant-metrics"><div class="closing-consultant-metric"><strong>'+consultantRows.length+'</strong><span>Marcos</span></div><div class="closing-consultant-metric"><strong>'+consultantWaiting+'</strong><span>Aguardando</span></div><div class="closing-consultant-metric"><strong>'+consultantApproved+' / '+consultantRejected+'</strong><span>Aprov. / Reprov.</span></div><div class="closing-consultant-metric"><strong>'+fechamentoMoney(consultantBonus)+'</strong><span>Bônus</span></div></div></div><div class="closing-project-list">'+projectCards+'</div></section>';
+  }).join('') || '<div class="empty">Nenhum marco encontrado neste recorte. Rode “Atualizar ClickUp” para atualizar a base.</div>';
   var error = FECHAMENTO_META.error ? '<div class="dashx-focus-note" style="margin-bottom:12px"><strong>'+escapeHtml(FECHAMENTO_META.error)+'</strong></div>' : '';
   var bg = FECHAMENTO_META.background_sync || {};
   var syncNote = bg.active
     ? '<div class="dashx-focus-note" style="margin-bottom:12px"><strong>Leitura ClickUp em andamento:</strong> '+Number(bg.processed || 0)+' de '+Number(bg.total || 0)+' projetos lidos, '+Number(bg.detected || 0)+' marcos detectados até agora.</div>'
     : (Number(bg.errors || 0) > 0 ? '<div class="dashx-focus-note" style="margin-bottom:12px"><strong>Última leitura:</strong> '+Number(bg.processed || 0)+' projetos lidos, '+Number(bg.detected || 0)+' marcos detectados e '+Number(bg.errors || 0)+' erro(s).</div>' : '');
   box.innerHTML = '<div class="closing-head"><div><div class="closing-title">Fechamento de marcos</div><div class="closing-sub">Exibe os marcos que entraram em Closed no mês selecionado e acompanha a validação técnica posterior. Somente aprovados entram na bonificação de R$ 30 por marco.</div></div>'+
-    '<div class="closing-actions"><select class="closing-select" onchange="fechamentoSetFilter(\'month\',this.value)">'+monthOptions+'</select>'+
-    '<select class="closing-select" onchange="fechamentoSetFilter(\'consultor\',this.value)">'+consultorOptions+'</select>'+
+    '<div class="closing-actions"><select class="closing-select" onchange="fechamentoSetFilter(\'consultor\',this.value)">'+consultorOptions+'</select>'+
     '<select class="closing-select" onchange="fechamentoSetFilter(\'projeto\',this.value)">'+projetoOptions+'</select>'+
-    '<select class="closing-select" onchange="fechamentoSetFilter(\'situacao\',this.value)"><option value="todos">Todos os status</option><option value="aguardando" '+(FECHAMENTO_FILTER.situacao==='aguardando'?'selected':'')+'>Aguardando validação</option><option value="aprovado" '+(FECHAMENTO_FILTER.situacao==='aprovado'?'selected':'')+'>Aprovados</option><option value="reprovado" '+(FECHAMENTO_FILTER.situacao==='reprovado'?'selected':'')+'>Reprovados</option></select>'+
     (AUTH_STATE.user && AUTH_STATE.user.role === 'admin' ? '<button class="btn-syncall" onclick="return fechamentoStartSync(this)">Atualizar ClickUp</button>' : '')+
     '<button class="btn-reload" onclick="fechamentoLoad(true)">Recarregar</button></div></div>'+error+syncNote+
+    '<div class="closing-filter-block"><div class="closing-filter-label">Mês em que entrou em Closed</div><div class="closing-filter-chips">'+monthChips+'</div><div class="closing-filter-label" style="margin-top:12px">Validação técnica</div><div class="closing-filter-chips">'+statusChips+'</div></div>'+
     '<div class="closing-kpis"><div class="closing-kpi"><span>Marcos no recorte</span><strong>'+list.length+'</strong></div><div class="closing-kpi"><span>Aguardando validação</span><strong>'+waiting+'</strong></div><div class="closing-kpi"><span>Aprovados / Reprovados</span><strong>'+approved+' / '+rejected+'</strong></div><div class="closing-kpi"><span>Bonificação aprovada</span><strong>'+fechamentoMoney(bonus)+'</strong></div></div>'+
-    '<div class="closing-summary-grid"><div><div class="closing-section-title">Resumo por consultor</div>'+closingSummary('consultor','Sem consultor')+'</div><div><div class="closing-section-title">Resumo por projeto</div>'+closingSummary('projeto','Sem projeto')+'</div></div>'+
-    '<div class="closing-section-title">Detalhamento dos marcos</div>'+
-    '<div class="dashx-table-wrap"><table class="dashx-table"><thead><tr><th>Projeto / fase</th><th>Consultor</th><th>Marco</th><th>Closed em</th><th>Validação</th><th>Validado em</th><th>Justificativa</th><th class="num">Bônus</th><th>Ação</th></tr></thead><tbody>'+rows+'</tbody></table></div>';
+    consultantCards;
 }
 window.fechamentoLoad = fechamentoLoad;
 window.fechamentoSetFilter = fechamentoSetFilter;

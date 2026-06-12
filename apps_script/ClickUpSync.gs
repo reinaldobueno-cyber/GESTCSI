@@ -28,6 +28,7 @@
 var CLICKUP_API_BASE = 'https://api.clickup.com/api/v2';
 var CLICKUP_DEFAULT_WORKSPACE_ID = '9007083069';
 var CLICKUP_MILESTONE_BONUS_VALUE = 30;
+var CLICKUP_MILESTONE_AUDIT_TASK_IDS = ['86a6bhumn'];
 var MONTHS = ['JAN', 'FEV', 'MAR', 'ABR', 'MAI', 'JUN', 'JUL', 'AGO', 'SET', 'OUT', 'NOV', 'DEZ'];
 var HISTORICAL_CLICKUP_SPACES = [
   { name: 'CSI-PROJETOS-ENGORDA', space_id: '90130063112', url: 'https://app.clickup.com/9007083069/v/s/90130063112' },
@@ -1219,7 +1220,7 @@ function upsertClickUpMilestoneClosing_(mapping, normalized) {
     }
     var justification = sanitizeText_(previous && previous.justificativa);
     var justificationBy = sanitizeText_(previous && previous.justificativa_por);
-    if ((situation === 'aprovado' || situation === 'reprovado') && (statusChanged || !justification)) {
+    if (situation !== 'outro' && (statusChanged || !justification)) {
       var comment = fetchLatestClickUpTaskComment_(taskId);
       if (comment.text) justification = comment.text;
       if (comment.user) justificationBy = comment.user;
@@ -1288,15 +1289,25 @@ function fetchLatestClickUpTaskComment_(taskId) {
     comments.sort(function(a, b) {
       return Number(b.date || b.date_created || 0) - Number(a.date || a.date_created || 0);
     });
-    var latest = comments[0] || {};
-    var text = Array.isArray(latest.comment_text)
-      ? latest.comment_text.map(function(part) {
+    var meaningful = comments.map(function(comment) {
+      var text = Array.isArray(comment.comment_text)
+      ? comment.comment_text.map(function(part) {
         return sanitizeText_(part && (part.text || part.value || part.content));
       }).filter(function(part) { return !!part; }).join(' ')
-      : sanitizeText_(latest.comment_text || latest.comment || latest.text);
+      : sanitizeText_(comment.comment_text || comment.comment || comment.text);
+      var attachments = (comment.attachments || []).map(function(attachment) {
+        return sanitizeText_(attachment && (attachment.title || attachment.name || attachment.filename));
+      }).filter(function(name) { return !!name; });
+      if (attachments.length) text += (text ? ' | ' : '') + 'Anexo(s): ' + attachments.join(', ');
+      return {
+        text: sanitizeText_(text),
+        user: sanitizeText_(comment.user && (comment.user.username || comment.user.name || comment.user.email))
+      };
+    }).filter(function(comment) { return !!comment.text; });
+    if (!meaningful.length) return { text: '', user: '' };
     return {
-      text: text,
-      user: sanitizeText_(latest.user && (latest.user.username || latest.user.name || latest.user.email))
+      text: meaningful.slice(0, 5).map(function(comment) { return comment.text; }).join(' | '),
+      user: meaningful[0].user
     };
   } catch (error) {
     return { text: '', user: '' };
@@ -1312,13 +1323,17 @@ function startClickUpMilestoneClosingBackground_(params) {
   props.setProperty('CLICKUP_MILESTONE_CLOSING_DETECTED', '0');
   props.setProperty('CLICKUP_MILESTONE_CLOSING_STARTED_AT', new Date().toISOString());
   props.deleteProperty('CLICKUP_MILESTONE_CLOSING_ERROR');
+  var auditResult = syncClickUpMilestoneAuditTasks_();
   var firstBatch = syncClickUpMilestoneClosingBatch_(0, 3);
   props.setProperty('CLICKUP_MILESTONE_CLOSING_OFFSET', String(firstBatch.next_offset));
   props.setProperty('CLICKUP_MILESTONE_CLOSING_PROCESSED', String(firstBatch.processed));
-  props.setProperty('CLICKUP_MILESTONE_CLOSING_ERRORS', String(firstBatch.errors));
-  props.setProperty('CLICKUP_MILESTONE_CLOSING_DETECTED', String(firstBatch.detected));
+  props.setProperty('CLICKUP_MILESTONE_CLOSING_ERRORS', String(firstBatch.errors + auditResult.errors));
+  props.setProperty('CLICKUP_MILESTONE_CLOSING_DETECTED', String(firstBatch.detected + auditResult.detected));
   props.setProperty('CLICKUP_MILESTONE_CLOSING_TOTAL', String(firstBatch.total));
   props.setProperty('CLICKUP_MILESTONE_CLOSING_UPDATED_AT', new Date().toISOString());
+  if (auditResult.last_error || firstBatch.last_error) {
+    props.setProperty('CLICKUP_MILESTONE_CLOSING_ERROR', auditResult.last_error || firstBatch.last_error);
+  }
   if (firstBatch.done) {
     props.setProperty('CLICKUP_MILESTONE_CLOSING_ACTIVE', '0');
     props.setProperty('CLICKUP_MILESTONE_CLOSING_COMPLETED_AT', new Date().toISOString());
@@ -1398,18 +1413,28 @@ function syncClickUpMilestoneClosingBatch_(offset, limit) {
   });
   var reachedEnd = !batch.length || offset + batch.length >= mappings.length;
   if (reachedEnd) {
+    var coverageTasks = [];
     try {
-      var coverageTasks = fetchClickUpMilestoneCoverageTasks_();
-      coverageDetected = coverageTasks.length;
-      coverageTasks.forEach(function(task) {
-        var mapping = findProjectMappingForTask_(task, mappings) || fallbackProjectMappingForTask_(task);
-        var normalized = buildNormalizedMilestoneCoverageProject_(mapping, task);
-        upsertClickUpMilestoneClosing_(mapping, normalized);
-      });
+      coverageTasks = fetchClickUpMilestoneCoverageTasks_();
     } catch (coverageError) {
       errors += 1;
       lastError = 'Varredura geral: ' + simplifyErrorMessage_(coverageError);
     }
+    getClickUpMilestoneAuditTaskIds_().forEach(function(taskId) {
+      try {
+        coverageTasks.push(clickupRequest_('get', '/task/' + normalizeClickUpId_(taskId)));
+      } catch (directError) {
+        errors += 1;
+        lastError = 'Leitura direta do marco ' + taskId + ': ' + simplifyErrorMessage_(directError);
+      }
+    });
+    coverageTasks = dedupeTasks_(coverageTasks);
+    coverageDetected = coverageTasks.length;
+    coverageTasks.forEach(function(task) {
+      var mapping = findProjectMappingForTask_(task, mappings) || fallbackProjectMappingForTask_(task);
+      var normalized = buildNormalizedMilestoneCoverageProject_(mapping, task);
+      upsertClickUpMilestoneClosing_(mapping, normalized);
+    });
   }
   return {
     total: mappings.length,
@@ -1421,6 +1446,37 @@ function syncClickUpMilestoneClosingBatch_(offset, limit) {
     next_offset: offset + batch.length,
     done: reachedEnd
   };
+}
+
+function getClickUpMilestoneAuditTaskIds_() {
+  var configured = sanitizeText_(getScriptProperty_('CLICKUP_MILESTONE_AUDIT_TASK_IDS', ''));
+  var ids = CLICKUP_MILESTONE_AUDIT_TASK_IDS.slice();
+  if (configured) ids = ids.concat(configured.split(/[\s,;]+/));
+  var seen = {};
+  return ids.map(normalizeClickUpId_).filter(function(id) {
+    if (!id || seen[id]) return false;
+    seen[id] = true;
+    return true;
+  });
+}
+
+function syncClickUpMilestoneAuditTasks_() {
+  var mappings = loadProjectMappings_().filter(function(item) { return item.enabled; });
+  var detected = 0;
+  var errors = 0;
+  var lastError = '';
+  getClickUpMilestoneAuditTaskIds_().forEach(function(taskId) {
+    try {
+      var task = clickupRequest_('get', '/task/' + normalizeClickUpId_(taskId));
+      var mapping = findProjectMappingForTask_(task, mappings) || fallbackProjectMappingForTask_(task);
+      upsertClickUpMilestoneClosing_(mapping, buildNormalizedMilestoneCoverageProject_(mapping, task));
+      detected += 1;
+    } catch (error) {
+      errors += 1;
+      lastError = 'Leitura direta do marco ' + taskId + ': ' + simplifyErrorMessage_(error);
+    }
+  });
+  return { detected: detected, errors: errors, last_error: lastError };
 }
 
 function findProjectMappingForTask_(task, mappings) {
