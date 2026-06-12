@@ -1191,17 +1191,11 @@ function getClickUpMilestoneClosing_(params) {
   };
 }
 
-function upsertClickUpMilestoneClosing_(mapping, normalized) {
+function upsertClickUpMilestoneClosing_(mapping, normalized, options) {
+  options = options || {};
   var sheet = getClickUpMilestoneClosingSheet_();
   var headers = getClickUpMilestoneClosingHeaders_();
-  var values = sheet.getDataRange().getValues();
-  var current = {};
-  if (values.length > 1) {
-    values.slice(1).forEach(function(row) {
-      var item = rowToObject_(values[0], row);
-      if (item.task_id) current[String(item.task_id)] = item;
-    });
-  }
+  var current = options.current || loadClickUpMilestoneClosingCurrent_(sheet);
   var now = new Date().toISOString();
   (normalized.marcos || []).forEach(function(milestone) {
     var taskId = String(milestone.id || '');
@@ -1252,8 +1246,39 @@ function upsertClickUpMilestoneClosing_(mapping, normalized) {
       status_history_json: JSON.stringify(history)
     };
   });
+  if (!options.defer_write) writeClickUpMilestoneClosingCurrent_(sheet, headers, current);
+  return current;
+}
+
+function loadClickUpMilestoneClosingCurrent_(sheet) {
+  var values = sheet.getDataRange().getValues();
+  var current = {};
+  if (values.length > 1) {
+    values.slice(1).forEach(function(row) {
+      var item = rowToObject_(values[0], row);
+      if (item.task_id) current[String(item.task_id)] = item;
+    });
+  }
+  return current;
+}
+
+function writeClickUpMilestoneClosingCurrent_(sheet, headers, current) {
   writeObjectsToSheet_(sheet, Object.keys(current).map(function(id) { return current[id]; }), headers);
   sheet.setFrozenRows(1);
+}
+
+function upsertClickUpMilestoneClosingEntries_(entries) {
+  if (!entries || !entries.length) return;
+  var sheet = getClickUpMilestoneClosingSheet_();
+  var headers = getClickUpMilestoneClosingHeaders_();
+  var current = loadClickUpMilestoneClosingCurrent_(sheet);
+  entries.forEach(function(entry) {
+    upsertClickUpMilestoneClosing_(entry.mapping, entry.normalized, {
+      current: current,
+      defer_write: true
+    });
+  });
+  writeClickUpMilestoneClosingCurrent_(sheet, headers, current);
 }
 
 function clickUpMilestoneSituation_(status) {
@@ -1316,6 +1341,10 @@ function fetchLatestClickUpTaskComment_(taskId) {
 
 function startClickUpMilestoneClosingBackground_(params) {
   var props = PropertiesService.getScriptProperties();
+  if (props.getProperty('CLICKUP_MILESTONE_CLOSING_ACTIVE') === '1') {
+    scheduleClickUpMilestoneClosingBackground_(1000);
+    return { ok: true, scheduled: true, already_active: true, background_sync: getClickUpMilestoneClosingBackgroundStatus_() };
+  }
   props.setProperty('CLICKUP_MILESTONE_CLOSING_ACTIVE', '1');
   props.setProperty('CLICKUP_MILESTONE_CLOSING_OFFSET', '0');
   props.setProperty('CLICKUP_MILESTONE_CLOSING_PROCESSED', '0');
@@ -1323,23 +1352,8 @@ function startClickUpMilestoneClosingBackground_(params) {
   props.setProperty('CLICKUP_MILESTONE_CLOSING_DETECTED', '0');
   props.setProperty('CLICKUP_MILESTONE_CLOSING_STARTED_AT', new Date().toISOString());
   props.deleteProperty('CLICKUP_MILESTONE_CLOSING_ERROR');
-  var auditResult = syncClickUpMilestoneAuditTasks_();
-  var firstBatch = syncClickUpMilestoneClosingBatch_(0, 3);
-  props.setProperty('CLICKUP_MILESTONE_CLOSING_OFFSET', String(firstBatch.next_offset));
-  props.setProperty('CLICKUP_MILESTONE_CLOSING_PROCESSED', String(firstBatch.processed));
-  props.setProperty('CLICKUP_MILESTONE_CLOSING_ERRORS', String(firstBatch.errors + auditResult.errors));
-  props.setProperty('CLICKUP_MILESTONE_CLOSING_DETECTED', String(firstBatch.detected + auditResult.detected));
-  props.setProperty('CLICKUP_MILESTONE_CLOSING_TOTAL', String(firstBatch.total));
+  props.setProperty('CLICKUP_MILESTONE_CLOSING_TOTAL', String(loadClickUpMilestoneClosingMappings_().length));
   props.setProperty('CLICKUP_MILESTONE_CLOSING_UPDATED_AT', new Date().toISOString());
-  if (auditResult.last_error || firstBatch.last_error) {
-    props.setProperty('CLICKUP_MILESTONE_CLOSING_ERROR', auditResult.last_error || firstBatch.last_error);
-  }
-  if (firstBatch.done) {
-    props.setProperty('CLICKUP_MILESTONE_CLOSING_ACTIVE', '0');
-    props.setProperty('CLICKUP_MILESTONE_CLOSING_COMPLETED_AT', new Date().toISOString());
-    clearClickUpMilestoneClosingBackgroundTriggers_();
-    return { ok: true, scheduled: false, background_sync: getClickUpMilestoneClosingBackgroundStatus_() };
-  }
   scheduleClickUpMilestoneClosingBackground_(1000);
   return { ok: true, scheduled: true, background_sync: getClickUpMilestoneClosingBackgroundStatus_() };
 }
@@ -1368,7 +1382,7 @@ function continueClickUpMilestoneClosingBackgroundTrigger() {
     return;
   }
   var offset = toInt_(props.getProperty('CLICKUP_MILESTONE_CLOSING_OFFSET'), 0);
-  var result = syncClickUpMilestoneClosingBatch_(offset, 5);
+  var result = syncClickUpMilestoneClosingBatch_(offset, 10);
   var processed = toInt_(props.getProperty('CLICKUP_MILESTONE_CLOSING_PROCESSED'), 0) + result.processed;
   var errors = toInt_(props.getProperty('CLICKUP_MILESTONE_CLOSING_ERRORS'), 0) + result.errors;
   var detected = toInt_(props.getProperty('CLICKUP_MILESTONE_CLOSING_DETECTED'), 0) + result.detected;
@@ -1389,9 +1403,7 @@ function continueClickUpMilestoneClosingBackgroundTrigger() {
 }
 
 function syncClickUpMilestoneClosingBatch_(offset, limit) {
-  var mappings = loadProjectMappings_().filter(function(item) {
-    return item.enabled && (item.list_id || item.view_id || item.folder_id || item.space_id);
-  });
+  var mappings = loadClickUpMilestoneClosingMappings_();
   offset = Math.max(0, Number(offset || 0));
   limit = Math.max(1, Number(limit || 5));
   var batch = mappings.slice(offset, offset + limit);
@@ -1400,17 +1412,19 @@ function syncClickUpMilestoneClosingBatch_(offset, limit) {
   var detected = 0;
   var coverageDetected = 0;
   var lastError = '';
+  var pendingUpserts = [];
   batch.forEach(function(mapping) {
     try {
       var normalized = buildNormalizedProjectFromClickUp_(mapping);
       detected += (normalized.marcos || []).length;
-      upsertClickUpMilestoneClosing_(mapping, normalized);
+      pendingUpserts.push({ mapping: mapping, normalized: normalized });
       processed += 1;
     } catch (error) {
       errors += 1;
       lastError = simplifyErrorMessage_(error);
     }
   });
+  upsertClickUpMilestoneClosingEntries_(pendingUpserts);
   var reachedEnd = !batch.length || offset + batch.length >= mappings.length;
   if (reachedEnd) {
     var coverageTasks = [];
@@ -1430,11 +1444,12 @@ function syncClickUpMilestoneClosingBatch_(offset, limit) {
     });
     coverageTasks = dedupeTasks_(coverageTasks);
     coverageDetected = coverageTasks.length;
-    coverageTasks.forEach(function(task) {
+    var coverageUpserts = coverageTasks.map(function(task) {
       var mapping = findProjectMappingForTask_(task, mappings) || fallbackProjectMappingForTask_(task);
       var normalized = buildNormalizedMilestoneCoverageProject_(mapping, task);
-      upsertClickUpMilestoneClosing_(mapping, normalized);
+      return { mapping: mapping, normalized: normalized };
     });
+    upsertClickUpMilestoneClosingEntries_(coverageUpserts);
   }
   return {
     total: mappings.length,
@@ -1446,6 +1461,20 @@ function syncClickUpMilestoneClosingBatch_(offset, limit) {
     next_offset: offset + batch.length,
     done: reachedEnd
   };
+}
+
+function loadClickUpMilestoneClosingMappings_() {
+  var seen = {};
+  return loadProjectMappings_().filter(function(item) {
+    if (!item.enabled || !(item.list_id || item.view_id || item.folder_id || item.space_id)) return false;
+    var key = item.list_id ? ('list|' + item.list_id) :
+      item.view_id ? ('view|' + item.view_id) :
+      item.folder_id ? ('folder|' + item.folder_id) :
+      ('space|' + item.space_id);
+    if (seen[key]) return false;
+    seen[key] = true;
+    return true;
+  });
 }
 
 function getClickUpMilestoneAuditTaskIds_() {
