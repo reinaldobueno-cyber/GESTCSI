@@ -1246,7 +1246,7 @@ function upsertClickUpMilestoneClosing_(mapping, normalized, options) {
     }
     var justification = sanitizeText_(previous && previous.justificativa);
     var justificationBy = sanitizeText_(previous && previous.justificativa_por);
-    if (situation !== 'outro' && (statusChanged || !justification)) {
+    if (options.fetch_comments !== false && situation !== 'outro' && (statusChanged || !justification)) {
       var comment = fetchLatestClickUpTaskComment_(taskId);
       if (comment.text) justification = comment.text;
       if (comment.user) justificationBy = comment.user;
@@ -1300,7 +1300,8 @@ function writeClickUpMilestoneClosingCurrent_(sheet, headers, current) {
   sheet.setFrozenRows(1);
 }
 
-function upsertClickUpMilestoneClosingEntries_(entries) {
+function upsertClickUpMilestoneClosingEntries_(entries, options) {
+  options = options || {};
   if (!entries || !entries.length) return;
   var sheet = getClickUpMilestoneClosingSheet_();
   var headers = getClickUpMilestoneClosingHeaders_();
@@ -1308,7 +1309,8 @@ function upsertClickUpMilestoneClosingEntries_(entries) {
   entries.forEach(function(entry) {
     upsertClickUpMilestoneClosing_(entry.mapping, entry.normalized, {
       current: current,
-      defer_write: true
+      defer_write: true,
+      fetch_comments: options.fetch_comments !== false
     });
   });
   writeClickUpMilestoneClosingCurrent_(sheet, headers, current);
@@ -1377,6 +1379,7 @@ function startClickUpMilestoneClosingBackground_(params) {
   migrateClickUpMilestoneClosingSchema_();
   if (props.getProperty('CLICKUP_MILESTONE_CLOSING_ACTIVE') === '1') {
     var activeRefresh = syncClickUpRecentMilestoneCoverage_();
+    var activeHistory = ensureClickUpMilestoneHistoryCoverage_();
     props.setProperty('CLICKUP_MILESTONE_CLOSING_UPDATED_AT', new Date().toISOString());
     if (activeRefresh.last_error) props.setProperty('CLICKUP_MILESTONE_CLOSING_ERROR', activeRefresh.last_error);
     scheduleClickUpMilestoneClosingBackground_(1000);
@@ -1385,6 +1388,7 @@ function startClickUpMilestoneClosingBackground_(params) {
       scheduled: true,
       already_active: true,
       recent_refresh: activeRefresh,
+      history_refresh: activeHistory,
       background_sync: getClickUpMilestoneClosingBackgroundStatus_()
     };
   }
@@ -1396,6 +1400,7 @@ function startClickUpMilestoneClosingBackground_(params) {
   props.setProperty('CLICKUP_MILESTONE_CLOSING_STARTED_AT', new Date().toISOString());
   props.deleteProperty('CLICKUP_MILESTONE_CLOSING_ERROR');
   var recentRefresh = syncClickUpRecentMilestoneCoverage_();
+  var historyRefresh = ensureClickUpMilestoneHistoryCoverage_();
   props.setProperty('CLICKUP_MILESTONE_CLOSING_DETECTED', String(recentRefresh.detected));
   props.setProperty('CLICKUP_MILESTONE_CLOSING_ERRORS', String(recentRefresh.errors));
   if (recentRefresh.last_error) props.setProperty('CLICKUP_MILESTONE_CLOSING_ERROR', recentRefresh.last_error);
@@ -1406,6 +1411,7 @@ function startClickUpMilestoneClosingBackground_(params) {
     ok: true,
     scheduled: true,
     recent_refresh: recentRefresh,
+    history_refresh: historyRefresh,
     background_sync: getClickUpMilestoneClosingBackgroundStatus_()
   };
 }
@@ -1420,6 +1426,7 @@ function migrateClickUpMilestoneClosingSchema_() {
   props.setProperty('CLICKUP_MILESTONE_CLOSING_ACTIVE', '0');
   props.setProperty('CLICKUP_MILESTONE_CLOSING_OFFSET', '0');
   props.deleteProperty('CLICKUP_MILESTONE_INCREMENTAL_SINCE');
+  props.deleteProperty('CLICKUP_MILESTONE_HISTORY_REBUILT');
   clearClickUpMilestoneClosingBackgroundTriggers_();
 }
 
@@ -1626,6 +1633,37 @@ function syncClickUpRecentMilestoneCoverage_() {
   } finally {
     lock.releaseLock();
   }
+}
+
+function syncClickUpMilestoneHistoryCoverage_() {
+  var mappings = loadClickUpMilestoneClosingMappings_();
+  var tasks = [];
+  var errors = 0;
+  var lastError = '';
+  try {
+    tasks = fetchClickUpMilestoneCoverageTasks_();
+  } catch (error) {
+    errors += 1;
+    lastError = 'Historico de marcos: ' + simplifyErrorMessage_(error);
+  }
+  var entries = tasks.map(function(task) {
+    var mapping = findProjectMappingForTask_(task, mappings) || fallbackProjectMappingForTask_(task);
+    return { mapping: mapping, normalized: buildNormalizedMilestoneCoverageProject_(mapping, task) };
+  });
+  // Comentarios continuam sendo enriquecidos pela atualizacao incremental e
+  // pela carga detalhada. Evita uma chamada extra por marco no historico.
+  upsertClickUpMilestoneClosingEntries_(entries, { fetch_comments: false });
+  return { detected: entries.length, errors: errors, last_error: lastError };
+}
+
+function ensureClickUpMilestoneHistoryCoverage_() {
+  var props = PropertiesService.getScriptProperties();
+  if (props.getProperty('CLICKUP_MILESTONE_HISTORY_REBUILT') === '1') {
+    return { detected: 0, errors: 0, already_rebuilt: true, last_error: '' };
+  }
+  var result = syncClickUpMilestoneHistoryCoverage_();
+  if (!result.errors) props.setProperty('CLICKUP_MILESTONE_HISTORY_REBUILT', '1');
+  return result;
 }
 
 function findProjectMappingForTask_(task, mappings) {
