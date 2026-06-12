@@ -5089,7 +5089,8 @@ function fechamentoStartSync(btn) {
     auth_token: authTokenParam()
   }, 30000).then(function(resp) {
     if (!resp || resp.ok === false) throw new Error((resp && (resp.error || resp.message)) || 'Não foi possível iniciar');
-    showToast('Fechamento ClickUp agendado em segundo plano', 'ok');
+    var recent = resp.recent_refresh || {};
+    showToast('Atualização rápida concluída: '+Number(recent.detected || 0)+' marco(s) atualizado(s)', 'ok');
     if (btn) btn.textContent = 'Sincronizando...';
     function poll() {
       return fechamentoLoad(true).then(function() {
@@ -5100,7 +5101,12 @@ function fechamentoStartSync(btn) {
         showToast('Fechamento ClickUp atualizado', 'ok');
       });
     }
-    return sleep(2500).then(poll);
+    return fechamentoLoad(true).then(function() {
+      var bg = FECHAMENTO_META.background_sync || {};
+      if (bg.active) return sleep(5000).then(poll);
+      if (btn) { btn.disabled = false; btn.textContent = original || 'Atualizar ClickUp'; }
+      return null;
+    });
   }).catch(function(error) {
     if (btn) { btn.disabled = false; btn.textContent = original || 'Atualizar ClickUp'; }
     showToast((error && error.message) || 'Erro ao atualizar fechamento', 'err');

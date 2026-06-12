@@ -881,17 +881,19 @@ function fetchClickUpMilestoneCoverageTasks_() {
   return dedupeTasks_(all);
 }
 
-function fetchClickUpRecentMilestoneCoverageTasks_(days) {
+function fetchClickUpRecentMilestoneCoverageTasks_(sinceMillis) {
   var workspaceId = getClickUpWorkspaceId_();
   if (!workspaceId) throw new Error('CLICKUP_TEAM_ID nao configurado para atualizacao recente de marcos.');
-  var since = new Date().getTime() - Math.max(1, Number(days || 14)) * 86400000;
+  var since = Math.max(0, Number(sinceMillis || 0));
   var page = 0;
   var all = [];
-  while (page < 1) {
+  while (page < 10) {
     var query = [
       'include_closed=true',
       'subtasks=true',
       'date_updated_gt=' + since,
+      'order_by=updated',
+      'reverse=true',
       'page=' + page
     ].join('&');
     var response = clickupRequest_('get', '/team/' + workspaceId + '/task?' + query);
@@ -1552,12 +1554,23 @@ function syncClickUpMilestoneAuditTasks_() {
 }
 
 function syncClickUpRecentMilestoneCoverage_() {
+  var lock = LockService.getScriptLock();
+  if (!lock.tryLock(1000)) {
+    return { detected: 0, scanned: 0, errors: 0, already_running: true, last_error: '' };
+  }
+  try {
+  var props = PropertiesService.getScriptProperties();
   var mappings = loadClickUpMilestoneClosingMappings_();
   var tasks = [];
   var errors = 0;
   var lastError = '';
+  var startedAt = new Date().getTime();
+  var previousCursor = toInt_(props.getProperty('CLICKUP_MILESTONE_INCREMENTAL_SINCE'), 0);
+  var since = previousCursor
+    ? Math.max(0, previousCursor - 5 * 60 * 1000)
+    : startedAt - 24 * 60 * 60 * 1000;
   try {
-    tasks = fetchClickUpRecentMilestoneCoverageTasks_(3);
+    tasks = fetchClickUpRecentMilestoneCoverageTasks_(since);
   } catch (error) {
     errors += 1;
     lastError = 'Atualizacao recente: ' + simplifyErrorMessage_(error);
@@ -1574,14 +1587,6 @@ function syncClickUpRecentMilestoneCoverage_() {
   tasks.sort(function(a, b) {
     return Number(b && b.date_updated || 0) - Number(a && a.date_updated || 0);
   });
-  var auditIds = {};
-  getClickUpMilestoneAuditTaskIds_().forEach(function(id) { auditIds[String(id)] = true; });
-  var recentTasks = tasks.filter(function(task) {
-    return !auditIds[String(task && task.id || '')];
-  }).slice(0, 15);
-  tasks = recentTasks.concat(tasks.filter(function(task) {
-    return !!auditIds[String(task && task.id || '')];
-  }));
   var entries = tasks.filter(function(task) {
     var status = task && task.status && (task.status.status || task.status.type || task.status.label) || '';
     return clickUpMilestoneSituation_(status) !== 'outro';
@@ -1590,7 +1595,17 @@ function syncClickUpRecentMilestoneCoverage_() {
     return { mapping: mapping, normalized: buildNormalizedMilestoneCoverageProject_(mapping, task) };
   });
   upsertClickUpMilestoneClosingEntries_(entries);
-  return { detected: entries.length, errors: errors, last_error: lastError };
+  if (!errors) props.setProperty('CLICKUP_MILESTONE_INCREMENTAL_SINCE', String(startedAt));
+  return {
+    detected: entries.length,
+    scanned: tasks.length,
+    since: new Date(since).toISOString(),
+    errors: errors,
+    last_error: lastError
+  };
+  } finally {
+    lock.releaseLock();
+  }
 }
 
 function findProjectMappingForTask_(task, mappings) {
