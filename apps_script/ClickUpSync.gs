@@ -845,6 +845,41 @@ function fetchAllViewTasks_(viewId, options) {
   return dedupeTasks_(all);
 }
 
+function fetchClickUpMilestoneCoverageTasks_() {
+  var workspaceId = getClickUpWorkspaceId_();
+  if (!workspaceId) throw new Error('CLICKUP_TEAM_ID nao configurado para varredura geral de marcos.');
+  var statuses = [
+    'Closed', 'closed',
+    'Aprovado Gestao', 'Aprovado Gestão', 'aprovado gestão',
+    'Reprovado Gestao', 'Reprovado Gestão', 'reprovado gestão'
+  ];
+  var all = [];
+  var successfulQueries = 0;
+  statuses.forEach(function(status) {
+    try {
+      var page = 0;
+      while (true) {
+        var query = [
+          'include_closed=true',
+          'subtasks=true',
+          'page=' + page,
+          'statuses[]=' + encodeURIComponent(status)
+        ].join('&');
+        var response = clickupRequest_('get', '/team/' + workspaceId + '/task?' + query);
+        var batch = response.tasks || [];
+        all = all.concat(batch);
+        if (batch.length < 100) break;
+        page += 1;
+      }
+      successfulQueries += 1;
+    } catch (error) {
+      // Status customizados podem ter grafias diferentes entre os spaces.
+    }
+  });
+  if (!successfulQueries) throw new Error('Nenhum status de marco pôde ser consultado na varredura geral.');
+  return dedupeTasks_(all);
+}
+
 function fetchAllFolderTasks_(folderId, options) {
   folderId = normalizeClickUpId_(folderId);
   if (!folderId) throw new Error('CLICKUP_CONFIG com folder_id invalido ou vazio.');
@@ -1138,8 +1173,7 @@ function getClickUpMilestoneClosing_(params) {
   var month = sanitizeText_((params || {}).month || (params || {}).mes).slice(0, 7);
   if (month) {
     rows = rows.filter(function(item) {
-      return String(item.mes_fechamento || '').slice(0, 7) === month ||
-        String(item.mes_validacao || '').slice(0, 7) === month;
+      return String(item.mes_fechamento || '').slice(0, 7) === month;
     });
   }
   rows.sort(function(a, b) {
@@ -1349,6 +1383,7 @@ function syncClickUpMilestoneClosingBatch_(offset, limit) {
   var processed = 0;
   var errors = 0;
   var detected = 0;
+  var coverageDetected = 0;
   var lastError = '';
   batch.forEach(function(mapping) {
     try {
@@ -1361,14 +1396,91 @@ function syncClickUpMilestoneClosingBatch_(offset, limit) {
       lastError = simplifyErrorMessage_(error);
     }
   });
+  var reachedEnd = !batch.length || offset + batch.length >= mappings.length;
+  if (reachedEnd) {
+    try {
+      var coverageTasks = fetchClickUpMilestoneCoverageTasks_();
+      coverageDetected = coverageTasks.length;
+      coverageTasks.forEach(function(task) {
+        var mapping = findProjectMappingForTask_(task, mappings) || fallbackProjectMappingForTask_(task);
+        var normalized = buildNormalizedMilestoneCoverageProject_(mapping, task);
+        upsertClickUpMilestoneClosing_(mapping, normalized);
+      });
+    } catch (coverageError) {
+      errors += 1;
+      lastError = 'Varredura geral: ' + simplifyErrorMessage_(coverageError);
+    }
+  }
   return {
     total: mappings.length,
     processed: processed,
     errors: errors,
-    detected: detected,
+    detected: detected + coverageDetected,
+    coverage_detected: coverageDetected,
     last_error: lastError,
     next_offset: offset + batch.length,
-    done: !batch.length || offset + batch.length >= mappings.length
+    done: reachedEnd
+  };
+}
+
+function findProjectMappingForTask_(task, mappings) {
+  var listId = normalizeClickUpId_(task && task.list && task.list.id);
+  var folderId = normalizeClickUpId_(task && task.folder && task.folder.id);
+  var spaceId = normalizeClickUpId_(task && task.space && task.space.id);
+  var taskNames = [
+    sanitizeText_(task && task.folder && task.folder.name),
+    sanitizeText_(task && task.project && task.project.name),
+    sanitizeText_(task && task.list && task.list.name)
+  ].filter(function(name) { return !!name; }).map(normalizeKey_);
+  return (mappings || loadProjectMappings_()).filter(function(mapping) {
+    if (listId && String(mapping.list_id || '') === listId) return true;
+    if (folderId && String(mapping.folder_id || '') === folderId) return true;
+    if (spaceId && String(mapping.space_id || '') === spaceId && taskNames.indexOf(normalizeKey_(mapping.cliente)) >= 0) return true;
+    return taskNames.indexOf(normalizeKey_(mapping.cliente)) >= 0;
+  })[0] || null;
+}
+
+function fallbackProjectMappingForTask_(task) {
+  var projectName = sanitizeText_(task && task.folder && task.folder.name) ||
+    sanitizeText_(task && task.project && task.project.name) ||
+    sanitizeText_(task && task.list && task.list.name) ||
+    'Projeto nao mapeado';
+  var hierarchyId = normalizeClickUpId_(task && task.folder && task.folder.id) ||
+    normalizeClickUpId_(task && task.list && task.list.id) ||
+    normalizeClickUpId_(task && task.space && task.space.id) ||
+    normalizeClickUpId_(task && task.id);
+  return {
+    enabled: true,
+    mes: '',
+    cliente: projectName,
+    project_key: 'CLICKUP|' + hierarchyId,
+    project_url: '',
+    view_id: '',
+    list_id: normalizeClickUpId_(task && task.list && task.list.id),
+    folder_id: normalizeClickUpId_(task && task.folder && task.folder.id),
+    space_id: normalizeClickUpId_(task && task.space && task.space.id)
+  };
+}
+
+function buildNormalizedMilestoneCoverageProject_(mapping, task) {
+  var status = task && task.status && (task.status.status || task.status.type || task.status.label) || '';
+  var responsible = (task && task.assignees || []).map(function(user) {
+    return sanitizeText_(user && (user.username || user.name || user.email));
+  }).filter(function(name) { return !!name; }).join(', ');
+  return {
+    cliente: mapping.cliente || '',
+    consultor: responsible,
+    marcos: [{
+      id: String(task && task.id || ''),
+      nome: sanitizeText_(task && task.name),
+      fase_nome: sanitizeText_(task && task.list && task.list.name),
+      status_original: status,
+      responsaveis: responsible,
+      task_url: sanitizeText_(task && (task.url || task.permalink || task.link || task.html_url)) ||
+        ('https://app.clickup.com/t/' + String(task && task.id || '')),
+      date_closed: task && task.date_closed ? fromMillisIso_(task.date_closed) : '',
+      updated_at: task && task.date_updated ? fromMillisIso_(task.date_updated) : ''
+    }]
   };
 }
 

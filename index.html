@@ -3130,6 +3130,7 @@ body.theme-dark *{
 .closing-summary-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:18px}
 .closing-section-title{font-size:11px;font-weight:900;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);margin:12px 0 7px}
 .closing-summary-table td,.closing-summary-table th{padding:8px 10px}
+.closing-consultant-row td{background:var(--green-s);color:var(--green);font-size:11px;font-weight:900;text-transform:uppercase;letter-spacing:.06em;padding:9px 12px}
 @media(max-width:1100px){.closing-summary-grid{grid-template-columns:1fr}}
 @media(max-width:900px){.closing-kpis{grid-template-columns:repeat(2,1fr)}.closing-head{flex-direction:column}}
 </style>
@@ -4987,7 +4988,7 @@ var FECHAMENTO_MARCOS = [];
 var FECHAMENTO_META = {};
 var FECHAMENTO_LOADED = false;
 var FECHAMENTO_LOADING = false;
-var FECHAMENTO_FILTER = { month:'todos', consultor:'todos', projeto:'todos', situacao:'todos' };
+var FECHAMENTO_FILTER = { month:'', consultor:'todos', projeto:'todos', situacao:'todos' };
 function fechamentoRestoreCache() {
   try {
     var cached = JSON.parse(localStorage.getItem('gestcsi_fechamento_cache') || 'null');
@@ -5034,7 +5035,7 @@ function fechamentoLoad(force) {
     FECHAMENTO_LOADING = false;
     delete FECHAMENTO_META.error;
     fechamentoSaveCache();
-    if (!FECHAMENTO_FILTER.month) FECHAMENTO_FILTER.month = 'todos';
+    if (!FECHAMENTO_FILTER.month) FECHAMENTO_FILTER.month = fechamentoCurrentMonth();
     initFechamento();
     return resp;
   }).catch(function(error) {
@@ -5054,7 +5055,7 @@ function fechamentoSetFilter(key, value) {
 function fechamentoFilteredRows() {
   return (FECHAMENTO_MARCOS || []).filter(function(item) {
     var month = String(FECHAMENTO_FILTER.month || '');
-    if (month && month !== 'todos' && String(item.mes_fechamento || '') !== month && String(item.mes_validacao || '') !== month) return false;
+    if (month && month !== 'todos' && String(item.mes_fechamento || '') !== month) return false;
     if (FECHAMENTO_FILTER.consultor !== 'todos' && String(item.consultor || '') !== FECHAMENTO_FILTER.consultor) return false;
     if (FECHAMENTO_FILTER.projeto !== 'todos' && String(item.projeto || '') !== FECHAMENTO_FILTER.projeto) return false;
     if (FECHAMENTO_FILTER.situacao !== 'todos' && String(item.situacao || '') !== FECHAMENTO_FILTER.situacao) return false;
@@ -5102,12 +5103,16 @@ function initFechamento() {
   var projects = {};
   (FECHAMENTO_MARCOS || []).forEach(function(item) {
     if (item.mes_fechamento) months[item.mes_fechamento] = true;
-    if (item.mes_validacao) months[item.mes_validacao] = true;
     if (item.consultor) consultants[item.consultor] = true;
     if (item.projeto) projects[item.projeto] = true;
   });
-  if (!FECHAMENTO_FILTER.month) FECHAMENTO_FILTER.month = 'todos';
+  if (!FECHAMENTO_FILTER.month) FECHAMENTO_FILTER.month = fechamentoCurrentMonth();
   var list = fechamentoFilteredRows();
+  list.sort(function(a, b) {
+    var consultantCompare = String(a.consultor || 'Sem consultor').localeCompare(String(b.consultor || 'Sem consultor'));
+    if (consultantCompare) return consultantCompare;
+    return String(b.closed_at || '').localeCompare(String(a.closed_at || ''));
+  });
   var waiting = list.filter(function(x){ return x.situacao === 'aguardando'; }).length;
   var approved = list.filter(function(x){ return x.situacao === 'aprovado'; }).length;
   var rejected = list.filter(function(x){ return x.situacao === 'reprovado'; }).length;
@@ -5140,12 +5145,18 @@ function initFechamento() {
     }).join('');
     return '<div class="dashx-table-wrap"><table class="dashx-table closing-summary-table"><thead><tr><th>'+escapeHtml(groupKey === 'consultor' ? 'Consultor' : 'Projeto')+'</th><th class="num">Marcos</th><th class="num">Aguardando</th><th class="num">Aprovados</th><th class="num">Reprovados</th><th class="num">Bônus</th></tr></thead><tbody>'+summaryRows+'</tbody></table></div>';
   }
+  var lastConsultant = null;
   var rows = list.length ? list.map(function(item) {
     var status = String(item.situacao || 'outro');
+    var consultant = String(item.consultor || 'Sem consultor');
+    var consultantHeader = consultant !== lastConsultant
+      ? '<tr class="closing-consultant-row"><td colspan="9">'+escapeHtml(consultant)+'</td></tr>'
+      : '';
+    lastConsultant = consultant;
     var justification = item.justificativa
       ? '<div class="closing-justification">'+escapeHtml(item.justificativa)+(item.justificativa_por ? '<div class="dashx-list-sub">por '+escapeHtml(item.justificativa_por)+'</div>' : '')+'</div>'
       : (status === 'reprovado' ? '<span style="color:var(--red);font-weight:900">Sem justificativa</span>' : '-');
-    return '<tr><td><strong>'+escapeHtml(item.projeto || '-')+'</strong><div class="dashx-list-sub">'+escapeHtml(item.fase || '-')+'</div></td>'+
+    return consultantHeader+'<tr><td><strong>'+escapeHtml(item.projeto || '-')+'</strong><div class="dashx-list-sub">'+escapeHtml(item.fase || '-')+'</div></td>'+
       '<td>'+escapeHtml(item.consultor || '-')+'</td><td>'+escapeHtml(item.marco || '-')+'</td>'+
       '<td>'+(item.closed_at ? formatarDataHoraProjeto(item.closed_at) : '-')+'</td>'+
       '<td><span class="closing-status '+escapeHtml(status)+'">'+escapeHtml(item.status_atual || status)+'</span></td>'+
@@ -5158,7 +5169,7 @@ function initFechamento() {
   var syncNote = bg.active
     ? '<div class="dashx-focus-note" style="margin-bottom:12px"><strong>Leitura ClickUp em andamento:</strong> '+Number(bg.processed || 0)+' de '+Number(bg.total || 0)+' projetos lidos, '+Number(bg.detected || 0)+' marcos detectados até agora.</div>'
     : (Number(bg.errors || 0) > 0 ? '<div class="dashx-focus-note" style="margin-bottom:12px"><strong>Última leitura:</strong> '+Number(bg.processed || 0)+' projetos lidos, '+Number(bg.detected || 0)+' marcos detectados e '+Number(bg.errors || 0)+' erro(s).</div>' : '');
-  box.innerHTML = '<div class="closing-head"><div><div class="closing-title">Fechamento de marcos</div><div class="closing-sub">Acompanha diariamente marcos que chegaram em Closed e a validação técnica em Aprovado Gestão ou Reprovado Gestão. Somente aprovados entram na bonificação de R$ 30 por marco.</div></div>'+
+  box.innerHTML = '<div class="closing-head"><div><div class="closing-title">Fechamento de marcos</div><div class="closing-sub">Exibe os marcos que entraram em Closed no mês selecionado e acompanha a validação técnica posterior. Somente aprovados entram na bonificação de R$ 30 por marco.</div></div>'+
     '<div class="closing-actions"><select class="closing-select" onchange="fechamentoSetFilter(\'month\',this.value)">'+monthOptions+'</select>'+
     '<select class="closing-select" onchange="fechamentoSetFilter(\'consultor\',this.value)">'+consultorOptions+'</select>'+
     '<select class="closing-select" onchange="fechamentoSetFilter(\'projeto\',this.value)">'+projetoOptions+'</select>'+
