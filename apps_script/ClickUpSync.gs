@@ -28,7 +28,7 @@
 var CLICKUP_API_BASE = 'https://api.clickup.com/api/v2';
 var CLICKUP_DEFAULT_WORKSPACE_ID = '9007083069';
 var CLICKUP_MILESTONE_BONUS_VALUE = 30;
-var CLICKUP_MILESTONE_AUDIT_TASK_IDS = ['86a6bhumn', '86ag3xkqw'];
+var CLICKUP_MILESTONE_AUDIT_TASK_IDS = [];
 var MONTHS = ['JAN', 'FEV', 'MAR', 'ABR', 'MAI', 'JUN', 'JUL', 'AGO', 'SET', 'OUT', 'NOV', 'DEZ'];
 var HISTORICAL_CLICKUP_SPACES = [
   { name: 'CSI-PROJETOS-ENGORDA', space_id: '90130063112', url: 'https://app.clickup.com/9007083069/v/s/90130063112' },
@@ -868,7 +868,7 @@ function fetchClickUpMilestoneCoverageTasks_() {
         ].join('&');
         var response = clickupRequest_('get', '/team/' + workspaceId + '/task?' + query);
         var batch = response.tasks || [];
-        all = all.concat(batch);
+        all = all.concat(batch.filter(isMilestoneTask_));
         if (batch.length < 100) break;
         page += 1;
       }
@@ -900,7 +900,7 @@ function fetchClickUpRecentMilestoneCoverageTasks_(sinceMillis) {
     var batch = response.tasks || [];
     all = all.concat(batch.filter(function(task) {
       var status = task && task.status && (task.status.status || task.status.type || task.status.label) || '';
-      return clickUpMilestoneSituation_(status) !== 'outro';
+      return isMilestoneTask_(task) && clickUpMilestoneSituation_(status) !== 'outro';
     }));
     if (batch.length < 100) break;
     page += 1;
@@ -1196,7 +1196,7 @@ function getClickUpMilestoneClosing_(params) {
   var rows = values.length > 1 ? values.slice(1).map(function(row) {
     return rowToObject_(values[0], row);
   }).filter(function(item) {
-    return !!sanitizeText_(item.task_id);
+    return !!sanitizeText_(item.task_id) && normalizeKey_(item.item_tipo) === 'MARCO';
   }) : [];
   var month = sanitizeText_((params || {}).month || (params || {}).mes).slice(0, 7);
   if (month) {
@@ -1252,6 +1252,7 @@ function upsertClickUpMilestoneClosing_(mapping, normalized, options) {
     }
     current[taskId] = {
       task_id: taskId,
+      item_tipo: 'Marco',
       project_key: mapping.project_key || '',
       projeto: mapping.cliente || normalized.cliente || '',
       consultor: milestone.responsaveis || normalized.consultor || mapping.consultor || '',
@@ -1589,7 +1590,7 @@ function syncClickUpRecentMilestoneCoverage_() {
   });
   var entries = tasks.filter(function(task) {
     var status = task && task.status && (task.status.status || task.status.type || task.status.label) || '';
-    return clickUpMilestoneSituation_(status) !== 'outro';
+    return isMilestoneTask_(task) && clickUpMilestoneSituation_(status) !== 'outro';
   }).map(function(task) {
     var mapping = findProjectMappingForTask_(task, mappings) || fallbackProjectMappingForTask_(task);
     return { mapping: mapping, normalized: buildNormalizedMilestoneCoverageProject_(mapping, task) };
@@ -1648,6 +1649,9 @@ function fallbackProjectMappingForTask_(task) {
 }
 
 function buildNormalizedMilestoneCoverageProject_(mapping, task) {
+  if (!isMilestoneTask_(task)) {
+    return { cliente: mapping.cliente || '', consultor: '', marcos: [] };
+  }
   var status = task && task.status && (task.status.status || task.status.type || task.status.label) || '';
   var responsible = (task && task.assignees || []).map(function(user) {
     return sanitizeText_(user && (user.username || user.name || user.email));
@@ -2749,7 +2753,7 @@ function getClickUpMilestoneClosingHeaders_() {
     'status_atual', 'situacao', 'closed_at', 'mes_fechamento',
     'validation_at', 'mes_validacao', 'justificativa', 'justificativa_por',
     'valor_bonus', 'link', 'responsaveis', 'updated_at', 'sincronizado_em',
-    'status_history_json'
+    'status_history_json', 'item_tipo'
   ];
 }
 
@@ -4326,10 +4330,6 @@ function isClosedStatus_(status) {
 }
 
 function isMilestoneTask_(task) {
-  var statusKey = normalizeKey_(task.status && (task.status.status || task.status.type || task.status.label) || '');
-  // Estes status foram criados especificamente para a validacao de marcos.
-  // A regra tambem protege leituras de views que omitem o tipo customizado.
-  if (/(APROVAD|REPROVAD)/.test(statusKey) && /GESTAO/.test(statusKey)) return true;
   var typeName = sanitizeText_(
     task.custom_item && task.custom_item.name ||
     task.custom_task_type && task.custom_task_type.name ||
@@ -4338,8 +4338,6 @@ function isMilestoneTask_(task) {
   ).toLowerCase();
   if (String(task.custom_item_id || '') === '1') return true;
   if (typeName.indexOf('milestone') >= 0 || typeName.indexOf('marco') >= 0) return true;
-  var name = sanitizeText_(task.name).toLowerCase();
-  if (/(^|[\s-])(marco|entrega|validac|aprovac|encerrament|go live|golive|checkpoint)([\s-]|$)/i.test(name)) return true;
   return false;
 }
 
