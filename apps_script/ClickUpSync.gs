@@ -29,6 +29,7 @@ var CLICKUP_API_BASE = 'https://api.clickup.com/api/v2';
 var CLICKUP_DEFAULT_WORKSPACE_ID = '9007083069';
 var CLICKUP_MILESTONE_BONUS_VALUE = 30;
 var CLICKUP_MILESTONE_AUDIT_TASK_IDS = [];
+var CLICKUP_MILESTONE_CLOSING_SCHEMA_VERSION = 'strict-milestones-v2';
 var MONTHS = ['JAN', 'FEV', 'MAR', 'ABR', 'MAI', 'JUN', 'JUL', 'AGO', 'SET', 'OUT', 'NOV', 'DEZ'];
 var HISTORICAL_CLICKUP_SPACES = [
   { name: 'CSI-PROJETOS-ENGORDA', space_id: '90130063112', url: 'https://app.clickup.com/9007083069/v/s/90130063112' },
@@ -863,11 +864,13 @@ function fetchClickUpMilestoneCoverageTasks_() {
         var query = [
           'include_closed=true',
           'subtasks=true',
+          'custom_items[]=1',
           'page=' + page,
           'statuses[]=' + encodeURIComponent(status)
         ].join('&');
         var response = clickupRequest_('get', '/team/' + workspaceId + '/task?' + query);
         var batch = response.tasks || [];
+        batch.forEach(function(task) { task._confirmed_milestone = true; });
         all = all.concat(batch.filter(isMilestoneTask_));
         if (batch.length < 100) break;
         page += 1;
@@ -891,6 +894,7 @@ function fetchClickUpRecentMilestoneCoverageTasks_(sinceMillis) {
     var query = [
       'include_closed=true',
       'subtasks=true',
+      'custom_items[]=1',
       'date_updated_gt=' + since,
       'order_by=updated',
       'reverse=true',
@@ -898,6 +902,7 @@ function fetchClickUpRecentMilestoneCoverageTasks_(sinceMillis) {
     ].join('&');
     var response = clickupRequest_('get', '/team/' + workspaceId + '/task?' + query);
     var batch = response.tasks || [];
+    batch.forEach(function(task) { task._confirmed_milestone = true; });
     all = all.concat(batch.filter(function(task) {
       var status = task && task.status && (task.status.status || task.status.type || task.status.label) || '';
       return isMilestoneTask_(task) && clickUpMilestoneSituation_(status) !== 'outro';
@@ -1369,6 +1374,7 @@ function fetchLatestClickUpTaskComment_(taskId) {
 
 function startClickUpMilestoneClosingBackground_(params) {
   var props = PropertiesService.getScriptProperties();
+  migrateClickUpMilestoneClosingSchema_();
   if (props.getProperty('CLICKUP_MILESTONE_CLOSING_ACTIVE') === '1') {
     var activeRefresh = syncClickUpRecentMilestoneCoverage_();
     props.setProperty('CLICKUP_MILESTONE_CLOSING_UPDATED_AT', new Date().toISOString());
@@ -1402,6 +1408,19 @@ function startClickUpMilestoneClosingBackground_(params) {
     recent_refresh: recentRefresh,
     background_sync: getClickUpMilestoneClosingBackgroundStatus_()
   };
+}
+
+function migrateClickUpMilestoneClosingSchema_() {
+  var props = PropertiesService.getScriptProperties();
+  if (props.getProperty('CLICKUP_MILESTONE_CLOSING_SCHEMA_VERSION') === CLICKUP_MILESTONE_CLOSING_SCHEMA_VERSION) return;
+  var sheet = getClickUpMilestoneClosingSheet_();
+  sheet.clearContents();
+  ensureHeaders_(sheet, getClickUpMilestoneClosingHeaders_());
+  props.setProperty('CLICKUP_MILESTONE_CLOSING_SCHEMA_VERSION', CLICKUP_MILESTONE_CLOSING_SCHEMA_VERSION);
+  props.setProperty('CLICKUP_MILESTONE_CLOSING_ACTIVE', '0');
+  props.setProperty('CLICKUP_MILESTONE_CLOSING_OFFSET', '0');
+  props.deleteProperty('CLICKUP_MILESTONE_INCREMENTAL_SINCE');
+  clearClickUpMilestoneClosingBackgroundTriggers_();
 }
 
 function sincronizarFechamentoMarcosClickUp() {
@@ -4330,6 +4349,7 @@ function isClosedStatus_(status) {
 }
 
 function isMilestoneTask_(task) {
+  if (task && task._confirmed_milestone === true) return true;
   var typeName = sanitizeText_(
     task.custom_item && task.custom_item.name ||
     task.custom_task_type && task.custom_task_type.name ||
