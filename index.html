@@ -5016,7 +5016,7 @@ function fechamentoRestoreCache() {
   try {
     var cached = JSON.parse(localStorage.getItem('gestcsi_fechamento_cache') || 'null');
     if (!cached || !Array.isArray(cached.marcos)) return;
-    FECHAMENTO_MARCOS = cached.marcos;
+    FECHAMENTO_MARCOS = fechamentoNormalizeRows(cached.marcos);
     FECHAMENTO_META = cached.meta || {};
     FECHAMENTO_LOADED = true;
   } catch (error) {}
@@ -5038,6 +5038,28 @@ function fechamentoCurrentMonth() {
 function fechamentoMoney(value) {
   return Number(value || 0).toLocaleString('pt-BR', {style:'currency', currency:'BRL'});
 }
+function fechamentoMonthKey(value, fallbackDate) {
+  var text = String(value || '').trim();
+  var match = text.match(/^(\d{4})-(\d{2})/);
+  if (match) return match[1]+'-'+match[2];
+  var date = new Date(fallbackDate || value);
+  if (!isNaN(date.getTime())) return date.getFullYear()+'-'+String(date.getMonth()+1).padStart(2,'0');
+  return '';
+}
+function fechamentoConsultantName(value) {
+  var names = String(value || '').split(/\s*,\s*/).filter(function(name) {
+    return name && !/administrativo|administrador|multsoft|suporte/i.test(name);
+  });
+  return names[0] || String(value || '').split(/\s*,\s*/)[0] || 'Sem consultor';
+}
+function fechamentoNormalizeRows(rows) {
+  return (rows || []).map(function(item) {
+    item.mes_fechamento = fechamentoMonthKey(item.mes_fechamento, item.closed_at);
+    item.mes_validacao = fechamentoMonthKey(item.mes_validacao, item.validation_at);
+    item.consultor = fechamentoConsultantName(item.consultor || item.responsaveis);
+    return item;
+  });
+}
 function fechamentoLoad(force) {
   if (!authTokenParam()) return Promise.resolve(null);
   if (FECHAMENTO_LOADING || (FECHAMENTO_LOADED && !force)) {
@@ -5052,7 +5074,7 @@ function fechamentoLoad(force) {
     if (!resp || resp.ok === false || !Array.isArray(resp.marcos)) {
       throw new Error('Fechamento ainda não está disponível no Apps Script publicado.');
     }
-    FECHAMENTO_MARCOS = resp.marcos;
+    FECHAMENTO_MARCOS = fechamentoNormalizeRows(resp.marcos);
     FECHAMENTO_META = resp;
     FECHAMENTO_LOADED = true;
     FECHAMENTO_LOADING = false;

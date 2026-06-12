@@ -1199,7 +1199,11 @@ function getClickUpMilestoneClosing_(params) {
   var sheet = getClickUpMilestoneClosingSheet_();
   var values = sheet.getDataRange().getDisplayValues();
   var rows = values.length > 1 ? values.slice(1).map(function(row) {
-    return rowToObject_(values[0], row);
+    var item = rowToObject_(values[0], row);
+    item.mes_fechamento = normalizeClickUpMonthReference_(item.mes_fechamento, item.closed_at);
+    item.mes_validacao = normalizeClickUpMonthReference_(item.mes_validacao, item.validation_at);
+    item.consultor = clickUpMilestoneConsultant_(item.consultor || item.responsaveis);
+    return item;
   }).filter(function(item) {
     return !!sanitizeText_(item.task_id) && normalizeKey_(item.item_tipo) === 'MARCO';
   }) : [];
@@ -1260,7 +1264,7 @@ function upsertClickUpMilestoneClosing_(mapping, normalized, options) {
       item_tipo: 'Marco',
       project_key: mapping.project_key || '',
       projeto: mapping.cliente || normalized.cliente || '',
-      consultor: milestone.responsaveis || normalized.consultor || mapping.consultor || '',
+      consultor: clickUpMilestoneConsultant_(milestone.responsaveis || normalized.consultor || mapping.consultor),
       marco: milestone.nome || '',
       fase: milestone.fase_nome || '',
       status_atual: status,
@@ -1329,6 +1333,26 @@ function clickUpMonthReference_(value) {
   var date = new Date(value);
   if (isNaN(date.getTime())) return '';
   return Utilities.formatDate(date, Session.getScriptTimeZone(), 'yyyy-MM');
+}
+
+function normalizeClickUpMonthReference_(value, fallbackDate) {
+  var text = sanitizeText_(value);
+  var isoMatch = text.match(/^(\d{4})-(\d{2})/);
+  if (isoMatch) return isoMatch[1] + '-' + isoMatch[2];
+  var brMatch = text.match(/^(\d{2})\/(\d{4})$/);
+  if (brMatch) return brMatch[2] + '-' + brMatch[1];
+  return clickUpMonthReference_(fallbackDate || value);
+}
+
+function clickUpMilestoneConsultant_(value) {
+  var seen = {};
+  var names = sanitizeText_(value).split(/\s*,\s*/).filter(function(name) {
+    var key = normalizeKey_(name);
+    if (!key || /ADMINISTRATIVO|ADMINISTRADOR|MULTSOFT|SUPORTE/.test(key) || seen[key]) return false;
+    seen[key] = true;
+    return true;
+  });
+  return names[0] || sanitizeText_(value).split(/\s*,\s*/)[0] || 'Sem consultor';
 }
 
 function parseJsonArray_(value) {
