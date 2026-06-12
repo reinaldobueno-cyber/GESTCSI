@@ -3136,6 +3136,10 @@ body.theme-dark *{
 .closing-filter-chips{display:flex;gap:7px;flex-wrap:wrap}
 .closing-filter-chip{border:1px solid var(--border);background:var(--surf2);border-radius:999px;padding:7px 12px;font:900 10px 'Inter',sans-serif;color:var(--text2);cursor:pointer}
 .closing-filter-chip.on{background:var(--green);border-color:var(--green);color:#fff}
+.closing-year-groups{display:grid;gap:9px}
+.closing-year-group{display:grid;grid-template-columns:52px 1fr;gap:10px;align-items:start}
+.closing-year-label{font-size:11px;font-weight:900;color:var(--text);padding-top:7px}
+.closing-sync-note{font-size:10px;font-weight:800;color:var(--muted);align-self:center}
 .closing-consultant-card{background:var(--surf);border:1px solid var(--border);border-radius:14px;margin-bottom:16px;overflow:hidden}
 .closing-consultant-head{display:flex;justify-content:space-between;gap:12px;align-items:center;padding:15px 17px;border-bottom:1px solid var(--border);background:var(--surf2)}
 .closing-consultant-name{font-size:15px;font-weight:900;color:var(--text);text-transform:uppercase;letter-spacing:.04em}
@@ -5084,27 +5088,16 @@ function fechamentoStartSync(btn) {
     return false;
   }
   var original = btn && btn.textContent;
-  if (btn) { btn.disabled = true; btn.textContent = 'Agendando...'; }
+  if (btn) { btn.disabled = true; btn.textContent = 'Atualizando...'; }
   chamarAppsScriptJsonp('startClickUpMilestoneClosingBackground', {
     auth_token: authTokenParam()
   }, 30000).then(function(resp) {
     if (!resp || resp.ok === false) throw new Error((resp && (resp.error || resp.message)) || 'Não foi possível iniciar');
     var recent = resp.recent_refresh || {};
-    showToast('Atualização rápida concluída: '+Number(recent.detected || 0)+' marco(s) atualizado(s)', 'ok');
-    if (btn) btn.textContent = 'Sincronizando...';
-    function poll() {
-      return fechamentoLoad(true).then(function() {
-        var bg = FECHAMENTO_META.background_sync || {};
-        if (btn && bg.active) btn.textContent = 'Sync '+Number(bg.processed || 0)+'/'+Number(bg.total || 0);
-        if (bg.active) return sleep(15000).then(poll);
-        if (btn) { btn.disabled = false; btn.textContent = original || 'Atualizar ClickUp'; }
-        showToast('Fechamento ClickUp atualizado', 'ok');
-      });
-    }
+    if (btn) btn.textContent = 'Carregando dados...';
     return fechamentoLoad(true).then(function() {
-      var bg = FECHAMENTO_META.background_sync || {};
-      if (bg.active) return sleep(5000).then(poll);
       if (btn) { btn.disabled = false; btn.textContent = original || 'Atualizar ClickUp'; }
+      showToast('Atualizado: '+Number(recent.detected || 0)+' marco(s) encontrado(s) nas alterações recentes', 'ok');
       return null;
     });
   }).catch(function(error) {
@@ -5147,9 +5140,21 @@ function initFechamento() {
   var projetoOptions = '<option value="todos">Todos os projetos</option>'+Object.keys(projects).sort().map(function(name) {
     return '<option value="'+escapeHtml(name)+'" '+(name === FECHAMENTO_FILTER.projeto ? 'selected' : '')+'>'+escapeHtml(name)+'</option>';
   }).join('');
-  var monthChips = '<button class="closing-filter-chip '+(FECHAMENTO_FILTER.month === 'todos' ? 'on' : '')+'" onclick="return fechamentoSetFilter(\'month\',\'todos\')">Todos</button>'+Object.keys(months).sort().reverse().map(function(month) {
-    return '<button class="closing-filter-chip '+(month === FECHAMENTO_FILTER.month ? 'on' : '')+'" onclick="return fechamentoSetFilter(\'month\',\''+escapeHtml(month)+'\')">'+escapeHtml(month)+'</button>';
-  }).join('');
+  var monthsByYear = {};
+  Object.keys(months).sort().reverse().forEach(function(month) {
+    var year = String(month).slice(0,4);
+    (monthsByYear[year] || (monthsByYear[year] = [])).push(month);
+  });
+  var monthNames = ['JAN','FEV','MAR','ABR','MAI','JUN','JUL','AGO','SET','OUT','NOV','DEZ'];
+  var monthChips = '<div class="closing-filter-chips"><button class="closing-filter-chip '+(FECHAMENTO_FILTER.month === 'todos' ? 'on' : '')+'" onclick="return fechamentoSetFilter(\'month\',\'todos\')">Todos os meses</button></div>'+
+    '<div class="closing-year-groups">'+Object.keys(monthsByYear).sort().reverse().map(function(year) {
+      var chips = monthsByYear[year].map(function(month) {
+        var monthIndex = Number(String(month).slice(5,7)) - 1;
+        var label = monthNames[monthIndex] || month;
+        return '<button class="closing-filter-chip '+(month === FECHAMENTO_FILTER.month ? 'on' : '')+'" onclick="return fechamentoSetFilter(\'month\',\''+escapeHtml(month)+'\')">'+escapeHtml(label)+'</button>';
+      }).join('');
+      return '<div class="closing-year-group"><div class="closing-year-label">'+escapeHtml(year)+'</div><div class="closing-filter-chips">'+chips+'</div></div>';
+    }).join('')+'</div>';
   var statusChips = [
     {key:'todos', label:'Todos os status'},
     {key:'aguardando', label:'Aguardando validação'},
@@ -5189,8 +5194,8 @@ function initFechamento() {
     '<div class="closing-actions"><select class="closing-select" onchange="fechamentoSetFilter(\'consultor\',this.value)">'+consultorOptions+'</select>'+
     '<select class="closing-select" onchange="fechamentoSetFilter(\'projeto\',this.value)">'+projetoOptions+'</select>'+
     (AUTH_STATE.user && AUTH_STATE.user.role === 'admin' ? '<button class="btn-syncall" onclick="return fechamentoStartSync(this)">Atualizar ClickUp</button>' : '')+
-    '<button class="btn-reload" onclick="fechamentoLoad(true)">Recarregar</button></div></div>'+error+syncNote+
-    '<div class="closing-filter-block"><div class="closing-filter-label">Mês em que entrou em Closed</div><div class="closing-filter-chips">'+monthChips+'</div><div class="closing-filter-label" style="margin-top:12px">Validação técnica</div><div class="closing-filter-chips">'+statusChips+'</div></div>'+
+    '</div></div>'+error+syncNote+
+    '<div class="closing-filter-block"><div class="closing-filter-label">Mês em que entrou em Closed</div>'+monthChips+'<div class="closing-filter-label" style="margin-top:12px">Validação técnica</div><div class="closing-filter-chips">'+statusChips+'</div></div>'+
     '<div class="closing-kpis"><div class="closing-kpi"><span>Marcos no recorte</span><strong>'+list.length+'</strong></div><div class="closing-kpi"><span>Aguardando validação</span><strong>'+waiting+'</strong></div><div class="closing-kpi"><span>Aprovados / Reprovados</span><strong>'+approved+' / '+rejected+'</strong></div><div class="closing-kpi"><span>Bonificação aprovada</span><strong>'+fechamentoMoney(bonus)+'</strong></div></div>'+
     consultantCards;
 }
