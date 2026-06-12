@@ -3879,7 +3879,7 @@ function getCmaxDailyHeaders_() {
   return [
     'event_key', 'event_id', 'data', 'mes', 'ano', 'consultor', 'cliente',
     'tipo', 'resultado', 'descricao', 'hora_inicio', 'hora_fim',
-    'valor_bonus', 'sincronizado_em', 'raw_json'
+    'sincronizado_em', 'raw_json'
   ];
 }
 
@@ -3911,7 +3911,6 @@ function getCmaxDailyEvents_(params) {
     events: events,
     total: events.length,
     month: month,
-    bonus_per_day: getCmaxDailyBonusValue_(),
     synced_at: events.reduce(function(latest, item) {
       var value = String(item.sincronizado_em || '');
       return value > latest ? value : latest;
@@ -4042,7 +4041,6 @@ function normalizeCmaxAgendaEvent_(raw, syncedAt) {
     descricao: description,
     hora_inicio: sanitizeText_(deepFindFirst_(raw, ['hora_inicio', 'inicio_hora', 'start_time'])),
     hora_fim: sanitizeText_(deepFindFirst_(raw, ['hora_fim', 'fim_hora', 'end_time'])),
-    valor_bonus: getCmaxDailyBonusValue_(),
     sincronizado_em: syncedAt,
     raw_json: JSON.stringify(raw)
   };
@@ -4119,11 +4117,6 @@ function parseCmaxDate_(value) {
 function isCmaxPositiveResult_(value) {
   var normalized = sanitizeText_(value).normalize('NFD').replace(/[\u0300-\u036f]/g, '').toUpperCase();
   return normalized === 'POSITIVO' || normalized === 'POSITIVE' || normalized === '1';
-}
-
-function getCmaxDailyBonusValue_() {
-  var value = Number(PropertiesService.getScriptProperties().getProperty('CMAX_DIARIA_BONUS') || 50);
-  return isNaN(value) ? 50 : value;
 }
 
 function buildProjectUrl_(mapping, tasks) {

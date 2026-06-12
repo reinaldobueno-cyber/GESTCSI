@@ -10761,14 +10761,11 @@ function initAlert(){
   document.getElementById('rows-exc').innerHTML=buildMonthGroupedRows(exc,'exc-');
 }
 
-var CMAX_DAILY_STATE = {events:[], loading:false, loaded:false, error:'', month:cmaxCurrentMonth(), consultant:'', search:'', bonus:50, syncedAt:''};
+var CMAX_DAILY_STATE = {events:[], loading:false, loaded:false, error:'', month:cmaxCurrentMonth(), consultant:'', search:'', syncedAt:''};
 
 function cmaxCurrentMonth() {
   var date = new Date();
   return date.getFullYear()+'-'+String(date.getMonth()+1).padStart(2,'0');
-}
-function cmaxMoney(value) {
-  return Number(value || 0).toLocaleString('pt-BR',{style:'currency',currency:'BRL'});
 }
 function cmaxDate(value) {
   var parts=String(value||'').slice(0,10).split('-');
@@ -10814,7 +10811,6 @@ function renderDiariasCmax() {
     if(!byConsultant[key])byConsultant[key]=[];
     byConsultant[key].push(item);
   });
-  var totalBonus=list.reduce(function(sum,item){return sum+Number(item.valor_bonus||s.bonus||0);},0);
   var clients=new Set(list.map(function(x){return String(x.cliente||'');}).filter(Boolean)).size;
   var syncButton=AUTH_STATE.user&&AUTH_STATE.user.role==='admin'
     ? '<button class="btn-syncall" onclick="sincronizarDiariasCmax(this)">Atualizar CMAX</button>'
@@ -10822,13 +10818,12 @@ function renderDiariasCmax() {
   var groups=Object.keys(byConsultant).sort().map(function(name){
     var events=byConsultant[name].sort(function(a,b){return String(b.data||'').localeCompare(String(a.data||''));});
     var rows=events.map(function(item){
-      return '<tr><td><strong>'+escapeHtml(item.cliente||'-')+'</strong><div class="search-note">'+escapeHtml(item.descricao||'')+'</div></td><td>'+escapeHtml(item.tipo||'-')+'</td><td>'+cmaxDate(item.data)+'</td><td>'+escapeHtml((item.hora_inicio||'-')+(item.hora_fim?' - '+item.hora_fim:''))+'</td><td><span class="dashx-table-chip">'+escapeHtml(item.resultado||'Positivo')+'</span></td><td class="num"><strong>'+cmaxMoney(item.valor_bonus||s.bonus)+'</strong></td></tr>';
+      return '<tr><td><strong>'+escapeHtml(item.cliente||'-')+'</strong><div class="search-note">'+escapeHtml(item.descricao||'')+'</div></td><td>'+escapeHtml(item.tipo||'-')+'</td><td>'+cmaxDate(item.data)+'</td><td>'+escapeHtml((item.hora_inicio||'-')+(item.hora_fim?' - '+item.hora_fim:''))+'</td><td><span class="dashx-table-chip">'+escapeHtml(item.resultado||'Positivo')+'</span></td></tr>';
     }).join('');
-    var subtotal=events.reduce(function(sum,item){return sum+Number(item.valor_bonus||s.bonus||0);},0);
-    return '<section class="cmax-group"><div class="cmax-group-head"><span>'+escapeHtml(name)+'</span><span>'+events.length+' di&aacute;ria(s) &middot; '+cmaxMoney(subtotal)+'</span></div><div class="dashx-table-wrap"><table class="dashx-table"><thead><tr><th>Cliente</th><th>Tipo</th><th>Data</th><th>Hor&aacute;rio</th><th>Resultado</th><th class="num">B&ocirc;nus</th></tr></thead><tbody>'+rows+'</tbody></table></div></section>';
+    return '<section class="cmax-group"><div class="cmax-group-head"><span>'+escapeHtml(name)+'</span><span>'+events.length+' di&aacute;ria(s)</span></div><div class="dashx-table-wrap"><table class="dashx-table"><thead><tr><th>Cliente</th><th>Tipo</th><th>Data</th><th>Hor&aacute;rio</th><th>Resultado</th></tr></thead><tbody>'+rows+'</tbody></table></div></section>';
   }).join('');
   var status=s.loading?'Consultando a base salva...':s.error?escapeHtml(s.error):(s.syncedAt?'&Uacute;ltima sincroniza&ccedil;&atilde;o: '+escapeHtml(s.syncedAt):'Ainda sem sincroniza&ccedil;&atilde;o CMAX.');
-  box.innerHTML='<div class="cmax-shell"><div class="cmax-hero"><div><div class="cmax-title">Di&aacute;rias realizadas no CMAX</div><div class="cmax-sub">MVP de auditoria da agenda. Conta somente eventos com resultado <strong>Positivo</strong>, separados por consultor, cliente e data. O valor usa '+cmaxMoney(s.bonus)+' por di&aacute;ria.</div></div><div class="cmax-actions"><select onchange="CMAX_DAILY_STATE.month=this.value;renderDiariasCmax()">'+cmaxSelectOptions(months,s.month,'Todos os meses')+'</select><select onchange="CMAX_DAILY_STATE.consultant=this.value;renderDiariasCmax()">'+cmaxSelectOptions(consultants,s.consultant,'Todos os consultores')+'</select><input type="search" placeholder="Filtrar cliente..." value="'+escapeHtml(s.search)+'" oninput="CMAX_DAILY_STATE.search=this.value;renderDiariasCmax()">'+syncButton+'</div></div><div class="cmax-status">'+status+'</div><div class="cmax-summary"><div class="cmax-card"><span>Di&aacute;rias positivas</span><strong>'+list.length+'</strong></div><div class="cmax-card"><span>Consultores</span><strong>'+Object.keys(byConsultant).length+'</strong></div><div class="cmax-card"><span>Clientes atendidos</span><strong>'+clients+'</strong></div><div class="cmax-card"><span>Bonifica&ccedil;&atilde;o estimada</span><strong>'+cmaxMoney(totalBonus)+'</strong></div></div>'+(groups||'<div class="cmax-empty">Nenhuma di&aacute;ria positiva encontrada neste recorte.</div>')+'</div>';
+  box.innerHTML='<div class="cmax-shell"><div class="cmax-hero"><div><div class="cmax-title">Di&aacute;rias realizadas no CMAX</div><div class="cmax-sub">Vis&atilde;o quantitativa da agenda. Conta somente eventos com resultado <strong>Positivo</strong>, separados por consultor, cliente e data. A remunera&ccedil;&atilde;o ser&aacute; tratada posteriormente conforme a senioridade.</div></div><div class="cmax-actions"><select onchange="CMAX_DAILY_STATE.month=this.value;renderDiariasCmax()">'+cmaxSelectOptions(months,s.month,'Todos os meses')+'</select><select onchange="CMAX_DAILY_STATE.consultant=this.value;renderDiariasCmax()">'+cmaxSelectOptions(consultants,s.consultant,'Todos os consultores')+'</select><input type="search" placeholder="Filtrar cliente..." value="'+escapeHtml(s.search)+'" oninput="CMAX_DAILY_STATE.search=this.value;renderDiariasCmax()">'+syncButton+'</div></div><div class="cmax-status">'+status+'</div><div class="cmax-summary"><div class="cmax-card"><span>Di&aacute;rias positivas</span><strong>'+list.length+'</strong></div><div class="cmax-card"><span>Consultores com di&aacute;rias</span><strong>'+Object.keys(byConsultant).length+'</strong></div><div class="cmax-card"><span>Clientes atendidos</span><strong>'+clients+'</strong></div><div class="cmax-card"><span>M&eacute;dia por consultor</span><strong>'+(Object.keys(byConsultant).length?(list.length/Object.keys(byConsultant).length).toLocaleString('pt-BR',{maximumFractionDigits:1}):'0')+'</strong></div></div>'+(groups||'<div class="cmax-empty">Nenhuma di&aacute;ria positiva encontrada neste recorte.</div>')+'</div>';
 }
 function carregarDiariasCmax(force) {
   if(CMAX_DAILY_STATE.loading||(!force&&CMAX_DAILY_STATE.loaded)){renderDiariasCmax();return;}
@@ -10836,7 +10831,6 @@ function carregarDiariasCmax(force) {
   chamarAppsScriptJsonp('getCmaxDailyEvents',{},30000).then(function(resp){
     if(!resp||resp.ok===false)throw new Error((resp&&(resp.error||resp.raw_error))||'Falha ao carregar diárias CMAX');
     CMAX_DAILY_STATE.events=Array.isArray(resp.events)?resp.events:[];
-    CMAX_DAILY_STATE.bonus=Number(resp.bonus_per_day||50);
     CMAX_DAILY_STATE.syncedAt=String(resp.synced_at||'');
     CMAX_DAILY_STATE.loaded=true;CMAX_DAILY_STATE.loading=false;renderDiariasCmax();
   }).catch(function(error){CMAX_DAILY_STATE.loading=false;CMAX_DAILY_STATE.error=error.message||String(error);renderDiariasCmax();});
