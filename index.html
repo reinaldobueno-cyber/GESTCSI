@@ -5111,12 +5111,16 @@ function initFechamento() {
       '<td><a class="project-link-btn" href="'+escapeHtml(item.link || '#')+'" target="_blank" rel="noopener">Abrir</a></td></tr>';
   }).join('') : '<tr class="empty-row"><td colspan="9">Nenhum marco encontrado neste recorte. Rode “Atualizar ClickUp” para iniciar a base histórica.</td></tr>';
   var error = FECHAMENTO_META.error ? '<div class="dashx-focus-note" style="margin-bottom:12px"><strong>'+escapeHtml(FECHAMENTO_META.error)+'</strong></div>' : '';
+  var bg = FECHAMENTO_META.background_sync || {};
+  var syncNote = bg.active
+    ? '<div class="dashx-focus-note" style="margin-bottom:12px"><strong>Leitura ClickUp em andamento:</strong> '+Number(bg.processed || 0)+' de '+Number(bg.total || 0)+' projetos lidos, '+Number(bg.detected || 0)+' marcos detectados até agora.</div>'
+    : (Number(bg.errors || 0) > 0 ? '<div class="dashx-focus-note" style="margin-bottom:12px"><strong>Última leitura:</strong> '+Number(bg.processed || 0)+' projetos lidos, '+Number(bg.detected || 0)+' marcos detectados e '+Number(bg.errors || 0)+' erro(s).</div>' : '');
   box.innerHTML = '<div class="closing-head"><div><div class="closing-title">Fechamento de marcos</div><div class="closing-sub">Acompanha diariamente marcos que chegaram em Closed e a validação técnica em Aprovado Gestão ou Reprovado Gestão. Somente aprovados entram na bonificação de R$ 30 por marco.</div></div>'+
     '<div class="closing-actions"><select class="closing-select" onchange="fechamentoSetFilter(\'month\',this.value)">'+monthOptions+'</select>'+
     '<select class="closing-select" onchange="fechamentoSetFilter(\'consultor\',this.value)">'+consultorOptions+'</select>'+
     '<select class="closing-select" onchange="fechamentoSetFilter(\'situacao\',this.value)"><option value="todos">Todos os status</option><option value="aguardando" '+(FECHAMENTO_FILTER.situacao==='aguardando'?'selected':'')+'>Aguardando validação</option><option value="aprovado" '+(FECHAMENTO_FILTER.situacao==='aprovado'?'selected':'')+'>Aprovados</option><option value="reprovado" '+(FECHAMENTO_FILTER.situacao==='reprovado'?'selected':'')+'>Reprovados</option></select>'+
     (AUTH_STATE.user && AUTH_STATE.user.role === 'admin' ? '<button class="btn-syncall" onclick="return fechamentoStartSync(this)">Atualizar ClickUp</button>' : '')+
-    '<button class="btn-reload" onclick="fechamentoLoad(true)">Recarregar</button></div></div>'+error+
+    '<button class="btn-reload" onclick="fechamentoLoad(true)">Recarregar</button></div></div>'+error+syncNote+
     '<div class="closing-kpis"><div class="closing-kpi"><span>Marcos no recorte</span><strong>'+list.length+'</strong></div><div class="closing-kpi"><span>Aguardando validação</span><strong>'+waiting+'</strong></div><div class="closing-kpi"><span>Aprovados / Reprovados</span><strong>'+approved+' / '+rejected+'</strong></div><div class="closing-kpi"><span>Bonificação aprovada</span><strong>'+fechamentoMoney(bonus)+'</strong></div></div>'+
     '<div class="dashx-table-wrap"><table class="dashx-table"><thead><tr><th>Projeto / fase</th><th>Consultor</th><th>Marco</th><th>Closed em</th><th>Validação</th><th>Validado em</th><th>Justificativa</th><th class="num">Bônus</th><th>Ação</th></tr></thead><tbody>'+rows+'</tbody></table></div>';
 }

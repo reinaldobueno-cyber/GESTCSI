@@ -1272,8 +1272,22 @@ function startClickUpMilestoneClosingBackground_(params) {
   props.setProperty('CLICKUP_MILESTONE_CLOSING_OFFSET', '0');
   props.setProperty('CLICKUP_MILESTONE_CLOSING_PROCESSED', '0');
   props.setProperty('CLICKUP_MILESTONE_CLOSING_ERRORS', '0');
+  props.setProperty('CLICKUP_MILESTONE_CLOSING_DETECTED', '0');
   props.setProperty('CLICKUP_MILESTONE_CLOSING_STARTED_AT', new Date().toISOString());
   props.deleteProperty('CLICKUP_MILESTONE_CLOSING_ERROR');
+  var firstBatch = syncClickUpMilestoneClosingBatch_(0, 3);
+  props.setProperty('CLICKUP_MILESTONE_CLOSING_OFFSET', String(firstBatch.next_offset));
+  props.setProperty('CLICKUP_MILESTONE_CLOSING_PROCESSED', String(firstBatch.processed));
+  props.setProperty('CLICKUP_MILESTONE_CLOSING_ERRORS', String(firstBatch.errors));
+  props.setProperty('CLICKUP_MILESTONE_CLOSING_DETECTED', String(firstBatch.detected));
+  props.setProperty('CLICKUP_MILESTONE_CLOSING_TOTAL', String(firstBatch.total));
+  props.setProperty('CLICKUP_MILESTONE_CLOSING_UPDATED_AT', new Date().toISOString());
+  if (firstBatch.done) {
+    props.setProperty('CLICKUP_MILESTONE_CLOSING_ACTIVE', '0');
+    props.setProperty('CLICKUP_MILESTONE_CLOSING_COMPLETED_AT', new Date().toISOString());
+    clearClickUpMilestoneClosingBackgroundTriggers_();
+    return { ok: true, scheduled: false, background_sync: getClickUpMilestoneClosingBackgroundStatus_() };
+  }
   scheduleClickUpMilestoneClosingBackground_(1000);
   return { ok: true, scheduled: true, background_sync: getClickUpMilestoneClosingBackgroundStatus_() };
 }
@@ -1301,35 +1315,58 @@ function continueClickUpMilestoneClosingBackgroundTrigger() {
     clearClickUpMilestoneClosingBackgroundTriggers_();
     return;
   }
-  var mappings = loadProjectMappings_().filter(function(item) {
-    return item.enabled && (item.list_id || item.view_id || item.folder_id || item.space_id);
-  });
   var offset = toInt_(props.getProperty('CLICKUP_MILESTONE_CLOSING_OFFSET'), 0);
-  var batch = mappings.slice(offset, offset + 5);
-  var processed = toInt_(props.getProperty('CLICKUP_MILESTONE_CLOSING_PROCESSED'), 0);
-  var errors = toInt_(props.getProperty('CLICKUP_MILESTONE_CLOSING_ERRORS'), 0);
-  batch.forEach(function(mapping) {
-    try {
-      syncProjectMapping_(mapping, { force: true });
-      processed += 1;
-    } catch (error) {
-      errors += 1;
-      props.setProperty('CLICKUP_MILESTONE_CLOSING_ERROR', simplifyErrorMessage_(error));
-    }
-  });
-  offset += batch.length;
-  props.setProperty('CLICKUP_MILESTONE_CLOSING_OFFSET', String(offset));
+  var result = syncClickUpMilestoneClosingBatch_(offset, 5);
+  var processed = toInt_(props.getProperty('CLICKUP_MILESTONE_CLOSING_PROCESSED'), 0) + result.processed;
+  var errors = toInt_(props.getProperty('CLICKUP_MILESTONE_CLOSING_ERRORS'), 0) + result.errors;
+  var detected = toInt_(props.getProperty('CLICKUP_MILESTONE_CLOSING_DETECTED'), 0) + result.detected;
+  props.setProperty('CLICKUP_MILESTONE_CLOSING_OFFSET', String(result.next_offset));
   props.setProperty('CLICKUP_MILESTONE_CLOSING_PROCESSED', String(processed));
   props.setProperty('CLICKUP_MILESTONE_CLOSING_ERRORS', String(errors));
-  props.setProperty('CLICKUP_MILESTONE_CLOSING_TOTAL', String(mappings.length));
+  props.setProperty('CLICKUP_MILESTONE_CLOSING_DETECTED', String(detected));
+  props.setProperty('CLICKUP_MILESTONE_CLOSING_TOTAL', String(result.total));
   props.setProperty('CLICKUP_MILESTONE_CLOSING_UPDATED_AT', new Date().toISOString());
-  if (!batch.length || offset >= mappings.length) {
+  if (result.last_error) props.setProperty('CLICKUP_MILESTONE_CLOSING_ERROR', result.last_error);
+  if (result.done) {
     props.setProperty('CLICKUP_MILESTONE_CLOSING_ACTIVE', '0');
     props.setProperty('CLICKUP_MILESTONE_CLOSING_COMPLETED_AT', new Date().toISOString());
     clearClickUpMilestoneClosingBackgroundTriggers_();
     return;
   }
   scheduleClickUpMilestoneClosingBackground_(15000);
+}
+
+function syncClickUpMilestoneClosingBatch_(offset, limit) {
+  var mappings = loadProjectMappings_().filter(function(item) {
+    return item.enabled && (item.list_id || item.view_id || item.folder_id || item.space_id);
+  });
+  offset = Math.max(0, Number(offset || 0));
+  limit = Math.max(1, Number(limit || 5));
+  var batch = mappings.slice(offset, offset + limit);
+  var processed = 0;
+  var errors = 0;
+  var detected = 0;
+  var lastError = '';
+  batch.forEach(function(mapping) {
+    try {
+      var normalized = buildNormalizedProjectFromClickUp_(mapping);
+      detected += (normalized.marcos || []).length;
+      upsertClickUpMilestoneClosing_(mapping, normalized);
+      processed += 1;
+    } catch (error) {
+      errors += 1;
+      lastError = simplifyErrorMessage_(error);
+    }
+  });
+  return {
+    total: mappings.length,
+    processed: processed,
+    errors: errors,
+    detected: detected,
+    last_error: lastError,
+    next_offset: offset + batch.length,
+    done: !batch.length || offset + batch.length >= mappings.length
+  };
 }
 
 function getClickUpMilestoneClosingBackgroundStatus_() {
@@ -1339,6 +1376,7 @@ function getClickUpMilestoneClosingBackgroundStatus_() {
     total: toInt_(props.getProperty('CLICKUP_MILESTONE_CLOSING_TOTAL'), 0),
     processed: toInt_(props.getProperty('CLICKUP_MILESTONE_CLOSING_PROCESSED'), 0),
     errors: toInt_(props.getProperty('CLICKUP_MILESTONE_CLOSING_ERRORS'), 0),
+    detected: toInt_(props.getProperty('CLICKUP_MILESTONE_CLOSING_DETECTED'), 0),
     started_at: props.getProperty('CLICKUP_MILESTONE_CLOSING_STARTED_AT') || '',
     updated_at: props.getProperty('CLICKUP_MILESTONE_CLOSING_UPDATED_AT') || '',
     completed_at: props.getProperty('CLICKUP_MILESTONE_CLOSING_COMPLETED_AT') || '',
@@ -3996,6 +4034,8 @@ function isMilestoneTask_(task) {
   ).toLowerCase();
   if (String(task.custom_item_id || '') === '1') return true;
   if (typeName.indexOf('milestone') >= 0 || typeName.indexOf('marco') >= 0) return true;
+  var name = sanitizeText_(task.name).toLowerCase();
+  if (/(^|[\s-])(marco|entrega|validac|aprovac|encerrament|go live|golive|checkpoint)([\s-]|$)/i.test(name)) return true;
   return false;
 }
 
