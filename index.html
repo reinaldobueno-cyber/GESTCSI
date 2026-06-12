@@ -3184,7 +3184,7 @@ body.theme-dark *{
 <button class="snb" onclick="goTab('exec',this)"><span class="snb-icon">&#127775;</span><span class="snb-label">Executivo</span></button>
 <button class="snb" onclick="goTab('tower',this)"><span class="snb-icon">&#128737;</span><span class="snb-label">Gest&atilde;o</span><span class="snb-badge" id="n-tower" hidden>0</span></button>
 <button class="snb" onclick="return abrirAcompanhamentosPendentes(this)" title="Abrir acompanhamentos pendentes"><span class="snb-icon">&#128276;</span><span class="snb-label">Acompanhamento</span><span class="snb-badge" id="n-acom" hidden>0</span></button>
-<button class="snb" id="nav-fech" style="display:none" onclick="goTab('fech',this)"><span class="snb-icon">&#9989;</span><span class="snb-label">Fechamento</span><span class="snb-badge" id="n-fech" hidden>0</span></button>
+<button class="snb" id="nav-fech" onclick="goTab('fech',this)"><span class="snb-icon">&#9989;</span><span class="snb-label">Fechamento</span><span class="snb-badge" id="n-fech" hidden>0</span></button>
 <button class="snb" onclick="goTab('all',this)"><span class="snb-icon">&#128203;</span><span class="snb-label">Projetos</span><span class="snb-badge" id="n-all" hidden>0</span></button>
 <button class="snb" onclick="goTab('cons',this)"><span class="snb-icon">&#128100;</span><span class="snb-label">Consultores</span></button>
 <button class="snb" onclick="goTab('vend',this)"><span class="snb-icon">&#129309;</span><span class="snb-label">Vendedores</span></button>
@@ -4988,6 +4988,25 @@ var FECHAMENTO_META = {};
 var FECHAMENTO_LOADED = false;
 var FECHAMENTO_LOADING = false;
 var FECHAMENTO_FILTER = { month:'todos', consultor:'todos', projeto:'todos', situacao:'todos' };
+function fechamentoRestoreCache() {
+  try {
+    var cached = JSON.parse(localStorage.getItem('gestcsi_fechamento_cache') || 'null');
+    if (!cached || !Array.isArray(cached.marcos)) return;
+    FECHAMENTO_MARCOS = cached.marcos;
+    FECHAMENTO_META = cached.meta || {};
+    FECHAMENTO_LOADED = true;
+  } catch (error) {}
+}
+function fechamentoSaveCache() {
+  try {
+    localStorage.setItem('gestcsi_fechamento_cache', JSON.stringify({
+      marcos: FECHAMENTO_MARCOS,
+      meta: FECHAMENTO_META,
+      saved_at: new Date().toISOString()
+    }));
+  } catch (error) {}
+}
+fechamentoRestoreCache();
 function fechamentoCurrentMonth() {
   var d = new Date();
   return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0');
@@ -5013,18 +5032,16 @@ function fechamentoLoad(force) {
     FECHAMENTO_META = resp;
     FECHAMENTO_LOADED = true;
     FECHAMENTO_LOADING = false;
-    var nav = document.getElementById('nav-fech');
-    if (nav) nav.style.display = '';
+    delete FECHAMENTO_META.error;
+    fechamentoSaveCache();
     if (!FECHAMENTO_FILTER.month) FECHAMENTO_FILTER.month = 'todos';
     initFechamento();
     return resp;
   }).catch(function(error) {
     FECHAMENTO_LOADING = false;
-    FECHAMENTO_META.error = 'Fechamento ainda não está disponível.';
-    var nav = document.getElementById('nav-fech');
-    if (nav) nav.style.display = 'none';
-    var page = document.getElementById('page-fech');
-    if (page && page.classList.contains('on')) goTab('dash');
+    FECHAMENTO_META.error = FECHAMENTO_LOADED
+      ? 'Não foi possível atualizar agora. Mantendo a última leitura válida.'
+      : 'Não foi possível carregar o fechamento agora. Tente recarregar em alguns instantes.';
     initFechamento();
     return null;
   });
