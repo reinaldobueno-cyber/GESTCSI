@@ -44,7 +44,10 @@ uma mensagem clara pedindo a atualizacao de `CMAX_JWT_TOKEN`.
   evitando a conversao de horas do Google Sheets para datas de 1899.
 - A tela apresenta filtros em blocos por ano/mes, consultor e atividade.
 - Somente pessoas que possuem ao menos um dos quatro treinamentos contabilizaveis
-  no historico fazem parte da visao. Todas as atividades positivas dessas pessoas
-  continuam disponiveis para auditoria.
+  nos ultimos 6 meses fazem parte da visao. Todas as atividades positivas dessas
+  pessoas continuam disponiveis para auditoria. O periodo pode ser alterado pela
+  propriedade `CMAX_TRAINING_TEAM_MONTHS`.
+- A consulta da tela ignora a coluna pesada `raw_json`, reduzindo o tempo de
+  carregamento sem perder os dados de auditoria armazenados.
 - Cada consultor possui uma visao calendario mensal com intensidade por volume,
   quantidade de diarias/atividades no dia e detalhamento ao clicar na data.

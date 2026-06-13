@@ -3906,10 +3906,13 @@ function getCmaxDailySheet_() {
 function getCmaxDailyEvents_(params) {
   params = params || {};
   var sheet = getCmaxDailySheet_();
-  var range = sheet.getDataRange();
+  var headersExpected = getCmaxDailyHeaders_();
+  var rawJsonIndex = headersExpected.indexOf('raw_json');
+  var readColumns = rawJsonIndex > 0 ? rawJsonIndex : headersExpected.length;
+  var range = sheet.getRange(1, 1, Math.max(1, sheet.getLastRow()), readColumns);
   var values = range.getValues();
   var displayValues = range.getDisplayValues();
-  var headers = values.length ? values[0].map(function(value) { return String(value || ''); }) : getCmaxDailyHeaders_();
+  var headers = values.length ? values[0].map(function(value) { return String(value || ''); }) : headersExpected.slice(0, readColumns);
   var startTimeIndex = headers.indexOf('hora_inicio');
   var endTimeIndex = headers.indexOf('hora_fim');
   var month = sanitizeCmaxMonth_(params.month || params.mes);
@@ -3928,8 +3931,11 @@ function getCmaxDailyEvents_(params) {
     return item;
   });
   var trainingTeam = {};
+  var trainingCutoff = cmaxTrainingTeamCutoff_();
   allEvents.forEach(function(item) {
-    if (item.contabiliza_diaria) trainingTeam[sanitizeText_(item.consultor).toUpperCase()] = true;
+    if (item.contabiliza_diaria && item.data >= trainingCutoff) {
+      trainingTeam[sanitizeText_(item.consultor).toUpperCase()] = true;
+    }
   });
   var teamEvents = allEvents.filter(function(item) {
     return !!trainingTeam[sanitizeText_(item.consultor).toUpperCase()];
@@ -3956,6 +3962,7 @@ function getCmaxDailyEvents_(params) {
     available_months: Object.keys(availableMonths).sort().reverse(),
     history_months: cmaxHistoryMonths_(),
     history_loaded_months: cmaxProcessedHistoryMonths_(),
+    training_team_cutoff: trainingCutoff,
     training_team: Object.keys(availableConsultants).sort(),
     available_activities: Object.keys(availableActivities).sort(),
     history_sync: getCmaxDailyHistoryBackgroundStatus_(),
@@ -3965,6 +3972,14 @@ function getCmaxDailyEvents_(params) {
     }, ''),
     sheet: CMAX_DAILY_SHEET
   };
+}
+
+function cmaxTrainingTeamCutoff_() {
+  var props = PropertiesService.getScriptProperties();
+  var months = Math.max(1, Math.min(toInt_(props.getProperty('CMAX_TRAINING_TEAM_MONTHS'), 6), 60));
+  var now = new Date();
+  var cutoff = new Date(now.getFullYear(), now.getMonth() - months, 1);
+  return Utilities.formatDate(cutoff, Session.getScriptTimeZone(), 'yyyy-MM-dd');
 }
 
 function startCmaxDailyHistoryBackground_(params) {
