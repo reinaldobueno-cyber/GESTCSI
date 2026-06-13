@@ -3896,7 +3896,7 @@ function getCmaxDailyEvents_(params) {
   var headers = values.length ? values[0].map(function(value) { return String(value || ''); }) : getCmaxDailyHeaders_();
   var month = sanitizeCmaxMonth_(params.month || params.mes);
   var consultant = sanitizeText_(params.consultant || params.consultor).toUpperCase();
-  var events = values.slice(1).map(function(row) {
+  var allEvents = values.slice(1).map(function(row) {
     var item = {};
     headers.forEach(function(header, index) { item[header] = row[index]; });
     item.data = normalizeCmaxSheetDate_(item.data);
@@ -3908,10 +3908,26 @@ function getCmaxDailyEvents_(params) {
     item.contabiliza_diaria = isCmaxDailyModality_(item.modalidade);
     delete item.raw_json;
     return item;
-  }).filter(function(item) {
+  });
+  var trainingTeam = {};
+  allEvents.forEach(function(item) {
+    if (item.contabiliza_diaria) trainingTeam[sanitizeText_(item.consultor).toUpperCase()] = true;
+  });
+  var teamEvents = allEvents.filter(function(item) {
+    return !!trainingTeam[sanitizeText_(item.consultor).toUpperCase()];
+  });
+  var events = teamEvents.filter(function(item) {
     if (month && item.mes !== month) return false;
     if (consultant && sanitizeText_(item.consultor).toUpperCase() !== consultant) return false;
     return true;
+  });
+  var availableMonths = {};
+  var availableConsultants = {};
+  var availableActivities = {};
+  teamEvents.forEach(function(item) {
+    if (item.mes) availableMonths[item.mes] = true;
+    if (item.consultor) availableConsultants[item.consultor] = true;
+    if (item.descricao || item.modalidade || item.tipo) availableActivities[item.descricao || item.modalidade || item.tipo] = true;
   });
 
   return {
@@ -3919,6 +3935,9 @@ function getCmaxDailyEvents_(params) {
     events: events,
     total: events.length,
     month: month,
+    available_months: Object.keys(availableMonths).sort().reverse(),
+    training_team: Object.keys(availableConsultants).sort(),
+    available_activities: Object.keys(availableActivities).sort(),
     synced_at: events.reduce(function(latest, item) {
       var value = String(item.sincronizado_em || '');
       return value > latest ? value : latest;

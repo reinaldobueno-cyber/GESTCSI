@@ -26,3 +26,7 @@ uma mensagem clara pedindo a atualizacao de `CMAX_JWT_TOKEN`.
   diaria. As demais modalidades continuam visiveis como atividades registradas.
 - A tela apresenta quantitativo por modalidade e detalhamento por consultor,
   cliente, dia da semana, data e horario.
+- A tela apresenta filtros em blocos por ano/mes, consultor e atividade.
+- Somente pessoas que possuem ao menos um `TREINAMENTO ON LINE` ou
+  `TREINAMENTO IN LOCO` no historico fazem parte da visao. Todas as atividades
+  positivas dessas pessoas continuam disponiveis para auditoria.
