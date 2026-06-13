@@ -3917,6 +3917,9 @@ function getCmaxDailyEvents_(params) {
   var timeDisplayValues = startTimeIndex >= 0 && endTimeIndex === startTimeIndex + 1
     ? sheet.getRange(1, startTimeIndex + 1, Math.max(1, sheet.getLastRow()), 2).getDisplayValues()
     : [];
+  var rawJsonValues = rawJsonIndex >= 0
+    ? sheet.getRange(1, rawJsonIndex + 1, Math.max(1, sheet.getLastRow()), 1).getValues()
+    : [];
   var month = sanitizeCmaxMonth_(params.month || params.mes);
   var consultant = sanitizeText_(params.consultant || params.consultor).toUpperCase();
   var allEvents = values.slice(1).map(function(row, rowIndex) {
@@ -3927,6 +3930,17 @@ function getCmaxDailyEvents_(params) {
     item.ano = item.mes ? item.mes.slice(0, 4) : String(item.ano || '');
     item.hora_inicio = normalizeCmaxSheetTime_((timeDisplayValues[rowIndex + 1] || [])[0] || item.hora_inicio);
     item.hora_fim = normalizeCmaxSheetTime_((timeDisplayValues[rowIndex + 1] || [])[1] || item.hora_fim);
+    if (!isCmaxValidTime_(item.hora_inicio) || !isCmaxValidTime_(item.hora_fim)) {
+      var raw = parseCmaxRawJson_((rawJsonValues[rowIndex + 1] || [])[0]);
+      if (raw) {
+        item.hora_inicio = cmaxEventTime_(raw, [
+          'hora_inicio', 'hora_inicial', 'hora_de', 'horario_inicio', 'horario_de', 'inicio_hora', 'hr_inicio', 'start_time'
+        ]);
+        item.hora_fim = cmaxEventTime_(raw, [
+          'hora_fim', 'hora_final', 'hora_ate', 'horario_fim', 'horario_ate', 'fim_hora', 'hr_fim', 'end_time'
+        ]);
+      }
+    }
     item.modalidade = normalizeCmaxModality_(item.descricao || item.tipo);
     item.contabiliza_diaria = isCmaxDailyModality_(item.modalidade);
     delete item.raw_json;
@@ -4308,6 +4322,16 @@ function cmaxEventTime_(raw, aliases) {
   return /^\d{2}:\d{2}$/.test(normalizedNested) ? normalizedNested : '';
 }
 
+function parseCmaxRawJson_(value) {
+  if (!value) return null;
+  if (typeof value === 'object') return value;
+  try { return JSON.parse(String(value)); } catch (error) { return null; }
+}
+
+function isCmaxValidTime_(value) {
+  return /^\d{2}:\d{2}$/.test(String(value || ''));
+}
+
 function replaceCmaxDailyMonth_(month, events) {
   var sheet = getCmaxDailySheet_();
   var headers = getCmaxDailyHeaders_();
@@ -4317,10 +4341,22 @@ function replaceCmaxDailyMonth_(month, events) {
   var monthIndex = headers.indexOf('mes');
   var startTimeIndex = headers.indexOf('hora_inicio');
   var endTimeIndex = headers.indexOf('hora_fim');
+  var rawJsonIndex = headers.indexOf('raw_json');
   var retained = values.slice(1).map(function(row, rowIndex) {
     var copy = row.slice();
     copy[startTimeIndex] = normalizeCmaxSheetTime_(displayValues[rowIndex + 1][startTimeIndex] || copy[startTimeIndex]);
     copy[endTimeIndex] = normalizeCmaxSheetTime_(displayValues[rowIndex + 1][endTimeIndex] || copy[endTimeIndex]);
+    if (!isCmaxValidTime_(copy[startTimeIndex]) || !isCmaxValidTime_(copy[endTimeIndex])) {
+      var raw = parseCmaxRawJson_(copy[rawJsonIndex]);
+      if (raw) {
+        copy[startTimeIndex] = cmaxEventTime_(raw, [
+          'hora_inicio', 'hora_inicial', 'hora_de', 'horario_inicio', 'horario_de', 'inicio_hora', 'hr_inicio', 'start_time'
+        ]);
+        copy[endTimeIndex] = cmaxEventTime_(raw, [
+          'hora_fim', 'hora_final', 'hora_ate', 'horario_fim', 'horario_ate', 'fim_hora', 'hr_fim', 'end_time'
+        ]);
+      }
+    }
     return copy;
   }).filter(function(row) { return normalizeCmaxSheetMonth_(row[monthIndex]) !== month; });
   var added = events.map(function(item) { return headers.map(function(header) { return item[header] === undefined ? '' : item[header]; }); });
@@ -4359,6 +4395,7 @@ function normalizeCmaxSheetTime_(value) {
     return Utilities.formatDate(value, 'America/Sao_Paulo', 'HH:mm');
   }
   var text = String(value || '').trim();
+  if (/1899|1900/.test(text)) return '';
   if (/^\d{4}-\d{2}-\d{2}T/.test(text)) {
     var parsed = new Date(text);
     if (!isNaN(parsed.getTime())) return Utilities.formatDate(parsed, 'America/Sao_Paulo', 'HH:mm');
