@@ -46,6 +46,7 @@ uma mensagem clara pedindo a atualizacao de `CMAX_JWT_TOKEN`.
   evitando a conversao de horas do Google Sheets para datas de 1899.
 - Celulas antigas convertidas para 1899 sao reparadas pelo `raw_json` original;
   a interface nunca exibe datas de 1899 como horario.
+- A hora final usa tambem o campo original `end_time` do CMAX.
 - A tela apresenta filtros em blocos por ano/mes, consultor e atividade.
 - Somente pessoas que possuem ao menos um dos quatro treinamentos contabilizaveis
   nos ultimos 6 meses fazem parte da visao. Todas as atividades positivas dessas

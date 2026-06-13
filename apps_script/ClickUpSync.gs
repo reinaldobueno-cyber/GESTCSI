@@ -4276,10 +4276,10 @@ function normalizeCmaxAgendaEvent_(raw, syncedAt) {
     resultado: result,
     descricao: description,
     hora_inicio: cmaxEventTime_(raw, [
-      'hora_inicio', 'hora_inicial', 'hora_de', 'horario_inicio', 'horario_de', 'inicio_hora', 'hr_inicio'
+      'hora_inicio', 'hora_inicial', 'hora_de', 'horario_inicio', 'horario_de', 'inicio_hora', 'hr_inicio', 'start_time'
     ]),
     hora_fim: cmaxEventTime_(raw, [
-      'hora_fim', 'hora_final', 'hora_ate', 'horario_fim', 'horario_ate', 'fim_hora', 'hr_fim'
+      'hora_fim', 'hora_final', 'hora_ate', 'horario_fim', 'horario_ate', 'fim_hora', 'hr_fim', 'end_time'
     ]),
     sincronizado_em: syncedAt,
     raw_json: JSON.stringify(raw)
