@@ -20,6 +20,9 @@ uma mensagem clara pedindo a atualizacao de `CMAX_JWT_TOKEN`.
 - Apenas administradores podem executar **Atualizar historico CMAX**.
 - A atualizacao traz o mes atual imediatamente e continua em segundo plano,
   mes a mes, ate janeiro de 2023. Os anos e meses aparecem progressivamente.
+- Enquanto um administrador mantiver a guia aberta, a propria tela acelera a
+  carga historica em lotes de tres meses.
+- Clicar novamente em atualizar preserva o ponto ja alcancado no historico.
 - Para alterar o inicio do historico, configure `CMAX_HISTORY_START_MONTH` no
   formato `AAAA-MM`.
 - O menu da planilha tambem oferece **Sincronizar diarias CMAX do mes atual**.
@@ -31,6 +34,8 @@ uma mensagem clara pedindo a atualizacao de `CMAX_JWT_TOKEN`.
   aparecem primeiro e destacadas. As demais continuam visiveis como atividades.
 - A tela apresenta quantitativo por modalidade e detalhamento por consultor,
   cliente, dia da semana, data e horario.
+- Os detalhes de cada consultor iniciam minimizados e podem ser abertos pela seta.
+- Horarios sao formatados explicitamente no fuso `America/Sao_Paulo`.
 - A tela apresenta filtros em blocos por ano/mes, consultor e atividade.
 - Somente pessoas que possuem ao menos um dos quatro treinamentos contabilizaveis
   no historico fazem parte da visao. Todas as atividades positivas dessas pessoas

@@ -126,6 +126,10 @@ function doGet(e) {
       requireAdmin_(params);
       return jsonOutput_(startCmaxDailyHistoryBackground_(params), params.callback);
     }
+    if (action === 'continueCmaxDailyHistoryBatch') {
+      requireAdmin_(params);
+      return jsonOutput_(continueCmaxDailyHistoryBatch_(params), params.callback);
+    }
     if (action === 'logPanelUpdate' || String(params.log_update || '') === '1') {
       var logResult = logPanelUpdate_(params);
       return jsonOutput_(logResult, params.callback);
@@ -3963,16 +3967,20 @@ function startCmaxDailyHistoryBackground_(params) {
   var currentMonth = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'yyyy-MM');
   var startMonth = sanitizeCmaxMonth_(params.start_month || props.getProperty('CMAX_HISTORY_START_MONTH')) || CMAX_HISTORY_DEFAULT_START_MONTH;
   var currentResult = syncCmaxDailyEvents_({ month: currentMonth });
+  var alreadyActive = props.getProperty('CMAX_HISTORY_BACKGROUND_ACTIVE') === '1';
+  var existingCursor = sanitizeCmaxMonth_(props.getProperty('CMAX_HISTORY_BACKGROUND_CURSOR'));
   props.setProperty('CMAX_HISTORY_BACKGROUND_ACTIVE', '1');
-  props.setProperty('CMAX_HISTORY_BACKGROUND_CURSOR', cmaxShiftMonth_(currentMonth, -1));
   props.setProperty('CMAX_HISTORY_BACKGROUND_START_MONTH', startMonth);
   props.setProperty('CMAX_HISTORY_BACKGROUND_FAILURES', '0');
-  props.setProperty('CMAX_HISTORY_BACKGROUND_PROCESSED', '1');
   props.setProperty('CMAX_HISTORY_BACKGROUND_LAST_MONTH', currentMonth);
-  props.setProperty('CMAX_HISTORY_BACKGROUND_STARTED_AT', new Date().toISOString());
   props.setProperty('CMAX_HISTORY_BACKGROUND_UPDATED_AT', new Date().toISOString());
-  props.deleteProperty('CMAX_HISTORY_BACKGROUND_COMPLETED_AT');
   props.deleteProperty('CMAX_HISTORY_BACKGROUND_ERROR');
+  if (!alreadyActive || !existingCursor) {
+    props.setProperty('CMAX_HISTORY_BACKGROUND_CURSOR', cmaxShiftMonth_(currentMonth, -1));
+    props.setProperty('CMAX_HISTORY_BACKGROUND_PROCESSED', '1');
+    props.setProperty('CMAX_HISTORY_BACKGROUND_STARTED_AT', new Date().toISOString());
+    props.deleteProperty('CMAX_HISTORY_BACKGROUND_COMPLETED_AT');
+  }
   scheduleCmaxDailyHistoryBackground_(5000);
   return {
     ok: true,
@@ -3991,27 +3999,8 @@ function continueCmaxDailyHistoryBackgroundTrigger() {
     return;
   }
   try {
-    var cursor = sanitizeCmaxMonth_(props.getProperty('CMAX_HISTORY_BACKGROUND_CURSOR'));
-    var startMonth = sanitizeCmaxMonth_(props.getProperty('CMAX_HISTORY_BACKGROUND_START_MONTH')) || CMAX_HISTORY_DEFAULT_START_MONTH;
-    var batchSize = Math.max(1, Math.min(toInt_(props.getProperty('CMAX_HISTORY_BATCH_SIZE'), 2), 4));
-    var processed = toInt_(props.getProperty('CMAX_HISTORY_BACKGROUND_PROCESSED'), 0);
-    for (var index = 0; index < batchSize && cursor && cursor >= startMonth; index++) {
-      syncCmaxDailyEvents_({ month: cursor });
-      processed++;
-      props.setProperty('CMAX_HISTORY_BACKGROUND_LAST_MONTH', cursor);
-      cursor = cmaxShiftMonth_(cursor, -1);
-    }
-    props.setProperty('CMAX_HISTORY_BACKGROUND_CURSOR', cursor);
-    props.setProperty('CMAX_HISTORY_BACKGROUND_PROCESSED', String(processed));
-    props.setProperty('CMAX_HISTORY_BACKGROUND_FAILURES', '0');
-    props.setProperty('CMAX_HISTORY_BACKGROUND_UPDATED_AT', new Date().toISOString());
-    props.deleteProperty('CMAX_HISTORY_BACKGROUND_ERROR');
-    if (!cursor || cursor < startMonth) {
-      props.setProperty('CMAX_HISTORY_BACKGROUND_ACTIVE', '0');
-      props.setProperty('CMAX_HISTORY_BACKGROUND_COMPLETED_AT', new Date().toISOString());
-      clearCmaxDailyHistoryBackgroundTriggers_();
-      return;
-    }
+    var result = continueCmaxDailyHistoryBatch_({ batch_size: props.getProperty('CMAX_HISTORY_BATCH_SIZE') || '3' });
+    if (result.done) return;
     scheduleCmaxDailyHistoryBackground_(5000);
   } catch (error) {
     var failures = toInt_(props.getProperty('CMAX_HISTORY_BACKGROUND_FAILURES'), 0) + 1;
@@ -4023,6 +4012,51 @@ function continueCmaxDailyHistoryBackgroundTrigger() {
       return;
     }
     scheduleCmaxDailyHistoryBackground_(60000);
+  }
+}
+
+function continueCmaxDailyHistoryBatch_(params) {
+  params = params || {};
+  var props = PropertiesService.getScriptProperties();
+  var lock = LockService.getScriptLock();
+  if (!lock.tryLock(3000)) {
+    return { ok: true, busy: true, history_sync: getCmaxDailyHistoryBackgroundStatus_() };
+  }
+  try {
+    if (props.getProperty('CMAX_HISTORY_BACKGROUND_ACTIVE') !== '1') {
+      return { ok: true, done: true, history_sync: getCmaxDailyHistoryBackgroundStatus_() };
+    }
+    var cursor = sanitizeCmaxMonth_(props.getProperty('CMAX_HISTORY_BACKGROUND_CURSOR'));
+    var startMonth = sanitizeCmaxMonth_(props.getProperty('CMAX_HISTORY_BACKGROUND_START_MONTH')) || CMAX_HISTORY_DEFAULT_START_MONTH;
+    var batchSize = Math.max(1, Math.min(toInt_(params.batch_size, 3), 6));
+    var processed = toInt_(props.getProperty('CMAX_HISTORY_BACKGROUND_PROCESSED'), 0);
+    var batchMonths = [];
+    for (var index = 0; index < batchSize && cursor && cursor >= startMonth; index++) {
+      syncCmaxDailyEvents_({ month: cursor });
+      batchMonths.push(cursor);
+      processed++;
+      props.setProperty('CMAX_HISTORY_BACKGROUND_LAST_MONTH', cursor);
+      cursor = cmaxShiftMonth_(cursor, -1);
+    }
+    props.setProperty('CMAX_HISTORY_BACKGROUND_CURSOR', cursor);
+    props.setProperty('CMAX_HISTORY_BACKGROUND_PROCESSED', String(processed));
+    props.setProperty('CMAX_HISTORY_BACKGROUND_FAILURES', '0');
+    props.setProperty('CMAX_HISTORY_BACKGROUND_UPDATED_AT', new Date().toISOString());
+    props.deleteProperty('CMAX_HISTORY_BACKGROUND_ERROR');
+    var done = !cursor || cursor < startMonth;
+    if (done) {
+      props.setProperty('CMAX_HISTORY_BACKGROUND_ACTIVE', '0');
+      props.setProperty('CMAX_HISTORY_BACKGROUND_COMPLETED_AT', new Date().toISOString());
+      clearCmaxDailyHistoryBackgroundTriggers_();
+    }
+    return {
+      ok: true,
+      done: done,
+      batch_months: batchMonths,
+      history_sync: getCmaxDailyHistoryBackgroundStatus_()
+    };
+  } finally {
+    lock.releaseLock();
   }
 }
 
@@ -4186,8 +4220,12 @@ function normalizeCmaxAgendaEvent_(raw, syncedAt) {
     tipo: type || 'Agenda CMAX',
     resultado: result,
     descricao: description,
-    hora_inicio: normalizeCmaxSheetTime_(deepFindFirst_(raw, ['hora_inicio', 'inicio_hora', 'start_time'])),
-    hora_fim: normalizeCmaxSheetTime_(deepFindFirst_(raw, ['hora_fim', 'hora_termino', 'fim_hora', 'end_time'])),
+    hora_inicio: cmaxEventTime_(raw, [
+      'hora_inicio', 'hora_inicial', 'hora_de', 'horario_inicio', 'horario_de', 'inicio_hora', 'hr_inicio'
+    ]),
+    hora_fim: cmaxEventTime_(raw, [
+      'hora_fim', 'hora_final', 'hora_ate', 'horario_fim', 'horario_ate', 'fim_hora', 'hr_fim'
+    ]),
     sincronizado_em: syncedAt,
     raw_json: JSON.stringify(raw)
   };
@@ -4218,6 +4256,15 @@ function cmaxCloneWithParentDate_(value, date) {
   Object.keys(value || {}).forEach(function(key) { clone[key] = value[key]; });
   clone._cmax_parent_date = date;
   return clone;
+}
+
+function cmaxEventTime_(raw, aliases) {
+  var own = cmaxOwnValue_(raw, aliases);
+  var normalizedOwn = normalizeCmaxSheetTime_(own);
+  if (/^\d{2}:\d{2}$/.test(normalizedOwn)) return normalizedOwn;
+  var nested = deepFindFirst_(raw, aliases);
+  var normalizedNested = normalizeCmaxSheetTime_(nested);
+  return /^\d{2}:\d{2}$/.test(normalizedNested) ? normalizedNested : '';
 }
 
 function replaceCmaxDailyMonth_(month, events) {
@@ -4258,9 +4305,13 @@ function normalizeCmaxSheetDate_(value) {
 
 function normalizeCmaxSheetTime_(value) {
   if (value instanceof Date && !isNaN(value.getTime())) {
-    return Utilities.formatDate(value, Session.getScriptTimeZone(), 'HH:mm');
+    return Utilities.formatDate(value, 'America/Sao_Paulo', 'HH:mm');
   }
   var text = String(value || '').trim();
+  if (/^\d{4}-\d{2}-\d{2}T/.test(text)) {
+    var parsed = new Date(text);
+    if (!isNaN(parsed.getTime())) return Utilities.formatDate(parsed, 'America/Sao_Paulo', 'HH:mm');
+  }
   var iso = text.match(/T(\d{2}):(\d{2})/);
   if (iso) return iso[1] + ':' + iso[2];
   var time = text.match(/^(\d{1,2}):(\d{2})/);
