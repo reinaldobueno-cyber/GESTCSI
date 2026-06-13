@@ -27,6 +27,8 @@ uma mensagem clara pedindo a atualizacao de `CMAX_JWT_TOKEN`.
   processados aparecem tracejados.
 - Gravacoes mensais usam trava exclusiva para impedir que atualizacoes
   simultaneas apaguem meses ja carregados.
+- A trava cobre somente a escrita final na planilha; consultas ao CMAX nao
+  bloqueiam a leitura da tela nem o botao de atualizacao.
 - Para alterar o inicio do historico, configure `CMAX_HISTORY_START_MONTH` no
   formato `AAAA-MM`.
 - O menu da planilha tambem oferece **Sincronizar diarias CMAX do mes atual**.
@@ -49,5 +51,7 @@ uma mensagem clara pedindo a atualizacao de `CMAX_JWT_TOKEN`.
   propriedade `CMAX_TRAINING_TEAM_MONTHS`.
 - A consulta da tela ignora a coluna pesada `raw_json`, reduzindo o tempo de
   carregamento sem perder os dados de auditoria armazenados.
+- A tela aguarda ate 90 segundos na primeira leitura e tenta novamente
+  automaticamente caso a base esteja temporariamente ocupada.
 - Cada consultor possui uma visao calendario mensal com intensidade por volume,
   quantidade de diarias/atividades no dia e detalhamento ao clicar na data.

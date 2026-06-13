@@ -11028,7 +11028,7 @@ function renderDiariasCmax() {
 function carregarDiariasCmax(force) {
   if(CMAX_DAILY_STATE.loading||(!force&&CMAX_DAILY_STATE.loaded)){renderDiariasCmax();return;}
   CMAX_DAILY_STATE.loading=true;CMAX_DAILY_STATE.error='';renderDiariasCmax();
-  chamarAppsScriptJsonp('getCmaxDailyEvents',{month:CMAX_DAILY_STATE.month},30000).then(function(resp){
+  chamarAppsScriptJsonp('getCmaxDailyEvents',{month:CMAX_DAILY_STATE.month},90000).then(function(resp){
     if(!resp||resp.ok===false)throw new Error((resp&&(resp.error||resp.raw_error))||'Falha ao carregar diárias CMAX');
     CMAX_DAILY_STATE.events=Array.isArray(resp.events)?resp.events:[];
     CMAX_DAILY_STATE.loadedMonths=Array.from(new Set(
@@ -11043,7 +11043,14 @@ function carregarDiariasCmax(force) {
     CMAX_DAILY_STATE.syncedAt=String(resp.synced_at||'');
     CMAX_DAILY_STATE.loaded=true;CMAX_DAILY_STATE.loading=false;renderDiariasCmax();
     cmaxScheduleHistoryPoll();
-  }).catch(function(error){CMAX_DAILY_STATE.loading=false;CMAX_DAILY_STATE.error=error.message||String(error);renderDiariasCmax();});
+  }).catch(function(error){
+    CMAX_DAILY_STATE.loading=false;
+    CMAX_DAILY_STATE.error=error.message||String(error);
+    renderDiariasCmax();
+    if(!(CMAX_DAILY_STATE.events||[]).length){
+      setTimeout(function(){CMAX_DAILY_STATE.loaded=false;carregarDiariasCmax(true);},10000);
+    }
+  });
 }
 function sincronizarDiariasCmax(btn) {
   if(btn){btn.disabled=true;btn.textContent='Atualizando...';}
