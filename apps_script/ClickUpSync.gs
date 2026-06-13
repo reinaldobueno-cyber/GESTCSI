@@ -3906,18 +3906,22 @@ function getCmaxDailySheet_() {
 function getCmaxDailyEvents_(params) {
   params = params || {};
   var sheet = getCmaxDailySheet_();
-  var values = sheet.getDataRange().getValues();
+  var range = sheet.getDataRange();
+  var values = range.getValues();
+  var displayValues = range.getDisplayValues();
   var headers = values.length ? values[0].map(function(value) { return String(value || ''); }) : getCmaxDailyHeaders_();
+  var startTimeIndex = headers.indexOf('hora_inicio');
+  var endTimeIndex = headers.indexOf('hora_fim');
   var month = sanitizeCmaxMonth_(params.month || params.mes);
   var consultant = sanitizeText_(params.consultant || params.consultor).toUpperCase();
-  var allEvents = values.slice(1).map(function(row) {
+  var allEvents = values.slice(1).map(function(row, rowIndex) {
     var item = {};
     headers.forEach(function(header, index) { item[header] = row[index]; });
     item.data = normalizeCmaxSheetDate_(item.data);
     item.mes = normalizeCmaxSheetMonth_(item.mes || item.data);
     item.ano = item.mes ? item.mes.slice(0, 4) : String(item.ano || '');
-    item.hora_inicio = normalizeCmaxSheetTime_(item.hora_inicio);
-    item.hora_fim = normalizeCmaxSheetTime_(item.hora_fim);
+    item.hora_inicio = normalizeCmaxSheetTime_(displayValues[rowIndex + 1][startTimeIndex] || item.hora_inicio);
+    item.hora_fim = normalizeCmaxSheetTime_(displayValues[rowIndex + 1][endTimeIndex] || item.hora_fim);
     item.modalidade = normalizeCmaxModality_(item.descricao || item.tipo);
     item.contabiliza_diaria = isCmaxDailyModality_(item.modalidade);
     delete item.raw_json;
@@ -4270,12 +4274,22 @@ function cmaxEventTime_(raw, aliases) {
 function replaceCmaxDailyMonth_(month, events) {
   var sheet = getCmaxDailySheet_();
   var headers = getCmaxDailyHeaders_();
-  var values = sheet.getDataRange().getValues();
+  var range = sheet.getDataRange();
+  var values = range.getValues();
+  var displayValues = range.getDisplayValues();
   var monthIndex = headers.indexOf('mes');
-  var retained = values.slice(1).filter(function(row) { return normalizeCmaxSheetMonth_(row[monthIndex]) !== month; });
+  var startTimeIndex = headers.indexOf('hora_inicio');
+  var endTimeIndex = headers.indexOf('hora_fim');
+  var retained = values.slice(1).map(function(row, rowIndex) {
+    var copy = row.slice();
+    copy[startTimeIndex] = normalizeCmaxSheetTime_(displayValues[rowIndex + 1][startTimeIndex] || copy[startTimeIndex]);
+    copy[endTimeIndex] = normalizeCmaxSheetTime_(displayValues[rowIndex + 1][endTimeIndex] || copy[endTimeIndex]);
+    return copy;
+  }).filter(function(row) { return normalizeCmaxSheetMonth_(row[monthIndex]) !== month; });
   var added = events.map(function(item) { return headers.map(function(header) { return item[header] === undefined ? '' : item[header]; }); });
   sheet.clearContents();
   sheet.getRange(1, 1, 1, headers.length).setValues([headers]);
+  sheet.getRange(2, startTimeIndex + 1, Math.max(1, retained.length + added.length), 2).setNumberFormat('@');
   if (retained.length + added.length) {
     sheet.getRange(2, 1, retained.length + added.length, headers.length).setValues(retained.concat(added));
   }

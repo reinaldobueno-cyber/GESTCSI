@@ -36,6 +36,8 @@ uma mensagem clara pedindo a atualizacao de `CMAX_JWT_TOKEN`.
   cliente, dia da semana, data e horario.
 - Os detalhes de cada consultor iniciam minimizados e podem ser abertos pela seta.
 - Horarios sao formatados explicitamente no fuso `America/Sao_Paulo`.
+- As colunas de horario sao lidas pelo valor exibido e gravadas como texto,
+  evitando a conversao de horas do Google Sheets para datas de 1899.
 - A tela apresenta filtros em blocos por ano/mes, consultor e atividade.
 - Somente pessoas que possuem ao menos um dos quatro treinamentos contabilizaveis
   no historico fazem parte da visao. Todas as atividades positivas dessas pessoas
