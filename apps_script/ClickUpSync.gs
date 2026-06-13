@@ -4319,7 +4319,48 @@ function cmaxEventTime_(raw, aliases) {
   if (/^\d{2}:\d{2}$/.test(normalizedOwn)) return normalizedOwn;
   var nested = deepFindFirst_(raw, aliases);
   var normalizedNested = normalizeCmaxSheetTime_(nested);
-  return /^\d{2}:\d{2}$/.test(normalizedNested) ? normalizedNested : '';
+  if (/^\d{2}:\d{2}$/.test(normalizedNested)) return normalizedNested;
+  var wantsEnd = (aliases || []).some(function(alias) {
+    return /fim|final|ate|end|termino/i.test(normalizeCmaxKey_(alias));
+  });
+  return findCmaxSemanticTime_(raw, wantsEnd ? 'end' : 'start');
+}
+
+function normalizeCmaxKey_(value) {
+  return String(value || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, '_');
+}
+
+function findCmaxSemanticTime_(value, mode, depth) {
+  depth = depth || 0;
+  if (value === null || value === undefined || depth > 10) return '';
+  if (Array.isArray(value)) {
+    for (var arrayIndex = 0; arrayIndex < value.length; arrayIndex++) {
+      var arrayFound = findCmaxSemanticTime_(value[arrayIndex], mode, depth + 1);
+      if (arrayFound) return arrayFound;
+    }
+    return '';
+  }
+  if (typeof value !== 'object') return '';
+  var keys = Object.keys(value);
+  var keyPattern = mode === 'end'
+    ? /(^|_)(fim|final|ate|end|termino|encerramento)($|_)/
+    : /(^|_)(inicio|inicial|start|de)($|_)/;
+  for (var index = 0; index < keys.length; index++) {
+    var key = normalizeCmaxKey_(keys[index]);
+    if (!keyPattern.test(key)) continue;
+    var direct = normalizeCmaxSheetTime_(value[keys[index]]);
+    if (isCmaxValidTime_(direct)) return direct;
+  }
+  for (var intervalIndex = 0; intervalIndex < keys.length; intervalIndex++) {
+    var text = typeof value[keys[intervalIndex]] === 'string' ? value[keys[intervalIndex]] : '';
+    var interval = text.match(/(?:^|\D)(\d{1,2}:\d{2})\s*(?:-|a|ate|até)\s*(\d{1,2}:\d{2})(?:\D|$)/i);
+    if (interval) return normalizeCmaxSheetTime_(mode === 'end' ? interval[2] : interval[1]);
+  }
+  for (var childIndex = 0; childIndex < keys.length; childIndex++) {
+    var found = findCmaxSemanticTime_(value[keys[childIndex]], mode, depth + 1);
+    if (found) return found;
+  }
+  return '';
 }
 
 function parseCmaxRawJson_(value) {
