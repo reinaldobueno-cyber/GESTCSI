@@ -3902,6 +3902,10 @@ function getCmaxDailyEvents_(params) {
     item.data = normalizeCmaxSheetDate_(item.data);
     item.mes = normalizeCmaxSheetMonth_(item.mes || item.data);
     item.ano = item.mes ? item.mes.slice(0, 4) : String(item.ano || '');
+    item.hora_inicio = normalizeCmaxSheetTime_(item.hora_inicio);
+    item.hora_fim = normalizeCmaxSheetTime_(item.hora_fim);
+    item.modalidade = normalizeCmaxModality_(item.descricao || item.tipo);
+    item.contabiliza_diaria = isCmaxDailyModality_(item.modalidade);
     delete item.raw_json;
     return item;
   }).filter(function(item) {
@@ -4043,8 +4047,8 @@ function normalizeCmaxAgendaEvent_(raw, syncedAt) {
     tipo: type || 'Agenda CMAX',
     resultado: result,
     descricao: description,
-    hora_inicio: sanitizeText_(deepFindFirst_(raw, ['hora_inicio', 'inicio_hora', 'start_time'])),
-    hora_fim: sanitizeText_(deepFindFirst_(raw, ['hora_fim', 'fim_hora', 'end_time'])),
+    hora_inicio: normalizeCmaxSheetTime_(deepFindFirst_(raw, ['hora_inicio', 'inicio_hora', 'start_time'])),
+    hora_fim: normalizeCmaxSheetTime_(deepFindFirst_(raw, ['hora_fim', 'hora_termino', 'fim_hora', 'end_time'])),
     sincronizado_em: syncedAt,
     raw_json: JSON.stringify(raw)
   };
@@ -4111,6 +4115,27 @@ function normalizeCmaxSheetDate_(value) {
   }
   var parsed = parseCmaxDate_(value);
   return parsed ? Utilities.formatDate(parsed, Session.getScriptTimeZone(), 'yyyy-MM-dd') : String(value || '');
+}
+
+function normalizeCmaxSheetTime_(value) {
+  if (value instanceof Date && !isNaN(value.getTime())) {
+    return Utilities.formatDate(value, Session.getScriptTimeZone(), 'HH:mm');
+  }
+  var text = String(value || '').trim();
+  var iso = text.match(/T(\d{2}):(\d{2})/);
+  if (iso) return iso[1] + ':' + iso[2];
+  var time = text.match(/^(\d{1,2}):(\d{2})/);
+  if (time) return String(Number(time[1])).padStart(2, '0') + ':' + time[2];
+  return text;
+}
+
+function normalizeCmaxModality_(value) {
+  return sanitizeText_(value).normalize('NFD').replace(/[\u0300-\u036f]/g, '').toUpperCase();
+}
+
+function isCmaxDailyModality_(value) {
+  var modality = normalizeCmaxModality_(value);
+  return modality === 'TREINAMENTO ON LINE' || modality === 'TREINAMENTO IN LOCO';
 }
 
 function cmaxMonthRange_(month) {

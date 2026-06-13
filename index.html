@@ -3098,6 +3098,16 @@ body.theme-dark .tower-kpis [style*="background:#fff"]{
 .cmax-group-head{display:flex;justify-content:space-between;gap:12px;padding:14px 16px;border-bottom:1px solid var(--border);font-weight:900;color:var(--text)}
 .cmax-empty{padding:28px;text-align:center;color:var(--text2)}
 .cmax-status{padding:10px 12px;border:1px solid var(--border);background:var(--surf);border-radius:10px;color:var(--text2);font-size:11px}
+.cmax-modalities{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:10px}
+.cmax-modality{background:var(--surf);border:1px solid var(--border);border-radius:12px;padding:12px 14px}
+.cmax-modality span{display:block;color:var(--muted);font-size:9px;font-weight:900;letter-spacing:.1em;text-transform:uppercase}
+.cmax-modality strong{display:block;color:var(--text);font-size:21px;margin-top:5px}
+.cmax-counts{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.cmax-count-pill{border:1px solid var(--border);border-radius:999px;padding:5px 9px;font-size:10px;font-weight:900;color:var(--text2)}
+.cmax-date-main{font-weight:900;color:var(--text)}
+.cmax-date-sub{font-size:10px;color:var(--muted);margin-top:3px}
+.cmax-daily-yes{color:#28744c;font-weight:900}
+.cmax-daily-no{color:var(--muted);font-weight:800}
 @media(max-width:900px){.cmax-summary{grid-template-columns:repeat(2,1fr)}}
 @media(max-width:560px){.cmax-summary{grid-template-columns:1fr}}
 body.theme-dark .pb.on,
@@ -10771,6 +10781,30 @@ function cmaxDate(value) {
   var parts=String(value||'').slice(0,10).split('-');
   return parts.length===3 ? parts[2]+'/'+parts[1]+'/'+parts[0] : String(value||'-');
 }
+function cmaxDateInfo(value) {
+  var parts=String(value||'').slice(0,10).split('-');
+  if(parts.length!==3)return {date:String(value||'-'),weekday:'-'};
+  var date=new Date(Number(parts[0]),Number(parts[1])-1,Number(parts[2]));
+  var weekday=['Domingo','Segunda-feira','Terça-feira','Quarta-feira','Quinta-feira','Sexta-feira','Sábado'][date.getDay()];
+  return {date:parts[2]+'/'+parts[1]+'/'+parts[0],weekday:weekday};
+}
+function cmaxTime(value) {
+  var text=String(value||'').trim();
+  var iso=text.match(/T(\d{2}):(\d{2})/);
+  if(iso)return iso[1]+':'+iso[2];
+  var time=text.match(/^(\d{1,2}):(\d{2})/);
+  return time?String(Number(time[1])).padStart(2,'0')+':'+time[2]:text;
+}
+function cmaxModality(value) {
+  return String(value||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toUpperCase().trim();
+}
+function cmaxCountsDaily(item) {
+  var mode=cmaxModality(item.modalidade||item.descricao||item.tipo);
+  return mode==='TREINAMENTO ON LINE'||mode==='TREINAMENTO IN LOCO';
+}
+function cmaxModeLabel(item) {
+  return String(item.descricao||item.modalidade||item.tipo||'Sem modalidade').trim();
+}
 function cmaxAvailableMonths() {
   var values=[];
   var date=new Date();
@@ -10805,6 +10839,7 @@ function renderDiariasCmax() {
   var months=Array.from(new Set(cmaxAvailableMonths().concat((s.events||[]).map(function(x){return String(x.mes||'');}).filter(Boolean)))).sort().reverse();
   var consultants=Array.from(new Set((s.events||[]).map(function(x){return String(x.consultor||'');}).filter(Boolean))).sort();
   var list=cmaxFilteredEvents();
+  var dailyList=list.filter(cmaxCountsDaily);
   var byConsultant={};
   list.forEach(function(item){
     var key=String(item.consultor||'Sem consultor');
@@ -10812,18 +10847,31 @@ function renderDiariasCmax() {
     byConsultant[key].push(item);
   });
   var clients=new Set(list.map(function(x){return String(x.cliente||'');}).filter(Boolean)).size;
+  var modalities={};
+  list.forEach(function(item){var key=cmaxModeLabel(item);modalities[key]=(modalities[key]||0)+1;});
+  var modalityCards=Object.keys(modalities).sort(function(a,b){return modalities[b]-modalities[a]||a.localeCompare(b);}).map(function(name){
+    return '<div class="cmax-modality"><span>'+escapeHtml(name)+'</span><strong>'+modalities[name]+'</strong></div>';
+  }).join('');
   var syncButton=AUTH_STATE.user&&AUTH_STATE.user.role==='admin'
     ? '<button class="btn-syncall" onclick="sincronizarDiariasCmax(this)">Atualizar CMAX</button>'
     : '';
   var groups=Object.keys(byConsultant).sort().map(function(name){
-    var events=byConsultant[name].sort(function(a,b){return String(b.data||'').localeCompare(String(a.data||''));});
+    var events=byConsultant[name].sort(function(a,b){
+      var dateOrder=String(a.data||'').localeCompare(String(b.data||''));
+      if(dateOrder)return dateOrder;
+      return String(a.hora_inicio||'').localeCompare(String(b.hora_inicio||''));
+    });
+    var consultantDaily=events.filter(cmaxCountsDaily).length;
     var rows=events.map(function(item){
-      return '<tr><td><strong>'+escapeHtml(item.cliente||'-')+'</strong><div class="search-note">'+escapeHtml(item.descricao||'')+'</div></td><td>'+escapeHtml(item.tipo||'-')+'</td><td>'+cmaxDate(item.data)+'</td><td>'+escapeHtml((item.hora_inicio||'-')+(item.hora_fim?' - '+item.hora_fim:''))+'</td><td><span class="dashx-table-chip">'+escapeHtml(item.resultado||'Positivo')+'</span></td></tr>';
+      var dateInfo=cmaxDateInfo(item.data);
+      var start=cmaxTime(item.hora_inicio)||'-';
+      var end=cmaxTime(item.hora_fim);
+      return '<tr><td><strong>'+escapeHtml(item.cliente||'-')+'</strong></td><td>'+escapeHtml(cmaxModeLabel(item))+'</td><td><div class="cmax-date-main">'+escapeHtml(dateInfo.weekday)+'</div><div class="cmax-date-sub">'+escapeHtml(dateInfo.date)+'</div></td><td>'+escapeHtml(start+(end?' - '+end:''))+'</td><td class="'+(cmaxCountsDaily(item)?'cmax-daily-yes':'cmax-daily-no')+'">'+(cmaxCountsDaily(item)?'Sim':'Não')+'</td></tr>';
     }).join('');
-    return '<section class="cmax-group"><div class="cmax-group-head"><span>'+escapeHtml(name)+'</span><span>'+events.length+' di&aacute;ria(s)</span></div><div class="dashx-table-wrap"><table class="dashx-table"><thead><tr><th>Cliente</th><th>Tipo</th><th>Data</th><th>Hor&aacute;rio</th><th>Resultado</th></tr></thead><tbody>'+rows+'</tbody></table></div></section>';
+    return '<section class="cmax-group"><div class="cmax-group-head"><span>'+escapeHtml(name)+'</span><span class="cmax-counts"><span class="cmax-count-pill">'+consultantDaily+' di&aacute;ria(s)</span><span class="cmax-count-pill">'+events.length+' registro(s)</span></span></div><div class="dashx-table-wrap"><table class="dashx-table"><thead><tr><th>Cliente</th><th>Modalidade registrada</th><th>Dia realizado</th><th>Hor&aacute;rio</th><th>Conta di&aacute;ria?</th></tr></thead><tbody>'+rows+'</tbody></table></div></section>';
   }).join('');
   var status=s.loading?'Consultando a base salva...':s.error?escapeHtml(s.error):(s.syncedAt?'&Uacute;ltima sincroniza&ccedil;&atilde;o: '+escapeHtml(s.syncedAt):'Ainda sem sincroniza&ccedil;&atilde;o CMAX.');
-  box.innerHTML='<div class="cmax-shell"><div class="cmax-hero"><div><div class="cmax-title">Di&aacute;rias realizadas no CMAX</div><div class="cmax-sub">Vis&atilde;o quantitativa da agenda. Conta somente eventos com resultado <strong>Positivo</strong>, separados por consultor, cliente e data. A remunera&ccedil;&atilde;o ser&aacute; tratada posteriormente conforme a senioridade.</div></div><div class="cmax-actions"><select onchange="CMAX_DAILY_STATE.month=this.value;CMAX_DAILY_STATE.consultant=\'\';carregarDiariasCmax(true)">'+cmaxSelectOptions(months,s.month,'Todos os meses')+'</select><select onchange="CMAX_DAILY_STATE.consultant=this.value;renderDiariasCmax()">'+cmaxSelectOptions(consultants,s.consultant,'Todos os consultores')+'</select><input type="search" placeholder="Filtrar cliente..." value="'+escapeHtml(s.search)+'" oninput="CMAX_DAILY_STATE.search=this.value;renderDiariasCmax()">'+syncButton+'</div></div><div class="cmax-status">'+status+'</div><div class="cmax-summary"><div class="cmax-card"><span>Di&aacute;rias positivas</span><strong>'+list.length+'</strong></div><div class="cmax-card"><span>Consultores com di&aacute;rias</span><strong>'+Object.keys(byConsultant).length+'</strong></div><div class="cmax-card"><span>Clientes atendidos</span><strong>'+clients+'</strong></div><div class="cmax-card"><span>M&eacute;dia por consultor</span><strong>'+(Object.keys(byConsultant).length?(list.length/Object.keys(byConsultant).length).toLocaleString('pt-BR',{maximumFractionDigits:1}):'0')+'</strong></div></div>'+(groups||'<div class="cmax-empty">Nenhuma di&aacute;ria positiva encontrada neste recorte.</div>')+'</div>';
+  box.innerHTML='<div class="cmax-shell"><div class="cmax-hero"><div><div class="cmax-title">Di&aacute;rias e atividades realizadas no CMAX</div><div class="cmax-sub">Somente <strong>Treinamento On Line</strong> e <strong>Treinamento In Loco</strong> positivos contabilizam di&aacute;ria. Acompanhamentos, suporte e demais modalidades permanecem vis&iacute;veis como registros de atividade.</div></div><div class="cmax-actions"><select onchange="CMAX_DAILY_STATE.month=this.value;CMAX_DAILY_STATE.consultant=\'\';carregarDiariasCmax(true)">'+cmaxSelectOptions(months,s.month,'Todos os meses')+'</select><select onchange="CMAX_DAILY_STATE.consultant=this.value;renderDiariasCmax()">'+cmaxSelectOptions(consultants,s.consultant,'Todos os consultores')+'</select><input type="search" placeholder="Filtrar cliente..." value="'+escapeHtml(s.search)+'" oninput="CMAX_DAILY_STATE.search=this.value;renderDiariasCmax()">'+syncButton+'</div></div><div class="cmax-status">'+status+'</div><div class="cmax-summary"><div class="cmax-card"><span>Di&aacute;rias contabiliz&aacute;veis</span><strong>'+dailyList.length+'</strong></div><div class="cmax-card"><span>Registros positivos</span><strong>'+list.length+'</strong></div><div class="cmax-card"><span>Consultores com atividade</span><strong>'+Object.keys(byConsultant).length+'</strong></div><div class="cmax-card"><span>Clientes atendidos</span><strong>'+clients+'</strong></div></div><div><div class="sh"><div class="sh-title">Quantitativo por modalidade</div></div><div class="cmax-modalities">'+modalityCards+'</div></div>'+(groups||'<div class="cmax-empty">Nenhuma atividade positiva encontrada neste recorte.</div>')+'</div>';
 }
 function carregarDiariasCmax(force) {
   if(CMAX_DAILY_STATE.loading||(!force&&CMAX_DAILY_STATE.loaded)){renderDiariasCmax();return;}

@@ -22,3 +22,7 @@ uma mensagem clara pedindo a atualizacao de `CMAX_JWT_TOKEN`.
 - O menu da planilha tambem oferece **Sincronizar diarias CMAX do mes atual**.
 - O MVP apresenta somente quantidades. Valores de remuneracao serao tratados
   posteriormente conforme a senioridade de cada tecnico.
+- Somente `TREINAMENTO ON LINE` e `TREINAMENTO IN LOCO` positivos contam como
+  diaria. As demais modalidades continuam visiveis como atividades registradas.
+- A tela apresenta quantitativo por modalidade e detalhamento por consultor,
+  cliente, dia da semana, data e horario.
