@@ -3118,6 +3118,25 @@ body.theme-dark .tower-kpis [style*="background:#fff"]{
 .cmax-date-sub{font-size:10px;color:var(--muted);margin-top:3px}
 .cmax-daily-yes{color:#28744c;font-weight:900}
 .cmax-daily-no{color:var(--muted);font-weight:800}
+.cmax-calendar-btn{border:1px solid var(--border);background:var(--surf);border-radius:999px;padding:6px 10px;font:900 10px 'Inter',sans-serif;color:var(--text2);cursor:pointer}
+.cmax-calendar-btn:hover{border-color:var(--green);color:var(--green)}
+.cmax-calendar-backdrop{position:fixed;inset:0;z-index:22000;background:rgba(18,31,22,.5);display:flex;align-items:center;justify-content:center;padding:20px}
+.cmax-calendar-modal{width:min(1180px,96vw);max-height:92vh;overflow:auto;background:var(--surf);border:1px solid var(--border);border-radius:16px;box-shadow:0 24px 80px rgba(0,0,0,.28);padding:18px}
+.cmax-calendar-head{display:flex;justify-content:space-between;align-items:flex-start;gap:16px;margin-bottom:14px}
+.cmax-calendar-title{font-size:20px;font-weight:900;color:var(--text)}
+.cmax-calendar-sub{font-size:11px;color:var(--muted);margin-top:4px}
+.cmax-calendar-close{border:1px solid var(--border);background:var(--surf2);border-radius:999px;width:34px;height:34px;cursor:pointer;font-weight:900;color:var(--text)}
+.cmax-calendar-weekdays,.cmax-calendar-grid{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:4px}
+.cmax-calendar-weekdays div{text-align:center;padding:7px;font-size:9px;font-weight:900;text-transform:uppercase;letter-spacing:.08em;color:var(--muted)}
+.cmax-calendar-day{min-height:116px;border:1px solid var(--border);border-radius:10px;padding:9px;background:var(--surf2);color:var(--text);text-align:left;cursor:pointer;display:flex;flex-direction:column;justify-content:space-between}
+.cmax-calendar-day.empty{visibility:hidden;cursor:default}
+.cmax-calendar-day.weekend{opacity:.48}
+.cmax-calendar-day.has-events:hover,.cmax-calendar-day.on{outline:2px solid var(--green);outline-offset:1px}
+.cmax-calendar-day-num{font-size:12px;font-weight:900}
+.cmax-calendar-day-count{font-size:11px;font-weight:900}.cmax-calendar-day-count small{display:block;font-size:9px;font-weight:800;margin-top:3px}
+.cmax-calendar-detail{margin-top:14px;border-top:1px solid var(--border);padding-top:14px}
+.cmax-calendar-detail-title{font-size:13px;font-weight:900;color:var(--text);margin-bottom:9px}
+@media(max-width:800px){.cmax-calendar-day{min-height:82px;padding:6px}.cmax-calendar-day-count small{display:none}.cmax-calendar-modal{padding:11px}}
 @media(max-width:900px){.cmax-summary{grid-template-columns:repeat(2,1fr)}}
 @media(max-width:560px){.cmax-summary{grid-template-columns:1fr}}
 body.theme-dark .pb.on,
@@ -10853,6 +10872,71 @@ function cmaxMonthLabel(month) {
 function cmaxChip(key,value,label) {
   return '<button class="cmax-filter-chip '+(CMAX_DAILY_STATE[key]===value?'on':'')+'" onclick="return cmaxSetFilter(\''+key+'\',decodeURIComponent(\''+encodeURIComponent(value)+'\'))">'+escapeHtml(label||value)+'</button>';
 }
+function cmaxCalendarEventsForConsultant(name) {
+  var s=CMAX_DAILY_STATE;
+  return (s.events||[]).filter(function(item){
+    if(String(item.consultor||'')!==name)return false;
+    if(s.month&&String(item.mes||'')!==s.month)return false;
+    if(s.activity&&cmaxModeLabel(item)!==s.activity)return false;
+    if(s.search){
+      var hay=(String(item.cliente||'')+' '+cmaxModeLabel(item)).toUpperCase();
+      if(hay.indexOf(s.search.toUpperCase())<0)return false;
+    }
+    return true;
+  });
+}
+function cmaxCalendarMonth(events) {
+  if(CMAX_DAILY_STATE.month)return CMAX_DAILY_STATE.month;
+  var months=(events||[]).map(function(item){return String(item.mes||'');}).filter(Boolean).sort().reverse();
+  return months[0]||cmaxCurrentMonth();
+}
+function cmaxCalendarColor(count,max) {
+  if(!count)return 'var(--surf2)';
+  var ratio=Math.max(.18,Math.min(1,count/Math.max(1,max)));
+  return 'rgba(48,112,72,'+(0.12+ratio*.68).toFixed(2)+')';
+}
+function fecharCalendarioCmax() {
+  var wrap=document.getElementById('cmax-calendar-modal');
+  if(wrap&&wrap.parentNode)wrap.parentNode.removeChild(wrap);
+}
+function abrirCalendarioCmax(encodedName) {
+  var name=decodeURIComponent(encodedName||'');
+  var events=cmaxCalendarEventsForConsultant(name);
+  var month=cmaxCalendarMonth(events);
+  var parts=month.split('-'),year=Number(parts[0]),monthIndex=Number(parts[1])-1;
+  var first=new Date(year,monthIndex,1),lastDay=new Date(year,monthIndex+1,0).getDate();
+  var offset=(first.getDay()+6)%7;
+  var byDay={};
+  events.forEach(function(item){var day=Number(String(item.data||'').slice(8,10));if(!byDay[day])byDay[day]=[];byDay[day].push(item);});
+  var max=Object.keys(byDay).reduce(function(value,day){return Math.max(value,byDay[day].length);},0);
+  var cells='';
+  for(var blank=0;blank<offset;blank++)cells+='<button class="cmax-calendar-day empty"></button>';
+  for(var day=1;day<=lastDay;day++){
+    var dayEvents=byDay[day]||[],daily=dayEvents.filter(cmaxCountsDaily).length,dow=new Date(year,monthIndex,day).getDay();
+    cells+='<button class="cmax-calendar-day '+(dayEvents.length?'has-events ':'')+((dow===0||dow===6)?'weekend':'')+'" style="background:'+cmaxCalendarColor(dayEvents.length,max)+'" onclick="cmaxCalendarShowDay('+day+',decodeURIComponent(\''+encodeURIComponent(name)+'\'),this)"><span class="cmax-calendar-day-num">'+day+'</span><span class="cmax-calendar-day-count">'+daily+' di&aacute;ria(s)<small>'+dayEvents.length+' atividade(s)</small></span></button>';
+  }
+  var wrap=document.createElement('div');
+  wrap.id='cmax-calendar-modal';
+  wrap.className='cmax-calendar-backdrop';
+  wrap.onclick=function(event){if(event.target===wrap)fecharCalendarioCmax();};
+  wrap.innerHTML='<div class="cmax-calendar-modal"><div class="cmax-calendar-head"><div><div class="cmax-calendar-title">'+escapeHtml(name)+'</div><div class="cmax-calendar-sub">Vis&atilde;o calend&aacute;rio de '+escapeHtml(cmaxMonthLabel(month))+'/'+escapeHtml(String(year))+' &middot; '+events.filter(cmaxCountsDaily).length+' di&aacute;ria(s) &middot; '+events.length+' atividade(s)</div></div><button class="cmax-calendar-close" onclick="fecharCalendarioCmax()">X</button></div><div class="cmax-calendar-weekdays"><div>Seg</div><div>Ter</div><div>Qua</div><div>Qui</div><div>Sex</div><div>S&aacute;b</div><div>Dom</div></div><div class="cmax-calendar-grid">'+cells+'</div><div class="cmax-calendar-detail" id="cmax-calendar-detail"><div class="cmax-empty">Clique em um dia para ver os registros.</div></div></div>';
+  document.body.appendChild(wrap);
+}
+function cmaxCalendarShowDay(day,encodedName,button) {
+  var name=decodeURIComponent(encodedName||''),month=cmaxCalendarMonth(cmaxCalendarEventsForConsultant(name));
+  var date=month+'-'+String(day).padStart(2,'0');
+  var events=cmaxCalendarEventsForConsultant(name).filter(function(item){return String(item.data||'')===date;}).sort(function(a,b){return String(a.hora_inicio||'').localeCompare(String(b.hora_inicio||''));});
+  document.querySelectorAll('.cmax-calendar-day').forEach(function(cell){cell.classList.remove('on');});
+  if(button)button.classList.add('on');
+  var detail=document.getElementById('cmax-calendar-detail');
+  if(!detail)return;
+  var info=cmaxDateInfo(date);
+  var rows=events.map(function(item){
+    var start=cmaxTime(item.hora_inicio)||'-',end=cmaxTime(item.hora_fim);
+    return '<tr><td><strong>'+escapeHtml(item.cliente||'-')+'</strong></td><td>'+escapeHtml(cmaxModeLabel(item))+'</td><td>'+escapeHtml(start+(end?' - '+end:''))+'</td><td class="'+(cmaxCountsDaily(item)?'cmax-daily-yes':'cmax-daily-no')+'">'+(cmaxCountsDaily(item)?'Sim':'Não')+'</td></tr>';
+  }).join('');
+  detail.innerHTML='<div class="cmax-calendar-detail-title">'+escapeHtml(info.weekday)+' &middot; '+escapeHtml(info.date)+' &middot; '+events.filter(cmaxCountsDaily).length+' di&aacute;ria(s) &middot; '+events.length+' atividade(s)</div>'+(rows?'<div class="dashx-table-wrap"><table class="dashx-table"><thead><tr><th>Cliente</th><th>Atividade</th><th>Hor&aacute;rio</th><th>Conta di&aacute;ria?</th></tr></thead><tbody>'+rows+'</tbody></table></div>':'<div class="cmax-empty">Nenhum registro neste dia.</div>');
+}
 function cmaxSelectOptions(values, selected, allLabel) {
   return '<option value="">'+allLabel+'</option>'+values.map(function(value){
     return '<option value="'+escapeHtml(value)+'"'+(value===selected?' selected':'')+'>'+escapeHtml(value)+'</option>';
@@ -10901,7 +10985,7 @@ function renderDiariasCmax() {
       var end=cmaxTime(item.hora_fim);
       return '<tr><td><strong>'+escapeHtml(item.cliente||'-')+'</strong></td><td>'+escapeHtml(cmaxModeLabel(item))+'</td><td><div class="cmax-date-main">'+escapeHtml(dateInfo.weekday)+'</div><div class="cmax-date-sub">'+escapeHtml(dateInfo.date)+'</div></td><td>'+escapeHtml(start+(end?' - '+end:''))+'</td><td class="'+(cmaxCountsDaily(item)?'cmax-daily-yes':'cmax-daily-no')+'">'+(cmaxCountsDaily(item)?'Sim':'Não')+'</td></tr>';
     }).join('');
-    return '<section class="cmax-group"><div class="cmax-group-head"><span>'+escapeHtml(name)+'</span><span class="cmax-counts"><span class="cmax-count-pill">'+consultantDaily+' di&aacute;ria(s)</span><span class="cmax-count-pill">'+events.length+' registro(s)</span></span></div><div class="dashx-table-wrap"><table class="dashx-table"><thead><tr><th>Cliente</th><th>Modalidade registrada</th><th>Dia realizado</th><th>Hor&aacute;rio</th><th>Conta di&aacute;ria?</th></tr></thead><tbody>'+rows+'</tbody></table></div></section>';
+    return '<section class="cmax-group"><div class="cmax-group-head"><span class="cmax-counts"><span>'+escapeHtml(name)+'</span><button class="cmax-calendar-btn" onclick="abrirCalendarioCmax(\''+encodeURIComponent(name)+'\')">Vis&atilde;o calend&aacute;rio</button></span><span class="cmax-counts"><span class="cmax-count-pill">'+consultantDaily+' di&aacute;ria(s)</span><span class="cmax-count-pill">'+events.length+' registro(s)</span></span></div><div class="dashx-table-wrap"><table class="dashx-table"><thead><tr><th>Cliente</th><th>Modalidade registrada</th><th>Dia realizado</th><th>Hor&aacute;rio</th><th>Conta di&aacute;ria?</th></tr></thead><tbody>'+rows+'</tbody></table></div></section>';
   }).join('');
   var status=s.loading?'Consultando a base salva...':s.error?escapeHtml(s.error):(s.syncedAt?'&Uacute;ltima sincroniza&ccedil;&atilde;o: '+escapeHtml(s.syncedAt):'Ainda sem sincroniza&ccedil;&atilde;o CMAX.');
   box.innerHTML='<div class="cmax-shell"><div class="cmax-hero"><div><div class="cmax-title">Di&aacute;rias e atividades realizadas no CMAX</div><div class="cmax-sub">Exibe somente integrantes do time de treinamento: pessoas que possuem ao menos um <strong>Treinamento On Line</strong> ou <strong>Treinamento In Loco</strong> no hist&oacute;rico. Todas as atividades dessas pessoas permanecem audit&aacute;veis.</div></div></div><div class="cmax-status">'+status+'</div><div class="cmax-filter-block"><div class="cmax-filter-label">Ano e m&ecirc;s realizado <span style="text-transform:none;letter-spacing:0">(clique novamente no m&ecirc;s para ver o geral)</span></div>'+monthChips+'<div class="cmax-filter-label" style="margin-top:14px">Consultores do time de treinamento</div><div class="cmax-filter-chips">'+consultantChips+'</div><div class="cmax-filter-label" style="margin-top:14px">Atividades</div><div class="cmax-filter-chips">'+activityChips+'</div><input class="cmax-filter-search" type="search" placeholder="Filtrar cliente..." value="'+escapeHtml(s.search)+'" oninput="CMAX_DAILY_STATE.search=this.value;renderDiariasCmax()">'+(syncButton?'<div class="cmax-filter-footer">'+syncButton+'</div>':'')+'</div><div class="cmax-summary"><div class="cmax-card"><span>Di&aacute;rias contabiliz&aacute;veis</span><strong>'+dailyList.length+'</strong></div><div class="cmax-card"><span>Registros positivos</span><strong>'+list.length+'</strong></div><div class="cmax-card"><span>Consultores com atividade</span><strong>'+Object.keys(byConsultant).length+'</strong></div><div class="cmax-card"><span>Clientes atendidos</span><strong>'+clients+'</strong></div></div><div><div class="sh"><div class="sh-title">Quantitativo por modalidade</div></div><div class="cmax-modalities">'+modalityCards+'</div></div>'+(groups||'<div class="cmax-empty">Nenhuma atividade positiva encontrada neste recorte.</div>')+'</div>';

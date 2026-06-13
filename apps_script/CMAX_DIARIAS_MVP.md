@@ -30,3 +30,5 @@ uma mensagem clara pedindo a atualizacao de `CMAX_JWT_TOKEN`.
 - Somente pessoas que possuem ao menos um `TREINAMENTO ON LINE` ou
   `TREINAMENTO IN LOCO` no historico fazem parte da visao. Todas as atividades
   positivas dessas pessoas continuam disponiveis para auditoria.
+- Cada consultor possui uma visao calendario mensal com intensidade por volume,
+  quantidade de diarias/atividades no dia e detalhamento ao clicar na data.
