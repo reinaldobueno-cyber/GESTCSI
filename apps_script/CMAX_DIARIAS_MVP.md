@@ -17,18 +17,23 @@ uma mensagem clara pedindo a atualizacao de `CMAX_JWT_TOKEN`.
 ## Uso
 
 - Todos os usuarios podem consultar a guia **Diarias CMAX**.
-- Apenas administradores podem executar **Atualizar CMAX**.
-- A atualizacao substitui somente o mes selecionado e preserva os meses anteriores.
+- Apenas administradores podem executar **Atualizar historico CMAX**.
+- A atualizacao traz o mes atual imediatamente e continua em segundo plano,
+  mes a mes, ate janeiro de 2023. Os anos e meses aparecem progressivamente.
+- Para alterar o inicio do historico, configure `CMAX_HISTORY_START_MONTH` no
+  formato `AAAA-MM`.
 - O menu da planilha tambem oferece **Sincronizar diarias CMAX do mes atual**.
+- O menu da planilha oferece **Sincronizar historico de diarias CMAX**.
 - O MVP apresenta somente quantidades. Valores de remuneracao serao tratados
   posteriormente conforme a senioridade de cada tecnico.
-- Somente `TREINAMENTO ON LINE` e `TREINAMENTO IN LOCO` positivos contam como
-  diaria. As demais modalidades continuam visiveis como atividades registradas.
+- `TREINAMENTO ON LINE`, `TREINAMENTO IN LOCO`, `TREINAMENTO ON LINE AVULSO`
+  e `TREINAMENTO IN LOCO AVULSO` positivos contam como diaria. Essas modalidades
+  aparecem primeiro e destacadas. As demais continuam visiveis como atividades.
 - A tela apresenta quantitativo por modalidade e detalhamento por consultor,
   cliente, dia da semana, data e horario.
 - A tela apresenta filtros em blocos por ano/mes, consultor e atividade.
-- Somente pessoas que possuem ao menos um `TREINAMENTO ON LINE` ou
-  `TREINAMENTO IN LOCO` no historico fazem parte da visao. Todas as atividades
-  positivas dessas pessoas continuam disponiveis para auditoria.
+- Somente pessoas que possuem ao menos um dos quatro treinamentos contabilizaveis
+  no historico fazem parte da visao. Todas as atividades positivas dessas pessoas
+  continuam disponiveis para auditoria.
 - Cada consultor possui uma visao calendario mensal com intensidade por volume,
   quantidade de diarias/atividades no dia e detalhamento ao clicar na data.

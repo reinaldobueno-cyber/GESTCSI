@@ -3095,6 +3095,8 @@ body.theme-dark .tower-kpis [style*="background:#fff"]{
 .cmax-filter-chips{display:flex;gap:7px;flex-wrap:wrap}
 .cmax-filter-chip{border:1px solid var(--border);background:var(--surf2);border-radius:999px;padding:7px 12px;font:900 10px 'Inter',sans-serif;color:var(--text2);cursor:pointer}
 .cmax-filter-chip.on{background:var(--green);border-color:var(--green);color:#fff}
+.cmax-filter-chip.eligible{border-color:#78a98a;background:#e7f4ea;color:#23623d;box-shadow:inset 0 0 0 1px rgba(45,110,78,.08)}
+.cmax-filter-chip.eligible.on{background:#28744c;border-color:#28744c;color:#fff}
 .cmax-year-groups{display:grid;gap:9px}
 .cmax-year-group{display:grid;grid-template-columns:52px 1fr;gap:10px;align-items:start}
 .cmax-year-label{font-size:11px;font-weight:900;color:var(--text);padding-top:7px}
@@ -3112,12 +3114,16 @@ body.theme-dark .tower-kpis [style*="background:#fff"]{
 .cmax-modality{background:var(--surf);border:1px solid var(--border);border-radius:12px;padding:12px 14px}
 .cmax-modality span{display:block;color:var(--muted);font-size:9px;font-weight:900;letter-spacing:.1em;text-transform:uppercase}
 .cmax-modality strong{display:block;color:var(--text);font-size:21px;margin-top:5px}
+.cmax-modality.eligible{border-color:#78a98a;background:#edf8ef;box-shadow:inset 4px 0 0 #28744c}
+.cmax-modality.eligible span{color:#28744c}
 .cmax-counts{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
 .cmax-count-pill{border:1px solid var(--border);border-radius:999px;padding:5px 9px;font-size:10px;font-weight:900;color:var(--text2)}
 .cmax-date-main{font-weight:900;color:var(--text)}
 .cmax-date-sub{font-size:10px;color:var(--muted);margin-top:3px}
 .cmax-daily-yes{color:#28744c;font-weight:900}
 .cmax-daily-no{color:var(--muted);font-weight:800}
+.cmax-eligible-label{display:inline-flex;align-items:center;gap:5px;color:#28744c;font-weight:900}
+.cmax-eligible-label:before{content:'Conta diária';border-radius:999px;background:#dcefe2;color:#23623d;padding:3px 6px;font-size:8px;text-transform:uppercase;letter-spacing:.04em}
 .cmax-calendar-btn{border:1px solid var(--border);background:var(--surf);border-radius:999px;padding:6px 10px;font:900 10px 'Inter',sans-serif;color:var(--text2);cursor:pointer}
 .cmax-calendar-btn:hover{border-color:var(--green);color:var(--green)}
 .cmax-calendar-backdrop{position:fixed;inset:0;z-index:22000;background:rgba(18,31,22,.5);display:flex;align-items:center;justify-content:center;padding:20px}
@@ -10800,7 +10806,8 @@ function initAlert(){
   document.getElementById('rows-exc').innerHTML=buildMonthGroupedRows(exc,'exc-');
 }
 
-var CMAX_DAILY_STATE = {events:[], loading:false, loaded:false, error:'', month:cmaxCurrentMonth(), consultant:'', activity:'', search:'', syncedAt:'', months:[], trainingTeam:[], activities:[]};
+var CMAX_DAILY_STATE = {events:[], loading:false, loaded:false, error:'', month:cmaxCurrentMonth(), consultant:'', activity:'', search:'', syncedAt:'', months:[], trainingTeam:[], activities:[], historySync:null};
+var CMAX_HISTORY_POLL_TIMER=null;
 
 function cmaxCurrentMonth() {
   var date = new Date();
@@ -10829,7 +10836,7 @@ function cmaxModality(value) {
 }
 function cmaxCountsDaily(item) {
   var mode=cmaxModality(item.modalidade||item.descricao||item.tipo);
-  return mode==='TREINAMENTO ON LINE'||mode==='TREINAMENTO IN LOCO';
+  return mode==='TREINAMENTO ON LINE'||mode==='TREINAMENTO IN LOCO'||mode==='TREINAMENTO ON LINE AVULSO'||mode==='TREINAMENTO IN LOCO AVULSO';
 }
 function cmaxModeLabel(item) {
   return String(item.descricao||item.modalidade||item.tipo||'Sem modalidade').trim();
@@ -10869,8 +10876,20 @@ function cmaxMonthLabel(month) {
   var parts=String(month||'').split('-');
   return parts.length===2?labels[Number(parts[1])-1]:month;
 }
-function cmaxChip(key,value,label) {
-  return '<button class="cmax-filter-chip '+(CMAX_DAILY_STATE[key]===value?'on':'')+'" onclick="return cmaxSetFilter(\''+key+'\',decodeURIComponent(\''+encodeURIComponent(value)+'\'))">'+escapeHtml(label||value)+'</button>';
+function cmaxActivityCountsDaily(value) {
+  return cmaxCountsDaily({descricao:value});
+}
+function cmaxActivityOrder(a,b) {
+  var dailyA=cmaxActivityCountsDaily(a),dailyB=cmaxActivityCountsDaily(b);
+  if(dailyA!==dailyB)return dailyA?-1:1;
+  return String(a||'').localeCompare(String(b||''),'pt-BR');
+}
+function cmaxActivityLabel(item) {
+  var label=escapeHtml(cmaxModeLabel(item));
+  return cmaxCountsDaily(item)?'<span class="cmax-eligible-label">'+label+'</span>':label;
+}
+function cmaxChip(key,value,label,extraClass) {
+  return '<button class="cmax-filter-chip '+(extraClass||'')+' '+(CMAX_DAILY_STATE[key]===value?'on':'')+'" onclick="return cmaxSetFilter(\''+key+'\',decodeURIComponent(\''+encodeURIComponent(value)+'\'))">'+escapeHtml(label||value)+'</button>';
 }
 function cmaxCalendarEventsForConsultant(name) {
   var s=CMAX_DAILY_STATE;
@@ -10933,7 +10952,7 @@ function cmaxCalendarShowDay(day,encodedName,button) {
   var info=cmaxDateInfo(date);
   var rows=events.map(function(item){
     var start=cmaxTime(item.hora_inicio)||'-',end=cmaxTime(item.hora_fim);
-    return '<tr><td><strong>'+escapeHtml(item.cliente||'-')+'</strong></td><td>'+escapeHtml(cmaxModeLabel(item))+'</td><td>'+escapeHtml(start+(end?' - '+end:''))+'</td><td class="'+(cmaxCountsDaily(item)?'cmax-daily-yes':'cmax-daily-no')+'">'+(cmaxCountsDaily(item)?'Sim':'Não')+'</td></tr>';
+    return '<tr><td><strong>'+escapeHtml(item.cliente||'-')+'</strong></td><td>'+cmaxActivityLabel(item)+'</td><td>'+escapeHtml(start+(end?' - '+end:''))+'</td><td class="'+(cmaxCountsDaily(item)?'cmax-daily-yes':'cmax-daily-no')+'">'+(cmaxCountsDaily(item)?'Sim':'Não')+'</td></tr>';
   }).join('');
   detail.innerHTML='<div class="cmax-calendar-detail-title">'+escapeHtml(info.weekday)+' &middot; '+escapeHtml(info.date)+' &middot; '+events.filter(cmaxCountsDaily).length+' di&aacute;ria(s) &middot; '+events.length+' atividade(s)</div>'+(rows?'<div class="dashx-table-wrap"><table class="dashx-table"><thead><tr><th>Cliente</th><th>Atividade</th><th>Hor&aacute;rio</th><th>Conta di&aacute;ria?</th></tr></thead><tbody>'+rows+'</tbody></table></div>':'<div class="cmax-empty">Nenhum registro neste dia.</div>');
 }
@@ -10959,11 +10978,14 @@ function renderDiariasCmax() {
   var clients=new Set(list.map(function(x){return String(x.cliente||'');}).filter(Boolean)).size;
   var modalities={};
   list.forEach(function(item){var key=cmaxModeLabel(item);modalities[key]=(modalities[key]||0)+1;});
-  var modalityCards=Object.keys(modalities).sort(function(a,b){return modalities[b]-modalities[a]||a.localeCompare(b);}).map(function(name){
-    return '<div class="cmax-modality"><span>'+escapeHtml(name)+'</span><strong>'+modalities[name]+'</strong></div>';
+  var modalityCards=Object.keys(modalities).sort(function(a,b){
+    var priority=cmaxActivityOrder(a,b);
+    return priority||modalities[b]-modalities[a];
+  }).map(function(name){
+    return '<div class="cmax-modality '+(cmaxActivityCountsDaily(name)?'eligible':'')+'"><span>'+escapeHtml(name)+'</span><strong>'+modalities[name]+'</strong></div>';
   }).join('');
   var syncButton=AUTH_STATE.user&&AUTH_STATE.user.role==='admin'
-    ? '<button class="btn-syncall" onclick="sincronizarDiariasCmax(this)">Atualizar CMAX</button>'
+    ? '<button class="btn-syncall" onclick="sincronizarDiariasCmax(this)">Atualizar hist&oacute;rico CMAX</button>'
     : '';
   var monthsByYear={};
   months.forEach(function(month){var year=month.slice(0,4);if(!monthsByYear[year])monthsByYear[year]=[];monthsByYear[year].push(month);});
@@ -10971,7 +10993,7 @@ function renderDiariasCmax() {
     return '<div class="cmax-year-group"><div class="cmax-year-label">'+year+'</div><div class="cmax-filter-chips">'+monthsByYear[year].sort().reverse().map(function(month){return cmaxChip('month',month,cmaxMonthLabel(month));}).join('')+'</div></div>';
   }).join('')+'</div>';
   var consultantChips=consultants.map(function(name){return cmaxChip('consultant',name,name);}).join('');
-  var activityChips=(s.activities||[]).slice().sort().map(function(name){return cmaxChip('activity',name,name);}).join('');
+  var activityChips=(s.activities||[]).slice().sort(cmaxActivityOrder).map(function(name){return cmaxChip('activity',name,name,cmaxActivityCountsDaily(name)?'eligible':'');}).join('');
   var groups=Object.keys(byConsultant).sort().map(function(name){
     var events=byConsultant[name].sort(function(a,b){
       var dateOrder=String(a.data||'').localeCompare(String(b.data||''));
@@ -10983,12 +11005,13 @@ function renderDiariasCmax() {
       var dateInfo=cmaxDateInfo(item.data);
       var start=cmaxTime(item.hora_inicio)||'-';
       var end=cmaxTime(item.hora_fim);
-      return '<tr><td><strong>'+escapeHtml(item.cliente||'-')+'</strong></td><td>'+escapeHtml(cmaxModeLabel(item))+'</td><td><div class="cmax-date-main">'+escapeHtml(dateInfo.weekday)+'</div><div class="cmax-date-sub">'+escapeHtml(dateInfo.date)+'</div></td><td>'+escapeHtml(start+(end?' - '+end:''))+'</td><td class="'+(cmaxCountsDaily(item)?'cmax-daily-yes':'cmax-daily-no')+'">'+(cmaxCountsDaily(item)?'Sim':'Não')+'</td></tr>';
+      return '<tr><td><strong>'+escapeHtml(item.cliente||'-')+'</strong></td><td>'+cmaxActivityLabel(item)+'</td><td><div class="cmax-date-main">'+escapeHtml(dateInfo.weekday)+'</div><div class="cmax-date-sub">'+escapeHtml(dateInfo.date)+'</div></td><td>'+escapeHtml(start+(end?' - '+end:''))+'</td><td class="'+(cmaxCountsDaily(item)?'cmax-daily-yes':'cmax-daily-no')+'">'+(cmaxCountsDaily(item)?'Sim':'Não')+'</td></tr>';
     }).join('');
     return '<section class="cmax-group"><div class="cmax-group-head"><span class="cmax-counts"><span>'+escapeHtml(name)+'</span><button class="cmax-calendar-btn" onclick="abrirCalendarioCmax(\''+encodeURIComponent(name)+'\')">Vis&atilde;o calend&aacute;rio</button></span><span class="cmax-counts"><span class="cmax-count-pill">'+consultantDaily+' di&aacute;ria(s)</span><span class="cmax-count-pill">'+events.length+' registro(s)</span></span></div><div class="dashx-table-wrap"><table class="dashx-table"><thead><tr><th>Cliente</th><th>Modalidade registrada</th><th>Dia realizado</th><th>Hor&aacute;rio</th><th>Conta di&aacute;ria?</th></tr></thead><tbody>'+rows+'</tbody></table></div></section>';
   }).join('');
-  var status=s.loading?'Consultando a base salva...':s.error?escapeHtml(s.error):(s.syncedAt?'&Uacute;ltima sincroniza&ccedil;&atilde;o: '+escapeHtml(s.syncedAt):'Ainda sem sincroniza&ccedil;&atilde;o CMAX.');
-  box.innerHTML='<div class="cmax-shell"><div class="cmax-hero"><div><div class="cmax-title">Di&aacute;rias e atividades realizadas no CMAX</div><div class="cmax-sub">Exibe somente integrantes do time de treinamento: pessoas que possuem ao menos um <strong>Treinamento On Line</strong> ou <strong>Treinamento In Loco</strong> no hist&oacute;rico. Todas as atividades dessas pessoas permanecem audit&aacute;veis.</div></div></div><div class="cmax-status">'+status+'</div><div class="cmax-filter-block"><div class="cmax-filter-label">Ano e m&ecirc;s realizado <span style="text-transform:none;letter-spacing:0">(clique novamente no m&ecirc;s para ver o geral)</span></div>'+monthChips+'<div class="cmax-filter-label" style="margin-top:14px">Consultores do time de treinamento</div><div class="cmax-filter-chips">'+consultantChips+'</div><div class="cmax-filter-label" style="margin-top:14px">Atividades</div><div class="cmax-filter-chips">'+activityChips+'</div><input class="cmax-filter-search" type="search" placeholder="Filtrar cliente..." value="'+escapeHtml(s.search)+'" oninput="CMAX_DAILY_STATE.search=this.value;renderDiariasCmax()">'+(syncButton?'<div class="cmax-filter-footer">'+syncButton+'</div>':'')+'</div><div class="cmax-summary"><div class="cmax-card"><span>Di&aacute;rias contabiliz&aacute;veis</span><strong>'+dailyList.length+'</strong></div><div class="cmax-card"><span>Registros positivos</span><strong>'+list.length+'</strong></div><div class="cmax-card"><span>Consultores com atividade</span><strong>'+Object.keys(byConsultant).length+'</strong></div><div class="cmax-card"><span>Clientes atendidos</span><strong>'+clients+'</strong></div></div><div><div class="sh"><div class="sh-title">Quantitativo por modalidade</div></div><div class="cmax-modalities">'+modalityCards+'</div></div>'+(groups||'<div class="cmax-empty">Nenhuma atividade positiva encontrada neste recorte.</div>')+'</div>';
+  var history=s.historySync||{};
+  var status=s.loading?'Consultando a base salva...':s.error?escapeHtml(s.error):history.active?('Hist&oacute;rico CMAX em andamento: '+Number(history.processed_months||0)+' m&ecirc;s(es) processado(s). &Uacute;ltimo: '+escapeHtml(history.last_month||'-')+'.'):(s.syncedAt?'&Uacute;ltima sincroniza&ccedil;&atilde;o: '+escapeHtml(s.syncedAt):'Ainda sem sincroniza&ccedil;&atilde;o CMAX.');
+  box.innerHTML='<div class="cmax-shell"><div class="cmax-hero"><div><div class="cmax-title">Di&aacute;rias e atividades realizadas no CMAX</div><div class="cmax-sub">Exibe somente integrantes do time de treinamento. Contam como di&aacute;ria os treinamentos <strong>On Line</strong>, <strong>In Loco</strong>, <strong>On Line Avulso</strong> e <strong>In Loco Avulso</strong>. Todas as demais atividades dessas pessoas permanecem audit&aacute;veis.</div></div></div><div class="cmax-status">'+status+'</div><div class="cmax-filter-block"><div class="cmax-filter-label">Ano e m&ecirc;s realizado <span style="text-transform:none;letter-spacing:0">(clique novamente no m&ecirc;s para ver o geral)</span></div>'+monthChips+'<div class="cmax-filter-label" style="margin-top:14px">Consultores do time de treinamento</div><div class="cmax-filter-chips">'+consultantChips+'</div><div class="cmax-filter-label" style="margin-top:14px">Atividades <span style="text-transform:none;letter-spacing:0">(treinamentos destacados contam como di&aacute;ria)</span></div><div class="cmax-filter-chips">'+activityChips+'</div><input class="cmax-filter-search" type="search" placeholder="Filtrar cliente..." value="'+escapeHtml(s.search)+'" oninput="CMAX_DAILY_STATE.search=this.value;renderDiariasCmax()">'+(syncButton?'<div class="cmax-filter-footer">'+syncButton+'</div>':'')+'</div><div class="cmax-summary"><div class="cmax-card"><span>Di&aacute;rias contabiliz&aacute;veis</span><strong>'+dailyList.length+'</strong></div><div class="cmax-card"><span>Registros positivos</span><strong>'+list.length+'</strong></div><div class="cmax-card"><span>Consultores com atividade</span><strong>'+Object.keys(byConsultant).length+'</strong></div><div class="cmax-card"><span>Clientes atendidos</span><strong>'+clients+'</strong></div></div><div><div class="sh"><div class="sh-title">Quantitativo por modalidade</div></div><div class="cmax-modalities">'+modalityCards+'</div></div>'+(groups||'<div class="cmax-empty">Nenhuma atividade positiva encontrada neste recorte.</div>')+'</div>';
 }
 function carregarDiariasCmax(force) {
   if(CMAX_DAILY_STATE.loading||(!force&&CMAX_DAILY_STATE.loaded)){renderDiariasCmax();return;}
@@ -10999,20 +11022,30 @@ function carregarDiariasCmax(force) {
     CMAX_DAILY_STATE.months=Array.isArray(resp.available_months)?resp.available_months:CMAX_DAILY_STATE.months;
     CMAX_DAILY_STATE.trainingTeam=Array.isArray(resp.training_team)?resp.training_team:CMAX_DAILY_STATE.trainingTeam;
     CMAX_DAILY_STATE.activities=Array.isArray(resp.available_activities)?resp.available_activities:CMAX_DAILY_STATE.activities;
+    CMAX_DAILY_STATE.historySync=resp.history_sync||null;
     CMAX_DAILY_STATE.syncedAt=String(resp.synced_at||'');
     CMAX_DAILY_STATE.loaded=true;CMAX_DAILY_STATE.loading=false;renderDiariasCmax();
+    cmaxScheduleHistoryPoll();
   }).catch(function(error){CMAX_DAILY_STATE.loading=false;CMAX_DAILY_STATE.error=error.message||String(error);renderDiariasCmax();});
 }
 function sincronizarDiariasCmax(btn) {
-  var month=CMAX_DAILY_STATE.month||cmaxCurrentMonth();
   if(btn){btn.disabled=true;btn.textContent='Atualizando...';}
   CMAX_DAILY_STATE.error='';CMAX_DAILY_STATE.loading=true;renderDiariasCmax();
-  chamarAppsScriptJsonp('syncCmaxDailyEvents',{month:month,auth_token:authTokenParam()},120000).then(function(resp){
+  chamarAppsScriptJsonp('startCmaxDailyHistoryBackground',{auth_token:authTokenParam()},120000).then(function(resp){
     if(!resp||resp.ok===false)throw new Error((resp&&(resp.error||resp.raw_error))||'Falha ao sincronizar agenda CMAX');
+    CMAX_DAILY_STATE.historySync=resp.history_sync||null;
     CMAX_DAILY_STATE.loaded=false;CMAX_DAILY_STATE.loading=false;
-    showToast('CMAX atualizado: '+Number(resp.imported||0)+' diária(s) positiva(s).','ok');
+    showToast('Mês atual atualizado. O histórico CMAX continuará carregando em segundo plano.','ok');
     carregarDiariasCmax(true);
   }).catch(function(error){CMAX_DAILY_STATE.loading=false;CMAX_DAILY_STATE.error=error.message||String(error);renderDiariasCmax();showToast(CMAX_DAILY_STATE.error,'err');});
+}
+function cmaxScheduleHistoryPoll() {
+  if(CMAX_HISTORY_POLL_TIMER){clearTimeout(CMAX_HISTORY_POLL_TIMER);CMAX_HISTORY_POLL_TIMER=null;}
+  if(!(CMAX_DAILY_STATE.historySync&&CMAX_DAILY_STATE.historySync.active))return;
+  CMAX_HISTORY_POLL_TIMER=setTimeout(function(){
+    CMAX_DAILY_STATE.loaded=false;
+    carregarDiariasCmax(true);
+  },10000);
 }
 
 // ---- Google Sheets JSONP loader ----

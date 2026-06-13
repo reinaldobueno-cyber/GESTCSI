@@ -61,6 +61,7 @@ function onOpen() {
     .addItem('Sincronizar inventário ClickUp', 'sincronizarInventarioClickUp')
     .addItem('Sincronizar atividade dos usuários ClickUp', 'sincronizarAtividadeUsuariosClickUp')
     .addItem('Sincronizar diárias CMAX do mês atual', 'sincronizarDiariasCmaxMesAtual')
+    .addItem('Sincronizar histórico de diárias CMAX', 'sincronizarHistoricoDiariasCmax')
     .addItem('Sincronizar todos habilitados', 'syncAllProjectsTrigger')
     .addItem('Sincronizar primeiro configurado', 'syncPrimeiroProjetoConfigurado')
     .addToUi();
@@ -120,6 +121,10 @@ function doGet(e) {
     if (action === 'syncCmaxDailyEvents') {
       requireAdmin_(params);
       return jsonOutput_(syncCmaxDailyEvents_(params), params.callback);
+    }
+    if (action === 'startCmaxDailyHistoryBackground') {
+      requireAdmin_(params);
+      return jsonOutput_(startCmaxDailyHistoryBackground_(params), params.callback);
     }
     if (action === 'logPanelUpdate' || String(params.log_update || '') === '1') {
       var logResult = logPanelUpdate_(params);
@@ -3872,8 +3877,13 @@ function sincronizarDiariasCmaxMesAtual() {
   });
 }
 
+function sincronizarHistoricoDiariasCmax() {
+  return startCmaxDailyHistoryBackground_({});
+}
+
 var CMAX_DAILY_SHEET = 'CMAX_DIARIAS';
 var CMAX_AGENDA_URL = 'https://www.multbovinos.com/servicos/eventoscontato/obtenha-agenda/?format=json';
+var CMAX_HISTORY_DEFAULT_START_MONTH = '2023-01';
 
 function getCmaxDailyHeaders_() {
   return [
@@ -3938,12 +3948,122 @@ function getCmaxDailyEvents_(params) {
     available_months: Object.keys(availableMonths).sort().reverse(),
     training_team: Object.keys(availableConsultants).sort(),
     available_activities: Object.keys(availableActivities).sort(),
+    history_sync: getCmaxDailyHistoryBackgroundStatus_(),
     synced_at: events.reduce(function(latest, item) {
       var value = String(item.sincronizado_em || '');
       return value > latest ? value : latest;
     }, ''),
     sheet: CMAX_DAILY_SHEET
   };
+}
+
+function startCmaxDailyHistoryBackground_(params) {
+  params = params || {};
+  var props = PropertiesService.getScriptProperties();
+  var currentMonth = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'yyyy-MM');
+  var startMonth = sanitizeCmaxMonth_(params.start_month || props.getProperty('CMAX_HISTORY_START_MONTH')) || CMAX_HISTORY_DEFAULT_START_MONTH;
+  var currentResult = syncCmaxDailyEvents_({ month: currentMonth });
+  props.setProperty('CMAX_HISTORY_BACKGROUND_ACTIVE', '1');
+  props.setProperty('CMAX_HISTORY_BACKGROUND_CURSOR', cmaxShiftMonth_(currentMonth, -1));
+  props.setProperty('CMAX_HISTORY_BACKGROUND_START_MONTH', startMonth);
+  props.setProperty('CMAX_HISTORY_BACKGROUND_FAILURES', '0');
+  props.setProperty('CMAX_HISTORY_BACKGROUND_PROCESSED', '1');
+  props.setProperty('CMAX_HISTORY_BACKGROUND_LAST_MONTH', currentMonth);
+  props.setProperty('CMAX_HISTORY_BACKGROUND_STARTED_AT', new Date().toISOString());
+  props.setProperty('CMAX_HISTORY_BACKGROUND_UPDATED_AT', new Date().toISOString());
+  props.deleteProperty('CMAX_HISTORY_BACKGROUND_COMPLETED_AT');
+  props.deleteProperty('CMAX_HISTORY_BACKGROUND_ERROR');
+  scheduleCmaxDailyHistoryBackground_(5000);
+  return {
+    ok: true,
+    scheduled: true,
+    current_month: currentMonth,
+    current_imported: currentResult.imported,
+    start_month: startMonth,
+    history_sync: getCmaxDailyHistoryBackgroundStatus_()
+  };
+}
+
+function continueCmaxDailyHistoryBackgroundTrigger() {
+  var props = PropertiesService.getScriptProperties();
+  if (props.getProperty('CMAX_HISTORY_BACKGROUND_ACTIVE') !== '1') {
+    clearCmaxDailyHistoryBackgroundTriggers_();
+    return;
+  }
+  try {
+    var cursor = sanitizeCmaxMonth_(props.getProperty('CMAX_HISTORY_BACKGROUND_CURSOR'));
+    var startMonth = sanitizeCmaxMonth_(props.getProperty('CMAX_HISTORY_BACKGROUND_START_MONTH')) || CMAX_HISTORY_DEFAULT_START_MONTH;
+    var batchSize = Math.max(1, Math.min(toInt_(props.getProperty('CMAX_HISTORY_BATCH_SIZE'), 2), 4));
+    var processed = toInt_(props.getProperty('CMAX_HISTORY_BACKGROUND_PROCESSED'), 0);
+    for (var index = 0; index < batchSize && cursor && cursor >= startMonth; index++) {
+      syncCmaxDailyEvents_({ month: cursor });
+      processed++;
+      props.setProperty('CMAX_HISTORY_BACKGROUND_LAST_MONTH', cursor);
+      cursor = cmaxShiftMonth_(cursor, -1);
+    }
+    props.setProperty('CMAX_HISTORY_BACKGROUND_CURSOR', cursor);
+    props.setProperty('CMAX_HISTORY_BACKGROUND_PROCESSED', String(processed));
+    props.setProperty('CMAX_HISTORY_BACKGROUND_FAILURES', '0');
+    props.setProperty('CMAX_HISTORY_BACKGROUND_UPDATED_AT', new Date().toISOString());
+    props.deleteProperty('CMAX_HISTORY_BACKGROUND_ERROR');
+    if (!cursor || cursor < startMonth) {
+      props.setProperty('CMAX_HISTORY_BACKGROUND_ACTIVE', '0');
+      props.setProperty('CMAX_HISTORY_BACKGROUND_COMPLETED_AT', new Date().toISOString());
+      clearCmaxDailyHistoryBackgroundTriggers_();
+      return;
+    }
+    scheduleCmaxDailyHistoryBackground_(5000);
+  } catch (error) {
+    var failures = toInt_(props.getProperty('CMAX_HISTORY_BACKGROUND_FAILURES'), 0) + 1;
+    props.setProperty('CMAX_HISTORY_BACKGROUND_FAILURES', String(failures));
+    props.setProperty('CMAX_HISTORY_BACKGROUND_ERROR', simplifyErrorMessage_(error));
+    if (failures >= 10) {
+      props.setProperty('CMAX_HISTORY_BACKGROUND_ACTIVE', '0');
+      clearCmaxDailyHistoryBackgroundTriggers_();
+      return;
+    }
+    scheduleCmaxDailyHistoryBackground_(60000);
+  }
+}
+
+function getCmaxDailyHistoryBackgroundStatus_() {
+  var props = PropertiesService.getScriptProperties();
+  return {
+    active: props.getProperty('CMAX_HISTORY_BACKGROUND_ACTIVE') === '1',
+    start_month: props.getProperty('CMAX_HISTORY_BACKGROUND_START_MONTH') || CMAX_HISTORY_DEFAULT_START_MONTH,
+    next_month: props.getProperty('CMAX_HISTORY_BACKGROUND_CURSOR') || '',
+    last_month: props.getProperty('CMAX_HISTORY_BACKGROUND_LAST_MONTH') || '',
+    processed_months: toInt_(props.getProperty('CMAX_HISTORY_BACKGROUND_PROCESSED'), 0),
+    started_at: props.getProperty('CMAX_HISTORY_BACKGROUND_STARTED_AT') || '',
+    updated_at: props.getProperty('CMAX_HISTORY_BACKGROUND_UPDATED_AT') || '',
+    completed_at: props.getProperty('CMAX_HISTORY_BACKGROUND_COMPLETED_AT') || '',
+    error: props.getProperty('CMAX_HISTORY_BACKGROUND_ERROR') || ''
+  };
+}
+
+function scheduleCmaxDailyHistoryBackground_(delayMs) {
+  clearCmaxDailyHistoryBackgroundTriggers_();
+  ScriptApp.newTrigger('continueCmaxDailyHistoryBackgroundTrigger')
+    .timeBased()
+    .after(Math.max(1000, Number(delayMs || 5000)))
+    .create();
+}
+
+function clearCmaxDailyHistoryBackgroundTriggers_() {
+  ScriptApp.getProjectTriggers().forEach(function(trigger) {
+    if (trigger.getHandlerFunction() === 'continueCmaxDailyHistoryBackgroundTrigger') {
+      ScriptApp.deleteTrigger(trigger);
+    }
+  });
+}
+
+function cmaxShiftMonth_(month, offset) {
+  var parts = sanitizeCmaxMonth_(month).split('-');
+  if (parts.length !== 2) return '';
+  var absoluteMonth = Number(parts[0]) * 12 + Number(parts[1]) - 1 + Number(offset || 0);
+  var year = Math.floor(absoluteMonth / 12);
+  var monthNumber = absoluteMonth - year * 12 + 1;
+  return year + '-' + String(monthNumber).padStart(2, '0');
 }
 
 function syncCmaxDailyEvents_(params) {
@@ -4154,7 +4274,10 @@ function normalizeCmaxModality_(value) {
 
 function isCmaxDailyModality_(value) {
   var modality = normalizeCmaxModality_(value);
-  return modality === 'TREINAMENTO ON LINE' || modality === 'TREINAMENTO IN LOCO';
+  return modality === 'TREINAMENTO ON LINE' ||
+    modality === 'TREINAMENTO IN LOCO' ||
+    modality === 'TREINAMENTO ON LINE AVULSO' ||
+    modality === 'TREINAMENTO IN LOCO AVULSO';
 }
 
 function cmaxMonthRange_(month) {
