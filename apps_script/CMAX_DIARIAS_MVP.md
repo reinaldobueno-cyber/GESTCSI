@@ -23,6 +23,10 @@ uma mensagem clara pedindo a atualizacao de `CMAX_JWT_TOKEN`.
 - Enquanto um administrador mantiver a guia aberta, a propria tela acelera a
   carga historica em lotes de tres meses.
 - Clicar novamente em atualizar preserva o ponto ja alcancado no historico.
+- Todos os meses desde janeiro de 2023 permanecem visiveis; meses ainda nao
+  processados aparecem tracejados.
+- Gravacoes mensais usam trava exclusiva para impedir que atualizacoes
+  simultaneas apaguem meses ja carregados.
 - Para alterar o inicio do historico, configure `CMAX_HISTORY_START_MONTH` no
   formato `AAAA-MM`.
 - O menu da planilha tambem oferece **Sincronizar diarias CMAX do mes atual**.

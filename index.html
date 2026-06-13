@@ -3097,6 +3097,7 @@ body.theme-dark .tower-kpis [style*="background:#fff"]{
 .cmax-filter-chip.on{background:var(--green);border-color:var(--green);color:#fff}
 .cmax-filter-chip.eligible{border-color:#78a98a;background:#e7f4ea;color:#23623d;box-shadow:inset 0 0 0 1px rgba(45,110,78,.08)}
 .cmax-filter-chip.eligible.on{background:#28744c;border-color:#28744c;color:#fff}
+.cmax-filter-chip.pending{opacity:.48;border-style:dashed}
 .cmax-year-groups{display:grid;gap:9px}
 .cmax-year-group{display:grid;grid-template-columns:52px 1fr;gap:10px;align-items:start}
 .cmax-year-label{font-size:11px;font-weight:900;color:var(--text);padding-top:7px}
@@ -10810,7 +10811,7 @@ function initAlert(){
   document.getElementById('rows-exc').innerHTML=buildMonthGroupedRows(exc,'exc-');
 }
 
-var CMAX_DAILY_STATE = {events:[], loading:false, loaded:false, error:'', month:cmaxCurrentMonth(), consultant:'', activity:'', search:'', syncedAt:'', months:[], trainingTeam:[], activities:[], historySync:null, expanded:{}};
+var CMAX_DAILY_STATE = {events:[], loading:false, loaded:false, error:'', month:cmaxCurrentMonth(), consultant:'', activity:'', search:'', syncedAt:'', months:[], loadedMonths:[], trainingTeam:[], activities:[], historySync:null, expanded:{}};
 var CMAX_HISTORY_POLL_TIMER=null;
 
 function cmaxCurrentMonth() {
@@ -11000,7 +11001,7 @@ function renderDiariasCmax() {
   var monthsByYear={};
   months.forEach(function(month){var year=month.slice(0,4);if(!monthsByYear[year])monthsByYear[year]=[];monthsByYear[year].push(month);});
   var monthChips='<div class="cmax-year-groups">'+Object.keys(monthsByYear).sort().reverse().map(function(year){
-    return '<div class="cmax-year-group"><div class="cmax-year-label">'+year+'</div><div class="cmax-filter-chips">'+monthsByYear[year].sort().reverse().map(function(month){return cmaxChip('month',month,cmaxMonthLabel(month));}).join('')+'</div></div>';
+    return '<div class="cmax-year-group"><div class="cmax-year-label">'+year+'</div><div class="cmax-filter-chips">'+monthsByYear[year].sort().reverse().map(function(month){return cmaxChip('month',month,cmaxMonthLabel(month),(s.loadedMonths||[]).indexOf(month)>=0?'':'pending');}).join('')+'</div></div>';
   }).join('')+'</div>';
   var consultantChips=consultants.map(function(name){return cmaxChip('consultant',name,name);}).join('');
   var activityChips=(s.activities||[]).slice().sort(cmaxActivityOrder).map(function(name){return cmaxChip('activity',name,name,cmaxActivityCountsDaily(name)?'eligible':'');}).join('');
@@ -11021,7 +11022,7 @@ function renderDiariasCmax() {
     return '<section class="cmax-group '+(expanded?'open':'')+'"><div class="cmax-group-head" onclick="return cmaxToggleConsultant(\''+encodeURIComponent(name)+'\')"><span class="cmax-counts"><button class="cmax-group-toggle" title="'+(expanded?'Minimizar':'Ver todas as atividades')+'">&#9662;</button><span>'+escapeHtml(name)+'</span><button class="cmax-calendar-btn" onclick="event.stopPropagation();abrirCalendarioCmax(\''+encodeURIComponent(name)+'\')">Vis&atilde;o calend&aacute;rio</button></span><span class="cmax-counts"><span class="cmax-count-pill">'+consultantDaily+' di&aacute;ria(s)</span><span class="cmax-count-pill">'+events.length+' registro(s)</span></span></div><div class="cmax-group-body"><div class="dashx-table-wrap"><table class="dashx-table"><thead><tr><th>Cliente</th><th>Modalidade registrada</th><th>Dia realizado</th><th>Hor&aacute;rio</th><th>Conta di&aacute;ria?</th></tr></thead><tbody>'+rows+'</tbody></table></div></div></section>';
   }).join('');
   var history=s.historySync||{};
-  var status=s.loading?'Consultando a base salva...':s.error?escapeHtml(s.error):history.error?('Carga hist&oacute;rica interrompida: '+escapeHtml(history.error)):history.active?('Hist&oacute;rico CMAX em andamento: '+Number(history.processed_months||0)+' m&ecirc;s(es) processado(s). &Uacute;ltimo: '+escapeHtml(history.last_month||'-')+'; pr&oacute;ximo: '+escapeHtml(history.next_month||'-')+'.'):(s.syncedAt?'&Uacute;ltima sincroniza&ccedil;&atilde;o: '+escapeHtml(s.syncedAt):'Ainda sem sincroniza&ccedil;&atilde;o CMAX.');
+  var status=s.loading?'Consultando a base salva...':s.error?escapeHtml(s.error):history.error?('Carga hist&oacute;rica interrompida: '+escapeHtml(history.error)):history.active?('Hist&oacute;rico CMAX em andamento: '+(s.loadedMonths||[]).length+' de '+months.length+' m&ecirc;s(es) dispon&iacute;veis. &Uacute;ltimo processado: '+escapeHtml(history.last_month||'-')+'; pr&oacute;ximo: '+escapeHtml(history.next_month||'-')+'.'):(s.syncedAt?'Hist&oacute;rico carregado: '+(s.loadedMonths||[]).length+' de '+months.length+' m&ecirc;s(es). &Uacute;ltima sincroniza&ccedil;&atilde;o: '+escapeHtml(s.syncedAt):'Ainda sem sincroniza&ccedil;&atilde;o CMAX.');
   box.innerHTML='<div class="cmax-shell"><div class="cmax-hero"><div><div class="cmax-title">Di&aacute;rias e atividades realizadas no CMAX</div><div class="cmax-sub">Exibe somente integrantes do time de treinamento. Contam como di&aacute;ria os treinamentos <strong>On Line</strong>, <strong>In Loco</strong>, <strong>On Line Avulso</strong> e <strong>In Loco Avulso</strong>. Todas as demais atividades dessas pessoas permanecem audit&aacute;veis.</div></div></div><div class="cmax-status">'+status+'</div><div class="cmax-filter-block"><div class="cmax-filter-label">Ano e m&ecirc;s realizado <span style="text-transform:none;letter-spacing:0">(clique novamente no m&ecirc;s para ver o geral)</span></div>'+monthChips+'<div class="cmax-filter-label" style="margin-top:14px">Consultores do time de treinamento</div><div class="cmax-filter-chips">'+consultantChips+'</div><div class="cmax-filter-label" style="margin-top:14px">Atividades <span style="text-transform:none;letter-spacing:0">(treinamentos destacados contam como di&aacute;ria)</span></div><div class="cmax-filter-chips">'+activityChips+'</div><input class="cmax-filter-search" type="search" placeholder="Filtrar cliente..." value="'+escapeHtml(s.search)+'" oninput="CMAX_DAILY_STATE.search=this.value;renderDiariasCmax()">'+(syncButton?'<div class="cmax-filter-footer">'+syncButton+'</div>':'')+'</div><div class="cmax-summary"><div class="cmax-card"><span>Di&aacute;rias contabiliz&aacute;veis</span><strong>'+dailyList.length+'</strong></div><div class="cmax-card"><span>Registros positivos</span><strong>'+list.length+'</strong></div><div class="cmax-card"><span>Consultores com atividade</span><strong>'+Object.keys(byConsultant).length+'</strong></div><div class="cmax-card"><span>Clientes atendidos</span><strong>'+clients+'</strong></div></div><div><div class="sh"><div class="sh-title">Quantitativo por modalidade</div></div><div class="cmax-modalities">'+modalityCards+'</div></div>'+(groups||'<div class="cmax-empty">Nenhuma atividade positiva encontrada neste recorte.</div>')+'</div>';
 }
 function carregarDiariasCmax(force) {
@@ -11030,7 +11031,11 @@ function carregarDiariasCmax(force) {
   chamarAppsScriptJsonp('getCmaxDailyEvents',{month:CMAX_DAILY_STATE.month},30000).then(function(resp){
     if(!resp||resp.ok===false)throw new Error((resp&&(resp.error||resp.raw_error))||'Falha ao carregar diárias CMAX');
     CMAX_DAILY_STATE.events=Array.isArray(resp.events)?resp.events:[];
-    CMAX_DAILY_STATE.months=Array.isArray(resp.available_months)?resp.available_months:CMAX_DAILY_STATE.months;
+    CMAX_DAILY_STATE.loadedMonths=Array.from(new Set(
+      (Array.isArray(resp.available_months)?resp.available_months:[])
+        .concat(Array.isArray(resp.history_loaded_months)?resp.history_loaded_months:[])
+    ));
+    CMAX_DAILY_STATE.months=Array.isArray(resp.history_months)?resp.history_months:CMAX_DAILY_STATE.loadedMonths;
     CMAX_DAILY_STATE.trainingTeam=Array.isArray(resp.training_team)?resp.training_team:CMAX_DAILY_STATE.trainingTeam;
     CMAX_DAILY_STATE.activities=Array.isArray(resp.available_activities)?resp.available_activities:CMAX_DAILY_STATE.activities;
     CMAX_DAILY_STATE.historySync=resp.history_sync||null;

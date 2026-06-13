@@ -3954,6 +3954,8 @@ function getCmaxDailyEvents_(params) {
     total: events.length,
     month: month,
     available_months: Object.keys(availableMonths).sort().reverse(),
+    history_months: cmaxHistoryMonths_(),
+    history_loaded_months: cmaxProcessedHistoryMonths_(),
     training_team: Object.keys(availableConsultants).sort(),
     available_activities: Object.keys(availableActivities).sort(),
     history_sync: getCmaxDailyHistoryBackgroundStatus_(),
@@ -3976,12 +3978,12 @@ function startCmaxDailyHistoryBackground_(params) {
   props.setProperty('CMAX_HISTORY_BACKGROUND_ACTIVE', '1');
   props.setProperty('CMAX_HISTORY_BACKGROUND_START_MONTH', startMonth);
   props.setProperty('CMAX_HISTORY_BACKGROUND_FAILURES', '0');
-  props.setProperty('CMAX_HISTORY_BACKGROUND_LAST_MONTH', currentMonth);
   props.setProperty('CMAX_HISTORY_BACKGROUND_UPDATED_AT', new Date().toISOString());
   props.deleteProperty('CMAX_HISTORY_BACKGROUND_ERROR');
   if (!alreadyActive || !existingCursor) {
     props.setProperty('CMAX_HISTORY_BACKGROUND_CURSOR', cmaxShiftMonth_(currentMonth, -1));
     props.setProperty('CMAX_HISTORY_BACKGROUND_PROCESSED', '1');
+    props.setProperty('CMAX_HISTORY_BACKGROUND_LAST_MONTH', currentMonth);
     props.setProperty('CMAX_HISTORY_BACKGROUND_STARTED_AT', new Date().toISOString());
     props.deleteProperty('CMAX_HISTORY_BACKGROUND_COMPLETED_AT');
   }
@@ -4036,7 +4038,7 @@ function continueCmaxDailyHistoryBatch_(params) {
     var processed = toInt_(props.getProperty('CMAX_HISTORY_BACKGROUND_PROCESSED'), 0);
     var batchMonths = [];
     for (var index = 0; index < batchSize && cursor && cursor >= startMonth; index++) {
-      syncCmaxDailyEvents_({ month: cursor });
+      syncCmaxDailyEvents_({ month: cursor, write_lock_held: true });
       batchMonths.push(cursor);
       processed++;
       props.setProperty('CMAX_HISTORY_BACKGROUND_LAST_MONTH', cursor);
@@ -4104,6 +4106,26 @@ function cmaxShiftMonth_(month, offset) {
   return year + '-' + String(monthNumber).padStart(2, '0');
 }
 
+function cmaxHistoryMonths_() {
+  var props = PropertiesService.getScriptProperties();
+  var current = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'yyyy-MM');
+  var start = sanitizeCmaxMonth_(props.getProperty('CMAX_HISTORY_START_MONTH')) || CMAX_HISTORY_DEFAULT_START_MONTH;
+  var months = [];
+  while (current && current >= start && months.length < 120) {
+    months.push(current);
+    current = cmaxShiftMonth_(current, -1);
+  }
+  return months;
+}
+
+function cmaxProcessedHistoryMonths_() {
+  var props = PropertiesService.getScriptProperties();
+  var allMonths = cmaxHistoryMonths_();
+  var cursor = sanitizeCmaxMonth_(props.getProperty('CMAX_HISTORY_BACKGROUND_CURSOR'));
+  if (!cursor) return allMonths;
+  return allMonths.filter(function(month) { return month > cursor; });
+}
+
 function syncCmaxDailyEvents_(params) {
   params = params || {};
   var month = sanitizeCmaxMonth_(params.month || params.mes) || Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'yyyy-MM');
@@ -4147,7 +4169,17 @@ function syncCmaxDailyEvents_(params) {
   var unique = {};
   events.forEach(function(item) { unique[item.event_key] = item; });
   events = Object.keys(unique).map(function(key) { return unique[key]; });
-  replaceCmaxDailyMonth_(month, events);
+  if (params.write_lock_held) {
+    replaceCmaxDailyMonth_(month, events);
+  } else {
+    var writeLock = LockService.getScriptLock();
+    if (!writeLock.tryLock(30000)) throw new Error('Outra atualização CMAX está gravando o histórico. Tente novamente em instantes.');
+    try {
+      replaceCmaxDailyMonth_(month, events);
+    } finally {
+      writeLock.releaseLock();
+    }
+  }
 
   return {
     ok: true,
