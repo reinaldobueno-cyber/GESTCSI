@@ -58,6 +58,11 @@ Quando o token CMAX expira, o Apps Script autentica novamente em
   propriedade `CMAX_TRAINING_TEAM_MONTHS`.
 - A consulta da tela ignora a coluna pesada `raw_json`, reduzindo o tempo de
   carregamento sem perder os dados de auditoria armazenados.
+- Respostas mensais da tela ficam em cache comprimido por ate 6 horas.
+- O navegador preserva a ultima leitura valida por mes; falhas temporarias nunca
+  substituem dados existentes por indicadores zerados.
+- A tela consulta somente um status leve durante a carga historica. Os lotes
+  pesados sao executados exclusivamente pelos gatilhos do Apps Script.
 - A tela aguarda ate 90 segundos na primeira leitura e tenta novamente
   automaticamente caso a base esteja temporariamente ocupada.
 - Cada consultor possui uma visao calendario mensal com intensidade por volume,

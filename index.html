@@ -10813,10 +10813,33 @@ function initAlert(){
 
 var CMAX_DAILY_STATE = {events:[], loading:false, loaded:false, error:'', month:cmaxCurrentMonth(), consultant:'', activity:'', search:'', syncedAt:'', months:[], loadedMonths:[], trainingTeam:[], trainingTeamCutoff:'', activities:[], historySync:null, expanded:{}};
 var CMAX_HISTORY_POLL_TIMER=null;
+var CMAX_BROWSER_CACHE_PREFIX='gestcsi_cmax_view_v3_';
 
 function cmaxCurrentMonth() {
   var date = new Date();
   return date.getFullYear()+'-'+String(date.getMonth()+1).padStart(2,'0');
+}
+function cmaxBrowserCacheKey(month) {
+  return CMAX_BROWSER_CACHE_PREFIX+(month||'all');
+}
+function cmaxReadBrowserCache(month) {
+  try{return JSON.parse(localStorage.getItem(cmaxBrowserCacheKey(month))||'null');}catch(e){return null;}
+}
+function cmaxWriteBrowserCache(month,resp) {
+  try{localStorage.setItem(cmaxBrowserCacheKey(month),JSON.stringify({savedAt:Date.now(),response:resp}));}catch(e){}
+}
+function cmaxApplyResponse(resp) {
+  CMAX_DAILY_STATE.events=Array.isArray(resp.events)?resp.events:[];
+  CMAX_DAILY_STATE.loadedMonths=Array.from(new Set(
+    (Array.isArray(resp.available_months)?resp.available_months:[])
+      .concat(Array.isArray(resp.history_loaded_months)?resp.history_loaded_months:[])
+  ));
+  CMAX_DAILY_STATE.months=Array.isArray(resp.history_months)?resp.history_months:CMAX_DAILY_STATE.loadedMonths;
+  CMAX_DAILY_STATE.trainingTeam=Array.isArray(resp.training_team)?resp.training_team:CMAX_DAILY_STATE.trainingTeam;
+  CMAX_DAILY_STATE.trainingTeamCutoff=String(resp.training_team_cutoff||'');
+  CMAX_DAILY_STATE.activities=Array.isArray(resp.available_activities)?resp.available_activities:CMAX_DAILY_STATE.activities;
+  CMAX_DAILY_STATE.historySync=resp.history_sync||null;
+  CMAX_DAILY_STATE.syncedAt=String(resp.synced_at||'');
 }
 function cmaxDate(value) {
   var parts=String(value||'').slice(0,10).split('-');
@@ -11028,29 +11051,24 @@ function renderDiariasCmax() {
 }
 function carregarDiariasCmax(force) {
   if(CMAX_DAILY_STATE.loading||(!force&&CMAX_DAILY_STATE.loaded)){renderDiariasCmax();return;}
+  var browserCached=cmaxReadBrowserCache(CMAX_DAILY_STATE.month);
+  if(browserCached&&browserCached.response&&!(CMAX_DAILY_STATE.events||[]).length){
+    cmaxApplyResponse(browserCached.response);
+    CMAX_DAILY_STATE.loaded=true;
+    CMAX_DAILY_STATE.error='';
+    renderDiariasCmax();
+  }
   CMAX_DAILY_STATE.loading=true;CMAX_DAILY_STATE.error='';renderDiariasCmax();
   chamarAppsScriptJsonp('getCmaxDailyEvents',{month:CMAX_DAILY_STATE.month},90000).then(function(resp){
     if(!resp||resp.ok===false)throw new Error((resp&&(resp.error||resp.raw_error))||'Falha ao carregar diárias CMAX');
-    CMAX_DAILY_STATE.events=Array.isArray(resp.events)?resp.events:[];
-    CMAX_DAILY_STATE.loadedMonths=Array.from(new Set(
-      (Array.isArray(resp.available_months)?resp.available_months:[])
-        .concat(Array.isArray(resp.history_loaded_months)?resp.history_loaded_months:[])
-    ));
-    CMAX_DAILY_STATE.months=Array.isArray(resp.history_months)?resp.history_months:CMAX_DAILY_STATE.loadedMonths;
-    CMAX_DAILY_STATE.trainingTeam=Array.isArray(resp.training_team)?resp.training_team:CMAX_DAILY_STATE.trainingTeam;
-    CMAX_DAILY_STATE.trainingTeamCutoff=String(resp.training_team_cutoff||'');
-    CMAX_DAILY_STATE.activities=Array.isArray(resp.available_activities)?resp.available_activities:CMAX_DAILY_STATE.activities;
-    CMAX_DAILY_STATE.historySync=resp.history_sync||null;
-    CMAX_DAILY_STATE.syncedAt=String(resp.synced_at||'');
+    cmaxApplyResponse(resp);
+    cmaxWriteBrowserCache(CMAX_DAILY_STATE.month,resp);
     CMAX_DAILY_STATE.loaded=true;CMAX_DAILY_STATE.loading=false;renderDiariasCmax();
     cmaxScheduleHistoryPoll();
   }).catch(function(error){
     CMAX_DAILY_STATE.loading=false;
-    CMAX_DAILY_STATE.error=error.message||String(error);
+    CMAX_DAILY_STATE.error=(CMAX_DAILY_STATE.events||[]).length?'Exibindo a última leitura salva; atualização em segundo plano indisponível.':(error.message||String(error));
     renderDiariasCmax();
-    if(!(CMAX_DAILY_STATE.events||[]).length){
-      setTimeout(function(){CMAX_DAILY_STATE.loaded=false;carregarDiariasCmax(true);},10000);
-    }
   });
 }
 function sincronizarDiariasCmax(btn) {
@@ -11068,17 +11086,14 @@ function cmaxScheduleHistoryPoll() {
   if(CMAX_HISTORY_POLL_TIMER){clearTimeout(CMAX_HISTORY_POLL_TIMER);CMAX_HISTORY_POLL_TIMER=null;}
   if(!(CMAX_DAILY_STATE.historySync&&CMAX_DAILY_STATE.historySync.active))return;
   CMAX_HISTORY_POLL_TIMER=setTimeout(function(){
-    if(AUTH_STATE.user&&AUTH_STATE.user.role==='admin'){
-      chamarAppsScriptJsonp('continueCmaxDailyHistoryBatch',{batch_size:3,auth_token:authTokenParam()},120000).then(function(resp){
-        if(resp&&resp.history_sync)CMAX_DAILY_STATE.historySync=resp.history_sync;
-        CMAX_DAILY_STATE.loaded=false;
-        carregarDiariasCmax(true);
-      }).catch(function(){CMAX_DAILY_STATE.loaded=false;carregarDiariasCmax(true);});
-    }else{
-      CMAX_DAILY_STATE.loaded=false;
-      carregarDiariasCmax(true);
-    }
-  },10000);
+    chamarAppsScriptJsonp('getCmaxDailyHistoryStatus',{},15000).then(function(resp){
+      if(resp&&resp.history_sync)CMAX_DAILY_STATE.historySync=resp.history_sync;
+      if(resp&&Array.isArray(resp.history_months))CMAX_DAILY_STATE.months=resp.history_months;
+      if(resp&&Array.isArray(resp.history_loaded_months))CMAX_DAILY_STATE.loadedMonths=resp.history_loaded_months;
+      renderDiariasCmax();
+      cmaxScheduleHistoryPoll();
+    }).catch(function(){cmaxScheduleHistoryPoll();});
+  },20000);
 }
 
 // ---- Google Sheets JSONP loader ----

@@ -118,6 +118,9 @@ function doGet(e) {
     if (action === 'getCmaxDailyEvents') {
       return jsonOutput_(getCmaxDailyEvents_(params), params.callback);
     }
+    if (action === 'getCmaxDailyHistoryStatus') {
+      return jsonOutput_(getCmaxDailyHistoryStatus_(), params.callback);
+    }
     if (action === 'syncCmaxDailyEvents') {
       requireAdmin_(params);
       return jsonOutput_(syncCmaxDailyEvents_(params), params.callback);
@@ -3889,6 +3892,7 @@ var CMAX_DAILY_SHEET = 'CMAX_DIARIAS';
 var CMAX_AGENDA_URL = 'https://www.multbovinos.com/servicos/eventoscontato/obtenha-agenda/?format=json';
 var CMAX_TOKEN_AUTH_URL = 'https://www.multbovinos.com/servicos/login/';
 var CMAX_HISTORY_DEFAULT_START_MONTH = '2023-01';
+var CMAX_VIEW_CACHE_SECONDS = 21600;
 
 function getCmaxDailyHeaders_() {
   return [
@@ -3906,6 +3910,12 @@ function getCmaxDailySheet_() {
 
 function getCmaxDailyEvents_(params) {
   params = params || {};
+  var cacheKey = cmaxViewCacheKey_(params);
+  var cached = readCompressedScriptCache_(cacheKey);
+  if (cached) {
+    cached.cached = true;
+    return cached;
+  }
   var sheet = getCmaxDailySheet_();
   var headersExpected = getCmaxDailyHeaders_();
   var rawJsonIndex = headersExpected.indexOf('raw_json');
@@ -3976,7 +3986,7 @@ function getCmaxDailyEvents_(params) {
     if (item.descricao || item.modalidade || item.tipo) availableActivities[item.descricao || item.modalidade || item.tipo] = true;
   });
 
-  return {
+  var result = {
     ok: true,
     events: events,
     total: events.length,
@@ -3994,6 +4004,40 @@ function getCmaxDailyEvents_(params) {
     }, ''),
     sheet: CMAX_DAILY_SHEET
   };
+  writeCompressedScriptCache_(cacheKey, result, CMAX_VIEW_CACHE_SECONDS);
+  return result;
+}
+
+function cmaxViewCacheKey_(params) {
+  params = params || {};
+  var month = sanitizeCmaxMonth_(params.month || params.mes) || 'all';
+  var consultant = sanitizeText_(params.consultant || params.consultor).toUpperCase() || 'all';
+  return 'cmax:view:v3:' + month + ':' + consultant;
+}
+
+function readCompressedScriptCache_(key) {
+  try {
+    var encoded = CacheService.getScriptCache().get(key);
+    if (!encoded) return null;
+    var bytes = Utilities.base64Decode(encoded);
+    var json = Utilities.ungzip(Utilities.newBlob(bytes)).getDataAsString('UTF-8');
+    return JSON.parse(json);
+  } catch (ignored) {
+    return null;
+  }
+}
+
+function writeCompressedScriptCache_(key, value, seconds) {
+  try {
+    var compressed = Utilities.gzip(Utilities.newBlob(JSON.stringify(value), 'application/json'));
+    var encoded = Utilities.base64Encode(compressed.getBytes());
+    CacheService.getScriptCache().put(key, encoded, Math.max(60, Math.min(Number(seconds || 3600), 21600)));
+  } catch (ignored) {}
+}
+
+function clearCmaxViewCacheForMonths_(months) {
+  var keys = (months || []).map(function(month) { return cmaxViewCacheKey_({ month: month }); });
+  if (keys.length) CacheService.getScriptCache().removeAll(keys);
 }
 
 function cmaxTrainingTeamCutoff_() {
@@ -4110,6 +4154,37 @@ function getCmaxDailyHistoryBackgroundStatus_() {
     updated_at: props.getProperty('CMAX_HISTORY_BACKGROUND_UPDATED_AT') || '',
     completed_at: props.getProperty('CMAX_HISTORY_BACKGROUND_COMPLETED_AT') || '',
     error: props.getProperty('CMAX_HISTORY_BACKGROUND_ERROR') || ''
+  };
+}
+
+function getCmaxDailyHistoryStatus_() {
+  var props = PropertiesService.getScriptProperties();
+  var loaded = [];
+  try {
+    loaded = JSON.parse(props.getProperty('CMAX_HISTORY_COMPLETED_MONTHS_JSON') || '[]');
+  } catch (ignored) {}
+  var history = cmaxHistoryMonths_();
+  var loadedMap = {};
+  loaded.forEach(function(month) {
+    month = sanitizeCmaxMonth_(month);
+    if (month) loadedMap[month] = true;
+  });
+  var pending = history.filter(function(month) { return !loadedMap[month]; });
+  return {
+    ok: true,
+    history_months: history,
+    history_loaded_months: history.filter(function(month) { return !!loadedMap[month]; }),
+    history_sync: {
+      active: props.getProperty('CMAX_HISTORY_BACKGROUND_ACTIVE') === '1',
+      start_month: props.getProperty('CMAX_HISTORY_BACKGROUND_START_MONTH') || CMAX_HISTORY_DEFAULT_START_MONTH,
+      next_month: pending[0] || '',
+      last_month: props.getProperty('CMAX_HISTORY_BACKGROUND_LAST_MONTH') || '',
+      processed_months: history.length - pending.length,
+      started_at: props.getProperty('CMAX_HISTORY_BACKGROUND_STARTED_AT') || '',
+      updated_at: props.getProperty('CMAX_HISTORY_BACKGROUND_UPDATED_AT') || '',
+      completed_at: props.getProperty('CMAX_HISTORY_BACKGROUND_COMPLETED_AT') || '',
+      error: props.getProperty('CMAX_HISTORY_BACKGROUND_ERROR') || ''
+    }
   };
 }
 
@@ -4542,6 +4617,7 @@ function replaceCmaxDailyMonths_(eventsByMonth) {
   if (retained.length + added.length) {
     sheet.getRange(2, 1, retained.length + added.length, headers.length).setValues(retained.concat(added));
   }
+  clearCmaxViewCacheForMonths_(Object.keys(eventsByMonth || {}));
 }
 
 function sanitizeCmaxMonth_(value) {
