@@ -1573,11 +1573,11 @@ function syncClickUpMilestoneClosingBatch_(offset, limit) {
       var normalized = buildNormalizedProjectFromClickUp_(mapping);
       detected += (normalized.marcos || []).length;
       pendingUpserts.push({ mapping: mapping, normalized: normalized });
-      processed += 1;
     } catch (error) {
       errors += 1;
       lastError = simplifyErrorMessage_(error);
     }
+    processed += 1;
   });
   upsertClickUpMilestoneClosingEntries_(pendingUpserts);
   var reachedEnd = !batch.length || offset + batch.length >= mappings.length;
@@ -1818,7 +1818,10 @@ function getClickUpMilestoneClosingBackgroundStatus_() {
   return {
     active: props.getProperty('CLICKUP_MILESTONE_CLOSING_ACTIVE') === '1',
     total: toInt_(props.getProperty('CLICKUP_MILESTONE_CLOSING_TOTAL'), 0),
-    processed: toInt_(props.getProperty('CLICKUP_MILESTONE_CLOSING_PROCESSED'), 0),
+    processed: Math.max(
+      toInt_(props.getProperty('CLICKUP_MILESTONE_CLOSING_PROCESSED'), 0),
+      toInt_(props.getProperty('CLICKUP_MILESTONE_CLOSING_OFFSET'), 0)
+    ),
     errors: toInt_(props.getProperty('CLICKUP_MILESTONE_CLOSING_ERRORS'), 0),
     detected: toInt_(props.getProperty('CLICKUP_MILESTONE_CLOSING_DETECTED'), 0),
     phase: props.getProperty('CLICKUP_MILESTONE_CLOSING_PHASE') || '',
@@ -4720,7 +4723,7 @@ function getCmaxDailyEvents_(params) {
     month: month,
       available_months: cmaxRelevantMonths_(meta.available_months),
     history_months: cmaxHistoryMonths_(),
-      history_loaded_months: cmaxRelevantMonths_(meta.history_loaded_months),
+      history_loaded_months: cmaxSnapshotMonths_(meta),
     training_team_cutoff: meta.training_team_cutoff || '',
     training_team: meta.training_team || [],
     available_activities: meta.available_activities || [],
@@ -4777,7 +4780,7 @@ function readCmaxMaterializedCache_(month, consultant) {
     month: '',
     available_months: cmaxRelevantMonths_(meta.available_months),
     history_months: cmaxHistoryMonths_(),
-    history_loaded_months: cmaxRelevantMonths_(meta.history_loaded_months),
+    history_loaded_months: cmaxSnapshotMonths_(meta),
     training_team_cutoff: meta.training_team_cutoff || '',
     training_team: meta.training_team || [],
     available_activities: meta.available_activities || [],
@@ -4881,7 +4884,7 @@ function getCmaxDailyEventsLegacy_(params) {
     month: month,
     available_months: cmaxRelevantMonths_(Object.keys(availableMonths)),
     history_months: cmaxHistoryMonths_(),
-    history_loaded_months: cmaxRelevantMonths_(cmaxProcessedHistoryMonths_()),
+    history_loaded_months: cmaxSnapshotMonths_(),
     training_team_cutoff: trainingCutoff,
     training_team: Object.keys(availableConsultants).sort(),
     available_activities: Object.keys(availableActivities).sort(),
@@ -5059,10 +5062,7 @@ function getCmaxDailyHistoryBackgroundStatus_() {
 
 function getCmaxDailyHistoryStatus_() {
   var props = PropertiesService.getScriptProperties();
-  var loaded = [];
-  try {
-    loaded = JSON.parse(props.getProperty('CMAX_HISTORY_COMPLETED_MONTHS_JSON') || '[]');
-  } catch (ignored) {}
+  var loaded = cmaxSnapshotMonths_();
   var history = cmaxHistoryMonths_();
   var loadedMap = {};
   loaded.forEach(function(month) {
@@ -5086,6 +5086,13 @@ function getCmaxDailyHistoryStatus_() {
       error: props.getProperty('CMAX_HISTORY_BACKGROUND_ERROR') || ''
     }
   };
+}
+
+function cmaxSnapshotMonths_(meta) {
+  if (!meta) {
+    try { meta = JSON.parse(PropertiesService.getScriptProperties().getProperty('CMAX_VIEW_META_JSON') || 'null'); } catch (ignored) { meta = null; }
+  }
+  return cmaxRelevantMonths_(Object.keys(meta && meta.month_sheets || {}));
 }
 
 function scheduleCmaxDailyHistoryBackground_(delayMs) {
@@ -5731,7 +5738,7 @@ function rebuildCmaxDailyMaterializedView_(rows, sourceHeaders) {
     ranges: ranges,
     all: { start: 2, count: items.length },
     available_months: cmaxRelevantMonths_(Object.keys(availableMonths)),
-    history_loaded_months: cmaxRelevantMonths_(cmaxProcessedHistoryMonths_()),
+    history_loaded_months: cmaxSnapshotMonths_(),
     training_team_cutoff: trainingCutoff,
     training_team: Object.keys(trainingTeamMap).sort(),
     available_activities: Object.keys(availableActivities).sort(),
@@ -5756,9 +5763,9 @@ function writeCmaxMaterializedCaches_(items, meta) {
       events: events,
       total: events.length,
       month: month,
-    available_months: availableMonths,
+      available_months: cmaxRelevantMonths_(meta.available_months),
       history_months: cmaxHistoryMonths_(),
-    history_loaded_months: cmaxRelevantMonths_(meta.history_loaded_months),
+      history_loaded_months: cmaxSnapshotMonths_(meta),
       training_team_cutoff: meta.training_team_cutoff || '',
       training_team: meta.training_team || [],
       available_activities: meta.available_activities || [],
@@ -5797,7 +5804,6 @@ function normalizeCmaxSheetTime_(value) {
     return Utilities.formatDate(value, 'America/Sao_Paulo', 'HH:mm');
   }
   var text = String(value || '').trim();
-  if (/1899|1900/.test(text)) return '';
   if (/^\d{4}-\d{2}-\d{2}T/.test(text)) {
     var parsed = new Date(text);
     if (!isNaN(parsed.getTime())) return Utilities.formatDate(parsed, 'America/Sao_Paulo', 'HH:mm');

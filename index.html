@@ -5300,8 +5300,8 @@ function initFechamento() {
   var error = FECHAMENTO_META.error ? '<div class="dashx-focus-note" style="margin-bottom:12px"><strong>'+escapeHtml(FECHAMENTO_META.error)+'</strong></div>' : '';
   var bg = FECHAMENTO_META.background_sync || {};
   var syncNote = bg.active
-    ? '<div class="dashx-focus-note" style="margin-bottom:12px"><strong>Leitura ClickUp em andamento:</strong> '+Number(bg.processed || 0)+' de '+Number(bg.total || 0)+' projetos lidos, '+Number(bg.detected || 0)+' marcos detectados até agora.</div>'
-    : (Number(bg.errors || 0) > 0 ? '<div class="dashx-focus-note" style="margin-bottom:12px"><strong>Última leitura:</strong> '+Number(bg.processed || 0)+' projetos lidos, '+Number(bg.detected || 0)+' marcos detectados e '+Number(bg.errors || 0)+' erro(s).</div>' : '');
+    ? '<div class="dashx-focus-note" style="margin-bottom:12px"><strong>Leitura ClickUp em andamento:</strong> '+Number(bg.processed || 0)+' de '+Number(bg.total || 0)+' projetos processados, '+Number(bg.detected || 0)+' marcos detectados e '+Number(bg.errors || 0)+' erro(s).</div>'
+    : (Number(bg.errors || 0) > 0 ? '<div class="dashx-focus-note" style="margin-bottom:12px"><strong>Última leitura:</strong> '+Number(bg.processed || 0)+' projetos processados, '+Number(bg.detected || 0)+' marcos detectados e '+Number(bg.errors || 0)+' erro(s).</div>' : '');
   box.innerHTML = '<div class="closing-head"><div><div class="closing-title">Fechamento de marcos</div><div class="closing-sub">Exibe os marcos que entraram em Closed no mês selecionado e acompanha a validação técnica posterior. Somente aprovados entram na bonificação de R$ 30 por marco.</div></div>'+
     '</div>'+error+syncNote+
     '<div class="closing-filter-block"><div class="closing-filter-label">Mês em que entrou em Closed <span style="text-transform:none;letter-spacing:0;font-weight:700">(clique novamente no mês selecionado para ver o geral)</span></div>'+monthChips+
@@ -11105,7 +11105,7 @@ function initAlert(){
 var CMAX_DAILY_STATE = {events:[], loading:false, loaded:false, error:'', month:cmaxCurrentMonth(), consultant:'', activity:'', search:'', syncedAt:'', months:[], loadedMonths:[], trainingTeam:[], trainingTeamCutoff:'', activities:[], historySync:null, expanded:{}, requestSeq:0, monthResponses:{}};
 var CMAX_HISTORY_POLL_TIMER=null;
 var CMAX_PREFETCH_RUNNING=false;
-var CMAX_BROWSER_CACHE_PREFIX='gestcsi_cmax_view_v4_';
+var CMAX_BROWSER_CACHE_PREFIX='gestcsi_cmax_view_v5_';
 
 function cmaxCurrentMonth() {
   var date = new Date();
@@ -11163,6 +11163,7 @@ function cmaxNormalizeMonths(values) {
 }
 function cmaxApplyResponse(resp) {
   CMAX_DAILY_STATE.events=(Array.isArray(resp.events)?resp.events:[]).map(function(item){
+    item.data=String(item.data||'').slice(0,10);
     item.mes=cmaxNormalizeMonth(item.mes||item.data);
     return item;
   }).filter(function(item){return !!item.mes;});
@@ -11191,7 +11192,11 @@ function cmaxDateInfo(value) {
 }
 function cmaxTime(value) {
   var text=String(value||'').trim();
-  if(!text||/1899|1900/.test(text))return '';
+  if(!text)return '';
+  if(/^\d{4}-\d{2}-\d{2}T/.test(text)){
+    var parsed=new Date(text);
+    if(!isNaN(parsed.getTime()))return new Intl.DateTimeFormat('pt-BR',{timeZone:'America/Sao_Paulo',hour:'2-digit',minute:'2-digit',hour12:false}).format(parsed);
+  }
   var iso=text.match(/T(\d{2}):(\d{2})/);
   if(iso)return iso[1]+':'+iso[2];
   var time=text.match(/^(\d{1,2}):(\d{2})/);
@@ -11328,7 +11333,7 @@ function abrirCalendarioCmax(encodedName) {
 function cmaxCalendarShowDay(day,encodedName,button) {
   var name=decodeURIComponent(encodedName||''),month=cmaxCalendarMonth(cmaxCalendarEventsForConsultant(name));
   var date=month+'-'+String(day).padStart(2,'0');
-  var events=cmaxCalendarEventsForConsultant(name).filter(function(item){return String(item.data||'')===date;}).sort(function(a,b){return String(a.hora_inicio||'').localeCompare(String(b.hora_inicio||''));});
+  var events=cmaxCalendarEventsForConsultant(name).filter(function(item){return String(item.data||'').slice(0,10)===date;}).sort(function(a,b){return String(a.hora_inicio||'').localeCompare(String(b.hora_inicio||''));});
   document.querySelectorAll('.cmax-calendar-day').forEach(function(cell){cell.classList.remove('on');});
   if(button)button.classList.add('on');
   var detail=document.getElementById('cmax-calendar-detail');
