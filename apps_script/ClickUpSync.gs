@@ -2221,7 +2221,11 @@ function syncClickUpClosedMilestones_(params) {
       sync_type: 'closed'
     };
     if (params.skip_result) return summary;
-    var result = getClickUpMilestoneClosing_(params);
+    var resultParams = {};
+    Object.keys(params).forEach(function(key) { resultParams[key] = params[key]; });
+    delete resultParams.month;
+    delete resultParams.mes;
+    var result = getClickUpMilestoneClosing_(resultParams);
     Object.keys(summary).forEach(function(key) { result[key] = summary[key]; });
     return result;
   } finally {

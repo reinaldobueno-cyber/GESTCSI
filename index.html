@@ -5225,10 +5225,11 @@ function fechamentoRunSync(action, label, btn) {
   }
   var original = btn && btn.textContent;
   var month = String(FECHAMENTO_FILTER.month || fechamentoCurrentMonth());
+  var syncMonth = action === 'syncClickUpClosedMilestones' ? '' : (month === 'todos' ? '' : month);
   if (btn) { btn.disabled = true; btn.textContent = 'Buscando...'; }
   chamarAppsScriptJsonp(action, {
     auth_token: authTokenParam(),
-    month: month === 'todos' ? '' : month
+    month: syncMonth
   }, 45000).then(function(recent) {
     if (!recent || recent.ok === false || !Array.isArray(recent.marcos)) {
       throw new Error((recent && (recent.error || recent.message)) || 'Não foi possível atualizar as alterações recentes');
