@@ -11195,7 +11195,7 @@ function consultantCompensationLoad(force) {
   if(!authTokenParam()||CONSULTANT_COMP_STATE.loading||(!force&&CONSULTANT_COMP_STATE.loaded))return Promise.resolve(null);
   CONSULTANT_COMP_STATE.loading=true;
   return chamarAppsScriptJsonp('getConsultantCompensation',{auth_token:authTokenParam()},15000).then(function(resp){
-    if(!resp||resp.ok===false)throw new Error((resp&&resp.error)||'Falha ao carregar senioridades');
+    if(!resp||resp.ok===false||!Array.isArray(resp.consultants))throw new Error((resp&&resp.error)||'Publique o Apps Script atualizado para carregar senioridades.');
     var items={};
     (resp.consultants||[]).forEach(function(item){items[consultantCompKey(item.consultant_key||item.consultant_name)]=item;});
     CONSULTANT_COMP_STATE.items=items;
@@ -11221,7 +11221,7 @@ function consultantSetSeniority(name,seniority,select) {
   if(!seniority)return false;
   if(select)select.disabled=true;
   return chamarAppsScriptJsonp('setConsultantSeniority',{auth_token:authTokenParam(),consultant_name:name,seniority:seniority},15000).then(function(resp){
-    if(!resp||resp.ok===false)throw new Error((resp&&resp.error)||'Falha ao salvar senioridade');
+    if(!resp||resp.ok===false||!resp.consultant)throw new Error((resp&&resp.error)||'Publique o Apps Script atualizado para salvar senioridades.');
     CONSULTANT_COMP_STATE.items[consultantCompKey(name)]=resp.consultant;
     CONSULTANT_COMP_STATE.loaded=true;
     initCons();
