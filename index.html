@@ -5080,6 +5080,7 @@ var FECHAMENTO_MARCOS = [];
 var FECHAMENTO_META = {};
 var FECHAMENTO_LOADED = false;
 var FECHAMENTO_LOADING = false;
+var FECHAMENTO_SESSION_REFRESHED = false;
 var FECHAMENTO_POLL_TIMER = null;
 var FECHAMENTO_FILTER = { month:'', consultor:'todos', projetoBusca:'', situacao:'todos' };
 function fechamentoRestoreCache() {
@@ -5439,7 +5440,12 @@ window.alternarUsuarioPainel = alternarUsuarioPainel;
 
 function renderAll() {
   buildPeriodBar(); initDash(); initControlTower(); initAcomp(); initFechamento(); initAdmin(); initAll(); initCons(); initVend(); initAvul(); initLog(); initPraz(); initAlert(); initExec();
-  if (!FECHAMENTO_LOADED && !FECHAMENTO_LOADING) fechamentoLoad(false);
+  if (authTokenParam() && !FECHAMENTO_SESSION_REFRESHED) {
+    FECHAMENTO_SESSION_REFRESHED = true;
+    fechamentoLoad(true);
+  } else if (!FECHAMENTO_LOADED && !FECHAMENTO_LOADING) {
+    fechamentoLoad(false);
+  }
 }
 function abrirProjetosComFiltro(status, clienteBusca) {
   fS = status || 'all';
