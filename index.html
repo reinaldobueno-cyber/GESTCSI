@@ -3123,9 +3123,9 @@ body.theme-dark .tower-kpis [style*="background:#fff"]{
 .cmax-modality.eligible span{color:#28744c}
 .cmax-counts{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
 .cmax-count-pill{border:1px solid var(--border);border-radius:999px;padding:5px 9px;font-size:10px;font-weight:900;color:var(--text2)}
-.consultant-seniority{border:1px solid rgba(255,255,255,.55);border-radius:999px;background:rgba(255,255,255,.18);color:#fff;padding:5px 8px;font:800 10px 'Inter',sans-serif;max-width:110px}
+.consultant-seniority{border:1px solid var(--border);border-radius:999px;background:var(--surf);color:var(--text);padding:6px 9px;font:800 10px 'Inter',sans-serif;max-width:145px}
 .consultant-seniority option{color:#17251d;background:#fff}
-.consultant-seniority-badge{border:1px solid rgba(255,255,255,.55);border-radius:999px;background:rgba(255,255,255,.18);color:#fff;padding:5px 8px;font-size:10px;font-weight:900}
+.consultant-seniority-badge{border:1px solid #78a98a;border-radius:999px;background:#e7f4ea;color:#23623d;padding:6px 9px;font-size:10px;font-weight:900}
 .admin-seniority{border:1px solid var(--border);border-radius:999px;background:var(--surf2);color:var(--text);padding:7px 10px;font:800 10px 'Inter',sans-serif}
 .cmax-date-main{font-weight:900;color:var(--text)}
 .cmax-date-sub{font-size:10px;color:var(--muted);margin-top:3px}
@@ -4087,7 +4087,10 @@ function goTab(id, btn) {
       } catch(e) {}
     }, 220);
   }
-  if (id === 'cmax') carregarDiariasCmax(false);
+  if (id === 'cmax') {
+    consultantCompensationLoad(true);
+    carregarDiariasCmax(false);
+  }
   if (id === 'fech') {
     fechamentoLoad(false);
   }
@@ -11213,10 +11216,13 @@ function consultantCompensationLoad(force) {
 }
 function consultantSeniorityControl(name) {
   var comp=consultantCompensation(name);
+  if(comp.seniority){
+    return '<span class="consultant-seniority-badge" title="Configurado no cadastro de usuários">'+consultantSeniorityLabel(comp.seniority)+' - '+consultantMoney(comp.daily_value)+'</span>';
+  }
   if(AUTH_STATE.user&&AUTH_STATE.user.role==='admin'){
     return '<select class="consultant-seniority" title="Senioridade para cálculo de diária" onclick="event.stopPropagation()" onchange="event.stopPropagation();return consultantSetSeniority(decodeURIComponent(\''+encodeURIComponent(name)+'\'),this.value,this)"><option value="">Senioridade</option><option value="junior" '+(comp.seniority==='junior'?'selected':'')+'>Junior</option><option value="pleno" '+(comp.seniority==='pleno'?'selected':'')+'>Pleno</option><option value="senior" '+(comp.seniority==='senior'?'selected':'')+'>Senior</option></select>';
   }
-  return comp.seniority?'<span class="consultant-seniority-badge">'+consultantSeniorityLabel(comp.seniority)+'</span>':'';
+  return '<span class="cmax-count-pill">Sem senioridade</span>';
 }
 function adminUserSeniorityControl(name) {
   var comp=consultantCompensation(name);
