@@ -3179,6 +3179,49 @@ body.theme-dark *{
 .admin-user-meta{font-size:11px;color:var(--muted);margin-top:2px;}
 .admin-toggle{border:1px solid var(--border);background:var(--surf2);border-radius:999px;padding:6px 10px;font:900 11px 'Inter',sans-serif;color:var(--text2);cursor:pointer;}
 @media(max-width:860px){.admin-users{grid-template-columns:1fr}}
+.closing-head{display:flex;justify-content:space-between;align-items:flex-start;gap:16px;margin-bottom:16px}
+.closing-title{font-size:22px;font-weight:900;color:var(--text)}
+.closing-sub{font-size:12px;color:var(--muted);margin-top:4px;max-width:760px;line-height:1.5}
+.closing-actions{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.closing-select{border:1px solid var(--border);background:var(--surf);border-radius:8px;padding:8px 10px;font:800 11px 'Inter',sans-serif;color:var(--text)}
+.closing-kpis{display:grid;grid-template-columns:repeat(4,minmax(150px,1fr));gap:10px;margin-bottom:16px}
+.closing-kpi{background:var(--surf);border:1px solid var(--border);border-radius:10px;padding:14px}
+.closing-kpi span{display:block;font-size:9px;font-weight:900;text-transform:uppercase;letter-spacing:.08em;color:var(--muted)}
+.closing-kpi strong{display:block;font-size:25px;margin-top:5px;color:var(--text)}
+.closing-status{display:inline-flex;border-radius:999px;padding:4px 8px;font-size:9px;font-weight:900;text-transform:uppercase}
+.closing-status.aguardando{background:var(--orange-s);color:var(--orange)}
+.closing-status.aprovado{background:var(--green-s);color:var(--green)}
+.closing-status.reprovado{background:var(--red-s);color:var(--red)}
+.closing-justification{max-width:320px;font-size:10px;line-height:1.4;color:var(--text2)}
+.closing-summary-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:18px}
+.closing-section-title{font-size:11px;font-weight:900;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);margin:12px 0 7px}
+.closing-summary-table td,.closing-summary-table th{padding:8px 10px}
+.closing-consultant-row td{background:var(--green-s);color:var(--green);font-size:11px;font-weight:900;text-transform:uppercase;letter-spacing:.06em;padding:9px 12px}
+.closing-filter-block{background:var(--surf);border:1px solid var(--border);border-radius:12px;padding:12px;margin-bottom:14px}
+.closing-filter-label{font-size:9px;font-weight:900;text-transform:uppercase;letter-spacing:.09em;color:var(--muted);margin-bottom:8px}
+.closing-filter-chips{display:flex;gap:7px;flex-wrap:wrap}
+.closing-filter-chip{border:1px solid var(--border);background:var(--surf2);border-radius:999px;padding:7px 12px;font:900 10px 'Inter',sans-serif;color:var(--text2);cursor:pointer}
+.closing-filter-chip.on{background:var(--green);border-color:var(--green);color:#fff}
+.closing-year-groups{display:grid;gap:9px}
+.closing-year-group{display:grid;grid-template-columns:52px 1fr;gap:10px;align-items:start}
+.closing-year-label{font-size:11px;font-weight:900;color:var(--text);padding-top:7px}
+.closing-sync-note{font-size:10px;font-weight:800;color:var(--muted);align-self:center}
+.closing-client-search{width:100%;border:1px solid var(--border);background:var(--surf2);border-radius:9px;padding:10px 12px;font:800 11px 'Inter',sans-serif;color:var(--text)}
+.closing-client-search:focus{outline:none;border-color:rgba(45,110,78,.38);box-shadow:0 0 0 3px rgba(45,110,78,.08)}
+.closing-filter-footer{display:flex;justify-content:flex-end;align-items:center;margin-top:13px;padding-top:12px;border-top:1px solid var(--border)}
+.closing-consultant-card{background:var(--surf);border:1px solid var(--border);border-radius:14px;margin-bottom:16px;overflow:hidden}
+.closing-consultant-head{display:flex;justify-content:space-between;gap:12px;align-items:center;padding:15px 17px;border-bottom:1px solid var(--border);background:var(--surf2)}
+.closing-consultant-name{font-size:15px;font-weight:900;color:var(--text);text-transform:uppercase;letter-spacing:.04em}
+.closing-consultant-metrics{display:flex;gap:18px;flex-wrap:wrap}
+.closing-consultant-metric{text-align:right}.closing-consultant-metric strong{display:block;font-size:18px;color:var(--text)}.closing-consultant-metric span{font-size:8px;font-weight:900;color:var(--muted);text-transform:uppercase}
+.closing-project-list{padding:12px}
+.closing-project-card{display:grid;grid-template-columns:minmax(240px,1.4fr) minmax(220px,2fr) auto;gap:14px;align-items:center;border:1px solid var(--border);border-radius:12px;padding:12px 14px;margin-bottom:9px;background:var(--surf)}
+.closing-project-card:last-child{margin-bottom:0}
+.closing-project-title{font-size:12px;font-weight:900;color:var(--text)}.closing-project-marco{font-size:11px;font-weight:800;color:var(--text2);margin-top:3px}
+.closing-project-meta{font-size:9px;color:var(--muted);margin-top:4px;line-height:1.5}
+.closing-project-comment{font-size:10px;color:var(--text2);line-height:1.45}
+@media(max-width:1100px){.closing-summary-grid{grid-template-columns:1fr}}
+@media(max-width:900px){.closing-kpis{grid-template-columns:repeat(2,1fr)}.closing-head{flex-direction:column}.closing-project-card{grid-template-columns:1fr}.closing-consultant-head{align-items:flex-start;flex-direction:column}.closing-consultant-metric{text-align:left}}
 </style>
 </head>
 <body>
@@ -3232,6 +3275,7 @@ body.theme-dark *{
 <button class="snb" onclick="goTab('tower',this)"><span class="snb-icon">&#128737;</span><span class="snb-label">Gest&atilde;o</span><span class="snb-badge" id="n-tower" hidden>0</span></button>
 <button class="snb" onclick="return abrirAcompanhamentosPendentes(this)" title="Abrir acompanhamentos pendentes"><span class="snb-icon">&#128276;</span><span class="snb-label">Acompanhamento</span><span class="snb-badge" id="n-acom" hidden>0</span></button>
 <button class="snb" onclick="goTab('cmax',this)"><span class="snb-icon">&#128197;</span><span class="snb-label">Di&aacute;rias CMAX</span></button>
+<button class="snb" id="nav-fech" onclick="goTab('fech',this)"><span class="snb-icon">&#9989;</span><span class="snb-label">Fechamento</span><span class="snb-badge" id="n-fech" hidden>0</span></button>
 <button class="snb" onclick="goTab('all',this)"><span class="snb-icon">&#128203;</span><span class="snb-label">Projetos</span><span class="snb-badge" id="n-all" hidden>0</span></button>
 <button class="snb" onclick="goTab('cons',this)"><span class="snb-icon">&#128100;</span><span class="snb-label">Consultores</span></button>
 <button class="snb" onclick="goTab('vend',this)"><span class="snb-icon">&#129309;</span><span class="snb-label">Vendedores</span></button>
@@ -3245,6 +3289,7 @@ body.theme-dark *{
 <div class="page tower-page" id="page-tower"><div id="tower-content"></div></div>
 <div class="page" id="page-acom"><div id="acom-content"></div></div>
 <div class="page" id="page-cmax"><div id="cmax-content"></div></div>
+<div class="page" id="page-fech"><div id="fech-content"></div></div>
 <div class="page" id="page-admin"><div id="admin-content"></div></div>
 <div class="page" id="page-all">
   <div class="kpis" id="kpis-all"></div>
@@ -4039,6 +4084,9 @@ function goTab(id, btn) {
     }, 220);
   }
   if (id === 'cmax') carregarDiariasCmax(false);
+  if (id === 'fech') {
+    fechamentoLoad(false);
+  }
 }
 function setPeriod(p, btn) {
   activePeriod = p;
@@ -5028,6 +5076,241 @@ function initAcomp() {
     '</div>';
 }
 
+var FECHAMENTO_MARCOS = [];
+var FECHAMENTO_META = {};
+var FECHAMENTO_LOADED = false;
+var FECHAMENTO_LOADING = false;
+var FECHAMENTO_FILTER = { month:'', consultor:'todos', projetoBusca:'', situacao:'todos' };
+function fechamentoRestoreCache() {
+  try {
+    var cached = JSON.parse(localStorage.getItem('gestcsi_fechamento_cache') || 'null');
+    if (!cached || !Array.isArray(cached.marcos)) return;
+    FECHAMENTO_MARCOS = fechamentoNormalizeRows(cached.marcos);
+    FECHAMENTO_META = cached.meta || {};
+    FECHAMENTO_LOADED = true;
+  } catch (error) {}
+}
+function fechamentoSaveCache() {
+  try {
+    localStorage.setItem('gestcsi_fechamento_cache', JSON.stringify({
+      marcos: FECHAMENTO_MARCOS,
+      meta: FECHAMENTO_META,
+      saved_at: new Date().toISOString()
+    }));
+  } catch (error) {}
+}
+fechamentoRestoreCache();
+function fechamentoCurrentMonth() {
+  var d = new Date();
+  return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0');
+}
+function fechamentoMoney(value) {
+  return Number(value || 0).toLocaleString('pt-BR', {style:'currency', currency:'BRL'});
+}
+function fechamentoMonthKey(value, fallbackDate) {
+  var text = String(value || '').trim();
+  var match = text.match(/^(\d{4})-(\d{2})/);
+  if (match) return match[1]+'-'+match[2];
+  var date = new Date(fallbackDate || value);
+  if (!isNaN(date.getTime())) return date.getFullYear()+'-'+String(date.getMonth()+1).padStart(2,'0');
+  return '';
+}
+function fechamentoConsultantName(value) {
+  var names = String(value || '').split(/\s*,\s*/).filter(function(name) {
+    return name && !/administrativo|administrador|multsoft|suporte/i.test(name);
+  });
+  return names[0] || String(value || '').split(/\s*,\s*/)[0] || 'Sem consultor';
+}
+function fechamentoNormalizeRows(rows) {
+  return (rows || []).map(function(item) {
+    item.mes_fechamento = fechamentoMonthKey(item.mes_fechamento, item.closed_at);
+    item.mes_validacao = fechamentoMonthKey(item.mes_validacao, item.validation_at);
+    item.consultor = fechamentoConsultantName(item.consultor || item.responsaveis);
+    return item;
+  });
+}
+function fechamentoLoad(force) {
+  if (!authTokenParam()) return Promise.resolve(null);
+  if (FECHAMENTO_LOADING || (FECHAMENTO_LOADED && !force)) {
+    initFechamento();
+    return Promise.resolve(null);
+  }
+  FECHAMENTO_LOADING = true;
+  initFechamento();
+  return chamarAppsScriptJsonp('getClickUpMilestoneClosing', {
+    auth_token: authTokenParam()
+  }, 30000).then(function(resp) {
+    if (!resp || resp.ok === false || !Array.isArray(resp.marcos)) {
+      throw new Error('Fechamento ainda não está disponível no Apps Script publicado.');
+    }
+    FECHAMENTO_MARCOS = fechamentoNormalizeRows(resp.marcos);
+    FECHAMENTO_META = resp;
+    FECHAMENTO_LOADED = true;
+    FECHAMENTO_LOADING = false;
+    delete FECHAMENTO_META.error;
+    fechamentoSaveCache();
+    if (!FECHAMENTO_FILTER.month) FECHAMENTO_FILTER.month = fechamentoCurrentMonth();
+    initFechamento();
+    return resp;
+  }).catch(function(error) {
+    FECHAMENTO_LOADING = false;
+    FECHAMENTO_META.error = FECHAMENTO_LOADED
+      ? 'Não foi possível atualizar agora. Mantendo a última leitura válida.'
+      : 'Não foi possível carregar o fechamento agora. Tente recarregar em alguns instantes.';
+    initFechamento();
+    return null;
+  });
+}
+function fechamentoSetFilter(key, value) {
+  var next = String(value || '');
+  if ((key === 'month' || key === 'consultor') && FECHAMENTO_FILTER[key] === next) next = 'todos';
+  FECHAMENTO_FILTER[key] = next;
+  initFechamento();
+  return false;
+}
+function fechamentoSetProjectSearch(value) {
+  FECHAMENTO_FILTER.projetoBusca = String(value || '');
+  initFechamento();
+  setTimeout(function() {
+    var input = document.getElementById('fechamento-client-search');
+    if (input) {
+      input.focus();
+      input.setSelectionRange(input.value.length, input.value.length);
+    }
+  }, 0);
+  return false;
+}
+function fechamentoSearchKey(value) {
+  return String(value || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim();
+}
+function fechamentoFilteredRows() {
+  return (FECHAMENTO_MARCOS || []).filter(function(item) {
+    var month = String(FECHAMENTO_FILTER.month || '');
+    if (month && month !== 'todos' && String(item.mes_fechamento || '') !== month) return false;
+    if (FECHAMENTO_FILTER.consultor !== 'todos' && String(item.consultor || '') !== FECHAMENTO_FILTER.consultor) return false;
+    if (FECHAMENTO_FILTER.projetoBusca && fechamentoSearchKey(item.projeto).indexOf(fechamentoSearchKey(FECHAMENTO_FILTER.projetoBusca)) < 0) return false;
+    if (FECHAMENTO_FILTER.situacao !== 'todos' && String(item.situacao || '') !== FECHAMENTO_FILTER.situacao) return false;
+    return true;
+  });
+}
+function fechamentoStartSync(btn) {
+  if (!AUTH_STATE.user || AUTH_STATE.user.role !== 'admin') {
+    showToast('Somente admin pode iniciar a leitura geral do ClickUp', 'err');
+    return false;
+  }
+  var original = btn && btn.textContent;
+  if (btn) { btn.disabled = true; btn.textContent = 'Atualizando...'; }
+  chamarAppsScriptJsonp('startClickUpMilestoneClosingBackground', {
+    auth_token: authTokenParam()
+  }, 30000).then(function(resp) {
+    if (!resp || resp.ok === false) throw new Error((resp && (resp.error || resp.message)) || 'Não foi possível iniciar');
+    var recent = resp.recent_refresh || {};
+    if (btn) btn.textContent = 'Carregando dados...';
+    return fechamentoLoad(true).then(function() {
+      if (btn) { btn.disabled = false; btn.textContent = original || 'Atualizar ClickUp'; }
+      showToast('Atualizado: '+Number(recent.detected || 0)+' marco(s) encontrado(s) nas alterações recentes', 'ok');
+      return null;
+    });
+  }).catch(function(error) {
+    if (btn) { btn.disabled = false; btn.textContent = original || 'Atualizar ClickUp'; }
+    showToast((error && error.message) || 'Erro ao atualizar fechamento', 'err');
+  });
+  return false;
+}
+function initFechamento() {
+  var box = document.getElementById('fech-content');
+  if (!box) return;
+  if (FECHAMENTO_LOADING && !FECHAMENTO_LOADED) {
+    box.innerHTML = '<div class="empty">Carregando fechamento de marcos...</div>';
+    return;
+  }
+  var months = {};
+  var consultants = {};
+  (FECHAMENTO_MARCOS || []).forEach(function(item) {
+    if (item.mes_fechamento) months[item.mes_fechamento] = true;
+    if (item.consultor) consultants[item.consultor] = true;
+  });
+  if (!FECHAMENTO_FILTER.month) FECHAMENTO_FILTER.month = fechamentoCurrentMonth();
+  var list = fechamentoFilteredRows();
+  list.sort(function(a, b) {
+    var consultantCompare = String(a.consultor || 'Sem consultor').localeCompare(String(b.consultor || 'Sem consultor'));
+    if (consultantCompare) return consultantCompare;
+    return String(b.closed_at || '').localeCompare(String(a.closed_at || ''));
+  });
+  var waiting = list.filter(function(x){ return x.situacao === 'aguardando'; }).length;
+  var approved = list.filter(function(x){ return x.situacao === 'aprovado'; }).length;
+  var rejected = list.filter(function(x){ return x.situacao === 'reprovado'; }).length;
+  var bonus = list.reduce(function(sum, x){ return sum + Number(x.valor_bonus || 0); }, 0);
+  var badge = document.getElementById('n-fech');
+  if (badge) { badge.hidden = waiting === 0; badge.textContent = waiting; }
+  var monthsByYear = {};
+  Object.keys(months).sort().reverse().forEach(function(month) {
+    var year = String(month).slice(0,4);
+    (monthsByYear[year] || (monthsByYear[year] = [])).push(month);
+  });
+  var monthNames = ['JAN','FEV','MAR','ABR','MAI','JUN','JUL','AGO','SET','OUT','NOV','DEZ'];
+  var monthChips = '<div class="closing-year-groups">'+Object.keys(monthsByYear).sort().reverse().map(function(year) {
+      var chips = monthsByYear[year].map(function(month) {
+        var monthIndex = Number(String(month).slice(5,7)) - 1;
+        var label = monthNames[monthIndex] || month;
+        return '<button class="closing-filter-chip '+(month === FECHAMENTO_FILTER.month ? 'on' : '')+'" onclick="return fechamentoSetFilter(\'month\',\''+escapeHtml(month)+'\')">'+escapeHtml(label)+'</button>';
+      }).join('');
+      return '<div class="closing-year-group"><div class="closing-year-label">'+escapeHtml(year)+'</div><div class="closing-filter-chips">'+chips+'</div></div>';
+    }).join('')+'</div>';
+  var consultantChips = Object.keys(consultants).sort().map(function(name) {
+    return '<button class="closing-filter-chip '+(name === FECHAMENTO_FILTER.consultor ? 'on' : '')+'" onclick="return fechamentoSetFilter(\'consultor\',decodeURIComponent(\''+encodeURIComponent(name)+'\'))">'+escapeHtml(name)+'</button>';
+  }).join('');
+  var statusChips = [
+    {key:'todos', label:'Todos os status'},
+    {key:'aguardando', label:'Aguardando validação'},
+    {key:'aprovado', label:'Aprovados'},
+    {key:'reprovado', label:'Reprovados'}
+  ].map(function(status) {
+    return '<button class="closing-filter-chip '+(status.key === FECHAMENTO_FILTER.situacao ? 'on' : '')+'" onclick="return fechamentoSetFilter(\'situacao\',\''+status.key+'\')">'+status.label+'</button>';
+  }).join('');
+  var byConsultant = {};
+  list.forEach(function(item) {
+    var name = String(item.consultor || 'Sem consultor');
+    (byConsultant[name] || (byConsultant[name] = [])).push(item);
+  });
+  var consultantCards = Object.keys(byConsultant).sort().map(function(consultant) {
+    var consultantRows = byConsultant[consultant];
+    var consultantApproved = consultantRows.filter(function(item){ return item.situacao === 'aprovado'; }).length;
+    var consultantRejected = consultantRows.filter(function(item){ return item.situacao === 'reprovado'; }).length;
+    var consultantWaiting = consultantRows.filter(function(item){ return item.situacao === 'aguardando'; }).length;
+    var consultantBonus = consultantRows.reduce(function(sum,item){ return sum + Number(item.valor_bonus || 0); },0);
+    var projectCards = consultantRows.map(function(item) {
+      var status = String(item.situacao || 'outro');
+      var comment = item.justificativa
+        ? escapeHtml(item.justificativa)+(item.justificativa_por ? '<div class="closing-project-meta">por '+escapeHtml(item.justificativa_por)+'</div>' : '')
+        : '<span style="color:var(--muted)">Nenhum comentário textual ou anexo encontrado.</span>';
+      return '<div class="closing-project-card"><div><div class="closing-project-title">'+escapeHtml(item.projeto || 'Projeto não mapeado')+'</div><div class="closing-project-marco">'+escapeHtml(item.marco || '-')+'</div><div class="closing-project-meta">'+escapeHtml(item.fase || '-')+'<br>Closed: '+(item.closed_at ? formatarDataHoraProjeto(item.closed_at) : '-')+(item.validation_at ? ' · Validado: '+formatarDataHoraProjeto(item.validation_at) : '')+'</div></div>'+
+        '<div><span class="closing-status '+escapeHtml(status)+'">'+escapeHtml(item.status_atual || status)+'</span><div class="closing-project-comment" style="margin-top:7px">'+comment+'</div></div>'+
+        '<div><strong>'+fechamentoMoney(item.valor_bonus)+'</strong><div style="margin-top:8px"><a class="project-link-btn" href="'+escapeHtml(item.link || '#')+'" target="_blank" rel="noopener">Abrir marco</a></div></div></div>';
+    }).join('');
+    return '<section class="closing-consultant-card"><div class="closing-consultant-head"><div><div class="closing-consultant-name">'+escapeHtml(consultant)+'</div><div class="closing-project-meta">Marcos que entraram em Closed no período selecionado</div></div><div class="closing-consultant-metrics"><div class="closing-consultant-metric"><strong>'+consultantRows.length+'</strong><span>Marcos</span></div><div class="closing-consultant-metric"><strong>'+consultantWaiting+'</strong><span>Aguardando</span></div><div class="closing-consultant-metric"><strong>'+consultantApproved+' / '+consultantRejected+'</strong><span>Aprov. / Reprov.</span></div><div class="closing-consultant-metric"><strong>'+fechamentoMoney(consultantBonus)+'</strong><span>Bônus</span></div></div></div><div class="closing-project-list">'+projectCards+'</div></section>';
+  }).join('') || '<div class="empty">Nenhum marco encontrado neste recorte. Rode “Atualizar ClickUp” para atualizar a base.</div>';
+  var error = FECHAMENTO_META.error ? '<div class="dashx-focus-note" style="margin-bottom:12px"><strong>'+escapeHtml(FECHAMENTO_META.error)+'</strong></div>' : '';
+  var bg = FECHAMENTO_META.background_sync || {};
+  var syncNote = bg.active
+    ? '<div class="dashx-focus-note" style="margin-bottom:12px"><strong>Leitura ClickUp em andamento:</strong> '+Number(bg.processed || 0)+' de '+Number(bg.total || 0)+' projetos lidos, '+Number(bg.detected || 0)+' marcos detectados até agora.</div>'
+    : (Number(bg.errors || 0) > 0 ? '<div class="dashx-focus-note" style="margin-bottom:12px"><strong>Última leitura:</strong> '+Number(bg.processed || 0)+' projetos lidos, '+Number(bg.detected || 0)+' marcos detectados e '+Number(bg.errors || 0)+' erro(s).</div>' : '');
+  box.innerHTML = '<div class="closing-head"><div><div class="closing-title">Fechamento de marcos</div><div class="closing-sub">Exibe os marcos que entraram em Closed no mês selecionado e acompanha a validação técnica posterior. Somente aprovados entram na bonificação de R$ 30 por marco.</div></div>'+
+    '</div>'+error+syncNote+
+    '<div class="closing-filter-block"><div class="closing-filter-label">Mês em que entrou em Closed <span style="text-transform:none;letter-spacing:0;font-weight:700">(clique novamente no mês selecionado para ver o geral)</span></div>'+monthChips+
+    '<div class="closing-filter-label" style="margin-top:14px">Consultores</div><div class="closing-filter-chips">'+consultantChips+'</div>'+
+    '<div class="closing-filter-label" style="margin-top:14px">Validação técnica</div><div class="closing-filter-chips">'+statusChips+'</div>'+
+    '<div class="closing-filter-label" style="margin-top:14px">Filtrar cliente</div><input id="fechamento-client-search" class="closing-client-search" type="search" value="'+escapeHtml(FECHAMENTO_FILTER.projetoBusca || '')+'" placeholder="Digite o nome do cliente..." oninput="fechamentoSetProjectSearch(this.value)">'+
+    (AUTH_STATE.user && AUTH_STATE.user.role === 'admin' ? '<div class="closing-filter-footer"><button class="btn-syncall" onclick="return fechamentoStartSync(this)">Atualizar ClickUp</button></div>' : '')+
+    '</div>'+
+    '<div class="closing-kpis"><div class="closing-kpi"><span>Marcos no recorte</span><strong>'+list.length+'</strong></div><div class="closing-kpi"><span>Aguardando validação</span><strong>'+waiting+'</strong></div><div class="closing-kpi"><span>Aprovados / Reprovados</span><strong>'+approved+' / '+rejected+'</strong></div><div class="closing-kpi"><span>Bonificação aprovada</span><strong>'+fechamentoMoney(bonus)+'</strong></div></div>'+
+    consultantCards;
+}
+window.fechamentoLoad = fechamentoLoad;
+window.fechamentoSetFilter = fechamentoSetFilter;
+window.fechamentoSetProjectSearch = fechamentoSetProjectSearch;
+window.fechamentoStartSync = fechamentoStartSync;
+
 function initAdmin() {
   var el = document.getElementById('admin-content');
   if (!el) return;
@@ -5102,7 +5385,8 @@ window.criarUsuarioPainel = criarUsuarioPainel;
 window.alternarUsuarioPainel = alternarUsuarioPainel;
 
 function renderAll() {
-  buildPeriodBar(); initDash(); initControlTower(); initAcomp(); initAdmin(); initAll(); initCons(); initVend(); initAvul(); initLog(); initPraz(); initAlert(); initExec();
+  buildPeriodBar(); initDash(); initControlTower(); initAcomp(); initFechamento(); initAdmin(); initAll(); initCons(); initVend(); initAvul(); initLog(); initPraz(); initAlert(); initExec();
+  if (!FECHAMENTO_LOADED && !FECHAMENTO_LOADING) fechamentoLoad(false);
 }
 function abrirProjetosComFiltro(status, clienteBusca) {
   fS = status || 'all';
@@ -11061,6 +11345,13 @@ function carregarDiariasCmax(force) {
   CMAX_DAILY_STATE.loading=true;CMAX_DAILY_STATE.error='';renderDiariasCmax();
   chamarAppsScriptJsonp('getCmaxDailyEvents',{month:CMAX_DAILY_STATE.month},90000).then(function(resp){
     if(!resp||resp.ok===false)throw new Error((resp&&(resp.error||resp.raw_error))||'Falha ao carregar diárias CMAX');
+    if(resp.building_view){
+      CMAX_DAILY_STATE.loading=false;
+      CMAX_DAILY_STATE.error='Preparando a visão rápida CMAX. Os dados salvos permanecem visíveis.';
+      renderDiariasCmax();
+      setTimeout(function(){CMAX_DAILY_STATE.loaded=false;carregarDiariasCmax(true);},20000);
+      return;
+    }
     cmaxApplyResponse(resp);
     cmaxWriteBrowserCache(CMAX_DAILY_STATE.month,resp);
     CMAX_DAILY_STATE.loaded=true;CMAX_DAILY_STATE.loading=false;renderDiariasCmax();
