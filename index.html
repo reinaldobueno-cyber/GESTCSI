@@ -5134,7 +5134,29 @@ function fechamentoNormalizeRows(rows) {
 }
 function fechamentoLoad(force) {
   if (!authTokenParam()) return Promise.resolve(null);
-  if (FECHAMENTO_LOADING || (FECHAMENTO_LOADED && !force)) {
+  if (FECHAMENTO_LOADING) {
+    initFechamento();
+    if (force) {
+      return new Promise(function(resolve) {
+        var attempts = 0;
+        function waitForCurrentLoad() {
+          attempts += 1;
+          if (!FECHAMENTO_LOADING) {
+            resolve(fechamentoLoad(true));
+            return;
+          }
+          if (attempts >= 100) {
+            resolve(null);
+            return;
+          }
+          setTimeout(waitForCurrentLoad, 100);
+        }
+        waitForCurrentLoad();
+      });
+    }
+    return Promise.resolve(null);
+  }
+  if (FECHAMENTO_LOADED && !force) {
     initFechamento();
     return Promise.resolve(null);
   }
@@ -5203,13 +5225,21 @@ function fechamentoStartSync(btn) {
   }
   var original = btn && btn.textContent;
   if (btn) { btn.disabled = true; btn.textContent = 'Atualizando...'; }
-  chamarAppsScriptJsonp('startClickUpMilestoneClosingBackground', {
+  chamarAppsScriptJsonp('syncClickUpMilestoneRecent', {
     auth_token: authTokenParam()
-  }, 15000).then(function(resp) {
+  }, 30000).then(function(recent) {
+    if (!recent || recent.ok === false) throw new Error((recent && (recent.error || recent.message)) || 'Não foi possível atualizar as alterações recentes');
+    if (btn) btn.textContent = 'Carregando resultado...';
+    return fechamentoLoad(true);
+  }).then(function() {
+    return chamarAppsScriptJsonp('startClickUpMilestoneClosingBackground', {
+      auth_token: authTokenParam()
+    }, 15000);
+  }).then(function(resp) {
     if (!resp || resp.ok === false) throw new Error((resp && (resp.error || resp.message)) || 'Não foi possível iniciar');
     FECHAMENTO_META.background_sync = resp.background_sync || {active:true};
     if (btn) { btn.disabled = false; btn.textContent = original || 'Atualizar ClickUp'; }
-    showToast('Atualização ClickUp agendada. O painel será recarregado automaticamente.', 'ok');
+    showToast('Alterações recentes atualizadas. A auditoria completa continuará em segundo plano.', 'ok');
     initFechamento();
     fechamentoSchedulePoll(3000);
   }).catch(function(error) {
