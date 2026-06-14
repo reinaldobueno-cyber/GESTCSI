@@ -939,6 +939,42 @@ function fetchClickUpRecentMilestoneCoverageTasks_(sinceMillis, options) {
   return dedupeTasks_(all);
 }
 
+function fetchClickUpTasksByIds_(taskIds) {
+  var token = getScriptProperty_('CLICKUP_TOKEN');
+  if (!token) throw new Error('Missing CLICKUP_TOKEN script property');
+  var seen = {};
+  var ids = (taskIds || []).map(normalizeClickUpId_).filter(function(id) {
+    if (!id || seen[id]) return false;
+    seen[id] = true;
+    return true;
+  }).slice(0, 150);
+  var tasks = [];
+  for (var offset = 0; offset < ids.length; offset += 50) {
+    var batch = ids.slice(offset, offset + 50);
+    var responses = UrlFetchApp.fetchAll(batch.map(function(id) {
+      return {
+        url: CLICKUP_API_BASE + '/task/' + id,
+        method: 'get',
+        muteHttpExceptions: true,
+        headers: {
+          Authorization: token,
+          Accept: 'application/json',
+          'Content-Type': 'application/json'
+        }
+      };
+    }));
+    responses.forEach(function(response) {
+      if (response.getResponseCode() < 200 || response.getResponseCode() >= 300) return;
+      try {
+        var task = JSON.parse(response.getContentText() || '{}');
+        task._confirmed_milestone = true;
+        tasks.push(task);
+      } catch (error) {}
+    });
+  }
+  return tasks;
+}
+
 function fetchAllFolderTasks_(folderId, options) {
   folderId = normalizeClickUpId_(folderId);
   if (!folderId) throw new Error('CLICKUP_CONFIG com folder_id invalido ou vazio.');
@@ -1717,6 +1753,14 @@ function syncClickUpRecentMilestoneCoverage_(options) {
     errors += 1;
     lastError = 'Atualizacao recente: ' + simplifyErrorMessage_(error);
   }
+  if (options.confirm_task_ids && options.confirm_task_ids.length) {
+    try {
+      tasks = tasks.concat(fetchClickUpTasksByIds_(options.confirm_task_ids));
+    } catch (error) {
+      errors += 1;
+      lastError = 'Confirmacao direta dos marcos: ' + simplifyErrorMessage_(error);
+    }
+  }
   getClickUpMilestoneAuditTaskIds_().forEach(function(taskId) {
     try {
       tasks.push(clickupRequest_('get', '/task/' + normalizeClickUpId_(taskId)));
@@ -1753,10 +1797,14 @@ function syncClickUpRecentMilestoneCoverage_(options) {
 }
 
 function syncClickUpRecentMilestoneAndGetClosing_(params) {
+  var confirmTaskIds = sanitizeText_((params || {}).task_ids).split(/[\s,;]+/).filter(function(id) {
+    return !!normalizeClickUpId_(id);
+  });
   var recent = syncClickUpRecentMilestoneCoverage_({
     authoritative: true,
     interactive: true,
-    validation_comments_only: true
+    validation_comments_only: true,
+    confirm_task_ids: confirmTaskIds
   });
   if (recent.already_running) {
     throw new Error('Outra atualização recente ainda está finalizando. Tente novamente em alguns segundos.');
