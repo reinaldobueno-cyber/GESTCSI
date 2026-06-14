@@ -5406,7 +5406,7 @@ function carregarUsuariosPainel() {
     if (note) note.textContent = users.length + ' usuário(s)';
     if (box) box.innerHTML = users.map(function(u){
       return '<div class="admin-user-row"><div><div class="admin-user-name">'+escapeHtml(u.name || u.username)+'</div><div class="admin-user-meta">'+escapeHtml(u.username)+' &bull; '+escapeHtml(u.role || 'user')+' &bull; '+(u.enabled ? 'ativo' : 'desativado')+'</div></div>'+
-        adminUserSeniorityControl(u.name || u.username)+
+        adminUserSeniorityControl(u)+
         '<button class="admin-toggle" onclick="return alternarUsuarioPainel(\''+jsQuote(u.username)+'\', '+(u.enabled ? 'false' : 'true')+')">'+(u.enabled ? 'Desativar' : 'Ativar')+'</button></div>';
     }).join('') || '<div class="empty">Nenhum usu&aacute;rio cadastrado.</div>';
   }).catch(function(err){
@@ -11180,14 +11180,15 @@ function consultantCompensation(name) {
   var key=consultantCompKey(name);
   if(CONSULTANT_COMP_STATE.items[key])return CONSULTANT_COMP_STATE.items[key];
   var tokens=consultantCompTokens(name);
-  var best=null,bestScore=0;
+  var best=null,bestScore=0,firstTokenMatches=[];
   Object.keys(CONSULTANT_COMP_STATE.items).forEach(function(itemKey){
     var itemTokens=consultantCompTokens(itemKey);
     if(!tokens.length||!itemTokens.length||tokens[0]!==itemTokens[0])return;
+    firstTokenMatches.push(CONSULTANT_COMP_STATE.items[itemKey]);
     var score=tokens.filter(function(token){return itemTokens.indexOf(token)>=0;}).length;
     if(score>=2&&score>bestScore){best=CONSULTANT_COMP_STATE.items[itemKey];bestScore=score;}
   });
-  return best||{seniority:'',daily_value:0};
+  return best||(firstTokenMatches.length===1?firstTokenMatches[0]:null)||{seniority:'',daily_value:0};
 }
 function consultantSeniorityLabel(value) {
   return value==='junior'?'Junior':value==='pleno'?'Pleno':value==='senior'?'Senior':'Definir senioridade';
@@ -11224,9 +11225,36 @@ function consultantSeniorityControl(name) {
   }
   return '<span class="cmax-count-pill">Sem senioridade</span>';
 }
-function adminUserSeniorityControl(name) {
+function adminUserSeniorityControl(user) {
+  var name=user.name||user.username;
   var comp=consultantCompensation(name);
-  return '<select class="admin-seniority" title="Senioridade para cálculo de diária" onchange="return consultantSetSeniority(decodeURIComponent(\''+encodeURIComponent(name)+'\'),this.value,this)"><option value="">Sem senioridade</option><option value="junior" '+(comp.seniority==='junior'?'selected':'')+'>Junior - R$ 60</option><option value="pleno" '+(comp.seniority==='pleno'?'selected':'')+'>Pleno - R$ 85</option><option value="senior" '+(comp.seniority==='senior'?'selected':'')+'>Senior - R$ 110</option></select>';
+  var seniority=user.seniority||comp.seniority||'';
+  return '<select class="admin-seniority" title="Senioridade para cálculo de diária" onchange="return userSetSeniority(decodeURIComponent(\''+encodeURIComponent(user.username)+'\'),decodeURIComponent(\''+encodeURIComponent(name)+'\'),this.value,this)"><option value="">Sem senioridade</option><option value="junior" '+(seniority==='junior'?'selected':'')+'>Junior - R$ 60</option><option value="pleno" '+(seniority==='pleno'?'selected':'')+'>Pleno - R$ 85</option><option value="senior" '+(seniority==='senior'?'selected':'')+'>Senior - R$ 110</option></select>';
+}
+function userSetSeniority(username,name,seniority,select) {
+  if(!seniority)return false;
+  if(select)select.disabled=true;
+  return chamarAppsScriptJsonp('setUserSeniority',{auth_token:authTokenParam(),username:username,seniority:seniority},15000).then(function(resp){
+    if(!resp||resp.ok===false||!resp.user)throw new Error((resp&&resp.error)||'Falha ao salvar senioridade no usuário.');
+    return resp;
+  }).catch(function(){
+    return chamarAppsScriptJsonp('setConsultantSeniority',{auth_token:authTokenParam(),consultant_name:name,seniority:seniority},15000).then(function(resp){
+      if(!resp||resp.ok===false||!resp.consultant)throw new Error((resp&&resp.error)||'Falha ao salvar senioridade.');
+      return resp;
+    });
+  }).then(function(){
+    CONSULTANT_COMP_STATE.loaded=false;
+    return consultantCompensationLoad(true);
+  }).then(function(){
+    carregarUsuariosPainel();
+    carregarDiariasCmax(true);
+    showToast('Senioridade salva no cadastro do usuário e aplicada ao CMAX.','ok');
+    return false;
+  }).catch(function(error){
+    if(select)select.disabled=false;
+    showToast((error&&error.message)||'Falha ao salvar senioridade','err');
+    return false;
+  });
 }
 function consultantSetSeniority(name,seniority,select) {
   if(!seniority)return false;
