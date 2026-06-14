@@ -3887,6 +3887,7 @@ function sincronizarHistoricoDiariasCmax() {
 
 var CMAX_DAILY_SHEET = 'CMAX_DIARIAS';
 var CMAX_AGENDA_URL = 'https://www.multbovinos.com/servicos/eventoscontato/obtenha-agenda/?format=json';
+var CMAX_TOKEN_AUTH_URL = 'https://www.multbovinos.com/servicos/login/';
 var CMAX_HISTORY_DEFAULT_START_MONTH = '2023-01';
 
 function getCmaxDailyHeaders_() {
@@ -4228,30 +4229,10 @@ function syncCmaxDailyEvents_(params) {
 
 function fetchCmaxDailyEventsForMonth_(month) {
   var range = cmaxMonthRange_(month);
-  var token = String(PropertiesService.getScriptProperties().getProperty('CMAX_JWT_TOKEN') || '').trim();
-  if (!token) {
-    throw new Error('CMAX_JWT_TOKEN não configurado nas propriedades do Apps Script.');
-  }
-
-  var response = UrlFetchApp.fetch(CMAX_AGENDA_URL, {
-    method: 'post',
-    contentType: 'application/json',
-    headers: {
-      Authorization: 'JWT ' + token,
-      Accept: 'application/json, text/plain, */*',
-      'Django-Timezone': 'America/Sao_Paulo',
-      Referer: 'https://www.multbovinos.com/'
-    },
-    payload: JSON.stringify({
-      origem: 'tela',
-      data_de: range.start,
-      data_ate: range.end
-    }),
-    muteHttpExceptions: true
-  });
+  var response = fetchCmaxAgendaWithAutomaticToken_(range);
   var code = response.getResponseCode();
   var text = response.getContentText();
-  if (code === 401 || code === 403) throw new Error('Token CMAX expirado ou sem permissão. Atualize CMAX_JWT_TOKEN.');
+  if (code === 401 || code === 403) throw new Error('Autenticação CMAX recusada mesmo após renovação automática.');
   if (code < 200 || code >= 300) throw new Error('CMAX respondeu HTTP ' + code + ': ' + text.slice(0, 240));
 
   var payload;
@@ -4279,6 +4260,76 @@ function fetchCmaxDailyEventsForMonth_(month) {
       synced_at: syncedAt
     }
   };
+}
+
+function fetchCmaxAgendaWithAutomaticToken_(range) {
+  var props = PropertiesService.getScriptProperties();
+  var token = String(props.getProperty('CMAX_JWT_TOKEN') || '').trim();
+  if (!token) token = renewCmaxJwtToken_('');
+  var response = fetchCmaxAgendaWithToken_(range, token);
+  if (response.getResponseCode() !== 401 && response.getResponseCode() !== 403) return response;
+  token = renewCmaxJwtToken_(token);
+  return fetchCmaxAgendaWithToken_(range, token);
+}
+
+function fetchCmaxAgendaWithToken_(range, token) {
+  return UrlFetchApp.fetch(CMAX_AGENDA_URL, {
+    method: 'post',
+    contentType: 'application/json',
+    headers: {
+      Authorization: 'JWT ' + token,
+      Accept: 'application/json, text/plain, */*',
+      'Django-Timezone': 'America/Sao_Paulo',
+      Referer: 'https://www.multbovinos.com/'
+    },
+    payload: JSON.stringify({
+      origem: 'tela',
+      data_de: range.start,
+      data_ate: range.end
+    }),
+    muteHttpExceptions: true
+  });
+}
+
+function renewCmaxJwtToken_(currentToken) {
+  var props = PropertiesService.getScriptProperties();
+  var refreshUrl = String(props.getProperty('CMAX_TOKEN_REFRESH_URL') || '').trim();
+  if (currentToken && refreshUrl) {
+    var refreshed = requestCmaxToken_(refreshUrl, { token: currentToken });
+    if (refreshed) {
+      props.setProperty('CMAX_JWT_TOKEN', refreshed);
+      return refreshed;
+    }
+  }
+  var username = String(props.getProperty('CMAX_EMAIL') || props.getProperty('CMAX_USERNAME') || '').trim();
+  var password = String(props.getProperty('CMAX_PASSWORD') || '');
+  if (username && password) {
+    var authUrl = String(props.getProperty('CMAX_TOKEN_AUTH_URL') || CMAX_TOKEN_AUTH_URL).trim();
+    var authenticated = requestCmaxToken_(authUrl, { email: username, password: password });
+    if (authenticated) {
+      props.setProperty('CMAX_JWT_TOKEN', authenticated);
+      return authenticated;
+    }
+  }
+  throw new Error('Não foi possível renovar a autenticação CMAX automaticamente. Configure CMAX_EMAIL e CMAX_PASSWORD nas propriedades do Apps Script.');
+}
+
+function requestCmaxToken_(url, payload) {
+  if (!url) return '';
+  var response = UrlFetchApp.fetch(url, {
+    method: 'post',
+    contentType: 'application/json',
+    headers: { Accept: 'application/json, text/plain, */*' },
+    payload: JSON.stringify(payload || {}),
+    muteHttpExceptions: true
+  });
+  if (response.getResponseCode() < 200 || response.getResponseCode() >= 300) return '';
+  try {
+    var parsed = JSON.parse(response.getContentText());
+    return String(parsed.token || parsed.access || parsed.jwt || (parsed.dados_acesso || {}).token || '').trim();
+  } catch (ignored) {
+    return '';
+  }
 }
 
 function collectCmaxAgendaCandidates_(value, depth, output, seen, inheritedDate) {

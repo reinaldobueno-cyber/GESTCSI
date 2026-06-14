@@ -7,12 +7,14 @@ O painel consulta a agenda CMAX e armazena somente eventos com resultado
 
 1. No Apps Script, abra **Configuracoes do projeto**.
 2. Em **Propriedades do script**, crie:
-   - `CMAX_JWT_TOKEN`: token JWT atual do CMAX, sem escrever `JWT` no inicio.
+   - `CMAX_EMAIL`: email usado para entrar no CMAX.
+   - `CMAX_PASSWORD`: senha usada para entrar no CMAX.
+   - `CMAX_JWT_TOKEN`: opcional; o painel cria e renova automaticamente.
 3. Substitua o conteudo publicado de `ClickUpSync.gs` pela versao deste repositorio.
 4. Crie uma nova implantacao do Web App.
 
-O token CMAX expira. Quando isso ocorrer, o botao **Atualizar CMAX** mostrara
-uma mensagem clara pedindo a atualizacao de `CMAX_JWT_TOKEN`.
+Quando o token CMAX expira, o Apps Script autentica novamente em
+`/servicos/login/`, salva o novo JWT e continua a atualizacao sem intervencao.
 
 ## Uso
 
