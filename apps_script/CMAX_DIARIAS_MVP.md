@@ -59,6 +59,10 @@ Quando o token CMAX expira, o Apps Script autentica novamente em
 - A consulta da tela ignora a coluna pesada `raw_json`, reduzindo o tempo de
   carregamento sem perder os dados de auditoria armazenados.
 - Respostas mensais da tela ficam em cache comprimido por ate 6 horas.
+- A aba `CMAX_DIARIAS_VIEW` materializa somente os dados prontos para exibicao,
+  ordenados e indexados por mes. A navegacao nao varre mais a base bruta.
+- Apos instalar esta versao sobre uma base existente, execute uma vez o menu
+  **Reconstruir visao rapida de diarias CMAX**.
 - O navegador preserva a ultima leitura valida por mes; falhas temporarias nunca
   substituem dados existentes por indicadores zerados.
 - A tela consulta somente um status leve durante a carga historica. Os lotes
