@@ -5233,10 +5233,10 @@ function fechamentoStartSync(btn) {
     return !!id && ids.indexOf(id) === index;
   }).slice(0, 150);
   if (btn) { btn.disabled = true; btn.textContent = 'Atualizando...'; }
-  chamarAppsScriptJsonp('syncClickUpMilestoneRecent', {
+  chamarAppsScriptJsonp('confirmClickUpMilestoneStatuses', {
     auth_token: authTokenParam(),
     task_ids: confirmationIds.join(',')
-  }, 30000).then(function(recent) {
+  }, 45000).then(function(recent) {
     if (!recent || recent.ok === false || !Array.isArray(recent.marcos)) {
       throw new Error((recent && (recent.error || recent.message)) || 'Não foi possível atualizar as alterações recentes');
     }
@@ -5247,8 +5247,10 @@ function fechamentoStartSync(btn) {
     fechamentoSaveCache();
     initFechamento();
     if (btn) { btn.disabled = false; btn.textContent = original || 'Atualizar ClickUp'; }
-    var changed = recent.recent_sync && Number(recent.recent_sync.detected || 0);
-    showToast('Atualizado agora: '+changed+' marco(s) confirmado(s) diretamente no ClickUp.', 'ok');
+    var changed = Number(recent.changed || 0);
+    var confirmed = Number(recent.confirmed || confirmationIds.length || 0);
+    var seconds = Math.max(0, Number(recent.elapsed_ms || 0) / 1000).toFixed(1);
+    showToast('Atualizado em '+seconds+'s: '+confirmed+' marco(s) conferidos; '+changed+' mudança(s) encontrada(s).', 'ok');
   }).catch(function(error) {
     if (btn) { btn.disabled = false; btn.textContent = original || 'Atualizar ClickUp'; }
     showToast((error && error.message) || 'Erro ao atualizar fechamento', 'err');
