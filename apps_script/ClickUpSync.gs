@@ -198,6 +198,9 @@ function doGet(e) {
     if (action === 'setUserEnabled') {
       return jsonOutput_(setUserEnabled_(params), params.callback);
     }
+    if (action === 'setUserSeniority') {
+      return jsonOutput_(setUserSeniority_(params), params.callback);
+    }
     if (action === 'logProjectFollowup') {
       var followupResult = logProjectFollowup_(params);
       return jsonOutput_(followupResult, params.callback);
@@ -4185,7 +4188,9 @@ function getUsersSheet_() {
     'enabled',
     'password_salt',
     'password_hash',
-    'last_login'
+    'last_login',
+    'seniority',
+    'daily_value'
   ]);
   ensureBootstrapAdmin_(sheet);
   return sheet;
@@ -4258,7 +4263,9 @@ function publicUser_(user) {
     name: String(user.name || ''),
     role: normalizePanelRole_(user.role),
     enabled: String(user.enabled || '').toUpperCase() !== 'FALSE',
-    last_login: user.last_login instanceof Date ? user.last_login.toISOString() : String(user.last_login || '')
+    last_login: user.last_login instanceof Date ? user.last_login.toISOString() : String(user.last_login || ''),
+    seniority: normalizeConsultantSeniority_(user.seniority),
+    daily_value: CONSULTANT_SENIORITY_RATES[normalizeConsultantSeniority_(user.seniority)] || 0
   };
 }
 
@@ -4416,6 +4423,30 @@ function setUserEnabled_(params) {
   return { ok: true, username: username, enabled: enabled };
 }
 
+function setUserSeniority_(params) {
+  var admin = requireAdmin_(params || {});
+  var username = sanitizeText_(params.username).toLowerCase();
+  var seniority = normalizeConsultantSeniority_(params.seniority);
+  if (!seniority) throw new Error('Selecione Junior, Pleno ou Senior.');
+  var found = findUserRow_(username);
+  if (!found) throw new Error('Usuario nao encontrado.');
+  var seniorityCol = found.header.indexOf('seniority') + 1;
+  var dailyValueCol = found.header.indexOf('daily_value') + 1;
+  if (!seniorityCol || !dailyValueCol) throw new Error('Atualize as colunas do cadastro de usuarios.');
+  found.sheet.getRange(found.row, seniorityCol).setValue(seniority);
+  found.sheet.getRange(found.row, dailyValueCol).setValue(CONSULTANT_SENIORITY_RATES[seniority]);
+  setConsultantSeniority_({
+    auth_token: params.auth_token,
+    consultant_name: found.user.name || found.user.username,
+    seniority: seniority
+  });
+  return {
+    ok: true,
+    updated_by: admin.name || admin.username,
+    user: publicUser_(Object.assign({}, found.user, { seniority: seniority }))
+  };
+}
+
 var CONSULTANT_COMPENSATION_SHEET = 'CONSULTORES_REMUNERACAO';
 var CONSULTANT_SENIORITY_RATES = {
   junior: 60,
@@ -4451,9 +4482,9 @@ function getConsultantCompensation_(params) {
 function getConsultantCompensationData_() {
   var sheet = getConsultantCompensationSheet_();
   var values = sheet.getDataRange().getValues();
-  if (values.length <= 1) return { ok: true, consultants: [] };
   var header = values[0];
-  var consultants = values.slice(1).map(function(row) {
+  var byKey = {};
+  var consultants = values.length > 1 ? values.slice(1).map(function(row) {
     var item = rowToObject_(header, row);
     var seniority = normalizeConsultantSeniority_(item.seniority);
     return {
@@ -4466,8 +4497,35 @@ function getConsultantCompensationData_() {
     };
   }).filter(function(item) {
     return !!item.consultant_key;
+  }) : [];
+  consultants.forEach(function(item) {
+    byKey[normalizeKey_(item.consultant_key || item.consultant_name)] = item;
   });
-  return { ok: true, consultants: consultants, rates: CONSULTANT_SENIORITY_RATES };
+  var usersSheet = getUsersSheet_();
+  var userValues = usersSheet.getDataRange().getValues();
+  if (userValues.length > 1) {
+    var userHeader = userValues[0];
+    userValues.slice(1).forEach(function(row) {
+      var user = rowToObject_(userHeader, row);
+      var seniority = normalizeConsultantSeniority_(user.seniority);
+      var name = sanitizeText_(user.name || user.username);
+      if (!seniority || !name) return;
+      var key = normalizeKey_(name);
+      byKey[key] = {
+        consultant_key: key,
+        consultant_name: name,
+        username: sanitizeText_(user.username),
+        seniority: seniority,
+        daily_value: CONSULTANT_SENIORITY_RATES[seniority],
+        source: 'user'
+      };
+    });
+  }
+  return {
+    ok: true,
+    consultants: Object.keys(byKey).map(function(key) { return byKey[key]; }),
+    rates: CONSULTANT_SENIORITY_RATES
+  };
 }
 
 function setConsultantSeniority_(params) {
@@ -5373,6 +5431,8 @@ function getCmaxDailyEvents_(params) {
       month: month,
       history_months: cmaxHistoryMonths_(),
       history_loaded_months: [],
+      consultant_compensation: getConsultantCompensationData_().consultants,
+      consultant_daily_rates: CONSULTANT_SENIORITY_RATES,
       history_sync: getCmaxDailyHistoryStatus_().history_sync,
       building_view: true,
       message: 'Preparando visão rápida CMAX em segundo plano.'
