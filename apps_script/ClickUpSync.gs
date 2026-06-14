@@ -4642,7 +4642,7 @@ var CMAX_DAILY_SHEET = 'CMAX_DIARIAS';
 var CMAX_DAILY_VIEW_SHEET = 'CMAX_DIARIAS_VIEW';
 var CMAX_AGENDA_URL = 'https://www.multbovinos.com/servicos/eventoscontato/obtenha-agenda/?format=json';
 var CMAX_TOKEN_AUTH_URL = 'https://www.multbovinos.com/servicos/login/';
-var CMAX_HISTORY_DEFAULT_START_MONTH = '2025-01';
+var CMAX_HISTORY_DEFAULT_START_MONTH = '2024-01';
 var CMAX_VIEW_CACHE_SECONDS = 21600;
 
 function getCmaxDailyHeaders_() {
