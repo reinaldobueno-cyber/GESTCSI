@@ -11102,8 +11102,9 @@ function initAlert(){
   document.getElementById('rows-exc').innerHTML=buildMonthGroupedRows(exc,'exc-');
 }
 
-var CMAX_DAILY_STATE = {events:[], loading:false, loaded:false, error:'', month:cmaxCurrentMonth(), consultant:'', activity:'', search:'', syncedAt:'', months:[], loadedMonths:[], trainingTeam:[], trainingTeamCutoff:'', activities:[], historySync:null, expanded:{}};
+var CMAX_DAILY_STATE = {events:[], loading:false, loaded:false, error:'', month:cmaxCurrentMonth(), consultant:'', activity:'', search:'', syncedAt:'', months:[], loadedMonths:[], trainingTeam:[], trainingTeamCutoff:'', activities:[], historySync:null, expanded:{}, requestSeq:0, monthResponses:{}};
 var CMAX_HISTORY_POLL_TIMER=null;
+var CMAX_PREFETCH_RUNNING=false;
 var CMAX_BROWSER_CACHE_PREFIX='gestcsi_cmax_view_v4_';
 
 function cmaxCurrentMonth() {
@@ -11119,9 +11120,43 @@ function cmaxReadBrowserCache(month) {
 function cmaxWriteBrowserCache(month,resp) {
   try{localStorage.setItem(cmaxBrowserCacheKey(month),JSON.stringify({savedAt:Date.now(),response:resp}));}catch(e){}
 }
+function cmaxCachedResponse(month) {
+  var memory=CMAX_DAILY_STATE.monthResponses[month||'all'];
+  var stored=cmaxReadBrowserCache(month);
+  return memory||(stored&&stored.response)||null;
+}
+function cmaxCombinedCachedResponse() {
+  var months=cmaxNormalizeMonths(CMAX_DAILY_STATE.loadedMonths);
+  var responses=months.map(cmaxCachedResponse).filter(Boolean);
+  if(!responses.length)return null;
+  var base=Object.assign({},responses[0]);
+  base.month='';
+  base.events=[];
+  responses.forEach(function(resp){base.events=base.events.concat(resp.events||[]);});
+  base.total=base.events.length;
+  return base;
+}
+function cmaxPrefetchMonths() {
+  if(CMAX_PREFETCH_RUNNING)return;
+  var pending=cmaxNormalizeMonths(CMAX_DAILY_STATE.loadedMonths).filter(function(month){return !cmaxCachedResponse(month);});
+  if(!pending.length)return;
+  CMAX_PREFETCH_RUNNING=true;
+  function next(){
+    var month=pending.shift();
+    if(!month){CMAX_PREFETCH_RUNNING=false;return;}
+    chamarAppsScriptJsonp('getCmaxDailyEvents',{month:month},30000).then(function(resp){
+      if(resp&&resp.ok!==false&&!resp.building_view){
+        CMAX_DAILY_STATE.monthResponses[month]=resp;
+        cmaxWriteBrowserCache(month,resp);
+      }
+      setTimeout(next,100);
+    }).catch(function(){setTimeout(next,1000);});
+  }
+  setTimeout(next,100);
+}
 function cmaxNormalizeMonth(value) {
   var match=String(value||'').match(/^(\d{4})-(0[1-9]|1[0-2])/);
-  return match&&match[1]>='2025' ? match[1]+'-'+match[2] : '';
+  return match&&match[1]>='2024' ? match[1]+'-'+match[2] : '';
 }
 function cmaxNormalizeMonths(values) {
   return Array.from(new Set((values||[]).map(cmaxNormalizeMonth).filter(Boolean))).sort().reverse();
@@ -11198,7 +11233,19 @@ function cmaxFilteredEvents() {
 function cmaxSetFilter(key,value) {
   var current=CMAX_DAILY_STATE[key]||'';
   CMAX_DAILY_STATE[key]=current===value?'':value;
-  if(key==='month'){CMAX_DAILY_STATE.consultant='';CMAX_DAILY_STATE.activity='';carregarDiariasCmax(true);}
+  if(key==='month'){
+    CMAX_DAILY_STATE.consultant='';CMAX_DAILY_STATE.activity='';
+    var month=CMAX_DAILY_STATE.month;
+    var cached=month?cmaxCachedResponse(month):cmaxCombinedCachedResponse();
+    if(cached){
+      cmaxApplyResponse(cached);
+      CMAX_DAILY_STATE.loaded=true;
+      CMAX_DAILY_STATE.loading=false;
+      CMAX_DAILY_STATE.error='';
+    }
+    renderDiariasCmax();
+    carregarDiariasCmax(true);
+  }
   else renderDiariasCmax();
   return false;
 }
@@ -11352,17 +11399,22 @@ function renderDiariasCmax() {
   box.innerHTML='<div class="cmax-shell"><div class="cmax-hero"><div><div class="cmax-title">Di&aacute;rias e atividades realizadas no CMAX</div><div class="cmax-sub">Exibe somente integrantes com treinamento contabiliz&aacute;vel nos &uacute;ltimos 6 meses. Contam como di&aacute;ria os treinamentos <strong>On Line</strong>, <strong>In Loco</strong>, <strong>On Line Avulso</strong> e <strong>In Loco Avulso</strong>. Todas as demais atividades dessas pessoas permanecem audit&aacute;veis.</div></div></div><div class="cmax-status">'+status+'</div><div class="cmax-filter-block"><div class="cmax-filter-label">Ano e m&ecirc;s realizado <span style="text-transform:none;letter-spacing:0">(clique novamente no m&ecirc;s para ver o geral)</span></div>'+monthChips+'<div class="cmax-filter-label" style="margin-top:14px">Consultores do time de treinamento</div><div class="cmax-filter-chips">'+consultantChips+'</div><div class="cmax-filter-label" style="margin-top:14px">Atividades <span style="text-transform:none;letter-spacing:0">(treinamentos destacados contam como di&aacute;ria)</span></div><div class="cmax-filter-chips">'+activityChips+'</div><input class="cmax-filter-search" type="search" placeholder="Filtrar cliente..." value="'+escapeHtml(s.search)+'" oninput="CMAX_DAILY_STATE.search=this.value;renderDiariasCmax()">'+(syncButton?'<div class="cmax-filter-footer">'+syncButton+'</div>':'')+'</div><div class="cmax-summary"><div class="cmax-card"><span>Di&aacute;rias contabiliz&aacute;veis</span><strong>'+dailyList.length+'</strong></div><div class="cmax-card"><span>Registros positivos</span><strong>'+list.length+'</strong></div><div class="cmax-card"><span>Consultores com atividade</span><strong>'+Object.keys(byConsultant).length+'</strong></div><div class="cmax-card"><span>Clientes atendidos</span><strong>'+clients+'</strong></div></div><div><div class="sh"><div class="sh-title">Quantitativo por modalidade</div></div><div class="cmax-modalities">'+modalityCards+'</div></div>'+(groups||'<div class="cmax-empty">Nenhuma atividade positiva encontrada neste recorte.</div>')+'</div>';
 }
 function carregarDiariasCmax(force) {
-  if(CMAX_DAILY_STATE.loading||(!force&&CMAX_DAILY_STATE.loaded)){renderDiariasCmax();return;}
-  var browserCached=cmaxReadBrowserCache(CMAX_DAILY_STATE.month);
-  if(browserCached&&browserCached.response&&!(CMAX_DAILY_STATE.events||[]).length){
-    cmaxApplyResponse(browserCached.response);
+  if(!force&&CMAX_DAILY_STATE.loaded){renderDiariasCmax();return;}
+  var requestedMonth=CMAX_DAILY_STATE.month;
+  var requestSeq=++CMAX_DAILY_STATE.requestSeq;
+  var cachedResponse=requestedMonth?cmaxCachedResponse(requestedMonth):cmaxCombinedCachedResponse();
+  if(cachedResponse){
+    cmaxApplyResponse(cachedResponse);
     CMAX_DAILY_STATE.loaded=true;
     CMAX_DAILY_STATE.error='';
     renderDiariasCmax();
   }
-  CMAX_DAILY_STATE.loading=true;CMAX_DAILY_STATE.error='';renderDiariasCmax();
-  chamarAppsScriptJsonp('getCmaxDailyEvents',{month:CMAX_DAILY_STATE.month},90000).then(function(resp){
+  CMAX_DAILY_STATE.loading=!cachedResponse;CMAX_DAILY_STATE.error='';renderDiariasCmax();
+  chamarAppsScriptJsonp('getCmaxDailyEvents',{month:requestedMonth},30000).then(function(resp){
     if(!resp||resp.ok===false)throw new Error((resp&&(resp.error||resp.raw_error))||'Falha ao carregar diárias CMAX');
+    CMAX_DAILY_STATE.monthResponses[requestedMonth||'all']=resp;
+    cmaxWriteBrowserCache(requestedMonth,resp);
+    if(requestSeq!==CMAX_DAILY_STATE.requestSeq||requestedMonth!==CMAX_DAILY_STATE.month)return;
     if(resp.building_view){
       CMAX_DAILY_STATE.loading=false;
       CMAX_DAILY_STATE.error='Preparando a visão rápida CMAX. Os dados salvos permanecem visíveis.';
@@ -11371,10 +11423,11 @@ function carregarDiariasCmax(force) {
       return;
     }
     cmaxApplyResponse(resp);
-    cmaxWriteBrowserCache(CMAX_DAILY_STATE.month,resp);
     CMAX_DAILY_STATE.loaded=true;CMAX_DAILY_STATE.loading=false;renderDiariasCmax();
     cmaxScheduleHistoryPoll();
+    cmaxPrefetchMonths();
   }).catch(function(error){
+    if(requestSeq!==CMAX_DAILY_STATE.requestSeq||requestedMonth!==CMAX_DAILY_STATE.month)return;
     CMAX_DAILY_STATE.loading=false;
     CMAX_DAILY_STATE.error=(CMAX_DAILY_STATE.events||[]).length?'Exibindo a última leitura salva; atualização em segundo plano indisponível.':(error.message||String(error));
     renderDiariasCmax();
