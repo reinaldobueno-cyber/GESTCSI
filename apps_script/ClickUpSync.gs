@@ -123,6 +123,18 @@ function doGet(e) {
       requireAdmin_(params);
       return jsonOutput_(confirmClickUpMilestoneStatuses_(params), params.callback);
     }
+    if (action === 'syncClickUpClosedMilestones') {
+      requireAdmin_(params);
+      return jsonOutput_(syncClickUpClosedMilestones_(params), params.callback);
+    }
+    if (action === 'syncClickUpApprovedMilestones') {
+      requireAdmin_(params);
+      return jsonOutput_(syncClickUpValidationSituation_(params, 'aprovado'), params.callback);
+    }
+    if (action === 'syncClickUpRejectedMilestones') {
+      requireAdmin_(params);
+      return jsonOutput_(syncClickUpValidationSituation_(params, 'reprovado'), params.callback);
+    }
     if (action === 'syncClickUpUserActivity') {
       requireAdmin_(params);
       return jsonOutput_(syncClickUpUserActivity_(params), params.callback);
@@ -355,6 +367,7 @@ function createTimeDrivenTriggers() {
   ScriptApp.newTrigger('processDirtyQueueTrigger').timeBased().everyMinutes(5).create();
   ScriptApp.newTrigger('syncAllProjectsTrigger').timeBased().everyHours(6).create();
   ScriptApp.newTrigger('syncClickUpMilestoneClosingTrigger').timeBased().everyHours(6).create();
+  installClickUpClosedMilestonesTrigger();
 }
 
 function processDirtyQueueTrigger() {
@@ -363,6 +376,20 @@ function processDirtyQueueTrigger() {
 
 function syncAllProjectsTrigger() {
   syncAllProjects({ force: true });
+}
+
+function syncClickUpClosedMilestonesTrigger() {
+  syncClickUpClosedMilestones_({ skip_result: true });
+}
+
+function installClickUpClosedMilestonesTrigger() {
+  ScriptApp.getProjectTriggers().forEach(function(trigger) {
+    if (trigger.getHandlerFunction() === 'syncClickUpClosedMilestonesTrigger') {
+      ScriptApp.deleteTrigger(trigger);
+    }
+  });
+  ScriptApp.newTrigger('syncClickUpClosedMilestonesTrigger').timeBased().everyHours(12).create();
+  return { ok: true, handler: 'syncClickUpClosedMilestonesTrigger', every_hours: 12 };
 }
 
 function diagnosticarSetup() {
@@ -1067,6 +1094,91 @@ function fetchClickUpValidationAndCurrentTasks_(currentValidationIds) {
         task._confirmed_milestone = true;
         tasks.push(task);
       });
+      if (requests[index].kind === 'status' && found.length === 100) {
+        var page = 1;
+        while (page < 20) {
+          var next = clickupRequestAbsolute_('get', requests[index].url.replace('page=0', 'page=' + page));
+          var nextTasks = next.tasks || [];
+          nextTasks.forEach(function(task) {
+            task._confirmed_milestone = true;
+            tasks.push(task);
+          });
+          if (nextTasks.length < 100) break;
+          page += 1;
+        }
+      }
+    } catch (error) {}
+  });
+  return dedupeTasks_(tasks);
+}
+
+function clickUpMilestoneStatusAliases_(situation) {
+  if (situation === 'aprovado') {
+    return ['Aprovado Gestao', 'Aprovado Gestão', 'aprovado gestão'];
+  }
+  if (situation === 'reprovado') {
+    return ['Reprovado Gestao', 'Reprovado Gestão', 'reprovado gestão'];
+  }
+  return ['Closed', 'closed'];
+}
+
+function fetchClickUpMilestonesBySituation_(situation, currentIds) {
+  var token = getScriptProperty_('CLICKUP_TOKEN');
+  var workspaceId = getClickUpWorkspaceId_();
+  if (!token) throw new Error('Missing CLICKUP_TOKEN script property');
+  if (!workspaceId) throw new Error('CLICKUP_TEAM_ID nao configurado.');
+  var requests = clickUpMilestoneStatusAliases_(situation).map(function(status) {
+    return {
+      url: CLICKUP_API_BASE + '/team/' + workspaceId + '/task?' + [
+        'include_closed=true',
+        'subtasks=true',
+        'custom_items[]=1',
+        'page=0',
+        'statuses[]=' + encodeURIComponent(status)
+      ].join('&'),
+      kind: 'status'
+    };
+  });
+  (currentIds || []).map(normalizeClickUpId_).filter(function(id, index, all) {
+    return !!id && all.indexOf(id) === index;
+  }).forEach(function(id) {
+    requests.push({ url: CLICKUP_API_BASE + '/task/' + id, kind: 'task' });
+  });
+  var responses = UrlFetchApp.fetchAll(requests.map(function(request) {
+    return {
+      url: request.url,
+      method: 'get',
+      muteHttpExceptions: true,
+      headers: {
+        Authorization: token,
+        Accept: 'application/json',
+        'Content-Type': 'application/json'
+      }
+    };
+  }));
+  var tasks = [];
+  responses.forEach(function(response, index) {
+    if (response.getResponseCode() < 200 || response.getResponseCode() >= 300) return;
+    try {
+      var payload = JSON.parse(response.getContentText() || '{}');
+      var found = requests[index].kind === 'status' ? (payload.tasks || []) : [payload];
+      found.forEach(function(task) {
+        task._confirmed_milestone = true;
+        tasks.push(task);
+      });
+      if (requests[index].kind === 'status' && found.length === 100) {
+        var page = 1;
+        while (page < 20) {
+          var next = clickupRequestAbsolute_('get', requests[index].url.replace('page=0', 'page=' + page));
+          var nextTasks = next.tasks || [];
+          nextTasks.forEach(function(task) {
+            task._confirmed_milestone = true;
+            tasks.push(task);
+          });
+          if (nextTasks.length < 100) break;
+          page += 1;
+        }
+      }
     } catch (error) {}
   });
   return dedupeTasks_(tasks);
@@ -2031,6 +2143,120 @@ function confirmClickUpMilestoneStatuses_(params) {
     result.confirmed = tasks.length;
     result.changed = changed;
     result.elapsed_ms = new Date().getTime() - startedAt;
+    return result;
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+function syncClickUpClosedMilestones_(params) {
+  params = params || {};
+  var startedAt = new Date().getTime();
+  var lock = LockService.getScriptLock();
+  if (!lock.tryLock(5000)) throw new Error('Outra atualização está finalizando. Tente novamente em alguns segundos.');
+  try {
+    var sheet = getClickUpMilestoneClosingSheet_();
+    var headers = getClickUpMilestoneClosingHeaders_();
+    var current = loadClickUpMilestoneClosingCurrent_(sheet);
+    var mappings = loadClickUpMilestoneClosingMappings_();
+    var tasks = fetchClickUpMilestonesBySituation_('aguardando', []).filter(function(task) {
+      var status = task && task.status && (task.status.status || task.status.type || task.status.label) || '';
+      return clickUpMilestoneSituation_(status) === 'aguardando';
+    });
+    var changed = 0;
+    tasks.forEach(function(task) {
+      var taskId = String(task && task.id || '');
+      var previous = current[taskId] || {};
+      var beforeStatus = sanitizeText_(previous.status_atual);
+      var mapping = findProjectMappingForTask_(task, mappings) || fallbackProjectMappingForTask_(task);
+      upsertClickUpMilestoneClosing_(mapping, buildNormalizedMilestoneCoverageProject_(mapping, task), {
+        current: current,
+        defer_write: true,
+        fetch_comments: false,
+        authoritative: true,
+        validation_comments_only: true
+      });
+      if (current[taskId]) {
+        current[taskId].justificativa = '';
+        current[taskId].justificativa_por = '';
+      }
+      if (sanitizeText_(current[taskId] && current[taskId].status_atual) !== beforeStatus) changed += 1;
+    });
+    writeClickUpMilestoneClosingCurrent_(sheet, headers, current);
+    var summary = {
+      ok: true,
+      confirmed: tasks.length,
+      changed: changed,
+      elapsed_ms: new Date().getTime() - startedAt,
+      sync_type: 'closed'
+    };
+    if (params.skip_result) return summary;
+    var result = getClickUpMilestoneClosing_(params);
+    Object.keys(summary).forEach(function(key) { result[key] = summary[key]; });
+    return result;
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+function syncClickUpValidationSituation_(params, situation) {
+  params = params || {};
+  var startedAt = new Date().getTime();
+  var month = sanitizeText_(params.month || params.mes).slice(0, 7);
+  var lock = LockService.getScriptLock();
+  if (!lock.tryLock(5000)) throw new Error('Outra atualização está finalizando. Tente novamente em alguns segundos.');
+  try {
+    var sheet = getClickUpMilestoneClosingSheet_();
+    var headers = getClickUpMilestoneClosingHeaders_();
+    var current = loadClickUpMilestoneClosingCurrent_(sheet);
+    var mappings = loadClickUpMilestoneClosingMappings_();
+    var currentIds = Object.keys(current).filter(function(taskId) {
+      var item = current[taskId] || {};
+      return item.situacao === situation &&
+        (!month || sanitizeText_(item.mes_fechamento).slice(0, 7) === month);
+    });
+    var tasks = fetchClickUpMilestonesBySituation_(situation, currentIds).filter(function(task) {
+      var taskId = String(task && task.id || '');
+      var existing = current[taskId] || {};
+      var taskClosedAt = task && task.date_closed ? fromMillisIso_(task.date_closed) : '';
+      var taskMonth = normalizeClickUpMonthReference_(existing.mes_fechamento, taskClosedAt);
+      return !month || taskMonth === month;
+    });
+    var matchingIds = tasks.filter(function(task) {
+      var status = task && task.status && (task.status.status || task.status.type || task.status.label) || '';
+      return clickUpMilestoneSituation_(status) === situation;
+    }).map(function(task) { return String(task.id || ''); });
+    var commentsById = fetchLatestClickUpTaskCommentsByIds_(matchingIds);
+    var changed = 0;
+    tasks.forEach(function(task) {
+      var taskId = String(task && task.id || '');
+      var previous = current[taskId] || {};
+      var beforeStatus = sanitizeText_(previous.status_atual);
+      var mapping = findProjectMappingForTask_(task, mappings) || fallbackProjectMappingForTask_(task);
+      upsertClickUpMilestoneClosing_(mapping, buildNormalizedMilestoneCoverageProject_(mapping, task), {
+        current: current,
+        defer_write: true,
+        fetch_comments: false,
+        authoritative: true,
+        validation_comments_only: true
+      });
+      var after = current[taskId];
+      if (after && after.situacao === situation) {
+        var comment = commentsById[taskId] || { text: '', user: '' };
+        after.justificativa = comment.text || '';
+        after.justificativa_por = comment.user || '';
+      } else if (after) {
+        after.justificativa = '';
+        after.justificativa_por = '';
+      }
+      if (!after || sanitizeText_(after.status_atual) !== beforeStatus) changed += 1;
+    });
+    writeClickUpMilestoneClosingCurrent_(sheet, headers, current);
+    var result = getClickUpMilestoneClosing_(params);
+    result.confirmed = tasks.length;
+    result.changed = changed;
+    result.elapsed_ms = new Date().getTime() - startedAt;
+    result.sync_type = situation;
     return result;
   } finally {
     lock.releaseLock();

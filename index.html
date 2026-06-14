@@ -5218,15 +5218,15 @@ function fechamentoFilteredRows() {
     return true;
   });
 }
-function fechamentoStartSync(btn) {
+function fechamentoRunSync(action, label, btn) {
   if (!AUTH_STATE.user || AUTH_STATE.user.role !== 'admin') {
-    showToast('Somente admin pode iniciar a leitura geral do ClickUp', 'err');
+    showToast('Somente admin pode atualizar o fechamento', 'err');
     return false;
   }
   var original = btn && btn.textContent;
   var month = String(FECHAMENTO_FILTER.month || fechamentoCurrentMonth());
-  if (btn) { btn.disabled = true; btn.textContent = 'Atualizando...'; }
-  chamarAppsScriptJsonp('confirmClickUpMilestoneStatuses', {
+  if (btn) { btn.disabled = true; btn.textContent = 'Buscando...'; }
+  chamarAppsScriptJsonp(action, {
     auth_token: authTokenParam(),
     month: month === 'todos' ? '' : month
   }, 45000).then(function(recent) {
@@ -5239,16 +5239,25 @@ function fechamentoStartSync(btn) {
     FECHAMENTO_LOADING = false;
     fechamentoSaveCache();
     initFechamento();
-    if (btn) { btn.disabled = false; btn.textContent = original || 'Atualizar ClickUp'; }
+    if (btn) { btn.disabled = false; btn.textContent = original || label; }
     var changed = Number(recent.changed || 0);
     var confirmed = Number(recent.confirmed || 0);
     var seconds = Math.max(0, Number(recent.elapsed_ms || 0) / 1000).toFixed(1);
-    showToast('Atualizado em '+seconds+'s: '+confirmed+' marco(s) conferidos; '+changed+' mudança(s) encontrada(s).', 'ok');
+    showToast(label+' em '+seconds+'s: '+confirmed+' marco(s); '+changed+' mudança(s).', 'ok');
   }).catch(function(error) {
-    if (btn) { btn.disabled = false; btn.textContent = original || 'Atualizar ClickUp'; }
+    if (btn) { btn.disabled = false; btn.textContent = original || label; }
     showToast((error && error.message) || 'Erro ao atualizar fechamento', 'err');
   });
   return false;
+}
+function fechamentoStartSync(btn) {
+  return fechamentoRunSync('syncClickUpClosedMilestones', 'Atualizar Closed', btn);
+}
+function fechamentoSyncRejected(btn) {
+  return fechamentoRunSync('syncClickUpRejectedMilestones', 'Buscar Reprovados', btn);
+}
+function fechamentoSyncApproved(btn) {
+  return fechamentoRunSync('syncClickUpApprovedMilestones', 'Buscar Aprovados', btn);
 }
 function fechamentoSchedulePoll(delay) {
   if (FECHAMENTO_POLL_TIMER) clearTimeout(FECHAMENTO_POLL_TIMER);
@@ -5330,7 +5339,7 @@ function initFechamento() {
         '<div><strong>'+fechamentoMoney(item.valor_bonus)+'</strong><div style="margin-top:8px"><a class="project-link-btn" href="'+escapeHtml(item.link || '#')+'" target="_blank" rel="noopener">Abrir marco</a></div></div></div>';
     }).join('');
     return '<section class="closing-consultant-card"><div class="closing-consultant-head"><div><div class="closing-consultant-name">'+escapeHtml(consultant)+'</div><div class="closing-project-meta">Marcos que entraram em Closed no período selecionado</div></div><div class="closing-consultant-metrics"><div class="closing-consultant-metric"><strong>'+consultantRows.length+'</strong><span>Marcos</span></div><div class="closing-consultant-metric"><strong>'+consultantWaiting+'</strong><span>Aguardando</span></div><div class="closing-consultant-metric"><strong>'+consultantApproved+' / '+consultantRejected+'</strong><span>Aprov. / Reprov.</span></div><div class="closing-consultant-metric"><strong>'+fechamentoMoney(consultantBonus)+'</strong><span>Bônus</span></div></div></div><div class="closing-project-list">'+projectCards+'</div></section>';
-  }).join('') || '<div class="empty">Nenhum marco encontrado neste recorte. Rode “Atualizar ClickUp” para atualizar a base.</div>';
+  }).join('') || '<div class="empty">Nenhum marco encontrado neste recorte. Atualize os Closed ou consulte as validações.</div>';
   var error = FECHAMENTO_META.error ? '<div class="dashx-focus-note" style="margin-bottom:12px"><strong>'+escapeHtml(FECHAMENTO_META.error)+'</strong></div>' : '';
   var bg = FECHAMENTO_META.background_sync || {};
   var syncNote = bg.active
@@ -5342,7 +5351,7 @@ function initFechamento() {
     '<div class="closing-filter-label" style="margin-top:14px">Consultores</div><div class="closing-filter-chips">'+consultantChips+'</div>'+
     '<div class="closing-filter-label" style="margin-top:14px">Validação técnica</div><div class="closing-filter-chips">'+statusChips+'</div>'+
     '<div class="closing-filter-label" style="margin-top:14px">Filtrar cliente</div><input id="fechamento-client-search" class="closing-client-search" type="search" value="'+escapeHtml(FECHAMENTO_FILTER.projetoBusca || '')+'" placeholder="Digite o nome do cliente..." oninput="fechamentoSetProjectSearch(this.value)">'+
-    (AUTH_STATE.user && AUTH_STATE.user.role === 'admin' ? '<div class="closing-filter-footer"><button class="btn-syncall" onclick="return fechamentoStartSync(this)">Atualizar ClickUp</button></div>' : '')+
+    (AUTH_STATE.user && AUTH_STATE.user.role === 'admin' ? '<div class="closing-project-meta" style="margin-top:12px">Closed atualiza a fila geral compartilhada. Reprovados e Aprovados consultam somente a validação e os comentários do mês selecionado.</div><div class="closing-filter-footer" style="gap:8px;flex-wrap:wrap"><button class="btn-syncall" onclick="return fechamentoStartSync(this)">Atualizar Closed</button><button class="btn-syncall" onclick="return fechamentoSyncRejected(this)">Buscar Reprovados</button><button class="btn-syncall" onclick="return fechamentoSyncApproved(this)">Buscar Aprovados</button></div>' : '')+
     '</div>'+
     '<div class="closing-kpis"><div class="closing-kpi"><span>Marcos no recorte</span><strong>'+list.length+'</strong></div><div class="closing-kpi"><span>Aguardando validação</span><strong>'+waiting+'</strong></div><div class="closing-kpi"><span>Aprovados / Reprovados</span><strong>'+approved+' / '+rejected+'</strong></div><div class="closing-kpi"><span>Bonificação aprovada</span><strong>'+fechamentoMoney(bonus)+'</strong></div></div>'+
     consultantCards;
@@ -5351,6 +5360,8 @@ window.fechamentoLoad = fechamentoLoad;
 window.fechamentoSetFilter = fechamentoSetFilter;
 window.fechamentoSetProjectSearch = fechamentoSetProjectSearch;
 window.fechamentoStartSync = fechamentoStartSync;
+window.fechamentoSyncRejected = fechamentoSyncRejected;
+window.fechamentoSyncApproved = fechamentoSyncApproved;
 
 function initAdmin() {
   var el = document.getElementById('admin-content');
