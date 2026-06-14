@@ -5228,20 +5228,25 @@ function fechamentoStartSync(btn) {
   chamarAppsScriptJsonp('syncClickUpMilestoneRecent', {
     auth_token: authTokenParam()
   }, 30000).then(function(recent) {
-    if (!recent || recent.ok === false) throw new Error((recent && (recent.error || recent.message)) || 'Não foi possível atualizar as alterações recentes');
-    if (btn) btn.textContent = 'Carregando resultado...';
-    return fechamentoLoad(true);
-  }).then(function() {
-    return chamarAppsScriptJsonp('startClickUpMilestoneClosingBackground', {
-      auth_token: authTokenParam()
-    }, 15000);
-  }).then(function(resp) {
-    if (!resp || resp.ok === false) throw new Error((resp && (resp.error || resp.message)) || 'Não foi possível iniciar');
-    FECHAMENTO_META.background_sync = resp.background_sync || {active:true};
-    if (btn) { btn.disabled = false; btn.textContent = original || 'Atualizar ClickUp'; }
-    showToast('Alterações recentes atualizadas. A auditoria completa continuará em segundo plano.', 'ok');
+    if (!recent || recent.ok === false || !Array.isArray(recent.marcos)) {
+      throw new Error((recent && (recent.error || recent.message)) || 'Não foi possível atualizar as alterações recentes');
+    }
+    FECHAMENTO_MARCOS = fechamentoNormalizeRows(recent.marcos);
+    FECHAMENTO_META = recent;
+    FECHAMENTO_LOADED = true;
+    FECHAMENTO_LOADING = false;
+    fechamentoSaveCache();
     initFechamento();
-    fechamentoSchedulePoll(3000);
+    if (btn) { btn.disabled = false; btn.textContent = original || 'Atualizar ClickUp'; }
+    var changed = recent.recent_sync && Number(recent.recent_sync.detected || 0);
+    showToast('Atualizado agora: '+changed+' marco(s) recente(s) verificado(s).', 'ok');
+    chamarAppsScriptJsonp('startClickUpMilestoneClosingBackground', {
+      auth_token: authTokenParam()
+    }, 15000).then(function(resp) {
+      if (!resp || resp.ok === false) return;
+      FECHAMENTO_META.background_sync = resp.background_sync || {active:true};
+      fechamentoSchedulePoll(3000);
+    }).catch(function() {});
   }).catch(function(error) {
     if (btn) { btn.disabled = false; btn.textContent = original || 'Atualizar ClickUp'; }
     showToast((error && error.message) || 'Erro ao atualizar fechamento', 'err');

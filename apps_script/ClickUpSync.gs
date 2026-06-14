@@ -117,7 +117,7 @@ function doGet(e) {
     }
     if (action === 'syncClickUpMilestoneRecent') {
       requireAdmin_(params);
-      return jsonOutput_(syncClickUpRecentMilestoneCoverage_({ authoritative: true }), params.callback);
+      return jsonOutput_(syncClickUpRecentMilestoneAndGetClosing_(params), params.callback);
     }
     if (action === 'syncClickUpUserActivity') {
       requireAdmin_(params);
@@ -909,13 +909,15 @@ function fetchClickUpMilestoneCoverageTasks_() {
   return dedupeTasks_(all);
 }
 
-function fetchClickUpRecentMilestoneCoverageTasks_(sinceMillis) {
+function fetchClickUpRecentMilestoneCoverageTasks_(sinceMillis, options) {
+  options = options || {};
   var workspaceId = getClickUpWorkspaceId_();
   if (!workspaceId) throw new Error('CLICKUP_TEAM_ID nao configurado para atualizacao recente de marcos.');
   var since = Math.max(0, Number(sinceMillis || 0));
   var page = 0;
+  var maxPages = Math.max(1, Number(options.max_pages || 10));
   var all = [];
-  while (page < 10) {
+  while (page < maxPages) {
     var query = [
       'include_closed=true',
       'subtasks=true',
@@ -1281,9 +1283,15 @@ function upsertClickUpMilestoneClosing_(mapping, normalized, options) {
     if ((situation === 'aprovado' || situation === 'reprovado') && (!validationAt || statusChanged)) {
       validationAt = sanitizeText_(milestone.updated_at) || now;
     }
-    var justification = options.authoritative ? '' : sanitizeText_(previous && previous.justificativa);
-    var justificationBy = options.authoritative ? '' : sanitizeText_(previous && previous.justificativa_por);
-    if (options.fetch_comments !== false && situation !== 'outro' && (options.authoritative || statusChanged || !justification)) {
+    var isValidation = situation === 'aprovado' || situation === 'reprovado';
+    var clearComment = options.authoritative && (!options.validation_comments_only || isValidation);
+    var justification = clearComment ? '' : sanitizeText_(previous && previous.justificativa);
+    var justificationBy = clearComment ? '' : sanitizeText_(previous && previous.justificativa_por);
+    var shouldFetchComment = options.fetch_comments !== false &&
+      situation !== 'outro' &&
+      (!options.validation_comments_only || isValidation) &&
+      (options.authoritative || statusChanged || !justification);
+    if (shouldFetchComment) {
       var comment = fetchLatestClickUpTaskComment_(taskId);
       justification = comment.text || '';
       justificationBy = comment.user || '';
@@ -1348,7 +1356,8 @@ function upsertClickUpMilestoneClosingEntries_(entries, options) {
       current: current,
       defer_write: true,
       fetch_comments: options.fetch_comments !== false,
-      authoritative: options.authoritative === true
+      authoritative: options.authoritative === true,
+      validation_comments_only: options.validation_comments_only === true
     });
   });
   writeClickUpMilestoneClosingCurrent_(sheet, headers, current);
@@ -1526,7 +1535,10 @@ function continueClickUpMilestoneClosingBackgroundWorker_() {
   }
   var phase = props.getProperty('CLICKUP_MILESTONE_CLOSING_PHASE') || 'recent';
   if (phase === 'recent') {
-    var recent = syncClickUpRecentMilestoneCoverage_({ authoritative: true });
+    var recent = syncClickUpRecentMilestoneCoverage_({
+      authoritative: true,
+      validation_comments_only: true
+    });
     props.setProperty('CLICKUP_MILESTONE_CLOSING_DETECTED', String(recent.detected || 0));
     props.setProperty('CLICKUP_MILESTONE_CLOSING_ERRORS', String(recent.errors || 0));
     props.setProperty('CLICKUP_MILESTONE_CLOSING_PHASE', 'history');
@@ -1680,7 +1692,7 @@ function syncClickUpMilestoneAuditTasks_() {
 function syncClickUpRecentMilestoneCoverage_(options) {
   options = options || {};
   var lock = LockService.getScriptLock();
-  if (!lock.tryLock(1000)) {
+  if (!lock.tryLock(options.interactive ? 15000 : 1000)) {
     return { detected: 0, scanned: 0, errors: 0, already_running: true, last_error: '' };
   }
   try {
@@ -1691,11 +1703,16 @@ function syncClickUpRecentMilestoneCoverage_(options) {
   var lastError = '';
   var startedAt = new Date().getTime();
   var previousCursor = toInt_(props.getProperty('CLICKUP_MILESTONE_INCREMENTAL_SINCE'), 0);
-  var since = previousCursor
+  var normalSince = previousCursor
     ? Math.max(0, previousCursor - 5 * 60 * 1000)
     : startedAt - 24 * 60 * 60 * 1000;
+  var since = options.interactive
+    ? Math.max(normalSince, startedAt - 2 * 60 * 60 * 1000)
+    : normalSince;
   try {
-    tasks = fetchClickUpRecentMilestoneCoverageTasks_(since);
+    tasks = fetchClickUpRecentMilestoneCoverageTasks_(since, {
+      max_pages: options.interactive ? 1 : 10
+    });
   } catch (error) {
     errors += 1;
     lastError = 'Atualizacao recente: ' + simplifyErrorMessage_(error);
@@ -1718,7 +1735,10 @@ function syncClickUpRecentMilestoneCoverage_(options) {
     var mapping = findProjectMappingForTask_(task, mappings) || fallbackProjectMappingForTask_(task);
     return { mapping: mapping, normalized: buildNormalizedMilestoneCoverageProject_(mapping, task) };
   });
-  upsertClickUpMilestoneClosingEntries_(entries, { authoritative: options.authoritative === true });
+  upsertClickUpMilestoneClosingEntries_(entries, {
+    authoritative: options.authoritative === true,
+    validation_comments_only: options.validation_comments_only === true
+  });
   if (!errors) props.setProperty('CLICKUP_MILESTONE_INCREMENTAL_SINCE', String(startedAt));
   return {
     detected: entries.length,
@@ -1730,6 +1750,20 @@ function syncClickUpRecentMilestoneCoverage_(options) {
   } finally {
     lock.releaseLock();
   }
+}
+
+function syncClickUpRecentMilestoneAndGetClosing_(params) {
+  var recent = syncClickUpRecentMilestoneCoverage_({
+    authoritative: true,
+    interactive: true,
+    validation_comments_only: true
+  });
+  if (recent.already_running) {
+    throw new Error('Outra atualização recente ainda está finalizando. Tente novamente em alguns segundos.');
+  }
+  var result = getClickUpMilestoneClosing_(params || {});
+  result.recent_sync = recent;
+  return result;
 }
 
 function syncClickUpMilestoneHistoryCoverage_() {
