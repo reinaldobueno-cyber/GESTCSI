@@ -4670,6 +4670,14 @@ function getCmaxDailySheet_() {
 function getCmaxDailyEvents_(params) {
   params = params || {};
   var props = PropertiesService.getScriptProperties();
+  var month = sanitizeCmaxMonth_(params.month || params.mes);
+  var consultant = sanitizeText_(params.consultant || params.consultor).toUpperCase();
+  var cached = readCmaxMaterializedCache_(month, consultant);
+  if (cached) {
+    cached.cached = true;
+    cached.history_sync = getCmaxDailyHistoryStatus_().history_sync;
+    return cached;
+  }
   var meta;
   try { meta = JSON.parse(props.getProperty('CMAX_VIEW_META_JSON') || 'null'); } catch (ignored) { meta = null; }
   if (!meta || !meta.ranges) {
@@ -4678,7 +4686,7 @@ function getCmaxDailyEvents_(params) {
       ok: true,
       events: [],
       total: 0,
-      month: sanitizeCmaxMonth_(params.month || params.mes),
+      month: month,
       history_months: cmaxHistoryMonths_(),
       history_loaded_months: [],
       history_sync: getCmaxDailyHistoryStatus_().history_sync,
@@ -4686,11 +4694,13 @@ function getCmaxDailyEvents_(params) {
       message: 'Preparando visão rápida CMAX em segundo plano.'
     };
   }
-  var month = sanitizeCmaxMonth_(params.month || params.mes);
-  var consultant = sanitizeText_(params.consultant || params.consultor).toUpperCase();
   var events = [];
+  var snapshotEvents = readCmaxDailyMonthSnapshot_(month, consultant, meta);
+  if (snapshotEvents) {
+    events = snapshotEvents;
+  }
   var rangeInfo = month ? meta.ranges[month] : meta.all;
-  if (rangeInfo && rangeInfo.count > 0) {
+  if (!snapshotEvents && rangeInfo && rangeInfo.count > 0) {
     var sheet = getOrCreateSheet_(CMAX_DAILY_VIEW_SHEET);
     var headers = getCmaxDailyViewHeaders_();
     var values = sheet.getRange(rangeInfo.start, 1, rangeInfo.count, headers.length).getValues();
@@ -4703,7 +4713,7 @@ function getCmaxDailyEvents_(params) {
       return !consultant || sanitizeText_(item.consultor).toUpperCase() === consultant;
     });
   }
-  return {
+  var result = {
     ok: true,
     events: events,
     total: events.length,
@@ -4717,6 +4727,63 @@ function getCmaxDailyEvents_(params) {
     history_sync: getCmaxDailyHistoryStatus_().history_sync,
     synced_at: meta.synced_at || '',
     materialized: true,
+    sheet: CMAX_DAILY_VIEW_SHEET
+  };
+  writeCompressedScriptCache_(cmaxViewCacheKey_({ month: month, consultant: consultant }), result, CMAX_VIEW_CACHE_SECONDS);
+  return result;
+}
+
+function cmaxDailyMonthSnapshotSheetName_(month) {
+  return 'CMAX_M_' + sanitizeCmaxMonth_(month).replace('-', '_');
+}
+
+function readCmaxDailyMonthSnapshot_(month, consultant, meta) {
+  if (!month || !meta || !meta.month_sheets || !meta.month_sheets[month]) return null;
+  var ss = SpreadsheetApp.openById(getScriptProperty_('SHEET_ID'));
+  var sheet = ss.getSheetByName(meta.month_sheets[month]);
+  if (!sheet) return null;
+  var headers = getCmaxDailyViewHeaders_();
+  var lastRow = sheet.getLastRow();
+  if (lastRow < 2) return [];
+  return sheet.getRange(2, 1, lastRow - 1, headers.length).getValues().map(function(row) {
+    var item = {};
+    headers.forEach(function(header, index) { item[header] = row[index]; });
+    item.contabiliza_diaria = item.contabiliza_diaria === true || String(item.contabiliza_diaria).toLowerCase() === 'true';
+    return item;
+  }).filter(function(item) {
+    return !consultant || sanitizeText_(item.consultor).toUpperCase() === consultant;
+  });
+}
+
+function readCmaxMaterializedCache_(month, consultant) {
+  if (consultant) return readCompressedScriptCache_(cmaxViewCacheKey_({ month: month, consultant: consultant }));
+  if (month) return readCompressedScriptCache_(cmaxViewCacheKey_({ month: month }));
+  var props = PropertiesService.getScriptProperties();
+  var meta;
+  try { meta = JSON.parse(props.getProperty('CMAX_VIEW_META_JSON') || 'null'); } catch (ignored) { meta = null; }
+  if (!meta || !Array.isArray(meta.available_months)) return null;
+  var snapshots = meta.available_months.map(function(itemMonth) {
+    return readCompressedScriptCache_(cmaxViewCacheKey_({ month: itemMonth }));
+  });
+  if (snapshots.some(function(snapshot) { return !snapshot; })) return null;
+  var first = snapshots[0] || {};
+  var events = [];
+  snapshots.forEach(function(snapshot) { events = events.concat(snapshot.events || []); });
+  return {
+    ok: true,
+    events: events,
+    total: events.length,
+    month: '',
+    available_months: meta.available_months || [],
+    history_months: cmaxHistoryMonths_(),
+    history_loaded_months: meta.history_loaded_months || [],
+    training_team_cutoff: meta.training_team_cutoff || '',
+    training_team: meta.training_team || [],
+    available_activities: meta.available_activities || [],
+    history_sync: first.history_sync || {},
+    synced_at: meta.synced_at || '',
+    materialized: true,
+    cached: true,
     sheet: CMAX_DAILY_VIEW_SHEET
   };
 }
@@ -4944,7 +5011,9 @@ function continueCmaxDailyHistoryBatch_(params) {
       return { ok: true, done: false, busy: true, history_sync: getCmaxDailyHistoryBackgroundStatus_() };
     }
     try {
-      replaceCmaxDailyMonths_(eventsByMonth);
+      Object.keys(eventsByMonth).forEach(function(month) {
+        writeCmaxDailyMonthSnapshot_(month, eventsByMonth[month]);
+      });
       markCmaxHistoryMonthsCompleted_(batchMonths);
     } finally {
       writeLock.releaseLock();
@@ -5073,7 +5142,13 @@ function cmaxHistoryCompletionMap_() {
       if (month) completed[month] = true;
     });
   } catch (ignored) {}
-  cmaxMonthsPresentInSheet_().forEach(function(month) { completed[month] = true; });
+  try {
+    var meta = JSON.parse(props.getProperty('CMAX_VIEW_META_JSON') || 'null');
+    (meta && meta.history_loaded_months || []).forEach(function(month) {
+      month = sanitizeCmaxMonth_(month);
+      if (month) completed[month] = true;
+    });
+  } catch (ignoredMeta) {}
   CMAX_HISTORY_COMPLETION_CACHE_ = completed;
   return completed;
 }
@@ -5101,36 +5176,28 @@ function cmaxPendingHistoryMonths_() {
 }
 
 function cmaxDailyMonthMatches_(month, events) {
-  var sheet = getCmaxDailySheet_();
-  var headers = getCmaxDailyHeaders_();
-  var lastRow = sheet.getLastRow();
-  var existing = [];
-  if (lastRow > 1) {
-    existing = sheet.getRange(2, 1, lastRow - 1, headers.length).getDisplayValues().filter(function(row) {
-      return normalizeCmaxSheetMonth_(row[headers.indexOf('mes')]) === month;
-    });
-  }
+  var props = PropertiesService.getScriptProperties();
+  var meta;
+  try { meta = JSON.parse(props.getProperty('CMAX_VIEW_META_JSON') || 'null'); } catch (ignored) { meta = null; }
+  var previousHash = meta && meta.month_hashes && meta.month_hashes[month];
+  return !!previousHash && previousHash === cmaxEventsHash_(events || []);
+}
+
+function cmaxEventsHash_(events) {
   var fields = ['event_key', 'data', 'consultor', 'cliente', 'tipo', 'resultado', 'descricao', 'hora_inicio', 'hora_fim'];
-  function normalizeField(field, value) {
-    if (field === 'data') return normalizeCmaxSheetDate_(value);
-    if (field === 'hora_inicio' || field === 'hora_fim') return normalizeCmaxSheetTime_(value);
-    return sanitizeText_(value);
-  }
-  function signatureFromRow(row) {
+  var signatures = (events || []).map(function(event) {
     return fields.map(function(field) {
-      return normalizeField(field, row[headers.indexOf(field)]);
+      var value = event && event[field];
+      if (field === 'data') return normalizeCmaxSheetDate_(value);
+      if (field === 'hora_inicio' || field === 'hora_fim') return normalizeCmaxSheetTime_(value);
+      return sanitizeText_(value);
     }).join('|');
-  }
-  function signatureFromEvent(event) {
-    return fields.map(function(field) {
-      return normalizeField(field, event && event[field]);
-    }).join('|');
-  }
-  var current = existing.map(signatureFromRow).sort();
-  var incoming = (events || []).map(signatureFromEvent).sort();
-  return current.length === incoming.length && current.every(function(value, index) {
-    return value === incoming[index];
-  });
+  }).sort();
+  return Utilities.base64EncodeWebSafe(Utilities.computeDigest(
+    Utilities.DigestAlgorithm.SHA_256,
+    signatures.join('\n'),
+    Utilities.Charset.UTF_8
+  ));
 }
 
 function markCmaxHistoryMonthsCompleted_(months) {
@@ -5190,13 +5257,78 @@ function syncCmaxDailyEvents_(params) {
   var writeLock = LockService.getScriptLock();
   if (!writeLock.tryLock(60000)) throw new Error('Outra atualização CMAX está finalizando uma gravação. Aguarde alguns segundos.');
   try {
-    replaceCmaxDailyMonth_(month, fetched.events);
+    writeCmaxDailyMonthSnapshot_(month, fetched.events);
     markCmaxHistoryMonthsCompleted_([month]);
     updateCmaxHistoryProgressProperties_();
   } finally {
     writeLock.releaseLock();
   }
   return fetched.result;
+}
+
+function writeCmaxDailyMonthSnapshot_(month, events) {
+  month = sanitizeCmaxMonth_(month);
+  if (!month) return;
+  var props = PropertiesService.getScriptProperties();
+  var meta;
+  try { meta = JSON.parse(props.getProperty('CMAX_VIEW_META_JSON') || '{}'); } catch (ignored) { meta = {}; }
+  meta.month_sheets = meta.month_sheets || {};
+  meta.month_hashes = meta.month_hashes || {};
+  meta.available_months = meta.available_months || [];
+  meta.history_loaded_months = meta.history_loaded_months || [];
+  meta.training_team = meta.training_team || [];
+  meta.available_activities = meta.available_activities || [];
+
+  var trainingTeam = {};
+  meta.training_team.forEach(function(name) { trainingTeam[sanitizeText_(name).toUpperCase()] = true; });
+  (events || []).forEach(function(event) {
+    var modality = normalizeCmaxModality_(event.descricao || event.tipo);
+    if (isCmaxDailyModality_(modality)) trainingTeam[sanitizeText_(event.consultor).toUpperCase()] = true;
+  });
+  var activities = {};
+  meta.available_activities.forEach(function(activity) { activities[activity] = true; });
+  var items = (events || []).map(function(event) {
+    var item = {};
+    getCmaxDailyViewHeaders_().forEach(function(header) { item[header] = event[header] === undefined ? '' : event[header]; });
+    item.data = normalizeCmaxSheetDate_(event.data);
+    item.mes = month;
+    item.ano = month.slice(0, 4);
+    item.hora_inicio = normalizeCmaxSheetTime_(event.hora_inicio);
+    item.hora_fim = normalizeCmaxSheetTime_(event.hora_fim);
+    item.modalidade = normalizeCmaxModality_(event.descricao || event.tipo);
+    item.contabiliza_diaria = isCmaxDailyModality_(item.modalidade);
+    if (event.descricao || item.modalidade || event.tipo) activities[event.descricao || item.modalidade || event.tipo] = true;
+    return item;
+  }).filter(function(item) {
+    return !!trainingTeam[sanitizeText_(item.consultor).toUpperCase()];
+  }).sort(function(a, b) {
+    return String(a.consultor).localeCompare(String(b.consultor), 'pt-BR') ||
+      String(a.data).localeCompare(String(b.data)) ||
+      String(a.hora_inicio).localeCompare(String(b.hora_inicio));
+  });
+
+  var ss = SpreadsheetApp.openById(getScriptProperty_('SHEET_ID'));
+  var sheetName = cmaxDailyMonthSnapshotSheetName_(month);
+  var sheet = ss.getSheetByName(sheetName) || ss.insertSheet(sheetName);
+  var headers = getCmaxDailyViewHeaders_();
+  var values = items.map(function(item) {
+    return headers.map(function(header) { return item[header] === undefined ? '' : item[header]; });
+  });
+  sheet.clearContents();
+  sheet.getRange(1, 1, 1, headers.length).setValues([headers]);
+  if (values.length) sheet.getRange(2, 1, values.length, headers.length).setValues(values);
+
+  meta.month_sheets[month] = sheetName;
+  meta.month_hashes[month] = cmaxEventsHash_(events || []);
+  if (meta.available_months.indexOf(month) < 0) meta.available_months.push(month);
+  if (meta.history_loaded_months.indexOf(month) < 0) meta.history_loaded_months.push(month);
+  meta.available_months.sort().reverse();
+  meta.history_loaded_months.sort().reverse();
+  meta.training_team = Object.keys(trainingTeam).sort();
+  meta.available_activities = Object.keys(activities).sort();
+  meta.synced_at = new Date().toISOString();
+  props.setProperty('CMAX_VIEW_META_JSON', JSON.stringify(meta));
+  writeCmaxMaterializedCaches_(items, meta);
 }
 
 function fetchCmaxDailyEventsForMonth_(month) {
@@ -5515,7 +5647,6 @@ function replaceCmaxDailyMonths_(eventsByMonth) {
     sheet.getRange(2, 1, retained.length + added.length, headers.length).setValues(retained.concat(added));
   }
   rebuildCmaxDailyMaterializedView_(retained.concat(added), headers);
-  clearCmaxViewCacheForMonths_(Object.keys(eventsByMonth || {}));
 }
 
 function rebuildCmaxDailyMaterializedView_(rows, sourceHeaders) {
@@ -5539,6 +5670,12 @@ function rebuildCmaxDailyMaterializedView_(rows, sourceHeaders) {
       trainingTeamMap[sanitizeText_(item.consultor).toUpperCase()] = true;
     }
   });
+  var monthHashes = {};
+  var rawMonthItems = {};
+  items.forEach(function(item) {
+    (rawMonthItems[item.mes] || (rawMonthItems[item.mes] = [])).push(item);
+  });
+  Object.keys(rawMonthItems).forEach(function(month) { monthHashes[month] = cmaxEventsHash_(rawMonthItems[month]); });
   items = items.filter(function(item) {
     return !!trainingTeamMap[sanitizeText_(item.consultor).toUpperCase()];
   }).sort(function(a, b) {
@@ -5567,7 +5704,7 @@ function rebuildCmaxDailyMaterializedView_(rows, sourceHeaders) {
     availableActivities[item.descricao || item.modalidade || item.tipo] = true;
     if (String(item.sincronizado_em || '') > syncedAt) syncedAt = String(item.sincronizado_em || '');
   });
-  PropertiesService.getScriptProperties().setProperty('CMAX_VIEW_META_JSON', JSON.stringify({
+  var meta = {
     ranges: ranges,
     all: { start: 2, count: items.length },
     available_months: Object.keys(availableMonths).sort().reverse(),
@@ -5575,9 +5712,39 @@ function rebuildCmaxDailyMaterializedView_(rows, sourceHeaders) {
     training_team_cutoff: trainingCutoff,
     training_team: Object.keys(trainingTeamMap).sort(),
     available_activities: Object.keys(availableActivities).sort(),
+    month_hashes: monthHashes,
     synced_at: syncedAt,
     rebuilt_at: new Date().toISOString()
-  }));
+  };
+  PropertiesService.getScriptProperties().setProperty('CMAX_VIEW_META_JSON', JSON.stringify(meta));
+  writeCmaxMaterializedCaches_(items, meta);
+}
+
+function writeCmaxMaterializedCaches_(items, meta) {
+  var byMonth = {};
+  (items || []).forEach(function(item) {
+    if (!item.mes) return;
+    (byMonth[item.mes] || (byMonth[item.mes] = [])).push(item);
+  });
+  Object.keys(byMonth).forEach(function(month) {
+    var events = byMonth[month];
+    writeCompressedScriptCache_(cmaxViewCacheKey_({ month: month }), {
+      ok: true,
+      events: events,
+      total: events.length,
+      month: month,
+      available_months: meta.available_months || [],
+      history_months: cmaxHistoryMonths_(),
+      history_loaded_months: meta.history_loaded_months || [],
+      training_team_cutoff: meta.training_team_cutoff || '',
+      training_team: meta.training_team || [],
+      available_activities: meta.available_activities || [],
+      history_sync: getCmaxDailyHistoryStatus_().history_sync,
+      synced_at: meta.synced_at || '',
+      materialized: true,
+      sheet: CMAX_DAILY_VIEW_SHEET
+    }, CMAX_VIEW_CACHE_SECONDS);
+  });
 }
 
 function sanitizeCmaxMonth_(value) {
