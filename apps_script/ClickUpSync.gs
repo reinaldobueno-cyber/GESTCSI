@@ -4642,7 +4642,7 @@ var CMAX_DAILY_SHEET = 'CMAX_DIARIAS';
 var CMAX_DAILY_VIEW_SHEET = 'CMAX_DIARIAS_VIEW';
 var CMAX_AGENDA_URL = 'https://www.multbovinos.com/servicos/eventoscontato/obtenha-agenda/?format=json';
 var CMAX_TOKEN_AUTH_URL = 'https://www.multbovinos.com/servicos/login/';
-var CMAX_HISTORY_DEFAULT_START_MONTH = '2023-01';
+var CMAX_HISTORY_DEFAULT_START_MONTH = '2025-01';
 var CMAX_VIEW_CACHE_SECONDS = 21600;
 
 function getCmaxDailyHeaders_() {
@@ -4718,9 +4718,9 @@ function getCmaxDailyEvents_(params) {
     events: events,
     total: events.length,
     month: month,
-    available_months: meta.available_months || [],
+      available_months: cmaxRelevantMonths_(meta.available_months),
     history_months: cmaxHistoryMonths_(),
-    history_loaded_months: meta.history_loaded_months || [],
+      history_loaded_months: cmaxRelevantMonths_(meta.history_loaded_months),
     training_team_cutoff: meta.training_team_cutoff || '',
     training_team: meta.training_team || [],
     available_activities: meta.available_activities || [],
@@ -4762,7 +4762,8 @@ function readCmaxMaterializedCache_(month, consultant) {
   var meta;
   try { meta = JSON.parse(props.getProperty('CMAX_VIEW_META_JSON') || 'null'); } catch (ignored) { meta = null; }
   if (!meta || !Array.isArray(meta.available_months)) return null;
-  var snapshots = meta.available_months.map(function(itemMonth) {
+  var availableMonths = cmaxRelevantMonths_(meta.available_months);
+  var snapshots = availableMonths.map(function(itemMonth) {
     return readCompressedScriptCache_(cmaxViewCacheKey_({ month: itemMonth }));
   });
   if (snapshots.some(function(snapshot) { return !snapshot; })) return null;
@@ -4774,9 +4775,9 @@ function readCmaxMaterializedCache_(month, consultant) {
     events: events,
     total: events.length,
     month: '',
-    available_months: meta.available_months || [],
+    available_months: cmaxRelevantMonths_(meta.available_months),
     history_months: cmaxHistoryMonths_(),
-    history_loaded_months: meta.history_loaded_months || [],
+    history_loaded_months: cmaxRelevantMonths_(meta.history_loaded_months),
     training_team_cutoff: meta.training_team_cutoff || '',
     training_team: meta.training_team || [],
     available_activities: meta.available_activities || [],
@@ -4939,7 +4940,7 @@ function startCmaxDailyHistoryBackground_(params) {
   params = params || {};
   var props = PropertiesService.getScriptProperties();
   var currentMonth = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'yyyy-MM');
-  var startMonth = sanitizeCmaxMonth_(params.start_month || props.getProperty('CMAX_HISTORY_START_MONTH')) || CMAX_HISTORY_DEFAULT_START_MONTH;
+  var startMonth = cmaxHistoryStartMonth_(params.start_month);
   addCmaxForcedHistoryMonths_([currentMonth]);
   props.setProperty('CMAX_HISTORY_BACKGROUND_ACTIVE', '1');
   props.setProperty('CMAX_HISTORY_BACKGROUND_START_MONTH', startMonth);
@@ -5045,7 +5046,7 @@ function getCmaxDailyHistoryBackgroundStatus_() {
   var completed = cmaxProcessedHistoryMonths_();
   return {
     active: props.getProperty('CMAX_HISTORY_BACKGROUND_ACTIVE') === '1',
-    start_month: props.getProperty('CMAX_HISTORY_BACKGROUND_START_MONTH') || CMAX_HISTORY_DEFAULT_START_MONTH,
+    start_month: cmaxHistoryStartMonth_(),
     next_month: pending[0] || '',
     last_month: props.getProperty('CMAX_HISTORY_BACKGROUND_LAST_MONTH') || '',
     processed_months: completed.length,
@@ -5075,7 +5076,7 @@ function getCmaxDailyHistoryStatus_() {
     history_loaded_months: history.filter(function(month) { return !!loadedMap[month]; }),
     history_sync: {
       active: props.getProperty('CMAX_HISTORY_BACKGROUND_ACTIVE') === '1',
-      start_month: props.getProperty('CMAX_HISTORY_BACKGROUND_START_MONTH') || CMAX_HISTORY_DEFAULT_START_MONTH,
+      start_month: cmaxHistoryStartMonth_(),
       next_month: pending[0] || '',
       last_month: props.getProperty('CMAX_HISTORY_BACKGROUND_LAST_MONTH') || '',
       processed_months: history.length - pending.length,
@@ -5113,15 +5114,29 @@ function cmaxShiftMonth_(month, offset) {
 }
 
 function cmaxHistoryMonths_() {
-  var props = PropertiesService.getScriptProperties();
   var current = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'yyyy-MM');
-  var start = sanitizeCmaxMonth_(props.getProperty('CMAX_HISTORY_START_MONTH')) || CMAX_HISTORY_DEFAULT_START_MONTH;
+  var start = cmaxHistoryStartMonth_();
   var months = [];
   while (current && current >= start && months.length < 120) {
     months.push(current);
     current = cmaxShiftMonth_(current, -1);
   }
   return months;
+}
+
+function cmaxHistoryStartMonth_(requested) {
+  var props = PropertiesService.getScriptProperties();
+  var configured = sanitizeCmaxMonth_(requested || props.getProperty('CMAX_HISTORY_START_MONTH')) || CMAX_HISTORY_DEFAULT_START_MONTH;
+  return configured < CMAX_HISTORY_DEFAULT_START_MONTH ? CMAX_HISTORY_DEFAULT_START_MONTH : configured;
+}
+
+function cmaxRelevantMonths_(months) {
+  var start = cmaxHistoryStartMonth_();
+  return (months || []).map(sanitizeCmaxMonth_).filter(function(month) {
+    return !!month && month >= start;
+  }).filter(function(month, index, all) {
+    return all.indexOf(month) === index;
+  }).sort().reverse();
 }
 
 function cmaxProcessedHistoryMonths_() {
@@ -5330,8 +5345,8 @@ function writeCmaxDailyMonthSnapshot_(month, events) {
   meta.month_hashes[month] = cmaxEventsHash_(events || []);
   if (meta.available_months.indexOf(month) < 0) meta.available_months.push(month);
   if (meta.history_loaded_months.indexOf(month) < 0) meta.history_loaded_months.push(month);
-  meta.available_months.sort().reverse();
-  meta.history_loaded_months.sort().reverse();
+  meta.available_months = cmaxRelevantMonths_(meta.available_months);
+  meta.history_loaded_months = cmaxRelevantMonths_(meta.history_loaded_months);
   meta.training_team = Object.keys(trainingTeam).sort();
   meta.available_activities = Object.keys(activities).sort();
   meta.synced_at = new Date().toISOString();
@@ -5741,9 +5756,9 @@ function writeCmaxMaterializedCaches_(items, meta) {
       events: events,
       total: events.length,
       month: month,
-      available_months: meta.available_months || [],
+    available_months: availableMonths,
       history_months: cmaxHistoryMonths_(),
-      history_loaded_months: meta.history_loaded_months || [],
+    history_loaded_months: cmaxRelevantMonths_(meta.history_loaded_months),
       training_team_cutoff: meta.training_team_cutoff || '',
       training_team: meta.training_team || [],
       available_activities: meta.available_activities || [],
