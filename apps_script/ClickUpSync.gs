@@ -154,6 +154,12 @@ function doGet(e) {
     if (action === 'getCmaxDailyEvents') {
       return jsonOutput_(getCmaxDailyEvents_(params), params.callback);
     }
+    if (action === 'getConsultantCompensation') {
+      return jsonOutput_(getConsultantCompensation_(params), params.callback);
+    }
+    if (action === 'setConsultantSeniority') {
+      return jsonOutput_(setConsultantSeniority_(params), params.callback);
+    }
     if (action === 'getCmaxDailyHistoryStatus') {
       return jsonOutput_(getCmaxDailyHistoryStatus_(), params.callback);
     }
@@ -4408,6 +4414,95 @@ function setUserEnabled_(params) {
   var col = found.header.indexOf('enabled') + 1;
   found.sheet.getRange(found.row, col).setValue(enabled ? 'TRUE' : 'FALSE');
   return { ok: true, username: username, enabled: enabled };
+}
+
+var CONSULTANT_COMPENSATION_SHEET = 'CONSULTORES_REMUNERACAO';
+var CONSULTANT_SENIORITY_RATES = {
+  junior: 60,
+  pleno: 85,
+  senior: 110
+};
+
+function getConsultantCompensationSheet_() {
+  var ss = SpreadsheetApp.openById(getScriptProperty_('SHEET_ID'));
+  var sheet = ss.getSheetByName(CONSULTANT_COMPENSATION_SHEET) || ss.insertSheet(CONSULTANT_COMPENSATION_SHEET);
+  ensureHeaders_(sheet, [
+    'consultant_key',
+    'consultant_name',
+    'seniority',
+    'daily_value',
+    'updated_at',
+    'updated_by'
+  ]);
+  return sheet;
+}
+
+function normalizeConsultantSeniority_(value) {
+  var key = normalizeKey_(value).toLowerCase();
+  if (key === 'junior' || key === 'pleno' || key === 'senior') return key;
+  return '';
+}
+
+function getConsultantCompensation_(params) {
+  requireUser_(params || {});
+  var sheet = getConsultantCompensationSheet_();
+  var values = sheet.getDataRange().getValues();
+  if (values.length <= 1) return { ok: true, consultants: [] };
+  var header = values[0];
+  var consultants = values.slice(1).map(function(row) {
+    var item = rowToObject_(header, row);
+    var seniority = normalizeConsultantSeniority_(item.seniority);
+    return {
+      consultant_key: sanitizeText_(item.consultant_key),
+      consultant_name: sanitizeText_(item.consultant_name),
+      seniority: seniority,
+      daily_value: CONSULTANT_SENIORITY_RATES[seniority] || 0,
+      updated_at: item.updated_at instanceof Date ? item.updated_at.toISOString() : String(item.updated_at || ''),
+      updated_by: sanitizeText_(item.updated_by)
+    };
+  }).filter(function(item) {
+    return !!item.consultant_key;
+  });
+  return { ok: true, consultants: consultants, rates: CONSULTANT_SENIORITY_RATES };
+}
+
+function setConsultantSeniority_(params) {
+  var admin = requireAdmin_(params || {});
+  var name = sanitizeText_(params.consultant_name || params.consultor);
+  var key = normalizeKey_(name);
+  var seniority = normalizeConsultantSeniority_(params.seniority);
+  if (!name || !key) throw new Error('Consultor obrigatorio.');
+  if (!seniority) throw new Error('Selecione Junior, Pleno ou Senior.');
+  var sheet = getConsultantCompensationSheet_();
+  var values = sheet.getDataRange().getValues();
+  var header = values[0];
+  var rowNumber = 0;
+  for (var i = 1; i < values.length; i++) {
+    if (sanitizeText_(values[i][header.indexOf('consultant_key')]) === key) {
+      rowNumber = i + 1;
+      break;
+    }
+  }
+  var row = [
+    key,
+    name,
+    seniority,
+    CONSULTANT_SENIORITY_RATES[seniority],
+    new Date(),
+    admin.name || admin.username
+  ];
+  if (rowNumber) sheet.getRange(rowNumber, 1, 1, row.length).setValues([row]);
+  else sheet.appendRow(row);
+  return {
+    ok: true,
+    consultant: {
+      consultant_key: key,
+      consultant_name: name,
+      seniority: seniority,
+      daily_value: CONSULTANT_SENIORITY_RATES[seniority],
+      updated_by: admin.name || admin.username
+    }
+  };
 }
 
 function logProjectFollowup_(params) {
