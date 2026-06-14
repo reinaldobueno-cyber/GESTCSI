@@ -3126,6 +3126,7 @@ body.theme-dark .tower-kpis [style*="background:#fff"]{
 .consultant-seniority{border:1px solid rgba(255,255,255,.55);border-radius:999px;background:rgba(255,255,255,.18);color:#fff;padding:5px 8px;font:800 10px 'Inter',sans-serif;max-width:110px}
 .consultant-seniority option{color:#17251d;background:#fff}
 .consultant-seniority-badge{border:1px solid rgba(255,255,255,.55);border-radius:999px;background:rgba(255,255,255,.18);color:#fff;padding:5px 8px;font-size:10px;font-weight:900}
+.admin-seniority{border:1px solid var(--border);border-radius:999px;background:var(--surf2);color:var(--text);padding:7px 10px;font:800 10px 'Inter',sans-serif}
 .cmax-date-main{font-weight:900;color:var(--text)}
 .cmax-date-sub{font-size:10px;color:var(--muted);margin-top:3px}
 .cmax-daily-yes{color:#28744c;font-weight:900}
@@ -5395,12 +5396,14 @@ function carregarUsuariosPainel() {
   var box = document.getElementById('admin-users-list');
   var note = document.getElementById('admin-users-note');
   if (box) box.innerHTML = '<div class="empty">Carregando usu&aacute;rios...</div>';
-  chamarAppsScriptJsonp('listUsers', {auth_token:authTokenParam()}, 12000).then(function(resp){
+  Promise.all([chamarAppsScriptJsonp('listUsers', {auth_token:authTokenParam()}, 12000), consultantCompensationLoad(false)]).then(function(results){
+    var resp = results[0];
     if (!resp || resp.ok === false) throw new Error((resp && (resp.error || resp.message)) || 'Falha ao listar');
     var users = Array.isArray(resp.users) ? resp.users : [];
     if (note) note.textContent = users.length + ' usuário(s)';
     if (box) box.innerHTML = users.map(function(u){
       return '<div class="admin-user-row"><div><div class="admin-user-name">'+escapeHtml(u.name || u.username)+'</div><div class="admin-user-meta">'+escapeHtml(u.username)+' &bull; '+escapeHtml(u.role || 'user')+' &bull; '+(u.enabled ? 'ativo' : 'desativado')+'</div></div>'+
+        adminUserSeniorityControl(u.name || u.username)+
         '<button class="admin-toggle" onclick="return alternarUsuarioPainel(\''+jsQuote(u.username)+'\', '+(u.enabled ? 'false' : 'true')+')">'+(u.enabled ? 'Desativar' : 'Ativar')+'</button></div>';
     }).join('') || '<div class="empty">Nenhum usu&aacute;rio cadastrado.</div>';
   }).catch(function(err){
@@ -8803,12 +8806,10 @@ function initCons(){
     var pb=d.dc>0?Math.min(100,Math.round((d.dr/d.dc)*100)):0;
     var pc=d.dr>d.dc?'var(--red)':pb>80?'var(--orange)':'var(--green)';
     var sid='cc-'+name.replace(/[^a-zA-Z0-9]/g,'_');
-    var seniorityControl=consultantSeniorityControl(name);
     html+='<div class="cc" id="'+sid+'" data-name="'+name+'" onclick="selCons(this.dataset.name,\'all\')">'+
       '<div class="cc-top" style="background:'+col+'">'+
         '<div class="cc-av">'+init+'</div>'+
         '<div class="cc-meta"><div class="cc-name">'+name+'</div><div class="cc-sub">'+d.t+' projeto(s) - '+d.a+' avulso(s) - '+d.v+' '+vendaNovaLabel(d.v).toLowerCase()+'</div></div>'+
-        seniorityControl+
         (d.atr>0?'<span class="tag tag-r" style="cursor:pointer;flex-shrink:0" onclick="event.stopPropagation();selCons(this.closest(\'.cc\').dataset.name,\'atrasado\')">'+d.atr+' atrasado(s)</span>':'')+
       '</div>'+
       '<div class="cc-body">'+
@@ -11216,6 +11217,10 @@ function consultantSeniorityControl(name) {
     return '<select class="consultant-seniority" title="Senioridade para cálculo de diária" onclick="event.stopPropagation()" onchange="event.stopPropagation();return consultantSetSeniority(decodeURIComponent(\''+encodeURIComponent(name)+'\'),this.value,this)"><option value="">Senioridade</option><option value="junior" '+(comp.seniority==='junior'?'selected':'')+'>Junior</option><option value="pleno" '+(comp.seniority==='pleno'?'selected':'')+'>Pleno</option><option value="senior" '+(comp.seniority==='senior'?'selected':'')+'>Senior</option></select>';
   }
   return comp.seniority?'<span class="consultant-seniority-badge">'+consultantSeniorityLabel(comp.seniority)+'</span>':'';
+}
+function adminUserSeniorityControl(name) {
+  var comp=consultantCompensation(name);
+  return '<select class="admin-seniority" title="Senioridade para cálculo de diária" onchange="return consultantSetSeniority(decodeURIComponent(\''+encodeURIComponent(name)+'\'),this.value,this)"><option value="">Sem senioridade</option><option value="junior" '+(comp.seniority==='junior'?'selected':'')+'>Junior - R$ 60</option><option value="pleno" '+(comp.seniority==='pleno'?'selected':'')+'>Pleno - R$ 85</option><option value="senior" '+(comp.seniority==='senior'?'selected':'')+'>Senior - R$ 110</option></select>';
 }
 function consultantSetSeniority(name,seniority,select) {
   if(!seniority)return false;
