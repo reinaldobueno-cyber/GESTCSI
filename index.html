@@ -11104,7 +11104,7 @@ function initAlert(){
 
 var CMAX_DAILY_STATE = {events:[], loading:false, loaded:false, error:'', month:cmaxCurrentMonth(), consultant:'', activity:'', search:'', syncedAt:'', months:[], loadedMonths:[], trainingTeam:[], trainingTeamCutoff:'', activities:[], historySync:null, expanded:{}};
 var CMAX_HISTORY_POLL_TIMER=null;
-var CMAX_BROWSER_CACHE_PREFIX='gestcsi_cmax_view_v3_';
+var CMAX_BROWSER_CACHE_PREFIX='gestcsi_cmax_view_v4_';
 
 function cmaxCurrentMonth() {
   var date = new Date();
@@ -11119,13 +11119,24 @@ function cmaxReadBrowserCache(month) {
 function cmaxWriteBrowserCache(month,resp) {
   try{localStorage.setItem(cmaxBrowserCacheKey(month),JSON.stringify({savedAt:Date.now(),response:resp}));}catch(e){}
 }
+function cmaxNormalizeMonth(value) {
+  var match=String(value||'').match(/^(\d{4})-(0[1-9]|1[0-2])/);
+  return match&&match[1]>='2025' ? match[1]+'-'+match[2] : '';
+}
+function cmaxNormalizeMonths(values) {
+  return Array.from(new Set((values||[]).map(cmaxNormalizeMonth).filter(Boolean))).sort().reverse();
+}
 function cmaxApplyResponse(resp) {
-  CMAX_DAILY_STATE.events=Array.isArray(resp.events)?resp.events:[];
-  CMAX_DAILY_STATE.loadedMonths=Array.from(new Set(
+  CMAX_DAILY_STATE.events=(Array.isArray(resp.events)?resp.events:[]).map(function(item){
+    item.mes=cmaxNormalizeMonth(item.mes||item.data);
+    return item;
+  }).filter(function(item){return !!item.mes;});
+  CMAX_DAILY_STATE.loadedMonths=cmaxNormalizeMonths(
     (Array.isArray(resp.available_months)?resp.available_months:[])
       .concat(Array.isArray(resp.history_loaded_months)?resp.history_loaded_months:[])
-  ));
-  CMAX_DAILY_STATE.months=Array.isArray(resp.history_months)?resp.history_months:CMAX_DAILY_STATE.loadedMonths;
+  );
+  CMAX_DAILY_STATE.months=cmaxNormalizeMonths(Array.isArray(resp.history_months)?resp.history_months:CMAX_DAILY_STATE.loadedMonths);
+  if(!CMAX_DAILY_STATE.month)CMAX_DAILY_STATE.month=cmaxCurrentMonth();
   CMAX_DAILY_STATE.trainingTeam=Array.isArray(resp.training_team)?resp.training_team:CMAX_DAILY_STATE.trainingTeam;
   CMAX_DAILY_STATE.trainingTeamCutoff=String(resp.training_team_cutoff||'');
   CMAX_DAILY_STATE.activities=Array.isArray(resp.available_activities)?resp.available_activities:CMAX_DAILY_STATE.activities;
@@ -11389,8 +11400,8 @@ function cmaxScheduleHistoryPoll() {
     var wasActive=!!(CMAX_DAILY_STATE.historySync&&CMAX_DAILY_STATE.historySync.active);
     chamarAppsScriptJsonp('getCmaxDailyHistoryStatus',{},15000).then(function(resp){
       if(resp&&resp.history_sync)CMAX_DAILY_STATE.historySync=resp.history_sync;
-      if(resp&&Array.isArray(resp.history_months))CMAX_DAILY_STATE.months=resp.history_months;
-      if(resp&&Array.isArray(resp.history_loaded_months))CMAX_DAILY_STATE.loadedMonths=resp.history_loaded_months;
+      if(resp&&Array.isArray(resp.history_months))CMAX_DAILY_STATE.months=cmaxNormalizeMonths(resp.history_months);
+      if(resp&&Array.isArray(resp.history_loaded_months))CMAX_DAILY_STATE.loadedMonths=cmaxNormalizeMonths(resp.history_loaded_months);
       renderDiariasCmax();
       var newLastMonth=CMAX_DAILY_STATE.historySync&&CMAX_DAILY_STATE.historySync.last_month||'';
       var isActive=!!(CMAX_DAILY_STATE.historySync&&CMAX_DAILY_STATE.historySync.active);
