@@ -11193,6 +11193,8 @@ function cmaxDateInfo(value) {
 function cmaxTime(value) {
   var text=String(value||'').trim();
   if(!text)return '';
+  var legacy=text.match(/^(1899|1900)-\d{2}-\d{2}T(\d{2}):(\d{2})/);
+  if(legacy)return String((Number(legacy[2])-8+24)%24).padStart(2,'0')+':'+legacy[3];
   if(/^\d{4}-\d{2}-\d{2}T/.test(text)){
     var parsed=new Date(text);
     if(!isNaN(parsed.getTime()))return new Intl.DateTimeFormat('pt-BR',{timeZone:'America/Sao_Paulo',hour:'2-digit',minute:'2-digit',hour12:false}).format(parsed);

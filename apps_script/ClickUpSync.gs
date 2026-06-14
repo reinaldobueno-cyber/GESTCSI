@@ -4944,7 +4944,11 @@ function startCmaxDailyHistoryBackground_(params) {
   var props = PropertiesService.getScriptProperties();
   var currentMonth = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'yyyy-MM');
   var startMonth = cmaxHistoryStartMonth_(params.start_month);
-  addCmaxForcedHistoryMonths_([currentMonth]);
+  if (cmaxSnapshotMonths_().indexOf(currentMonth) < 0) {
+    addCmaxForcedHistoryMonths_([currentMonth]);
+  } else {
+    removeCmaxForcedHistoryMonths_([currentMonth]);
+  }
   props.setProperty('CMAX_HISTORY_BACKGROUND_ACTIVE', '1');
   props.setProperty('CMAX_HISTORY_BACKGROUND_START_MONTH', startMonth);
   props.setProperty('CMAX_HISTORY_BACKGROUND_FAILURES', '0');
@@ -5801,10 +5805,13 @@ function normalizeCmaxSheetDate_(value) {
 
 function normalizeCmaxSheetTime_(value) {
   if (value instanceof Date && !isNaN(value.getTime())) {
+    if (value.getUTCFullYear() <= 1900) return cmaxLegacyTimeFromHours_(value.getUTCHours(), value.getUTCMinutes());
     return Utilities.formatDate(value, 'America/Sao_Paulo', 'HH:mm');
   }
   var text = String(value || '').trim();
   if (/^\d{4}-\d{2}-\d{2}T/.test(text)) {
+    var legacy = text.match(/^(1899|1900)-\d{2}-\d{2}T(\d{2}):(\d{2})/);
+    if (legacy) return cmaxLegacyTimeFromHours_(Number(legacy[2]), Number(legacy[3]));
     var parsed = new Date(text);
     if (!isNaN(parsed.getTime())) return Utilities.formatDate(parsed, 'America/Sao_Paulo', 'HH:mm');
   }
@@ -5813,6 +5820,11 @@ function normalizeCmaxSheetTime_(value) {
   var time = text.match(/^(\d{1,2}):(\d{2})/);
   if (time) return String(Number(time[1])).padStart(2, '0') + ':' + time[2];
   return text;
+}
+
+function cmaxLegacyTimeFromHours_(hours, minutes) {
+  var adjusted = (Number(hours || 0) - 8 + 24) % 24;
+  return String(adjusted).padStart(2, '0') + ':' + String(Number(minutes || 0)).padStart(2, '0');
 }
 
 function normalizeCmaxModality_(value) {
