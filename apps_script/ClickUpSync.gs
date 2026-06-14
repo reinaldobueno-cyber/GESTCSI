@@ -1228,6 +1228,9 @@ function getClickUpMilestoneClosing_(params) {
   }).filter(function(item) {
     return !!sanitizeText_(item.task_id) && normalizeKey_(item.item_tipo) === 'MARCO';
   }) : [];
+  rows = rows.filter(function(item) {
+    return String(item.mes_fechamento || '').slice(0, 7) >= '2024-01';
+  });
   var month = sanitizeText_((params || {}).month || (params || {}).mes).slice(0, 7);
   if (month) {
     rows = rows.filter(function(item) {
@@ -1423,6 +1426,7 @@ function startClickUpMilestoneClosingBackground_(params) {
   var props = PropertiesService.getScriptProperties();
   migrateClickUpMilestoneClosingSchema_();
   if (props.getProperty('CLICKUP_MILESTONE_CLOSING_ACTIVE') === '1') {
+    props.setProperty('CLICKUP_MILESTONE_CLOSING_PHASE', 'recent');
     props.setProperty('CLICKUP_MILESTONE_CLOSING_UPDATED_AT', new Date().toISOString());
     scheduleClickUpMilestoneClosingBackground_(1000);
     return {

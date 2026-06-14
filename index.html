@@ -5128,6 +5128,8 @@ function fechamentoNormalizeRows(rows) {
     item.mes_validacao = fechamentoMonthKey(item.mes_validacao, item.validation_at);
     item.consultor = fechamentoConsultantName(item.consultor || item.responsaveis);
     return item;
+  }).filter(function(item) {
+    return String(item.mes_fechamento || '') >= '2024-01';
   });
 }
 function fechamentoLoad(force) {
@@ -5209,20 +5211,20 @@ function fechamentoStartSync(btn) {
     if (btn) { btn.disabled = false; btn.textContent = original || 'Atualizar ClickUp'; }
     showToast('Atualização ClickUp agendada. O painel será recarregado automaticamente.', 'ok');
     initFechamento();
-    fechamentoSchedulePoll();
+    fechamentoSchedulePoll(3000);
   }).catch(function(error) {
     if (btn) { btn.disabled = false; btn.textContent = original || 'Atualizar ClickUp'; }
     showToast((error && error.message) || 'Erro ao atualizar fechamento', 'err');
   });
   return false;
 }
-function fechamentoSchedulePoll() {
+function fechamentoSchedulePoll(delay) {
   if (FECHAMENTO_POLL_TIMER) clearTimeout(FECHAMENTO_POLL_TIMER);
   FECHAMENTO_POLL_TIMER = setTimeout(function() {
     fechamentoLoad(true).then(function() {
-      if (FECHAMENTO_META.background_sync && FECHAMENTO_META.background_sync.active) fechamentoSchedulePoll();
+      if (FECHAMENTO_META.background_sync && FECHAMENTO_META.background_sync.active) fechamentoSchedulePoll(3000);
     });
-  }, 15000);
+  }, Number(delay || 3000));
 }
 function initFechamento() {
   var box = document.getElementById('fech-content');
