@@ -11231,6 +11231,7 @@ function consultantSetSeniority(name,seniority,select) {
     CONSULTANT_COMP_STATE.loaded=true;
     initCons();
     renderDiariasCmax();
+    carregarDiariasCmax(true);
     showToast('Senioridade de '+name+' salva para todos.','ok');
     return false;
   }).catch(function(error){
@@ -11309,6 +11310,13 @@ function cmaxApplyResponse(resp) {
   CMAX_DAILY_STATE.trainingTeam=Array.isArray(resp.training_team)?resp.training_team:CMAX_DAILY_STATE.trainingTeam;
   CMAX_DAILY_STATE.trainingTeamCutoff=String(resp.training_team_cutoff||'');
   CMAX_DAILY_STATE.activities=Array.isArray(resp.available_activities)?resp.available_activities:CMAX_DAILY_STATE.activities;
+  if(Array.isArray(resp.consultant_compensation)){
+    var compensationItems={};
+    resp.consultant_compensation.forEach(function(item){compensationItems[consultantCompKey(item.consultant_key||item.consultant_name)]=item;});
+    CONSULTANT_COMP_STATE.items=compensationItems;
+    CONSULTANT_COMP_STATE.rates=resp.consultant_daily_rates||CONSULTANT_COMP_STATE.rates;
+    CONSULTANT_COMP_STATE.loaded=true;
+  }
   CMAX_DAILY_STATE.historySync=resp.history_sync||null;
   CMAX_DAILY_STATE.syncedAt=String(resp.synced_at||'');
 }
@@ -11584,7 +11592,7 @@ function renderDiariasCmax() {
       var value=equivalent*financial.dailyValue;
       return '<tr><td><strong>'+escapeHtml(item.cliente||'-')+'</strong></td><td>'+cmaxActivityLabel(item)+'</td><td><div class="cmax-date-main">'+escapeHtml(dateInfo.weekday)+'</div><div class="cmax-date-sub">'+escapeHtml(dateInfo.date)+'</div></td><td>'+escapeHtml(start+(end?' - '+end:''))+'</td><td class="'+(equivalent?'cmax-daily-yes':'cmax-daily-no')+'">'+(equivalent?cmaxEquivalentLabel(equivalent):'Não')+'</td><td><strong>'+(equivalent?consultantMoney(value):'-')+'</strong></td></tr>';
     }).join('');
-    return '<section class="cmax-group '+(expanded?'open':'')+'"><div class="cmax-group-head" onclick="return cmaxToggleConsultant(\''+encodeURIComponent(name)+'\')"><span class="cmax-counts"><button class="cmax-group-toggle" title="'+(expanded?'Minimizar':'Ver todas as atividades')+'">&#9662;</button><span>'+escapeHtml(name)+'</span><span class="cmax-count-pill">'+escapeHtml(consultantSeniorityLabel(financial.seniority))+'</span><button class="cmax-calendar-btn" onclick="event.stopPropagation();abrirCalendarioCmax(\''+encodeURIComponent(name)+'\')">Vis&atilde;o calend&aacute;rio</button></span><span class="cmax-counts"><span class="cmax-count-pill">'+cmaxEquivalentLabel(consultantDaily)+' di&aacute;ria(s)</span><span class="cmax-count-pill">'+consultantMoney(financial.total)+'</span><span class="cmax-count-pill">'+events.length+' registro(s)</span></span></div><div class="cmax-group-body"><div class="dashx-table-wrap"><table class="dashx-table"><thead><tr><th>Cliente</th><th>Modalidade registrada</th><th>Dia realizado</th><th>Hor&aacute;rio</th><th>Equiv. di&aacute;ria</th><th>Valor</th></tr></thead><tbody>'+rows+'</tbody></table></div></div></section>';
+    return '<section class="cmax-group '+(expanded?'open':'')+'"><div class="cmax-group-head" onclick="return cmaxToggleConsultant(\''+encodeURIComponent(name)+'\')"><span class="cmax-counts"><button class="cmax-group-toggle" title="'+(expanded?'Minimizar':'Ver todas as atividades')+'">&#9662;</button><span>'+escapeHtml(name)+'</span>'+(AUTH_STATE.user&&AUTH_STATE.user.role==='admin'?consultantSeniorityControl(name):'<span class="cmax-count-pill">'+escapeHtml(consultantSeniorityLabel(financial.seniority))+'</span>')+'<button class="cmax-calendar-btn" onclick="event.stopPropagation();abrirCalendarioCmax(\''+encodeURIComponent(name)+'\')">Vis&atilde;o calend&aacute;rio</button></span><span class="cmax-counts"><span class="cmax-count-pill">'+cmaxEquivalentLabel(consultantDaily)+' di&aacute;ria(s)</span><span class="cmax-count-pill">'+consultantMoney(financial.total)+'</span><span class="cmax-count-pill">'+events.length+' registro(s)</span></span></div><div class="cmax-group-body"><div class="dashx-table-wrap"><table class="dashx-table"><thead><tr><th>Cliente</th><th>Modalidade registrada</th><th>Dia realizado</th><th>Hor&aacute;rio</th><th>Equiv. di&aacute;ria</th><th>Valor</th></tr></thead><tbody>'+rows+'</tbody></table></div></div></section>';
   }).join('');
   var history=s.historySync||{};
   var status=s.loading?'Consultando a base salva...':s.error?escapeHtml(s.error):history.error?('Carga hist&oacute;rica interrompida: '+escapeHtml(history.error)):history.active?('Hist&oacute;rico CMAX em andamento: '+(s.loadedMonths||[]).length+' de '+months.length+' m&ecirc;s(es) dispon&iacute;veis. &Uacute;ltimo processado: '+escapeHtml(history.last_month||'-')+'; pr&oacute;ximo: '+escapeHtml(history.next_month||'-')+'.'):(s.syncedAt?'Hist&oacute;rico carregado: '+(s.loadedMonths||[]).length+' de '+months.length+' m&ecirc;s(es). &Uacute;ltima sincroniza&ccedil;&atilde;o: '+escapeHtml(s.syncedAt):'Ainda sem sincroniza&ccedil;&atilde;o CMAX.');

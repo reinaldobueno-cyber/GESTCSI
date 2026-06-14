@@ -4445,6 +4445,10 @@ function normalizeConsultantSeniority_(value) {
 
 function getConsultantCompensation_(params) {
   requireUser_(params || {});
+  return getConsultantCompensationData_();
+}
+
+function getConsultantCompensationData_() {
   var sheet = getConsultantCompensationSheet_();
   var values = sheet.getDataRange().getValues();
   if (values.length <= 1) return { ok: true, consultants: [] };
@@ -4478,7 +4482,7 @@ function setConsultantSeniority_(params) {
   var header = values[0];
   var rowNumber = 0;
   for (var i = 1; i < values.length; i++) {
-    if (sanitizeText_(values[i][header.indexOf('consultant_key')]) === key) {
+    if (normalizeKey_(values[i][header.indexOf('consultant_key')]) === key) {
       rowNumber = i + 1;
       break;
     }
@@ -5354,6 +5358,8 @@ function getCmaxDailyEvents_(params) {
   if (cached) {
     cached.cached = true;
     cached.history_sync = getCmaxDailyHistoryStatus_().history_sync;
+    cached.consultant_compensation = getConsultantCompensationData_().consultants;
+    cached.consultant_daily_rates = CONSULTANT_SENIORITY_RATES;
     return cached;
   }
   var meta;
@@ -5458,6 +5464,8 @@ function readCmaxMaterializedCache_(month, consultant) {
     history_loaded_months: cmaxSnapshotMonths_(meta),
     training_team_cutoff: meta.training_team_cutoff || '',
     training_team: meta.training_team || [],
+    consultant_compensation: getConsultantCompensationData_().consultants,
+    consultant_daily_rates: CONSULTANT_SENIORITY_RATES,
     available_activities: meta.available_activities || [],
     history_sync: first.history_sync || {},
     synced_at: meta.synced_at || '',
