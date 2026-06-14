@@ -979,6 +979,99 @@ function fetchClickUpTasksByIds_(taskIds) {
   return tasks;
 }
 
+function fetchClickUpValidationMilestoneTasks_() {
+  var token = getScriptProperty_('CLICKUP_TOKEN');
+  var workspaceId = getClickUpWorkspaceId_();
+  if (!token) throw new Error('Missing CLICKUP_TOKEN script property');
+  if (!workspaceId) throw new Error('CLICKUP_TEAM_ID nao configurado.');
+  var statuses = [
+    'Aprovado Gestao', 'Aprovado Gestão', 'aprovado gestão',
+    'Reprovado Gestao', 'Reprovado Gestão', 'reprovado gestão'
+  ];
+  var responses = UrlFetchApp.fetchAll(statuses.map(function(status) {
+    return {
+      url: CLICKUP_API_BASE + '/team/' + workspaceId + '/task?' + [
+        'include_closed=true',
+        'subtasks=true',
+        'custom_items[]=1',
+        'page=0',
+        'statuses[]=' + encodeURIComponent(status)
+      ].join('&'),
+      method: 'get',
+      muteHttpExceptions: true,
+      headers: {
+        Authorization: token,
+        Accept: 'application/json',
+        'Content-Type': 'application/json'
+      }
+    };
+  }));
+  var tasks = [];
+  responses.forEach(function(response) {
+    if (response.getResponseCode() < 200 || response.getResponseCode() >= 300) return;
+    try {
+      (JSON.parse(response.getContentText() || '{}').tasks || []).forEach(function(task) {
+        task._confirmed_milestone = true;
+        tasks.push(task);
+      });
+    } catch (error) {}
+  });
+  return dedupeTasks_(tasks);
+}
+
+function fetchClickUpValidationAndCurrentTasks_(currentValidationIds) {
+  var token = getScriptProperty_('CLICKUP_TOKEN');
+  var workspaceId = getClickUpWorkspaceId_();
+  if (!token) throw new Error('Missing CLICKUP_TOKEN script property');
+  if (!workspaceId) throw new Error('CLICKUP_TEAM_ID nao configurado.');
+  var statuses = [
+    'Aprovado Gestao', 'Aprovado Gestão', 'aprovado gestão',
+    'Reprovado Gestao', 'Reprovado Gestão', 'reprovado gestão'
+  ];
+  var requests = statuses.map(function(status) {
+    return {
+      url: CLICKUP_API_BASE + '/team/' + workspaceId + '/task?' + [
+        'include_closed=true',
+        'subtasks=true',
+        'custom_items[]=1',
+        'page=0',
+        'statuses[]=' + encodeURIComponent(status)
+      ].join('&'),
+      kind: 'status'
+    };
+  });
+  (currentValidationIds || []).map(normalizeClickUpId_).filter(function(id, index, all) {
+    return !!id && all.indexOf(id) === index;
+  }).forEach(function(id) {
+    requests.push({ url: CLICKUP_API_BASE + '/task/' + id, kind: 'task' });
+  });
+  var responses = UrlFetchApp.fetchAll(requests.map(function(request) {
+    return {
+      url: request.url,
+      method: 'get',
+      muteHttpExceptions: true,
+      headers: {
+        Authorization: token,
+        Accept: 'application/json',
+        'Content-Type': 'application/json'
+      }
+    };
+  }));
+  var tasks = [];
+  responses.forEach(function(response, index) {
+    if (response.getResponseCode() < 200 || response.getResponseCode() >= 300) return;
+    try {
+      var payload = JSON.parse(response.getContentText() || '{}');
+      var found = requests[index].kind === 'status' ? (payload.tasks || []) : [payload];
+      found.forEach(function(task) {
+        task._confirmed_milestone = true;
+        tasks.push(task);
+      });
+    } catch (error) {}
+  });
+  return dedupeTasks_(tasks);
+}
+
 function fetchAllFolderTasks_(folderId, options) {
   folderId = normalizeClickUpId_(folderId);
   if (!folderId) throw new Error('CLICKUP_CONFIG com folder_id invalido ou vazio.');
@@ -1450,9 +1543,7 @@ function parseJsonArray_(value) {
   }
 }
 
-function fetchLatestClickUpTaskComment_(taskId) {
-  try {
-    var response = clickupRequest_('get', '/task/' + normalizeClickUpId_(taskId) + '/comment');
+function parseLatestClickUpTaskComment_(response) {
     var comments = response && response.comments || [];
     if (!comments.length) return { text: '', user: '' };
     comments.sort(function(a, b) {
@@ -1478,9 +1569,50 @@ function fetchLatestClickUpTaskComment_(taskId) {
       text: meaningful.slice(0, 5).map(function(comment) { return comment.text; }).join(' | '),
       user: meaningful[0].user
     };
+}
+
+function fetchLatestClickUpTaskComment_(taskId) {
+  try {
+    return parseLatestClickUpTaskComment_(
+      clickupRequest_('get', '/task/' + normalizeClickUpId_(taskId) + '/comment')
+    );
   } catch (error) {
     return { text: '', user: '' };
   }
+}
+
+function fetchLatestClickUpTaskCommentsByIds_(taskIds) {
+  var token = getScriptProperty_('CLICKUP_TOKEN');
+  if (!token) throw new Error('Missing CLICKUP_TOKEN script property');
+  var ids = (taskIds || []).map(normalizeClickUpId_).filter(function(id, index, all) {
+    return !!id && all.indexOf(id) === index;
+  });
+  var commentsById = {};
+  if (!ids.length) return commentsById;
+  var responses = UrlFetchApp.fetchAll(ids.map(function(id) {
+    return {
+      url: CLICKUP_API_BASE + '/task/' + id + '/comment',
+      method: 'get',
+      muteHttpExceptions: true,
+      headers: {
+        Authorization: token,
+        Accept: 'application/json',
+        'Content-Type': 'application/json'
+      }
+    };
+  }));
+  responses.forEach(function(response, index) {
+    if (response.getResponseCode() < 200 || response.getResponseCode() >= 300) {
+      commentsById[ids[index]] = { text: '', user: '' };
+      return;
+    }
+    try {
+      commentsById[ids[index]] = parseLatestClickUpTaskComment_(JSON.parse(response.getContentText() || '{}'));
+    } catch (error) {
+      commentsById[ids[index]] = { text: '', user: '' };
+    }
+  });
+  return commentsById;
 }
 
 function startClickUpMilestoneClosingBackground_(params) {
@@ -1822,10 +1954,7 @@ function syncClickUpRecentMilestoneAndGetClosing_(params) {
 
 function confirmClickUpMilestoneStatuses_(params) {
   var startedAt = new Date().getTime();
-  var taskIds = sanitizeText_((params || {}).task_ids).split(/[\s,;]+/).filter(function(id) {
-    return !!normalizeClickUpId_(id);
-  });
-  if (!taskIds.length) return getClickUpMilestoneClosing_(params || {});
+  var month = sanitizeText_((params || {}).month || (params || {}).mes).slice(0, 7);
 
   var lock = LockService.getScriptLock();
   if (!lock.tryLock(5000)) {
@@ -1835,8 +1964,36 @@ function confirmClickUpMilestoneStatuses_(params) {
     var sheet = getClickUpMilestoneClosingSheet_();
     var headers = getClickUpMilestoneClosingHeaders_();
     var current = loadClickUpMilestoneClosingCurrent_(sheet);
-    var tasks = fetchClickUpTasksByIds_(taskIds);
     var changed = 0;
+    Object.keys(current).forEach(function(taskId) {
+      var item = current[taskId] || {};
+      if ((!month || sanitizeText_(item.mes_fechamento).slice(0, 7) === month) &&
+          item.situacao === 'aguardando' &&
+          (sanitizeText_(item.justificativa) || sanitizeText_(item.justificativa_por))) {
+        item.justificativa = '';
+        item.justificativa_por = '';
+        changed += 1;
+      }
+    });
+    var validatedIds = Object.keys(current).filter(function(taskId) {
+      var item = current[taskId] || {};
+      return (!month || sanitizeText_(item.mes_fechamento).slice(0, 7) === month) &&
+        (item.situacao === 'aprovado' || item.situacao === 'reprovado');
+    });
+    var tasks = fetchClickUpValidationAndCurrentTasks_(validatedIds);
+    tasks = dedupeTasks_(tasks).filter(function(task) {
+      var taskId = String(task && task.id || '');
+      var existing = current[taskId] || {};
+      var taskClosedAt = task && task.date_closed ? fromMillisIso_(task.date_closed) : '';
+      var taskMonth = normalizeClickUpMonthReference_(existing.mes_fechamento, taskClosedAt);
+      return !month || taskMonth === month;
+    });
+    var validationIds = tasks.filter(function(task) {
+      var status = task && task.status && (task.status.status || task.status.type || task.status.label) || '';
+      var situation = clickUpMilestoneSituation_(status);
+      return situation === 'aprovado' || situation === 'reprovado';
+    }).map(function(task) { return String(task.id || ''); });
+    var commentsById = fetchLatestClickUpTaskCommentsByIds_(validationIds);
     tasks.forEach(function(task) {
       var taskId = String(task && task.id || '');
       var previous = current[taskId] || {};
@@ -1857,6 +2014,16 @@ function confirmClickUpMilestoneStatuses_(params) {
         validation_comments_only: true
       });
       var after = current[taskId];
+      if (after) {
+        if (after.situacao === 'aprovado' || after.situacao === 'reprovado') {
+          var comment = commentsById[taskId] || { text: '', user: '' };
+          after.justificativa = comment.text || '';
+          after.justificativa_por = comment.user || '';
+        } else {
+          after.justificativa = '';
+          after.justificativa_por = '';
+        }
+      }
       if (!after || sanitizeText_(after.status_atual) !== beforeStatus) changed += 1;
     });
     writeClickUpMilestoneClosingCurrent_(sheet, headers, current);
