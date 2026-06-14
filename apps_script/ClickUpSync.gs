@@ -27,6 +27,9 @@
 
 var CLICKUP_API_BASE = 'https://api.clickup.com/api/v2';
 var CLICKUP_DEFAULT_WORKSPACE_ID = '9007083069';
+var CLICKUP_MILESTONE_BONUS_VALUE = 30;
+var CLICKUP_MILESTONE_AUDIT_TASK_IDS = [];
+var CLICKUP_MILESTONE_CLOSING_SCHEMA_VERSION = 'strict-milestones-v2';
 var MONTHS = ['JAN', 'FEV', 'MAR', 'ABR', 'MAI', 'JUN', 'JUL', 'AGO', 'SET', 'OUT', 'NOV', 'DEZ'];
 var HISTORICAL_CLICKUP_SPACES = [
   { name: 'CSI-PROJETOS-ENGORDA', space_id: '90130063112', url: 'https://app.clickup.com/9007083069/v/s/90130063112' },
@@ -59,7 +62,11 @@ function onOpen() {
     .addItem('Validar CLICKUP_CONFIG', 'validarClickUpConfig')
     .addItem('Importar projetos dos spaces históricos', 'inserirSpacesHistoricosClickUp')
     .addItem('Sincronizar inventário ClickUp', 'sincronizarInventarioClickUp')
+    .addItem('Atualizar fechamento de marcos', 'sincronizarFechamentoMarcosClickUp')
     .addItem('Sincronizar atividade dos usuários ClickUp', 'sincronizarAtividadeUsuariosClickUp')
+    .addItem('Sincronizar diárias CMAX do mês atual', 'sincronizarDiariasCmaxMesAtual')
+    .addItem('Sincronizar histórico de diárias CMAX', 'sincronizarHistoricoDiariasCmax')
+    .addItem('Reconstruir visão rápida de diárias CMAX', 'reconstruirVisaoDiariasCmax')
     .addItem('Sincronizar todos habilitados', 'syncAllProjectsTrigger')
     .addItem('Sincronizar primeiro configurado', 'syncPrimeiroProjetoConfigurado')
     .addToUi();
@@ -101,6 +108,37 @@ function doGet(e) {
     if (action === 'getClickUpInventory') {
       return jsonOutput_(getClickUpInventory_(params), params.callback);
     }
+    if (action === 'getClickUpMilestoneClosing') {
+      return jsonOutput_(getClickUpMilestoneClosing_(params), params.callback);
+    }
+    if (action === 'startClickUpMilestoneClosingBackground') {
+      requireAdmin_(params);
+      return jsonOutput_(startClickUpMilestoneClosingBackground_(params), params.callback);
+    }
+    if (action === 'syncClickUpMilestoneRecent') {
+      requireAdmin_(params);
+      return jsonOutput_(syncClickUpRecentMilestoneAndGetClosing_(params), params.callback);
+    }
+    if (action === 'confirmClickUpMilestoneStatuses') {
+      requireAdmin_(params);
+      return jsonOutput_(confirmClickUpMilestoneStatuses_(params), params.callback);
+    }
+    if (action === 'syncClickUpClosedMilestones') {
+      requireAdmin_(params);
+      return jsonOutput_(syncClickUpClosedMilestones_(params), params.callback);
+    }
+    if (action === 'syncClickUpApprovedMilestones') {
+      requireAdmin_(params);
+      return jsonOutput_(syncClickUpValidationSituation_(params, 'aprovado'), params.callback);
+    }
+    if (action === 'syncClickUpRejectedMilestones') {
+      requireAdmin_(params);
+      return jsonOutput_(syncClickUpValidationSituation_(params, 'reprovado'), params.callback);
+    }
+    if (action === 'stopLegacyClickUpMilestoneAudit') {
+      requireAdmin_(params);
+      return jsonOutput_(stopLegacyClickUpMilestoneAudit_(), params.callback);
+    }
     if (action === 'syncClickUpUserActivity') {
       requireAdmin_(params);
       return jsonOutput_(syncClickUpUserActivity_(params), params.callback);
@@ -112,6 +150,24 @@ function doGet(e) {
     if (action === 'getClickUpUserActivity') {
       requireAdmin_(params);
       return jsonOutput_(getClickUpUserActivity_(params), params.callback);
+    }
+    if (action === 'getCmaxDailyEvents') {
+      return jsonOutput_(getCmaxDailyEvents_(params), params.callback);
+    }
+    if (action === 'getCmaxDailyHistoryStatus') {
+      return jsonOutput_(getCmaxDailyHistoryStatus_(), params.callback);
+    }
+    if (action === 'syncCmaxDailyEvents') {
+      requireAdmin_(params);
+      return jsonOutput_(syncCmaxDailyEvents_(params), params.callback);
+    }
+    if (action === 'startCmaxDailyHistoryBackground') {
+      requireAdmin_(params);
+      return jsonOutput_(startCmaxDailyHistoryBackground_(params), params.callback);
+    }
+    if (action === 'continueCmaxDailyHistoryBatch') {
+      requireAdmin_(params);
+      return jsonOutput_(continueCmaxDailyHistoryBatch_(params), params.callback);
     }
     if (action === 'logPanelUpdate' || String(params.log_update || '') === '1') {
       var logResult = logPanelUpdate_(params);
@@ -160,7 +216,7 @@ function doGet(e) {
     var payload = {
       ok: true,
       service: 'clickup-sync',
-      message: 'Use action=getMonthlyProjects|syncProject|syncAll|processDirty|validateConfig|getClickUpInventory|syncClickUpUserActivity|startClickUpUserActivityBackground|getClickUpUserActivity|logPanelUpdate|getPanelUpdateHistory|login|me|listUsers|createUser|setUserEnabled|logProjectFollowup|getProjectFollowups|setProjectFollowupStatus|setProjectKanbanStage|deleteProjectFollowup'
+      message: 'Use action=getMonthlyProjects|syncProject|syncAll|processDirty|validateConfig|getClickUpInventory|getClickUpMilestoneClosing|startClickUpMilestoneClosingBackground|syncClickUpUserActivity|startClickUpUserActivityBackground|getClickUpUserActivity|getCmaxDailyEvents|getCmaxDailyHistoryStatus|syncCmaxDailyEvents|startCmaxDailyHistoryBackground|logPanelUpdate|getPanelUpdateHistory|login|me|listUsers|createUser|setUserEnabled|logProjectFollowup|getProjectFollowups|setProjectFollowupStatus|setProjectKanbanStage|deleteProjectFollowup'
     };
     return jsonOutput_(payload, params.callback);
   } catch (error) {
@@ -314,6 +370,7 @@ function registerAllWebhooks() {
 function createTimeDrivenTriggers() {
   ScriptApp.newTrigger('processDirtyQueueTrigger').timeBased().everyMinutes(5).create();
   ScriptApp.newTrigger('syncAllProjectsTrigger').timeBased().everyHours(6).create();
+  installClickUpClosedMilestonesTrigger();
 }
 
 function processDirtyQueueTrigger() {
@@ -322,6 +379,40 @@ function processDirtyQueueTrigger() {
 
 function syncAllProjectsTrigger() {
   syncAllProjects({ force: true });
+}
+
+function syncClickUpClosedMilestonesTrigger() {
+  syncClickUpClosedMilestones_({ skip_result: true });
+}
+
+function installClickUpClosedMilestonesTrigger() {
+  stopLegacyClickUpMilestoneAudit_();
+  ScriptApp.getProjectTriggers().forEach(function(trigger) {
+    if (trigger.getHandlerFunction() === 'syncClickUpClosedMilestonesTrigger') {
+      ScriptApp.deleteTrigger(trigger);
+    }
+  });
+  ScriptApp.newTrigger('syncClickUpClosedMilestonesTrigger').timeBased().everyHours(12).create();
+  return { ok: true, handler: 'syncClickUpClosedMilestonesTrigger', every_hours: 12 };
+}
+
+function stopLegacyClickUpMilestoneAudit_() {
+  var props = PropertiesService.getScriptProperties();
+  if (props.getProperty('CLICKUP_MILESTONE_CLOSING_PHASE') === 'disabled' &&
+      props.getProperty('CLICKUP_MILESTONE_CLOSING_ACTIVE') !== '1') {
+    return { ok: true, legacy_audit_disabled: true, already_disabled: true };
+  }
+  props.setProperty('CLICKUP_MILESTONE_CLOSING_ACTIVE', '0');
+  props.setProperty('CLICKUP_MILESTONE_CLOSING_PHASE', 'disabled');
+  props.setProperty('CLICKUP_MILESTONE_CLOSING_UPDATED_AT', new Date().toISOString());
+  ScriptApp.getProjectTriggers().forEach(function(trigger) {
+    var handler = trigger.getHandlerFunction();
+    if (handler === 'syncClickUpMilestoneClosingTrigger' ||
+        handler === 'continueClickUpMilestoneClosingBackgroundTrigger') {
+      ScriptApp.deleteTrigger(trigger);
+    }
+  });
+  return { ok: true, legacy_audit_disabled: true };
 }
 
 function diagnosticarSetup() {
@@ -577,6 +668,7 @@ function syncProjectMapping_(mapping, options) {
   options = options || {};
   var normalized = buildNormalizedProjectFromClickUp_(mapping);
   writeProjectSummaryToMonthlySheet_(mapping, normalized);
+  upsertClickUpMilestoneClosing_(mapping, normalized);
   writeSyncStatus_(mapping, 'ok', '');
   return {
     project_key: mapping.project_key,
@@ -625,8 +717,11 @@ function buildNormalizedProjectFromClickUp_(mapping) {
     var phaseInfo = resolvePhaseForTask_(task, byId, phaseMap);
     var phase = phaseInfo.phase;
     var countInSummary = shouldCountTaskInSummary_(task, phaseInfo, byId);
+    var milestoneTask = isMilestoneTask_(task);
 
-    if (!countInSummary) {
+    // Marcos podem ter subtarefas de evidencia/validacao. Eles ainda precisam
+    // entrar no fechamento, mesmo quando nao contam como task folha no resumo.
+    if (!countInSummary && !milestoneTask) {
       ignoredNestedItems += 1;
       return;
     }
@@ -638,11 +733,17 @@ function buildNormalizedProjectFromClickUp_(mapping) {
       fase_nome: phase ? phase.nome : '',
       parent_id: String(task.parent || ''),
       status_original: task.status && (task.status.status || task.status.type || task.status.label) || '',
+      responsaveis: (task.assignees || []).map(function(user) {
+        return sanitizeText_(user && (user.username || user.name || user.email));
+      }).filter(function(name) { return !!name; }).join(', '),
+      task_url: sanitizeText_(task.url || task.permalink || task.link || task.html_url) ||
+        ('https://app.clickup.com/t/' + String(task.id || '')),
+      date_closed: task.date_closed ? fromMillisIso_(task.date_closed) : '',
       updated_at: task.date_updated ? fromMillisIso_(task.date_updated) : '',
       due_date: task.due_date ? fromMillisIso_(task.due_date) : ''
     };
 
-    if (isMilestoneTask_(task)) {
+    if (milestoneTask) {
       item.tipo = 'marco';
       item.concluido = isClosedStatus_(item.status_original);
       normalizedMilestones.push(item);
@@ -823,6 +924,287 @@ function fetchAllViewTasks_(viewId, options) {
     page += 1;
   }
   return dedupeTasks_(all);
+}
+
+function fetchClickUpMilestoneCoverageTasks_() {
+  var workspaceId = getClickUpWorkspaceId_();
+  if (!workspaceId) throw new Error('CLICKUP_TEAM_ID nao configurado para varredura geral de marcos.');
+  var statuses = [
+    'Closed', 'closed',
+    'Aprovado Gestao', 'Aprovado Gestão', 'aprovado gestão',
+    'Reprovado Gestao', 'Reprovado Gestão', 'reprovado gestão'
+  ];
+  var all = [];
+  var successfulQueries = 0;
+  statuses.forEach(function(status) {
+    try {
+      var page = 0;
+      while (true) {
+        var query = [
+          'include_closed=true',
+          'subtasks=true',
+          'custom_items[]=1',
+          'page=' + page,
+          'statuses[]=' + encodeURIComponent(status)
+        ].join('&');
+        var response = clickupRequest_('get', '/team/' + workspaceId + '/task?' + query);
+        var batch = response.tasks || [];
+        batch.forEach(function(task) { task._confirmed_milestone = true; });
+        all = all.concat(batch.filter(isMilestoneTask_));
+        if (batch.length < 100) break;
+        page += 1;
+      }
+      successfulQueries += 1;
+    } catch (error) {
+      // Status customizados podem ter grafias diferentes entre os spaces.
+    }
+  });
+  if (!successfulQueries) throw new Error('Nenhum status de marco pôde ser consultado na varredura geral.');
+  return dedupeTasks_(all);
+}
+
+function fetchClickUpRecentMilestoneCoverageTasks_(sinceMillis, options) {
+  options = options || {};
+  var workspaceId = getClickUpWorkspaceId_();
+  if (!workspaceId) throw new Error('CLICKUP_TEAM_ID nao configurado para atualizacao recente de marcos.');
+  var since = Math.max(0, Number(sinceMillis || 0));
+  var page = 0;
+  var maxPages = Math.max(1, Number(options.max_pages || 10));
+  var all = [];
+  while (page < maxPages) {
+    var query = [
+      'include_closed=true',
+      'subtasks=true',
+      'custom_items[]=1',
+      'date_updated_gt=' + since,
+      'order_by=updated',
+      'reverse=true',
+      'page=' + page
+    ].join('&');
+    var response = clickupRequest_('get', '/team/' + workspaceId + '/task?' + query);
+    var batch = response.tasks || [];
+    batch.forEach(function(task) { task._confirmed_milestone = true; });
+    // Também precisamos receber marcos que saíram do fluxo para remover
+    // aprovações/reprovações antigas da base de fechamento.
+    all = all.concat(batch.filter(isMilestoneTask_));
+    if (batch.length < 100) break;
+    page += 1;
+  }
+  return dedupeTasks_(all);
+}
+
+function fetchClickUpTasksByIds_(taskIds) {
+  var token = getScriptProperty_('CLICKUP_TOKEN');
+  if (!token) throw new Error('Missing CLICKUP_TOKEN script property');
+  var seen = {};
+  var ids = (taskIds || []).map(normalizeClickUpId_).filter(function(id) {
+    if (!id || seen[id]) return false;
+    seen[id] = true;
+    return true;
+  }).slice(0, 150);
+  var tasks = [];
+  for (var offset = 0; offset < ids.length; offset += 50) {
+    var batch = ids.slice(offset, offset + 50);
+    var responses = UrlFetchApp.fetchAll(batch.map(function(id) {
+      return {
+        url: CLICKUP_API_BASE + '/task/' + id,
+        method: 'get',
+        muteHttpExceptions: true,
+        headers: {
+          Authorization: token,
+          Accept: 'application/json',
+          'Content-Type': 'application/json'
+        }
+      };
+    }));
+    responses.forEach(function(response) {
+      if (response.getResponseCode() < 200 || response.getResponseCode() >= 300) return;
+      try {
+        var task = JSON.parse(response.getContentText() || '{}');
+        task._confirmed_milestone = true;
+        tasks.push(task);
+      } catch (error) {}
+    });
+  }
+  return tasks;
+}
+
+function fetchClickUpValidationMilestoneTasks_() {
+  var token = getScriptProperty_('CLICKUP_TOKEN');
+  var workspaceId = getClickUpWorkspaceId_();
+  if (!token) throw new Error('Missing CLICKUP_TOKEN script property');
+  if (!workspaceId) throw new Error('CLICKUP_TEAM_ID nao configurado.');
+  var statuses = [
+    'Aprovado Gestao', 'Aprovado Gestão', 'aprovado gestão',
+    'Reprovado Gestao', 'Reprovado Gestão', 'reprovado gestão'
+  ];
+  var responses = UrlFetchApp.fetchAll(statuses.map(function(status) {
+    return {
+      url: CLICKUP_API_BASE + '/team/' + workspaceId + '/task?' + [
+        'include_closed=true',
+        'subtasks=true',
+        'custom_items[]=1',
+        'page=0',
+        'statuses[]=' + encodeURIComponent(status)
+      ].join('&'),
+      method: 'get',
+      muteHttpExceptions: true,
+      headers: {
+        Authorization: token,
+        Accept: 'application/json',
+        'Content-Type': 'application/json'
+      }
+    };
+  }));
+  var tasks = [];
+  responses.forEach(function(response) {
+    if (response.getResponseCode() < 200 || response.getResponseCode() >= 300) return;
+    try {
+      (JSON.parse(response.getContentText() || '{}').tasks || []).forEach(function(task) {
+        task._confirmed_milestone = true;
+        tasks.push(task);
+      });
+    } catch (error) {}
+  });
+  return dedupeTasks_(tasks);
+}
+
+function fetchClickUpValidationAndCurrentTasks_(currentValidationIds) {
+  var token = getScriptProperty_('CLICKUP_TOKEN');
+  var workspaceId = getClickUpWorkspaceId_();
+  if (!token) throw new Error('Missing CLICKUP_TOKEN script property');
+  if (!workspaceId) throw new Error('CLICKUP_TEAM_ID nao configurado.');
+  var statuses = [
+    'Aprovado Gestao', 'Aprovado Gestão', 'aprovado gestão',
+    'Reprovado Gestao', 'Reprovado Gestão', 'reprovado gestão'
+  ];
+  var requests = statuses.map(function(status) {
+    return {
+      url: CLICKUP_API_BASE + '/team/' + workspaceId + '/task?' + [
+        'include_closed=true',
+        'subtasks=true',
+        'custom_items[]=1',
+        'page=0',
+        'statuses[]=' + encodeURIComponent(status)
+      ].join('&'),
+      kind: 'status'
+    };
+  });
+  (currentValidationIds || []).map(normalizeClickUpId_).filter(function(id, index, all) {
+    return !!id && all.indexOf(id) === index;
+  }).forEach(function(id) {
+    requests.push({ url: CLICKUP_API_BASE + '/task/' + id, kind: 'task' });
+  });
+  var responses = UrlFetchApp.fetchAll(requests.map(function(request) {
+    return {
+      url: request.url,
+      method: 'get',
+      muteHttpExceptions: true,
+      headers: {
+        Authorization: token,
+        Accept: 'application/json',
+        'Content-Type': 'application/json'
+      }
+    };
+  }));
+  var tasks = [];
+  responses.forEach(function(response, index) {
+    if (response.getResponseCode() < 200 || response.getResponseCode() >= 300) return;
+    try {
+      var payload = JSON.parse(response.getContentText() || '{}');
+      var found = requests[index].kind === 'status' ? (payload.tasks || []) : [payload];
+      found.forEach(function(task) {
+        task._confirmed_milestone = true;
+        tasks.push(task);
+      });
+      if (requests[index].kind === 'status' && found.length === 100) {
+        var page = 1;
+        while (page < 20) {
+          var next = clickupRequestAbsolute_('get', requests[index].url.replace('page=0', 'page=' + page));
+          var nextTasks = next.tasks || [];
+          nextTasks.forEach(function(task) {
+            task._confirmed_milestone = true;
+            tasks.push(task);
+          });
+          if (nextTasks.length < 100) break;
+          page += 1;
+        }
+      }
+    } catch (error) {}
+  });
+  return dedupeTasks_(tasks);
+}
+
+function clickUpMilestoneStatusAliases_(situation) {
+  if (situation === 'aprovado') {
+    return ['Aprovado Gestao', 'Aprovado Gestão', 'aprovado gestão'];
+  }
+  if (situation === 'reprovado') {
+    return ['Reprovado Gestao', 'Reprovado Gestão', 'reprovado gestão'];
+  }
+  return ['Closed', 'closed'];
+}
+
+function fetchClickUpMilestonesBySituation_(situation, currentIds) {
+  var token = getScriptProperty_('CLICKUP_TOKEN');
+  var workspaceId = getClickUpWorkspaceId_();
+  if (!token) throw new Error('Missing CLICKUP_TOKEN script property');
+  if (!workspaceId) throw new Error('CLICKUP_TEAM_ID nao configurado.');
+  var requests = clickUpMilestoneStatusAliases_(situation).map(function(status) {
+    return {
+      url: CLICKUP_API_BASE + '/team/' + workspaceId + '/task?' + [
+        'include_closed=true',
+        'subtasks=true',
+        'custom_items[]=1',
+        'page=0',
+        'statuses[]=' + encodeURIComponent(status)
+      ].join('&'),
+      kind: 'status'
+    };
+  });
+  (currentIds || []).map(normalizeClickUpId_).filter(function(id, index, all) {
+    return !!id && all.indexOf(id) === index;
+  }).forEach(function(id) {
+    requests.push({ url: CLICKUP_API_BASE + '/task/' + id, kind: 'task' });
+  });
+  var responses = UrlFetchApp.fetchAll(requests.map(function(request) {
+    return {
+      url: request.url,
+      method: 'get',
+      muteHttpExceptions: true,
+      headers: {
+        Authorization: token,
+        Accept: 'application/json',
+        'Content-Type': 'application/json'
+      }
+    };
+  }));
+  var tasks = [];
+  responses.forEach(function(response, index) {
+    if (response.getResponseCode() < 200 || response.getResponseCode() >= 300) return;
+    try {
+      var payload = JSON.parse(response.getContentText() || '{}');
+      var found = requests[index].kind === 'status' ? (payload.tasks || []) : [payload];
+      found.forEach(function(task) {
+        task._confirmed_milestone = true;
+        tasks.push(task);
+      });
+      if (requests[index].kind === 'status' && found.length === 100) {
+        var page = 1;
+        while (page < 20) {
+          var next = clickupRequestAbsolute_('get', requests[index].url.replace('page=0', 'page=' + page));
+          var nextTasks = next.tasks || [];
+          nextTasks.forEach(function(task) {
+            task._confirmed_milestone = true;
+            tasks.push(task);
+          });
+          if (nextTasks.length < 100) break;
+          page += 1;
+        }
+      }
+    } catch (error) {}
+  });
+  return dedupeTasks_(tasks);
 }
 
 function fetchAllFolderTasks_(folderId, options) {
@@ -1104,6 +1486,946 @@ function getClickUpInventory_(params) {
     return !!sanitizeText_(item.cliente) && canUserAccessProjectItem_(user, item);
   });
   return { ok: true, projetos: projetos, total: projetos.length };
+}
+
+function getClickUpMilestoneClosing_(params) {
+  requireUser_(params || {});
+  var sheet = getClickUpMilestoneClosingSheet_();
+  var values = sheet.getDataRange().getDisplayValues();
+  var rows = values.length > 1 ? values.slice(1).map(function(row) {
+    var item = rowToObject_(values[0], row);
+    item.mes_fechamento = normalizeClickUpMonthReference_(item.mes_fechamento, item.closed_at);
+    item.mes_validacao = normalizeClickUpMonthReference_(item.mes_validacao, item.validation_at);
+    item.consultor = clickUpMilestoneConsultant_(item.consultor || item.responsaveis);
+    return item;
+  }).filter(function(item) {
+    return !!sanitizeText_(item.task_id) && normalizeKey_(item.item_tipo) === 'MARCO';
+  }) : [];
+  rows = rows.filter(function(item) {
+    return String(item.mes_fechamento || '').slice(0, 7) >= '2024-01';
+  });
+  var month = sanitizeText_((params || {}).month || (params || {}).mes).slice(0, 7);
+  if (month) {
+    rows = rows.filter(function(item) {
+      return String(item.mes_fechamento || '').slice(0, 7) === month;
+    });
+  }
+  rows.sort(function(a, b) {
+    return String(b.closed_at || b.validation_at || b.updated_at || '').localeCompare(
+      String(a.closed_at || a.validation_at || a.updated_at || '')
+    );
+  });
+  return {
+    ok: true,
+    marcos: rows,
+    total: rows.length,
+    bonus_por_marco: CLICKUP_MILESTONE_BONUS_VALUE,
+    background_sync: getClickUpMilestoneClosingBackgroundStatus_()
+  };
+}
+
+function upsertClickUpMilestoneClosing_(mapping, normalized, options) {
+  options = options || {};
+  var sheet = getClickUpMilestoneClosingSheet_();
+  var headers = getClickUpMilestoneClosingHeaders_();
+  var current = options.current || loadClickUpMilestoneClosingCurrent_(sheet);
+  var now = new Date().toISOString();
+  (normalized.marcos || []).forEach(function(milestone) {
+    var taskId = String(milestone.id || '');
+    if (!taskId) return;
+    var previous = current[taskId] || null;
+    var status = sanitizeText_(milestone.status_original);
+    var situation = clickUpMilestoneSituation_(status);
+    if (!previous && situation === 'outro') return;
+    if (previous && situation === 'outro' && options.authoritative) {
+      delete current[taskId];
+      return;
+    }
+    var statusChanged = !previous || sanitizeText_(previous.status_atual) !== status;
+    var closedAt = sanitizeText_(previous && previous.closed_at) ||
+      sanitizeText_(milestone.date_closed) ||
+      (situation !== 'outro' ? sanitizeText_(milestone.updated_at) || now : '');
+    var validationAt = situation === 'aprovado' || situation === 'reprovado'
+      ? sanitizeText_(previous && previous.validation_at)
+      : '';
+    if ((situation === 'aprovado' || situation === 'reprovado') && (!validationAt || statusChanged)) {
+      validationAt = sanitizeText_(milestone.updated_at) || now;
+    }
+    var isValidation = situation === 'aprovado' || situation === 'reprovado';
+    var clearComment = options.fetch_comments !== false &&
+      options.authoritative &&
+      (!options.validation_comments_only || isValidation);
+    var justification = clearComment ? '' : sanitizeText_(previous && previous.justificativa);
+    var justificationBy = clearComment ? '' : sanitizeText_(previous && previous.justificativa_por);
+    var shouldFetchComment = options.fetch_comments !== false &&
+      situation !== 'outro' &&
+      (!options.validation_comments_only || isValidation) &&
+      (options.authoritative || statusChanged || !justification);
+    if (shouldFetchComment) {
+      var comment = fetchLatestClickUpTaskComment_(taskId);
+      justification = comment.text || '';
+      justificationBy = comment.user || '';
+    }
+    var history = parseJsonArray_(previous && previous.status_history_json);
+    if (statusChanged) {
+      history.push({ status: status, situacao: situation, at: sanitizeText_(milestone.updated_at) || now });
+    }
+    current[taskId] = {
+      task_id: taskId,
+      item_tipo: 'Marco',
+      project_key: mapping.project_key || '',
+      projeto: mapping.cliente || normalized.cliente || '',
+      consultor: clickUpMilestoneConsultant_(milestone.responsaveis || normalized.consultor || mapping.consultor),
+      marco: milestone.nome || '',
+      fase: milestone.fase_nome || '',
+      status_atual: status,
+      situacao: situation,
+      closed_at: closedAt,
+      mes_fechamento: clickUpMonthReference_(closedAt),
+      validation_at: validationAt,
+      mes_validacao: clickUpMonthReference_(validationAt),
+      justificativa: justification,
+      justificativa_por: justificationBy,
+      valor_bonus: situation === 'aprovado' ? CLICKUP_MILESTONE_BONUS_VALUE : 0,
+      link: milestone.task_url || ('https://app.clickup.com/t/' + taskId),
+      responsaveis: milestone.responsaveis || '',
+      updated_at: milestone.updated_at || now,
+      sincronizado_em: now,
+      status_history_json: JSON.stringify(history)
+    };
+  });
+  if (!options.defer_write) writeClickUpMilestoneClosingCurrent_(sheet, headers, current);
+  return current;
+}
+
+function loadClickUpMilestoneClosingCurrent_(sheet) {
+  var values = sheet.getDataRange().getValues();
+  var current = {};
+  if (values.length > 1) {
+    values.slice(1).forEach(function(row) {
+      var item = rowToObject_(values[0], row);
+      if (item.task_id) current[String(item.task_id)] = item;
+    });
+  }
+  return current;
+}
+
+function writeClickUpMilestoneClosingCurrent_(sheet, headers, current) {
+  writeObjectsToSheet_(sheet, Object.keys(current).map(function(id) { return current[id]; }), headers);
+  sheet.setFrozenRows(1);
+}
+
+function upsertClickUpMilestoneClosingEntries_(entries, options) {
+  options = options || {};
+  if (!entries || !entries.length) return;
+  var sheet = getClickUpMilestoneClosingSheet_();
+  var headers = getClickUpMilestoneClosingHeaders_();
+  var current = loadClickUpMilestoneClosingCurrent_(sheet);
+  entries.forEach(function(entry) {
+    upsertClickUpMilestoneClosing_(entry.mapping, entry.normalized, {
+      current: current,
+      defer_write: true,
+      fetch_comments: options.fetch_comments !== false,
+      authoritative: options.authoritative === true,
+      validation_comments_only: options.validation_comments_only === true
+    });
+  });
+  writeClickUpMilestoneClosingCurrent_(sheet, headers, current);
+}
+
+function clickUpMilestoneSituation_(status) {
+  var key = normalizeKey_(status);
+  if (/REPROVAD/.test(key) && /GESTAO/.test(key)) return 'reprovado';
+  if (/APROVAD/.test(key) && /GESTAO/.test(key)) return 'aprovado';
+  if (/CLOSED|CLOSE|CONCLUID|FINALIZ|DONE|COMPLETE/.test(key)) return 'aguardando';
+  return 'outro';
+}
+
+function clickUpMonthReference_(value) {
+  if (!value) return '';
+  var date = new Date(value);
+  if (isNaN(date.getTime())) return '';
+  return Utilities.formatDate(date, Session.getScriptTimeZone(), 'yyyy-MM');
+}
+
+function normalizeClickUpMonthReference_(value, fallbackDate) {
+  var text = sanitizeText_(value);
+  var isoMatch = text.match(/^(\d{4})-(\d{2})/);
+  if (isoMatch) return isoMatch[1] + '-' + isoMatch[2];
+  var brMatch = text.match(/^(\d{2})\/(\d{4})$/);
+  if (brMatch) return brMatch[2] + '-' + brMatch[1];
+  return clickUpMonthReference_(fallbackDate || value);
+}
+
+function clickUpMilestoneConsultant_(value) {
+  var seen = {};
+  var names = sanitizeText_(value).split(/\s*,\s*/).filter(function(name) {
+    var key = normalizeKey_(name);
+    if (!key || /ADMINISTRATIVO|ADMINISTRADOR|MULTSOFT|SUPORTE/.test(key) || seen[key]) return false;
+    seen[key] = true;
+    return true;
+  });
+  return names[0] || sanitizeText_(value).split(/\s*,\s*/)[0] || 'Sem consultor';
+}
+
+function parseJsonArray_(value) {
+  if (Array.isArray(value)) return value;
+  try {
+    var parsed = JSON.parse(String(value || '[]'));
+    return Array.isArray(parsed) ? parsed : [];
+  } catch (error) {
+    return [];
+  }
+}
+
+function parseLatestClickUpTaskComment_(response) {
+    var comments = response && response.comments || [];
+    if (!comments.length) return { text: '', user: '' };
+    comments.sort(function(a, b) {
+      return Number(b.date || b.date_created || 0) - Number(a.date || a.date_created || 0);
+    });
+    var meaningful = comments.map(function(comment) {
+      var text = Array.isArray(comment.comment_text)
+      ? comment.comment_text.map(function(part) {
+        return sanitizeText_(part && (part.text || part.value || part.content));
+      }).filter(function(part) { return !!part; }).join(' ')
+      : sanitizeText_(comment.comment_text || comment.comment || comment.text);
+      var attachments = (comment.attachments || []).map(function(attachment) {
+        return sanitizeText_(attachment && (attachment.title || attachment.name || attachment.filename));
+      }).filter(function(name) { return !!name; });
+      if (attachments.length) text += (text ? ' | ' : '') + 'Anexo(s): ' + attachments.join(', ');
+      return {
+        text: sanitizeText_(text),
+        user: sanitizeText_(comment.user && (comment.user.username || comment.user.name || comment.user.email))
+      };
+    }).filter(function(comment) { return !!comment.text; });
+    if (!meaningful.length) return { text: '', user: '' };
+    return {
+      text: meaningful.slice(0, 5).map(function(comment) { return comment.text; }).join(' | '),
+      user: meaningful[0].user
+    };
+}
+
+function fetchLatestClickUpTaskComment_(taskId) {
+  try {
+    return parseLatestClickUpTaskComment_(
+      clickupRequest_('get', '/task/' + normalizeClickUpId_(taskId) + '/comment')
+    );
+  } catch (error) {
+    return { text: '', user: '' };
+  }
+}
+
+function fetchLatestClickUpTaskCommentsByIds_(taskIds) {
+  var token = getScriptProperty_('CLICKUP_TOKEN');
+  if (!token) throw new Error('Missing CLICKUP_TOKEN script property');
+  var ids = (taskIds || []).map(normalizeClickUpId_).filter(function(id, index, all) {
+    return !!id && all.indexOf(id) === index;
+  });
+  var commentsById = {};
+  if (!ids.length) return commentsById;
+  var responses = UrlFetchApp.fetchAll(ids.map(function(id) {
+    return {
+      url: CLICKUP_API_BASE + '/task/' + id + '/comment',
+      method: 'get',
+      muteHttpExceptions: true,
+      headers: {
+        Authorization: token,
+        Accept: 'application/json',
+        'Content-Type': 'application/json'
+      }
+    };
+  }));
+  responses.forEach(function(response, index) {
+    if (response.getResponseCode() < 200 || response.getResponseCode() >= 300) {
+      commentsById[ids[index]] = { text: '', user: '' };
+      return;
+    }
+    try {
+      commentsById[ids[index]] = parseLatestClickUpTaskComment_(JSON.parse(response.getContentText() || '{}'));
+    } catch (error) {
+      commentsById[ids[index]] = { text: '', user: '' };
+    }
+  });
+  return commentsById;
+}
+
+function startClickUpMilestoneClosingBackground_(params) {
+  var props = PropertiesService.getScriptProperties();
+  migrateClickUpMilestoneClosingSchema_();
+  if (props.getProperty('CLICKUP_MILESTONE_CLOSING_ACTIVE') === '1') {
+    props.setProperty('CLICKUP_MILESTONE_CLOSING_PHASE', 'recent');
+    props.setProperty('CLICKUP_MILESTONE_CLOSING_UPDATED_AT', new Date().toISOString());
+    scheduleClickUpMilestoneClosingBackground_(1000);
+    return {
+      ok: true,
+      scheduled: true,
+      already_active: true,
+      background_sync: getClickUpMilestoneClosingBackgroundStatus_()
+    };
+  }
+  props.setProperty('CLICKUP_MILESTONE_CLOSING_ACTIVE', '1');
+  props.setProperty('CLICKUP_MILESTONE_CLOSING_OFFSET', '0');
+  props.setProperty('CLICKUP_MILESTONE_CLOSING_PROCESSED', '0');
+  props.setProperty('CLICKUP_MILESTONE_CLOSING_ERRORS', '0');
+  props.setProperty('CLICKUP_MILESTONE_CLOSING_DETECTED', '0');
+  props.setProperty('CLICKUP_MILESTONE_CLOSING_PHASE', 'recent');
+  props.setProperty('CLICKUP_MILESTONE_CLOSING_STARTED_AT', new Date().toISOString());
+  props.deleteProperty('CLICKUP_MILESTONE_CLOSING_ERROR');
+  if (clickUpMilestoneClosingDistinctMonths_().length <= 1) {
+    props.deleteProperty('CLICKUP_MILESTONE_HISTORY_REBUILT');
+  }
+  props.setProperty('CLICKUP_MILESTONE_CLOSING_TOTAL', '0');
+  props.setProperty('CLICKUP_MILESTONE_CLOSING_UPDATED_AT', new Date().toISOString());
+  scheduleClickUpMilestoneClosingBackground_(1000);
+  return {
+    ok: true,
+    scheduled: true,
+    background_sync: getClickUpMilestoneClosingBackgroundStatus_()
+  };
+}
+
+function clickUpMilestoneClosingDistinctMonths_() {
+  var sheet = getClickUpMilestoneClosingSheet_();
+  var lastRow = sheet.getLastRow();
+  if (lastRow < 2) return [];
+  var monthColumn = getClickUpMilestoneClosingHeaders_().indexOf('mes_fechamento') + 1;
+  var found = {};
+  sheet.getRange(2, monthColumn, lastRow - 1, 1).getDisplayValues().forEach(function(row) {
+    var month = normalizeClickUpMonthReference_(row[0]);
+    if (month) found[month] = true;
+  });
+  return Object.keys(found);
+}
+
+function migrateClickUpMilestoneClosingSchema_() {
+  var props = PropertiesService.getScriptProperties();
+  if (props.getProperty('CLICKUP_MILESTONE_CLOSING_SCHEMA_VERSION') === CLICKUP_MILESTONE_CLOSING_SCHEMA_VERSION) return;
+  var sheet = getClickUpMilestoneClosingSheet_();
+  ensureHeaders_(sheet, getClickUpMilestoneClosingHeaders_());
+  props.setProperty('CLICKUP_MILESTONE_CLOSING_SCHEMA_VERSION', CLICKUP_MILESTONE_CLOSING_SCHEMA_VERSION);
+}
+
+function sincronizarFechamentoMarcosClickUp() {
+  var result = startClickUpMilestoneClosingBackground_({});
+  try {
+    SpreadsheetApp.getUi().alert(
+      'Fechamento de marcos',
+      'Atualização agendada em segundo plano. A guia CLICKUP_FECHAMENTO_MARCOS será atualizada por lotes.',
+      SpreadsheetApp.getUi().ButtonSet.OK
+    );
+  } catch (error) {}
+  return result;
+}
+
+function syncClickUpMilestoneClosingTrigger() {
+  var status = getClickUpMilestoneClosingBackgroundStatus_();
+  if (!status.active) startClickUpMilestoneClosingBackground_({});
+}
+
+function continueClickUpMilestoneClosingBackgroundTrigger() {
+  var props = PropertiesService.getScriptProperties();
+  try {
+    continueClickUpMilestoneClosingBackgroundWorker_();
+  } catch (error) {
+    props.setProperty('CLICKUP_MILESTONE_CLOSING_ERROR', simplifyErrorMessage_(error));
+    props.setProperty('CLICKUP_MILESTONE_CLOSING_UPDATED_AT', new Date().toISOString());
+    if (props.getProperty('CLICKUP_MILESTONE_CLOSING_ACTIVE') === '1') {
+      scheduleClickUpMilestoneClosingBackground_(60000);
+    }
+  }
+}
+
+function continueClickUpMilestoneClosingBackgroundWorker_() {
+  var props = PropertiesService.getScriptProperties();
+  if (props.getProperty('CLICKUP_MILESTONE_CLOSING_ACTIVE') !== '1') {
+    clearClickUpMilestoneClosingBackgroundTriggers_();
+    return;
+  }
+  var phase = props.getProperty('CLICKUP_MILESTONE_CLOSING_PHASE') || 'recent';
+  if (phase === 'recent') {
+    var recent = syncClickUpRecentMilestoneCoverage_({
+      authoritative: true,
+      validation_comments_only: true
+    });
+    props.setProperty('CLICKUP_MILESTONE_CLOSING_DETECTED', String(recent.detected || 0));
+    props.setProperty('CLICKUP_MILESTONE_CLOSING_ERRORS', String(recent.errors || 0));
+    props.setProperty('CLICKUP_MILESTONE_CLOSING_PHASE', 'history');
+    props.setProperty('CLICKUP_MILESTONE_CLOSING_UPDATED_AT', new Date().toISOString());
+    if (recent.last_error) props.setProperty('CLICKUP_MILESTONE_CLOSING_ERROR', recent.last_error);
+    scheduleClickUpMilestoneClosingBackground_(5000);
+    return;
+  }
+  if (phase === 'history') {
+    var history = ensureClickUpMilestoneHistoryCoverage_();
+    props.setProperty('CLICKUP_MILESTONE_CLOSING_DETECTED', String(
+      toInt_(props.getProperty('CLICKUP_MILESTONE_CLOSING_DETECTED'), 0) + Number(history.detected || 0)
+    ));
+    props.setProperty('CLICKUP_MILESTONE_CLOSING_ERRORS', String(
+      toInt_(props.getProperty('CLICKUP_MILESTONE_CLOSING_ERRORS'), 0) + Number(history.errors || 0)
+    ));
+    props.setProperty('CLICKUP_MILESTONE_CLOSING_PHASE', 'projects');
+    props.setProperty('CLICKUP_MILESTONE_CLOSING_UPDATED_AT', new Date().toISOString());
+    if (history.last_error) props.setProperty('CLICKUP_MILESTONE_CLOSING_ERROR', history.last_error);
+    scheduleClickUpMilestoneClosingBackground_(5000);
+    return;
+  }
+  var offset = toInt_(props.getProperty('CLICKUP_MILESTONE_CLOSING_OFFSET'), 0);
+  var result = syncClickUpMilestoneClosingBatch_(offset, 10);
+  var processed = toInt_(props.getProperty('CLICKUP_MILESTONE_CLOSING_PROCESSED'), 0) + result.processed;
+  var errors = toInt_(props.getProperty('CLICKUP_MILESTONE_CLOSING_ERRORS'), 0) + result.errors;
+  var detected = toInt_(props.getProperty('CLICKUP_MILESTONE_CLOSING_DETECTED'), 0) + result.detected;
+  props.setProperty('CLICKUP_MILESTONE_CLOSING_OFFSET', String(result.next_offset));
+  props.setProperty('CLICKUP_MILESTONE_CLOSING_PROCESSED', String(processed));
+  props.setProperty('CLICKUP_MILESTONE_CLOSING_ERRORS', String(errors));
+  props.setProperty('CLICKUP_MILESTONE_CLOSING_DETECTED', String(detected));
+  props.setProperty('CLICKUP_MILESTONE_CLOSING_TOTAL', String(result.total));
+  props.setProperty('CLICKUP_MILESTONE_CLOSING_UPDATED_AT', new Date().toISOString());
+  if (result.last_error) props.setProperty('CLICKUP_MILESTONE_CLOSING_ERROR', result.last_error);
+  if (result.done) {
+    props.setProperty('CLICKUP_MILESTONE_CLOSING_ACTIVE', '0');
+    props.setProperty('CLICKUP_MILESTONE_CLOSING_PHASE', 'complete');
+    props.setProperty('CLICKUP_MILESTONE_CLOSING_COMPLETED_AT', new Date().toISOString());
+    clearClickUpMilestoneClosingBackgroundTriggers_();
+    return;
+  }
+  scheduleClickUpMilestoneClosingBackground_(15000);
+}
+
+function syncClickUpMilestoneClosingBatch_(offset, limit) {
+  var mappings = loadClickUpMilestoneClosingMappings_();
+  offset = Math.max(0, Number(offset || 0));
+  limit = Math.max(1, Number(limit || 5));
+  var batch = mappings.slice(offset, offset + limit);
+  var processed = 0;
+  var errors = 0;
+  var detected = 0;
+  var coverageDetected = 0;
+  var lastError = '';
+  var pendingUpserts = [];
+  batch.forEach(function(mapping) {
+    try {
+      var normalized = buildNormalizedProjectFromClickUp_(mapping);
+      detected += (normalized.marcos || []).length;
+      pendingUpserts.push({ mapping: mapping, normalized: normalized });
+    } catch (error) {
+      errors += 1;
+      lastError = simplifyErrorMessage_(error);
+    }
+    processed += 1;
+  });
+  upsertClickUpMilestoneClosingEntries_(pendingUpserts);
+  var reachedEnd = !batch.length || offset + batch.length >= mappings.length;
+  if (reachedEnd) {
+    var coverageTasks = [];
+    try {
+      coverageTasks = fetchClickUpMilestoneCoverageTasks_();
+    } catch (coverageError) {
+      errors += 1;
+      lastError = 'Varredura geral: ' + simplifyErrorMessage_(coverageError);
+    }
+    getClickUpMilestoneAuditTaskIds_().forEach(function(taskId) {
+      try {
+        coverageTasks.push(clickupRequest_('get', '/task/' + normalizeClickUpId_(taskId)));
+      } catch (directError) {
+        errors += 1;
+        lastError = 'Leitura direta do marco ' + taskId + ': ' + simplifyErrorMessage_(directError);
+      }
+    });
+    coverageTasks = dedupeTasks_(coverageTasks);
+    coverageDetected = coverageTasks.length;
+    var coverageUpserts = coverageTasks.map(function(task) {
+      var mapping = findProjectMappingForTask_(task, mappings) || fallbackProjectMappingForTask_(task);
+      var normalized = buildNormalizedMilestoneCoverageProject_(mapping, task);
+      return { mapping: mapping, normalized: normalized };
+    });
+    upsertClickUpMilestoneClosingEntries_(coverageUpserts);
+  }
+  return {
+    total: mappings.length,
+    processed: processed,
+    errors: errors,
+    detected: detected + coverageDetected,
+    coverage_detected: coverageDetected,
+    last_error: lastError,
+    next_offset: offset + batch.length,
+    done: reachedEnd
+  };
+}
+
+function loadClickUpMilestoneClosingMappings_() {
+  var seen = {};
+  return loadProjectMappings_().filter(function(item) {
+    if (!item.enabled || !(item.list_id || item.view_id || item.folder_id || item.space_id)) return false;
+    var key = item.list_id ? ('list|' + item.list_id) :
+      item.view_id ? ('view|' + item.view_id) :
+      item.folder_id ? ('folder|' + item.folder_id) :
+      ('space|' + item.space_id);
+    if (seen[key]) return false;
+    seen[key] = true;
+    return true;
+  });
+}
+
+function getClickUpMilestoneAuditTaskIds_() {
+  var configured = sanitizeText_(getScriptProperty_('CLICKUP_MILESTONE_AUDIT_TASK_IDS', ''));
+  var ids = CLICKUP_MILESTONE_AUDIT_TASK_IDS.slice();
+  if (configured) ids = ids.concat(configured.split(/[\s,;]+/));
+  var seen = {};
+  return ids.map(normalizeClickUpId_).filter(function(id) {
+    if (!id || seen[id]) return false;
+    seen[id] = true;
+    return true;
+  });
+}
+
+function syncClickUpMilestoneAuditTasks_() {
+  var mappings = loadProjectMappings_().filter(function(item) { return item.enabled; });
+  var detected = 0;
+  var errors = 0;
+  var lastError = '';
+  getClickUpMilestoneAuditTaskIds_().forEach(function(taskId) {
+    try {
+      var task = clickupRequest_('get', '/task/' + normalizeClickUpId_(taskId));
+      var mapping = findProjectMappingForTask_(task, mappings) || fallbackProjectMappingForTask_(task);
+      upsertClickUpMilestoneClosing_(mapping, buildNormalizedMilestoneCoverageProject_(mapping, task));
+      detected += 1;
+    } catch (error) {
+      errors += 1;
+      lastError = 'Leitura direta do marco ' + taskId + ': ' + simplifyErrorMessage_(error);
+    }
+  });
+  return { detected: detected, errors: errors, last_error: lastError };
+}
+
+function syncClickUpRecentMilestoneCoverage_(options) {
+  options = options || {};
+  var lock = LockService.getScriptLock();
+  if (!lock.tryLock(options.interactive ? 15000 : 1000)) {
+    return { detected: 0, scanned: 0, errors: 0, already_running: true, last_error: '' };
+  }
+  try {
+  var props = PropertiesService.getScriptProperties();
+  var mappings = loadClickUpMilestoneClosingMappings_();
+  var tasks = [];
+  var errors = 0;
+  var lastError = '';
+  var startedAt = new Date().getTime();
+  var previousCursor = toInt_(props.getProperty('CLICKUP_MILESTONE_INCREMENTAL_SINCE'), 0);
+  var normalSince = previousCursor
+    ? Math.max(0, previousCursor - 5 * 60 * 1000)
+    : startedAt - 24 * 60 * 60 * 1000;
+  var since = options.interactive
+    ? Math.max(normalSince, startedAt - 2 * 60 * 60 * 1000)
+    : normalSince;
+  try {
+    tasks = fetchClickUpRecentMilestoneCoverageTasks_(since, {
+      max_pages: options.interactive ? 1 : 10
+    });
+  } catch (error) {
+    errors += 1;
+    lastError = 'Atualizacao recente: ' + simplifyErrorMessage_(error);
+  }
+  if (options.confirm_task_ids && options.confirm_task_ids.length) {
+    try {
+      tasks = tasks.concat(fetchClickUpTasksByIds_(options.confirm_task_ids));
+    } catch (error) {
+      errors += 1;
+      lastError = 'Confirmacao direta dos marcos: ' + simplifyErrorMessage_(error);
+    }
+  }
+  getClickUpMilestoneAuditTaskIds_().forEach(function(taskId) {
+    try {
+      tasks.push(clickupRequest_('get', '/task/' + normalizeClickUpId_(taskId)));
+    } catch (error) {
+      errors += 1;
+      lastError = 'Leitura direta do marco ' + taskId + ': ' + simplifyErrorMessage_(error);
+    }
+  });
+  tasks = dedupeTasks_(tasks);
+  tasks.sort(function(a, b) {
+    return Number(b && b.date_updated || 0) - Number(a && a.date_updated || 0);
+  });
+  var entries = tasks.filter(function(task) {
+    return isMilestoneTask_(task);
+  }).map(function(task) {
+    var mapping = findProjectMappingForTask_(task, mappings) || fallbackProjectMappingForTask_(task);
+    return { mapping: mapping, normalized: buildNormalizedMilestoneCoverageProject_(mapping, task) };
+  });
+  upsertClickUpMilestoneClosingEntries_(entries, {
+    authoritative: options.authoritative === true,
+    validation_comments_only: options.validation_comments_only === true
+  });
+  if (!errors) props.setProperty('CLICKUP_MILESTONE_INCREMENTAL_SINCE', String(startedAt));
+  return {
+    detected: entries.length,
+    scanned: tasks.length,
+    since: new Date(since).toISOString(),
+    errors: errors,
+    last_error: lastError
+  };
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+function syncClickUpRecentMilestoneAndGetClosing_(params) {
+  var confirmTaskIds = sanitizeText_((params || {}).task_ids).split(/[\s,;]+/).filter(function(id) {
+    return !!normalizeClickUpId_(id);
+  });
+  var recent = syncClickUpRecentMilestoneCoverage_({
+    authoritative: true,
+    interactive: true,
+    validation_comments_only: true,
+    confirm_task_ids: confirmTaskIds
+  });
+  if (recent.already_running) {
+    throw new Error('Outra atualização recente ainda está finalizando. Tente novamente em alguns segundos.');
+  }
+  var result = getClickUpMilestoneClosing_(params || {});
+  result.recent_sync = recent;
+  return result;
+}
+
+function confirmClickUpMilestoneStatuses_(params) {
+  var startedAt = new Date().getTime();
+  var month = sanitizeText_((params || {}).month || (params || {}).mes).slice(0, 7);
+
+  var lock = LockService.getScriptLock();
+  if (!lock.tryLock(5000)) {
+    throw new Error('A base ainda está finalizando outra gravação. Tente novamente em alguns segundos.');
+  }
+  try {
+    var sheet = getClickUpMilestoneClosingSheet_();
+    var headers = getClickUpMilestoneClosingHeaders_();
+    var current = loadClickUpMilestoneClosingCurrent_(sheet);
+    var changed = 0;
+    Object.keys(current).forEach(function(taskId) {
+      var item = current[taskId] || {};
+      if ((!month || sanitizeText_(item.mes_fechamento).slice(0, 7) === month) &&
+          item.situacao === 'aguardando' &&
+          (sanitizeText_(item.justificativa) || sanitizeText_(item.justificativa_por))) {
+        item.justificativa = '';
+        item.justificativa_por = '';
+        changed += 1;
+      }
+    });
+    var validatedIds = Object.keys(current).filter(function(taskId) {
+      var item = current[taskId] || {};
+      return (!month || sanitizeText_(item.mes_fechamento).slice(0, 7) === month) &&
+        (item.situacao === 'aprovado' || item.situacao === 'reprovado');
+    });
+    var tasks = fetchClickUpValidationAndCurrentTasks_(validatedIds);
+    tasks = dedupeTasks_(tasks).filter(function(task) {
+      var taskId = String(task && task.id || '');
+      var existing = current[taskId] || {};
+      var taskClosedAt = task && task.date_closed ? fromMillisIso_(task.date_closed) : '';
+      var taskMonth = normalizeClickUpMonthReference_(existing.mes_fechamento, taskClosedAt);
+      return !month || taskMonth === month;
+    });
+    var validationIds = tasks.filter(function(task) {
+      var status = task && task.status && (task.status.status || task.status.type || task.status.label) || '';
+      var situation = clickUpMilestoneSituation_(status);
+      return situation === 'aprovado' || situation === 'reprovado';
+    }).map(function(task) { return String(task.id || ''); });
+    var commentsById = fetchLatestClickUpTaskCommentsByIds_(validationIds);
+    tasks.forEach(function(task) {
+      var taskId = String(task && task.id || '');
+      var previous = current[taskId] || {};
+      var beforeStatus = sanitizeText_(previous.status_atual);
+      var mapping = {
+        project_key: sanitizeText_(previous.project_key),
+        cliente: sanitizeText_(previous.projeto) || sanitizeText_(task && task.folder && task.folder.name),
+        consultor: sanitizeText_(previous.consultor),
+        list_id: normalizeClickUpId_(task && task.list && task.list.id),
+        folder_id: normalizeClickUpId_(task && task.folder && task.folder.id),
+        space_id: normalizeClickUpId_(task && task.space && task.space.id)
+      };
+      upsertClickUpMilestoneClosing_(mapping, buildNormalizedMilestoneCoverageProject_(mapping, task), {
+        current: current,
+        defer_write: true,
+        fetch_comments: false,
+        authoritative: true,
+        validation_comments_only: true
+      });
+      var after = current[taskId];
+      if (after) {
+        if (after.situacao === 'aprovado' || after.situacao === 'reprovado') {
+          var comment = commentsById[taskId] || { text: '', user: '' };
+          after.justificativa = comment.text || '';
+          after.justificativa_por = comment.user || '';
+        } else {
+          after.justificativa = '';
+          after.justificativa_por = '';
+        }
+      }
+      if (!after || sanitizeText_(after.status_atual) !== beforeStatus) changed += 1;
+    });
+    writeClickUpMilestoneClosingCurrent_(sheet, headers, current);
+    var result = getClickUpMilestoneClosing_(params || {});
+    result.confirmed = tasks.length;
+    result.changed = changed;
+    result.elapsed_ms = new Date().getTime() - startedAt;
+    return result;
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+function syncClickUpClosedMilestones_(params) {
+  params = params || {};
+  stopLegacyClickUpMilestoneAudit_();
+  var startedAt = new Date().getTime();
+  var lock = LockService.getScriptLock();
+  if (!lock.tryLock(5000)) throw new Error('Outra atualização está finalizando. Tente novamente em alguns segundos.');
+  try {
+    var sheet = getClickUpMilestoneClosingSheet_();
+    var headers = getClickUpMilestoneClosingHeaders_();
+    var current = loadClickUpMilestoneClosingCurrent_(sheet);
+    var mappings = loadClickUpMilestoneClosingMappings_();
+    var props = PropertiesService.getScriptProperties();
+    var previousCursor = toInt_(props.getProperty('CLICKUP_CLOSED_INCREMENTAL_SINCE'), 0);
+    var since = previousCursor
+      ? Math.max(0, previousCursor - 5 * 60 * 1000)
+      : startedAt - 48 * 60 * 60 * 1000;
+    var tasks = fetchClickUpRecentMilestoneCoverageTasks_(since, { max_pages: 5 }).filter(function(task) {
+      var status = task && task.status && (task.status.status || task.status.type || task.status.label) || '';
+      return clickUpMilestoneSituation_(status) === 'aguardando';
+    });
+    var changed = 0;
+    tasks.forEach(function(task) {
+      var taskId = String(task && task.id || '');
+      var previous = current[taskId] || {};
+      var beforeStatus = sanitizeText_(previous.status_atual);
+      var mapping = findProjectMappingForTask_(task, mappings) || fallbackProjectMappingForTask_(task);
+      upsertClickUpMilestoneClosing_(mapping, buildNormalizedMilestoneCoverageProject_(mapping, task), {
+        current: current,
+        defer_write: true,
+        fetch_comments: false,
+        authoritative: true,
+        validation_comments_only: true
+      });
+      if (current[taskId]) {
+        current[taskId].justificativa = '';
+        current[taskId].justificativa_por = '';
+      }
+      if (sanitizeText_(current[taskId] && current[taskId].status_atual) !== beforeStatus) changed += 1;
+    });
+    writeClickUpMilestoneClosingCurrent_(sheet, headers, current);
+    props.setProperty('CLICKUP_CLOSED_INCREMENTAL_SINCE', String(startedAt));
+    var summary = {
+      ok: true,
+      confirmed: tasks.length,
+      changed: changed,
+      elapsed_ms: new Date().getTime() - startedAt,
+      sync_type: 'closed'
+    };
+    if (params.skip_result) return summary;
+    var resultParams = {};
+    Object.keys(params).forEach(function(key) { resultParams[key] = params[key]; });
+    delete resultParams.month;
+    delete resultParams.mes;
+    var result = getClickUpMilestoneClosing_(resultParams);
+    Object.keys(summary).forEach(function(key) { result[key] = summary[key]; });
+    return result;
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+function syncClickUpValidationSituation_(params, situation) {
+  params = params || {};
+  stopLegacyClickUpMilestoneAudit_();
+  var startedAt = new Date().getTime();
+  var month = sanitizeText_(params.month || params.mes).slice(0, 7);
+  var lock = LockService.getScriptLock();
+  if (!lock.tryLock(5000)) throw new Error('Outra atualização está finalizando. Tente novamente em alguns segundos.');
+  try {
+    var sheet = getClickUpMilestoneClosingSheet_();
+    var headers = getClickUpMilestoneClosingHeaders_();
+    var current = loadClickUpMilestoneClosingCurrent_(sheet);
+    var mappings = loadClickUpMilestoneClosingMappings_();
+    var currentIds = Object.keys(current).filter(function(taskId) {
+      var item = current[taskId] || {};
+      return item.situacao === situation &&
+        (!month || sanitizeText_(item.mes_fechamento).slice(0, 7) === month);
+    });
+    var tasks = fetchClickUpMilestonesBySituation_(situation, currentIds).filter(function(task) {
+      var taskId = String(task && task.id || '');
+      var existing = current[taskId] || {};
+      var taskClosedAt = task && task.date_closed ? fromMillisIso_(task.date_closed) : '';
+      var taskMonth = normalizeClickUpMonthReference_(existing.mes_fechamento, taskClosedAt);
+      return !month || taskMonth === month;
+    });
+    var matchingIds = tasks.filter(function(task) {
+      var status = task && task.status && (task.status.status || task.status.type || task.status.label) || '';
+      return clickUpMilestoneSituation_(status) === situation;
+    }).map(function(task) { return String(task.id || ''); });
+    var commentsById = fetchLatestClickUpTaskCommentsByIds_(matchingIds);
+    var changed = 0;
+    tasks.forEach(function(task) {
+      var taskId = String(task && task.id || '');
+      var previous = current[taskId] || {};
+      var beforeStatus = sanitizeText_(previous.status_atual);
+      var mapping = findProjectMappingForTask_(task, mappings) || fallbackProjectMappingForTask_(task);
+      upsertClickUpMilestoneClosing_(mapping, buildNormalizedMilestoneCoverageProject_(mapping, task), {
+        current: current,
+        defer_write: true,
+        fetch_comments: false,
+        authoritative: true,
+        validation_comments_only: true
+      });
+      var after = current[taskId];
+      if (after && after.situacao === situation) {
+        var comment = commentsById[taskId] || { text: '', user: '' };
+        after.justificativa = comment.text || '';
+        after.justificativa_por = comment.user || '';
+      } else if (after) {
+        after.justificativa = '';
+        after.justificativa_por = '';
+      }
+      if (!after || sanitizeText_(after.status_atual) !== beforeStatus) changed += 1;
+    });
+    writeClickUpMilestoneClosingCurrent_(sheet, headers, current);
+    var result = getClickUpMilestoneClosing_(params);
+    result.confirmed = tasks.length;
+    result.changed = changed;
+    result.elapsed_ms = new Date().getTime() - startedAt;
+    result.sync_type = situation;
+    return result;
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+function syncClickUpMilestoneHistoryCoverage_() {
+  var mappings = loadClickUpMilestoneClosingMappings_();
+  var tasks = [];
+  var errors = 0;
+  var lastError = '';
+  try {
+    tasks = fetchClickUpMilestoneCoverageTasks_();
+  } catch (error) {
+    errors += 1;
+    lastError = 'Historico de marcos: ' + simplifyErrorMessage_(error);
+  }
+  var entries = tasks.map(function(task) {
+    var mapping = findProjectMappingForTask_(task, mappings) || fallbackProjectMappingForTask_(task);
+    return { mapping: mapping, normalized: buildNormalizedMilestoneCoverageProject_(mapping, task) };
+  });
+  // Comentarios continuam sendo enriquecidos pela atualizacao incremental e
+  // pela carga detalhada. Evita uma chamada extra por marco no historico.
+  upsertClickUpMilestoneClosingEntries_(entries, { fetch_comments: false });
+  return { detected: entries.length, errors: errors, last_error: lastError };
+}
+
+function ensureClickUpMilestoneHistoryCoverage_() {
+  var props = PropertiesService.getScriptProperties();
+  if (props.getProperty('CLICKUP_MILESTONE_HISTORY_REBUILT') === '1') {
+    return { detected: 0, errors: 0, already_rebuilt: true, last_error: '' };
+  }
+  var result = syncClickUpMilestoneHistoryCoverage_();
+  if (!result.errors) props.setProperty('CLICKUP_MILESTONE_HISTORY_REBUILT', '1');
+  return result;
+}
+
+function findProjectMappingForTask_(task, mappings) {
+  var listId = normalizeClickUpId_(task && task.list && task.list.id);
+  var folderId = normalizeClickUpId_(task && task.folder && task.folder.id);
+  var spaceId = normalizeClickUpId_(task && task.space && task.space.id);
+  var taskNames = [
+    sanitizeText_(task && task.folder && task.folder.name),
+    sanitizeText_(task && task.project && task.project.name),
+    sanitizeText_(task && task.list && task.list.name)
+  ].filter(function(name) { return !!name; }).map(normalizeKey_);
+  return (mappings || loadProjectMappings_()).filter(function(mapping) {
+    if (listId && String(mapping.list_id || '') === listId) return true;
+    if (folderId && String(mapping.folder_id || '') === folderId) return true;
+    if (spaceId && String(mapping.space_id || '') === spaceId && taskNames.indexOf(normalizeKey_(mapping.cliente)) >= 0) return true;
+    return taskNames.indexOf(normalizeKey_(mapping.cliente)) >= 0;
+  })[0] || null;
+}
+
+function fallbackProjectMappingForTask_(task) {
+  var projectName = sanitizeText_(task && task.folder && task.folder.name) ||
+    sanitizeText_(task && task.project && task.project.name) ||
+    sanitizeText_(task && task.list && task.list.name) ||
+    'Projeto nao mapeado';
+  var hierarchyId = normalizeClickUpId_(task && task.folder && task.folder.id) ||
+    normalizeClickUpId_(task && task.list && task.list.id) ||
+    normalizeClickUpId_(task && task.space && task.space.id) ||
+    normalizeClickUpId_(task && task.id);
+  return {
+    enabled: true,
+    mes: '',
+    cliente: projectName,
+    project_key: 'CLICKUP|' + hierarchyId,
+    project_url: '',
+    view_id: '',
+    list_id: normalizeClickUpId_(task && task.list && task.list.id),
+    folder_id: normalizeClickUpId_(task && task.folder && task.folder.id),
+    space_id: normalizeClickUpId_(task && task.space && task.space.id)
+  };
+}
+
+function buildNormalizedMilestoneCoverageProject_(mapping, task) {
+  if (!isMilestoneTask_(task)) {
+    return { cliente: mapping.cliente || '', consultor: '', marcos: [] };
+  }
+  var status = task && task.status && (task.status.status || task.status.type || task.status.label) || '';
+  var responsible = (task && task.assignees || []).map(function(user) {
+    return sanitizeText_(user && (user.username || user.name || user.email));
+  }).filter(function(name) { return !!name; }).join(', ');
+  return {
+    cliente: mapping.cliente || '',
+    consultor: responsible,
+    marcos: [{
+      id: String(task && task.id || ''),
+      nome: sanitizeText_(task && task.name),
+      fase_nome: sanitizeText_(task && task.list && task.list.name),
+      status_original: status,
+      responsaveis: responsible,
+      task_url: sanitizeText_(task && (task.url || task.permalink || task.link || task.html_url)) ||
+        ('https://app.clickup.com/t/' + String(task && task.id || '')),
+      date_closed: task && task.date_closed ? fromMillisIso_(task.date_closed) : '',
+      updated_at: task && task.date_updated ? fromMillisIso_(task.date_updated) : ''
+    }]
+  };
+}
+
+function getClickUpMilestoneClosingBackgroundStatus_() {
+  var props = PropertiesService.getScriptProperties();
+  return {
+    active: props.getProperty('CLICKUP_MILESTONE_CLOSING_ACTIVE') === '1',
+    total: toInt_(props.getProperty('CLICKUP_MILESTONE_CLOSING_TOTAL'), 0),
+    processed: Math.max(
+      toInt_(props.getProperty('CLICKUP_MILESTONE_CLOSING_PROCESSED'), 0),
+      toInt_(props.getProperty('CLICKUP_MILESTONE_CLOSING_OFFSET'), 0)
+    ),
+    errors: toInt_(props.getProperty('CLICKUP_MILESTONE_CLOSING_ERRORS'), 0),
+    detected: toInt_(props.getProperty('CLICKUP_MILESTONE_CLOSING_DETECTED'), 0),
+    phase: props.getProperty('CLICKUP_MILESTONE_CLOSING_PHASE') || '',
+    started_at: props.getProperty('CLICKUP_MILESTONE_CLOSING_STARTED_AT') || '',
+    updated_at: props.getProperty('CLICKUP_MILESTONE_CLOSING_UPDATED_AT') || '',
+    completed_at: props.getProperty('CLICKUP_MILESTONE_CLOSING_COMPLETED_AT') || '',
+    error: props.getProperty('CLICKUP_MILESTONE_CLOSING_ERROR') || ''
+  };
+}
+
+function scheduleClickUpMilestoneClosingBackground_(delayMs) {
+  clearClickUpMilestoneClosingBackgroundTriggers_();
+  ScriptApp.newTrigger('continueClickUpMilestoneClosingBackgroundTrigger')
+    .timeBased()
+    .after(Math.max(1000, Number(delayMs || 15000)))
+    .create();
+}
+
+function clearClickUpMilestoneClosingBackgroundTriggers_() {
+  ScriptApp.getProjectTriggers().forEach(function(trigger) {
+    if (trigger.getHandlerFunction() === 'continueClickUpMilestoneClosingBackgroundTrigger') {
+      ScriptApp.deleteTrigger(trigger);
+    }
+  });
 }
 
 function sincronizarAtividadeUsuariosClickUp() {
@@ -2149,6 +3471,16 @@ function getClickUpInventoryHeaders_() {
   ];
 }
 
+function getClickUpMilestoneClosingHeaders_() {
+  return [
+    'task_id', 'project_key', 'projeto', 'consultor', 'marco', 'fase',
+    'status_atual', 'situacao', 'closed_at', 'mes_fechamento',
+    'validation_at', 'mes_validacao', 'justificativa', 'justificativa_por',
+    'valor_bonus', 'link', 'responsaveis', 'updated_at', 'sincronizado_em',
+    'status_history_json', 'item_tipo'
+  ];
+}
+
 function inferProjectStatusFromSummary_(resumo) {
   var total = (resumo.tasks_concluidas || 0) + (resumo.tasks_pendentes || 0) + (resumo.marcos_concluidos || 0) + (resumo.marcos_pendentes || 0);
   var pend = (resumo.tasks_pendentes || 0) + (resumo.marcos_pendentes || 0);
@@ -2662,6 +3994,14 @@ function getClickUpInventorySheet_() {
   var name = getScriptProperty_('CLICKUP_INVENTORY_SHEET', 'CLICKUP_INVENTARIO');
   var sheet = ss.getSheetByName(name) || ss.insertSheet(name);
   ensureHeaders_(sheet, getClickUpInventoryHeaders_());
+  return sheet;
+}
+
+function getClickUpMilestoneClosingSheet_() {
+  var ss = SpreadsheetApp.openById(getScriptProperty_('SHEET_ID'));
+  var name = getScriptProperty_('CLICKUP_MILESTONE_CLOSING_SHEET', 'CLICKUP_FECHAMENTO_MARCOS');
+  var sheet = ss.getSheetByName(name) || ss.insertSheet(name);
+  ensureHeaders_(sheet, getClickUpMilestoneClosingHeaders_());
   return sheet;
 }
 
@@ -3710,10 +5050,11 @@ function dedupeTasks_(tasks) {
 
 function isClosedStatus_(status) {
   var norm = sanitizeText_(status).toLowerCase();
-  return /(done|closed|complete|conclu|finaliz|feito|resolved|encerrad|sucesso|finalizado)/.test(norm);
+  return /(done|closed|complete|conclu|finaliz|feito|resolved|encerrad|sucesso|finalizado|aprovado gest)/.test(norm);
 }
 
 function isMilestoneTask_(task) {
+  if (task && task._confirmed_milestone === true) return true;
   var typeName = sanitizeText_(
     task.custom_item && task.custom_item.name ||
     task.custom_task_type && task.custom_task_type.name ||
@@ -3856,6 +5197,1253 @@ function getLatestUpdateItemFromRawTasks_(tasks, byId, phaseMap) {
     }
   });
   return latest ? latest.item : null;
+}
+
+function sincronizarDiariasCmaxMesAtual() {
+  return syncCmaxDailyEvents_({
+    month: Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'yyyy-MM')
+  });
+}
+
+function sincronizarHistoricoDiariasCmax() {
+  return startCmaxDailyHistoryBackground_({});
+}
+
+function reconstruirVisaoDiariasCmax() {
+  try {
+    var sheet = getCmaxDailySheet_();
+    var headers = getCmaxDailyHeaders_();
+    var values = sheet.getDataRange().getValues();
+    rebuildCmaxDailyMaterializedView_(values.slice(1), headers);
+    return { ok: true, rows: Math.max(0, values.length - 1), sheet: CMAX_DAILY_VIEW_SHEET };
+  } finally {
+    PropertiesService.getScriptProperties().deleteProperty('CMAX_VIEW_BUILD_SCHEDULED');
+  }
+}
+
+var CMAX_DAILY_SHEET = 'CMAX_DIARIAS';
+var CMAX_DAILY_VIEW_SHEET = 'CMAX_DIARIAS_VIEW';
+var CMAX_AGENDA_URL = 'https://www.multbovinos.com/servicos/eventoscontato/obtenha-agenda/?format=json';
+var CMAX_TOKEN_AUTH_URL = 'https://www.multbovinos.com/servicos/login/';
+var CMAX_HISTORY_DEFAULT_START_MONTH = '2024-01';
+var CMAX_VIEW_CACHE_SECONDS = 21600;
+
+function getCmaxDailyHeaders_() {
+  return [
+    'event_key', 'event_id', 'data', 'mes', 'ano', 'consultor', 'cliente',
+    'tipo', 'resultado', 'descricao', 'hora_inicio', 'hora_fim',
+    'sincronizado_em', 'raw_json'
+  ];
+}
+
+function getCmaxDailyViewHeaders_() {
+  return [
+    'event_key', 'event_id', 'data', 'mes', 'ano', 'consultor', 'cliente',
+    'tipo', 'resultado', 'descricao', 'hora_inicio', 'hora_fim',
+    'sincronizado_em', 'modalidade', 'contabiliza_diaria'
+  ];
+}
+
+function getCmaxDailySheet_() {
+  var sheet = getOrCreateSheet_(CMAX_DAILY_SHEET);
+  ensureHeaders_(sheet, getCmaxDailyHeaders_());
+  return sheet;
+}
+
+function getCmaxDailyEvents_(params) {
+  params = params || {};
+  var props = PropertiesService.getScriptProperties();
+  var month = sanitizeCmaxMonth_(params.month || params.mes);
+  var consultant = sanitizeText_(params.consultant || params.consultor).toUpperCase();
+  var cached = readCmaxMaterializedCache_(month, consultant);
+  if (cached) {
+    cached.cached = true;
+    cached.history_sync = getCmaxDailyHistoryStatus_().history_sync;
+    return cached;
+  }
+  var meta;
+  try { meta = JSON.parse(props.getProperty('CMAX_VIEW_META_JSON') || 'null'); } catch (ignored) { meta = null; }
+  if (!meta || !meta.ranges) {
+    scheduleCmaxDailyViewBuild_();
+    return {
+      ok: true,
+      events: [],
+      total: 0,
+      month: month,
+      history_months: cmaxHistoryMonths_(),
+      history_loaded_months: [],
+      history_sync: getCmaxDailyHistoryStatus_().history_sync,
+      building_view: true,
+      message: 'Preparando visão rápida CMAX em segundo plano.'
+    };
+  }
+  var events = [];
+  var snapshotEvents = readCmaxDailyMonthSnapshot_(month, consultant, meta);
+  if (snapshotEvents) {
+    events = snapshotEvents;
+  }
+  var rangeInfo = month ? meta.ranges[month] : meta.all;
+  if (!snapshotEvents && rangeInfo && rangeInfo.count > 0) {
+    var sheet = getOrCreateSheet_(CMAX_DAILY_VIEW_SHEET);
+    var headers = getCmaxDailyViewHeaders_();
+    var values = sheet.getRange(rangeInfo.start, 1, rangeInfo.count, headers.length).getValues();
+    events = values.map(function(row) {
+      var item = {};
+      headers.forEach(function(header, index) { item[header] = row[index]; });
+      item.contabiliza_diaria = item.contabiliza_diaria === true || String(item.contabiliza_diaria).toLowerCase() === 'true';
+      return item;
+    }).filter(function(item) {
+      return !consultant || sanitizeText_(item.consultor).toUpperCase() === consultant;
+    });
+  }
+  var result = {
+    ok: true,
+    events: events,
+    total: events.length,
+    month: month,
+      available_months: cmaxRelevantMonths_(meta.available_months),
+    history_months: cmaxHistoryMonths_(),
+      history_loaded_months: cmaxSnapshotMonths_(meta),
+    training_team_cutoff: meta.training_team_cutoff || '',
+    training_team: meta.training_team || [],
+    available_activities: meta.available_activities || [],
+    history_sync: getCmaxDailyHistoryStatus_().history_sync,
+    synced_at: meta.synced_at || '',
+    materialized: true,
+    sheet: CMAX_DAILY_VIEW_SHEET
+  };
+  writeCompressedScriptCache_(cmaxViewCacheKey_({ month: month, consultant: consultant }), result, CMAX_VIEW_CACHE_SECONDS);
+  return result;
+}
+
+function cmaxDailyMonthSnapshotSheetName_(month) {
+  return 'CMAX_M_' + sanitizeCmaxMonth_(month).replace('-', '_');
+}
+
+function readCmaxDailyMonthSnapshot_(month, consultant, meta) {
+  if (!month || !meta || !meta.month_sheets || !meta.month_sheets[month]) return null;
+  var ss = SpreadsheetApp.openById(getScriptProperty_('SHEET_ID'));
+  var sheet = ss.getSheetByName(meta.month_sheets[month]);
+  if (!sheet) return null;
+  var headers = getCmaxDailyViewHeaders_();
+  var lastRow = sheet.getLastRow();
+  if (lastRow < 2) return [];
+  return sheet.getRange(2, 1, lastRow - 1, headers.length).getValues().map(function(row) {
+    var item = {};
+    headers.forEach(function(header, index) { item[header] = row[index]; });
+    item.contabiliza_diaria = item.contabiliza_diaria === true || String(item.contabiliza_diaria).toLowerCase() === 'true';
+    return item;
+  }).filter(function(item) {
+    return !consultant || sanitizeText_(item.consultor).toUpperCase() === consultant;
+  });
+}
+
+function readCmaxMaterializedCache_(month, consultant) {
+  if (consultant) return readCompressedScriptCache_(cmaxViewCacheKey_({ month: month, consultant: consultant }));
+  if (month) return readCompressedScriptCache_(cmaxViewCacheKey_({ month: month }));
+  var props = PropertiesService.getScriptProperties();
+  var meta;
+  try { meta = JSON.parse(props.getProperty('CMAX_VIEW_META_JSON') || 'null'); } catch (ignored) { meta = null; }
+  if (!meta || !Array.isArray(meta.available_months)) return null;
+  var availableMonths = cmaxRelevantMonths_(meta.available_months);
+  var snapshots = availableMonths.map(function(itemMonth) {
+    return readCompressedScriptCache_(cmaxViewCacheKey_({ month: itemMonth }));
+  });
+  if (snapshots.some(function(snapshot) { return !snapshot; })) return null;
+  var first = snapshots[0] || {};
+  var events = [];
+  snapshots.forEach(function(snapshot) { events = events.concat(snapshot.events || []); });
+  return {
+    ok: true,
+    events: events,
+    total: events.length,
+    month: '',
+    available_months: cmaxRelevantMonths_(meta.available_months),
+    history_months: cmaxHistoryMonths_(),
+    history_loaded_months: cmaxSnapshotMonths_(meta),
+    training_team_cutoff: meta.training_team_cutoff || '',
+    training_team: meta.training_team || [],
+    available_activities: meta.available_activities || [],
+    history_sync: first.history_sync || {},
+    synced_at: meta.synced_at || '',
+    materialized: true,
+    cached: true,
+    sheet: CMAX_DAILY_VIEW_SHEET
+  };
+}
+
+function scheduleCmaxDailyViewBuild_() {
+  var props = PropertiesService.getScriptProperties();
+  if (props.getProperty('CMAX_VIEW_BUILD_SCHEDULED') === '1') return;
+  props.setProperty('CMAX_VIEW_BUILD_SCHEDULED', '1');
+  ScriptApp.newTrigger('reconstruirVisaoDiariasCmax').timeBased().after(1000).create();
+}
+
+function getCmaxDailyEventsLegacy_(params) {
+  params = params || {};
+  var cacheKey = cmaxViewCacheKey_(params);
+  var cached = readCompressedScriptCache_(cacheKey);
+  if (cached) {
+    cached.cached = true;
+    return cached;
+  }
+  var sheet = getCmaxDailySheet_();
+  var headersExpected = getCmaxDailyHeaders_();
+  var rawJsonIndex = headersExpected.indexOf('raw_json');
+  var readColumns = rawJsonIndex > 0 ? rawJsonIndex : headersExpected.length;
+  var range = sheet.getRange(1, 1, Math.max(1, sheet.getLastRow()), readColumns);
+  var values = range.getValues();
+  var headers = values.length ? values[0].map(function(value) { return String(value || ''); }) : headersExpected.slice(0, readColumns);
+  var startTimeIndex = headers.indexOf('hora_inicio');
+  var endTimeIndex = headers.indexOf('hora_fim');
+  var timeDisplayValues = startTimeIndex >= 0 && endTimeIndex === startTimeIndex + 1
+    ? sheet.getRange(1, startTimeIndex + 1, Math.max(1, sheet.getLastRow()), 2).getDisplayValues()
+    : [];
+  var needsRawJson = values.slice(1).some(function(row, rowIndex) {
+    var start = normalizeCmaxSheetTime_((timeDisplayValues[rowIndex + 1] || [])[0] || row[startTimeIndex]);
+    var end = normalizeCmaxSheetTime_((timeDisplayValues[rowIndex + 1] || [])[1] || row[endTimeIndex]);
+    return !isCmaxValidTime_(start) || !isCmaxValidTime_(end);
+  });
+  var rawJsonValues = rawJsonIndex >= 0 && needsRawJson
+    ? sheet.getRange(1, rawJsonIndex + 1, Math.max(1, sheet.getLastRow()), 1).getValues()
+    : [];
+  var month = sanitizeCmaxMonth_(params.month || params.mes);
+  var consultant = sanitizeText_(params.consultant || params.consultor).toUpperCase();
+  var allEvents = values.slice(1).map(function(row, rowIndex) {
+    var item = {};
+    headers.forEach(function(header, index) { item[header] = row[index]; });
+    item.data = normalizeCmaxSheetDate_(item.data);
+    item.mes = normalizeCmaxSheetMonth_(item.mes || item.data);
+    item.ano = item.mes ? item.mes.slice(0, 4) : String(item.ano || '');
+    item.hora_inicio = normalizeCmaxSheetTime_((timeDisplayValues[rowIndex + 1] || [])[0] || item.hora_inicio);
+    item.hora_fim = normalizeCmaxSheetTime_((timeDisplayValues[rowIndex + 1] || [])[1] || item.hora_fim);
+    if (!isCmaxValidTime_(item.hora_inicio) || !isCmaxValidTime_(item.hora_fim)) {
+      var raw = parseCmaxRawJson_((rawJsonValues[rowIndex + 1] || [])[0]);
+      if (raw) {
+        item.hora_inicio = cmaxEventTime_(raw, [
+          'hora_inicio', 'hora_inicial', 'hora_de', 'horario_inicio', 'horario_de', 'inicio_hora', 'hr_inicio', 'start_time'
+        ]);
+        item.hora_fim = cmaxEventTime_(raw, [
+          'hora_fim', 'hora_final', 'hora_ate', 'horario_fim', 'horario_ate', 'fim_hora', 'hr_fim', 'end_time'
+        ]);
+      }
+    }
+    item.modalidade = normalizeCmaxModality_(item.descricao || item.tipo);
+    item.contabiliza_diaria = isCmaxDailyModality_(item.modalidade);
+    delete item.raw_json;
+    return item;
+  });
+  var trainingTeam = {};
+  var trainingCutoff = cmaxTrainingTeamCutoff_();
+  allEvents.forEach(function(item) {
+    if (item.contabiliza_diaria && item.data >= trainingCutoff) {
+      trainingTeam[sanitizeText_(item.consultor).toUpperCase()] = true;
+    }
+  });
+  var teamEvents = allEvents.filter(function(item) {
+    return !!trainingTeam[sanitizeText_(item.consultor).toUpperCase()];
+  });
+  var events = teamEvents.filter(function(item) {
+    if (month && item.mes !== month) return false;
+    if (consultant && sanitizeText_(item.consultor).toUpperCase() !== consultant) return false;
+    return true;
+  });
+  var availableMonths = {};
+  var availableConsultants = {};
+  var availableActivities = {};
+  teamEvents.forEach(function(item) {
+    if (item.mes) availableMonths[item.mes] = true;
+    if (item.consultor) availableConsultants[item.consultor] = true;
+    if (item.descricao || item.modalidade || item.tipo) availableActivities[item.descricao || item.modalidade || item.tipo] = true;
+  });
+
+  var result = {
+    ok: true,
+    events: events,
+    total: events.length,
+    month: month,
+    available_months: cmaxRelevantMonths_(Object.keys(availableMonths)),
+    history_months: cmaxHistoryMonths_(),
+    history_loaded_months: cmaxSnapshotMonths_(),
+    training_team_cutoff: trainingCutoff,
+    training_team: Object.keys(availableConsultants).sort(),
+    available_activities: Object.keys(availableActivities).sort(),
+    history_sync: getCmaxDailyHistoryBackgroundStatus_(),
+    synced_at: events.reduce(function(latest, item) {
+      var value = String(item.sincronizado_em || '');
+      return value > latest ? value : latest;
+    }, ''),
+    sheet: CMAX_DAILY_SHEET
+  };
+  writeCompressedScriptCache_(cacheKey, result, CMAX_VIEW_CACHE_SECONDS);
+  return result;
+}
+
+function cmaxViewCacheKey_(params) {
+  params = params || {};
+  var month = sanitizeCmaxMonth_(params.month || params.mes) || 'all';
+  var consultant = sanitizeText_(params.consultant || params.consultor).toUpperCase() || 'all';
+  return 'cmax:view:v3:' + month + ':' + consultant;
+}
+
+function readCompressedScriptCache_(key) {
+  try {
+    var encoded = CacheService.getScriptCache().get(key);
+    if (!encoded) return null;
+    var bytes = Utilities.base64Decode(encoded);
+    var json = Utilities.ungzip(Utilities.newBlob(bytes)).getDataAsString('UTF-8');
+    return JSON.parse(json);
+  } catch (ignored) {
+    return null;
+  }
+}
+
+function writeCompressedScriptCache_(key, value, seconds) {
+  try {
+    var compressed = Utilities.gzip(Utilities.newBlob(JSON.stringify(value), 'application/json'));
+    var encoded = Utilities.base64Encode(compressed.getBytes());
+    CacheService.getScriptCache().put(key, encoded, Math.max(60, Math.min(Number(seconds || 3600), 21600)));
+  } catch (ignored) {}
+}
+
+function clearCmaxViewCacheForMonths_(months) {
+  var keys = (months || []).map(function(month) { return cmaxViewCacheKey_({ month: month }); });
+  if (keys.length) CacheService.getScriptCache().removeAll(keys);
+}
+
+function cmaxTrainingTeamCutoff_() {
+  var props = PropertiesService.getScriptProperties();
+  var months = Math.max(1, Math.min(toInt_(props.getProperty('CMAX_TRAINING_TEAM_MONTHS'), 6), 60));
+  var now = new Date();
+  var cutoff = new Date(now.getFullYear(), now.getMonth() - months, 1);
+  return Utilities.formatDate(cutoff, Session.getScriptTimeZone(), 'yyyy-MM-dd');
+}
+
+function startCmaxDailyHistoryBackground_(params) {
+  params = params || {};
+  var props = PropertiesService.getScriptProperties();
+  var currentMonth = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'yyyy-MM');
+  var startMonth = cmaxHistoryStartMonth_(params.start_month);
+  if (cmaxSnapshotMonths_().indexOf(currentMonth) < 0) {
+    addCmaxForcedHistoryMonths_([currentMonth]);
+  } else {
+    removeCmaxForcedHistoryMonths_([currentMonth]);
+  }
+  props.setProperty('CMAX_HISTORY_BACKGROUND_ACTIVE', '1');
+  props.setProperty('CMAX_HISTORY_BACKGROUND_START_MONTH', startMonth);
+  props.setProperty('CMAX_HISTORY_BACKGROUND_FAILURES', '0');
+  props.setProperty('CMAX_HISTORY_BACKGROUND_UPDATED_AT', new Date().toISOString());
+  props.deleteProperty('CMAX_HISTORY_BACKGROUND_ERROR');
+  props.setProperty('CMAX_HISTORY_BACKGROUND_LAST_MONTH', currentMonth);
+  props.setProperty('CMAX_HISTORY_BACKGROUND_STARTED_AT', new Date().toISOString());
+  props.deleteProperty('CMAX_HISTORY_BACKGROUND_COMPLETED_AT');
+  updateCmaxHistoryProgressProperties_();
+  scheduleCmaxDailyHistoryBackground_(5000);
+  return {
+    ok: true,
+    scheduled: true,
+    current_month: currentMonth,
+    start_month: startMonth,
+    history_sync: getCmaxDailyHistoryBackgroundStatus_()
+  };
+}
+
+function continueCmaxDailyHistoryBackgroundTrigger() {
+  var props = PropertiesService.getScriptProperties();
+  if (props.getProperty('CMAX_HISTORY_BACKGROUND_ACTIVE') !== '1') {
+    clearCmaxDailyHistoryBackgroundTriggers_();
+    return;
+  }
+  try {
+    var result = continueCmaxDailyHistoryBatch_({ batch_size: props.getProperty('CMAX_HISTORY_BATCH_SIZE') || '1' });
+    if (result.done) return;
+    scheduleCmaxDailyHistoryBackground_(5000);
+  } catch (error) {
+    var failures = toInt_(props.getProperty('CMAX_HISTORY_BACKGROUND_FAILURES'), 0) + 1;
+    props.setProperty('CMAX_HISTORY_BACKGROUND_FAILURES', String(failures));
+    props.setProperty('CMAX_HISTORY_BACKGROUND_ERROR', simplifyErrorMessage_(error));
+    if (failures >= 10) {
+      props.setProperty('CMAX_HISTORY_BACKGROUND_ACTIVE', '0');
+      clearCmaxDailyHistoryBackgroundTriggers_();
+      return;
+    }
+    scheduleCmaxDailyHistoryBackground_(60000);
+  }
+}
+
+function continueCmaxDailyHistoryBatch_(params) {
+  params = params || {};
+  var props = PropertiesService.getScriptProperties();
+  if (props.getProperty('CMAX_HISTORY_BACKGROUND_ACTIVE') !== '1') {
+    return { ok: true, done: true, history_sync: getCmaxDailyHistoryBackgroundStatus_() };
+  }
+  var batchSize = Math.max(1, Math.min(toInt_(params.batch_size, 1), 2));
+  var pendingMonths = cmaxPendingHistoryMonths_();
+  var batchMonths = pendingMonths.slice(0, batchSize);
+  var attemptedMonths = batchMonths.slice();
+  var eventsByMonth = {};
+  batchMonths.forEach(function(month) {
+    eventsByMonth[month] = fetchCmaxDailyEventsForMonth_(month).events;
+  });
+  if (batchMonths.length) {
+    var unchangedMonths = batchMonths.filter(function(month) {
+      return cmaxDailyMonthMatches_(month, eventsByMonth[month]);
+    });
+    if (unchangedMonths.length) markCmaxHistoryMonthsCompleted_(unchangedMonths);
+    unchangedMonths.forEach(function(month) { delete eventsByMonth[month]; });
+    batchMonths = batchMonths.filter(function(month) { return unchangedMonths.indexOf(month) < 0; });
+  }
+  if (batchMonths.length) {
+    var writeLock = LockService.getScriptLock();
+    if (!writeLock.tryLock(1000)) {
+      return { ok: true, done: false, busy: true, history_sync: getCmaxDailyHistoryBackgroundStatus_() };
+    }
+    try {
+      Object.keys(eventsByMonth).forEach(function(month) {
+        writeCmaxDailyMonthSnapshot_(month, eventsByMonth[month]);
+      });
+      markCmaxHistoryMonthsCompleted_(batchMonths);
+    } finally {
+      writeLock.releaseLock();
+    }
+  }
+  if (attemptedMonths.length) props.setProperty('CMAX_HISTORY_BACKGROUND_LAST_MONTH', attemptedMonths[attemptedMonths.length - 1]);
+  var remainingMonths = cmaxPendingHistoryMonths_();
+  props.setProperty('CMAX_HISTORY_BACKGROUND_FAILURES', '0');
+  props.setProperty('CMAX_HISTORY_BACKGROUND_UPDATED_AT', new Date().toISOString());
+  props.deleteProperty('CMAX_HISTORY_BACKGROUND_ERROR');
+  var done = remainingMonths.length === 0;
+  if (done) {
+    props.setProperty('CMAX_HISTORY_BACKGROUND_ACTIVE', '0');
+    props.setProperty('CMAX_HISTORY_BACKGROUND_COMPLETED_AT', new Date().toISOString());
+    clearCmaxDailyHistoryBackgroundTriggers_();
+  }
+  updateCmaxHistoryProgressProperties_();
+  return {
+    ok: true,
+    done: done,
+    batch_months: batchMonths,
+    history_sync: getCmaxDailyHistoryBackgroundStatus_()
+  };
+}
+
+function getCmaxDailyHistoryBackgroundStatus_() {
+  var props = PropertiesService.getScriptProperties();
+  var pending = cmaxPendingHistoryMonths_();
+  var completed = cmaxProcessedHistoryMonths_();
+  return {
+    active: props.getProperty('CMAX_HISTORY_BACKGROUND_ACTIVE') === '1',
+    start_month: cmaxHistoryStartMonth_(),
+    next_month: pending[0] || '',
+    last_month: props.getProperty('CMAX_HISTORY_BACKGROUND_LAST_MONTH') || '',
+    processed_months: completed.length,
+    started_at: props.getProperty('CMAX_HISTORY_BACKGROUND_STARTED_AT') || '',
+    updated_at: props.getProperty('CMAX_HISTORY_BACKGROUND_UPDATED_AT') || '',
+    completed_at: props.getProperty('CMAX_HISTORY_BACKGROUND_COMPLETED_AT') || '',
+    error: props.getProperty('CMAX_HISTORY_BACKGROUND_ERROR') || ''
+  };
+}
+
+function getCmaxDailyHistoryStatus_() {
+  var props = PropertiesService.getScriptProperties();
+  var loaded = cmaxSnapshotMonths_();
+  var history = cmaxHistoryMonths_();
+  var loadedMap = {};
+  loaded.forEach(function(month) {
+    month = sanitizeCmaxMonth_(month);
+    if (month) loadedMap[month] = true;
+  });
+  var pending = history.filter(function(month) { return !loadedMap[month]; });
+  return {
+    ok: true,
+    history_months: history,
+    history_loaded_months: history.filter(function(month) { return !!loadedMap[month]; }),
+    history_sync: {
+      active: props.getProperty('CMAX_HISTORY_BACKGROUND_ACTIVE') === '1',
+      start_month: cmaxHistoryStartMonth_(),
+      next_month: pending[0] || '',
+      last_month: props.getProperty('CMAX_HISTORY_BACKGROUND_LAST_MONTH') || '',
+      processed_months: history.length - pending.length,
+      started_at: props.getProperty('CMAX_HISTORY_BACKGROUND_STARTED_AT') || '',
+      updated_at: props.getProperty('CMAX_HISTORY_BACKGROUND_UPDATED_AT') || '',
+      completed_at: props.getProperty('CMAX_HISTORY_BACKGROUND_COMPLETED_AT') || '',
+      error: props.getProperty('CMAX_HISTORY_BACKGROUND_ERROR') || ''
+    }
+  };
+}
+
+function cmaxSnapshotMonths_(meta) {
+  if (!meta) {
+    try { meta = JSON.parse(PropertiesService.getScriptProperties().getProperty('CMAX_VIEW_META_JSON') || 'null'); } catch (ignored) { meta = null; }
+  }
+  return cmaxRelevantMonths_(Object.keys(meta && meta.month_sheets || {}));
+}
+
+function scheduleCmaxDailyHistoryBackground_(delayMs) {
+  clearCmaxDailyHistoryBackgroundTriggers_();
+  ScriptApp.newTrigger('continueCmaxDailyHistoryBackgroundTrigger')
+    .timeBased()
+    .after(Math.max(1000, Number(delayMs || 5000)))
+    .create();
+}
+
+function clearCmaxDailyHistoryBackgroundTriggers_() {
+  ScriptApp.getProjectTriggers().forEach(function(trigger) {
+    if (trigger.getHandlerFunction() === 'continueCmaxDailyHistoryBackgroundTrigger') {
+      ScriptApp.deleteTrigger(trigger);
+    }
+  });
+}
+
+function cmaxShiftMonth_(month, offset) {
+  var parts = sanitizeCmaxMonth_(month).split('-');
+  if (parts.length !== 2) return '';
+  var absoluteMonth = Number(parts[0]) * 12 + Number(parts[1]) - 1 + Number(offset || 0);
+  var year = Math.floor(absoluteMonth / 12);
+  var monthNumber = absoluteMonth - year * 12 + 1;
+  return year + '-' + String(monthNumber).padStart(2, '0');
+}
+
+function cmaxHistoryMonths_() {
+  var current = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'yyyy-MM');
+  var start = cmaxHistoryStartMonth_();
+  var months = [];
+  while (current && current >= start && months.length < 120) {
+    months.push(current);
+    current = cmaxShiftMonth_(current, -1);
+  }
+  return months;
+}
+
+function cmaxHistoryStartMonth_(requested) {
+  var props = PropertiesService.getScriptProperties();
+  var configured = sanitizeCmaxMonth_(requested || props.getProperty('CMAX_HISTORY_START_MONTH')) || CMAX_HISTORY_DEFAULT_START_MONTH;
+  return configured < CMAX_HISTORY_DEFAULT_START_MONTH ? CMAX_HISTORY_DEFAULT_START_MONTH : configured;
+}
+
+function cmaxRelevantMonths_(months) {
+  var start = cmaxHistoryStartMonth_();
+  return (months || []).map(sanitizeCmaxMonth_).filter(function(month) {
+    return !!month && month >= start;
+  }).filter(function(month, index, all) {
+    return all.indexOf(month) === index;
+  }).sort().reverse();
+}
+
+function cmaxProcessedHistoryMonths_() {
+  var allMonths = cmaxHistoryMonths_();
+  var completed = cmaxHistoryCompletionMap_();
+  return allMonths.filter(function(month) { return !!completed[month]; });
+}
+
+var CMAX_HISTORY_COMPLETION_CACHE_ = null;
+
+function cmaxHistoryCompletionMap_() {
+  if (CMAX_HISTORY_COMPLETION_CACHE_) return CMAX_HISTORY_COMPLETION_CACHE_;
+  var props = PropertiesService.getScriptProperties();
+  var completed = {};
+  try {
+    JSON.parse(props.getProperty('CMAX_HISTORY_COMPLETED_MONTHS_JSON') || '[]').forEach(function(month) {
+      month = sanitizeCmaxMonth_(month);
+      if (month) completed[month] = true;
+    });
+  } catch (ignored) {}
+  try {
+    var meta = JSON.parse(props.getProperty('CMAX_VIEW_META_JSON') || 'null');
+    (meta && meta.history_loaded_months || []).forEach(function(month) {
+      month = sanitizeCmaxMonth_(month);
+      if (month) completed[month] = true;
+    });
+  } catch (ignoredMeta) {}
+  CMAX_HISTORY_COMPLETION_CACHE_ = completed;
+  return completed;
+}
+
+function cmaxMonthsPresentInSheet_() {
+  var sheet = getCmaxDailySheet_();
+  var lastRow = sheet.getLastRow();
+  if (lastRow < 2) return [];
+  var monthColumn = getCmaxDailyHeaders_().indexOf('mes') + 1;
+  var found = {};
+  sheet.getRange(2, monthColumn, lastRow - 1, 1).getValues().forEach(function(row) {
+    var month = normalizeCmaxSheetMonth_(row[0]);
+    if (month) found[month] = true;
+  });
+  return Object.keys(found).sort().reverse();
+}
+
+function cmaxPendingHistoryMonths_() {
+  var completed = {};
+  cmaxProcessedHistoryMonths_().forEach(function(month) { completed[month] = true; });
+  var forced = cmaxForcedHistoryMonths_();
+  var props = PropertiesService.getScriptProperties();
+  var meta;
+  try { meta = JSON.parse(props.getProperty('CMAX_VIEW_META_JSON') || 'null'); } catch (ignored) { meta = null; }
+  var monthSheets = meta && meta.month_sheets || {};
+  var missingSnapshots = cmaxHistoryMonths_().filter(function(month) {
+    return !monthSheets[month] && forced.indexOf(month) < 0;
+  });
+  return forced.concat(missingSnapshots).concat(cmaxHistoryMonths_().filter(function(month) {
+    return !completed[month] && forced.indexOf(month) < 0 && missingSnapshots.indexOf(month) < 0;
+  }));
+}
+
+function cmaxDailyMonthMatches_(month, events) {
+  var props = PropertiesService.getScriptProperties();
+  var meta;
+  try { meta = JSON.parse(props.getProperty('CMAX_VIEW_META_JSON') || 'null'); } catch (ignored) { meta = null; }
+  if (!meta || !meta.month_sheets || !meta.month_sheets[month]) return false;
+  var previousHash = meta && meta.month_hashes && meta.month_hashes[month];
+  return !!previousHash && previousHash === cmaxEventsHash_(events || []);
+}
+
+function cmaxEventsHash_(events) {
+  var fields = ['event_key', 'data', 'consultor', 'cliente', 'tipo', 'resultado', 'descricao', 'hora_inicio', 'hora_fim'];
+  var signatures = (events || []).map(function(event) {
+    return fields.map(function(field) {
+      var value = event && event[field];
+      if (field === 'data') return normalizeCmaxSheetDate_(value);
+      if (field === 'hora_inicio' || field === 'hora_fim') return normalizeCmaxSheetTime_(value);
+      return sanitizeText_(value);
+    }).join('|');
+  }).sort();
+  return Utilities.base64EncodeWebSafe(Utilities.computeDigest(
+    Utilities.DigestAlgorithm.SHA_256,
+    signatures.join('\n'),
+    Utilities.Charset.UTF_8
+  ));
+}
+
+function markCmaxHistoryMonthsCompleted_(months) {
+  var props = PropertiesService.getScriptProperties();
+  var completed = {};
+  cmaxProcessedHistoryMonths_().forEach(function(month) { completed[month] = true; });
+  (months || []).forEach(function(month) {
+    month = sanitizeCmaxMonth_(month);
+    if (month) completed[month] = true;
+  });
+  props.setProperty('CMAX_HISTORY_COMPLETED_MONTHS_JSON', JSON.stringify(Object.keys(completed).sort().reverse()));
+  removeCmaxForcedHistoryMonths_(months);
+  CMAX_HISTORY_COMPLETION_CACHE_ = completed;
+}
+
+function cmaxForcedHistoryMonths_() {
+  var props = PropertiesService.getScriptProperties();
+  try {
+    return JSON.parse(props.getProperty('CMAX_HISTORY_FORCED_MONTHS_JSON') || '[]').map(sanitizeCmaxMonth_).filter(function(month) {
+      return !!month;
+    });
+  } catch (ignored) {
+    return [];
+  }
+}
+
+function addCmaxForcedHistoryMonths_(months) {
+  var props = PropertiesService.getScriptProperties();
+  var forced = cmaxForcedHistoryMonths_();
+  (months || []).forEach(function(month) {
+    month = sanitizeCmaxMonth_(month);
+    if (month && forced.indexOf(month) < 0) forced.push(month);
+  });
+  props.setProperty('CMAX_HISTORY_FORCED_MONTHS_JSON', JSON.stringify(forced));
+}
+
+function removeCmaxForcedHistoryMonths_(months) {
+  var props = PropertiesService.getScriptProperties();
+  var remove = {};
+  (months || []).forEach(function(month) { remove[sanitizeCmaxMonth_(month)] = true; });
+  props.setProperty('CMAX_HISTORY_FORCED_MONTHS_JSON', JSON.stringify(cmaxForcedHistoryMonths_().filter(function(month) {
+    return !remove[month];
+  })));
+}
+
+function updateCmaxHistoryProgressProperties_() {
+  var props = PropertiesService.getScriptProperties();
+  var pending = cmaxPendingHistoryMonths_();
+  props.setProperty('CMAX_HISTORY_BACKGROUND_CURSOR', pending[0] || '');
+  props.setProperty('CMAX_HISTORY_BACKGROUND_PROCESSED', String(cmaxProcessedHistoryMonths_().length));
+}
+
+function syncCmaxDailyEvents_(params) {
+  params = params || {};
+  var month = sanitizeCmaxMonth_(params.month || params.mes) || Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'yyyy-MM');
+  var fetched = fetchCmaxDailyEventsForMonth_(month);
+  var writeLock = LockService.getScriptLock();
+  if (!writeLock.tryLock(60000)) throw new Error('Outra atualização CMAX está finalizando uma gravação. Aguarde alguns segundos.');
+  try {
+    writeCmaxDailyMonthSnapshot_(month, fetched.events);
+    markCmaxHistoryMonthsCompleted_([month]);
+    updateCmaxHistoryProgressProperties_();
+  } finally {
+    writeLock.releaseLock();
+  }
+  return fetched.result;
+}
+
+function writeCmaxDailyMonthSnapshot_(month, events) {
+  month = sanitizeCmaxMonth_(month);
+  if (!month) return;
+  var props = PropertiesService.getScriptProperties();
+  var meta;
+  try { meta = JSON.parse(props.getProperty('CMAX_VIEW_META_JSON') || '{}'); } catch (ignored) { meta = {}; }
+  meta.month_sheets = meta.month_sheets || {};
+  meta.month_hashes = meta.month_hashes || {};
+  meta.available_months = meta.available_months || [];
+  meta.history_loaded_months = meta.history_loaded_months || [];
+  meta.training_team = meta.training_team || [];
+  meta.available_activities = meta.available_activities || [];
+
+  var trainingTeam = {};
+  meta.training_team.forEach(function(name) { trainingTeam[sanitizeText_(name).toUpperCase()] = true; });
+  (events || []).forEach(function(event) {
+    var modality = normalizeCmaxModality_(event.descricao || event.tipo);
+    if (isCmaxDailyModality_(modality)) trainingTeam[sanitizeText_(event.consultor).toUpperCase()] = true;
+  });
+  var activities = {};
+  meta.available_activities.forEach(function(activity) { activities[activity] = true; });
+  var items = (events || []).map(function(event) {
+    var item = {};
+    getCmaxDailyViewHeaders_().forEach(function(header) { item[header] = event[header] === undefined ? '' : event[header]; });
+    item.data = normalizeCmaxSheetDate_(event.data);
+    item.mes = month;
+    item.ano = month.slice(0, 4);
+    item.hora_inicio = normalizeCmaxSheetTime_(event.hora_inicio);
+    item.hora_fim = normalizeCmaxSheetTime_(event.hora_fim);
+    item.modalidade = normalizeCmaxModality_(event.descricao || event.tipo);
+    item.contabiliza_diaria = isCmaxDailyModality_(item.modalidade);
+    if (event.descricao || item.modalidade || event.tipo) activities[event.descricao || item.modalidade || event.tipo] = true;
+    return item;
+  }).filter(function(item) {
+    return !!trainingTeam[sanitizeText_(item.consultor).toUpperCase()];
+  }).sort(function(a, b) {
+    return String(a.consultor).localeCompare(String(b.consultor), 'pt-BR') ||
+      String(a.data).localeCompare(String(b.data)) ||
+      String(a.hora_inicio).localeCompare(String(b.hora_inicio));
+  });
+
+  var ss = SpreadsheetApp.openById(getScriptProperty_('SHEET_ID'));
+  var sheetName = cmaxDailyMonthSnapshotSheetName_(month);
+  var sheet = ss.getSheetByName(sheetName) || ss.insertSheet(sheetName);
+  var headers = getCmaxDailyViewHeaders_();
+  var values = items.map(function(item) {
+    return headers.map(function(header) { return item[header] === undefined ? '' : item[header]; });
+  });
+  sheet.clearContents();
+  sheet.getRange(1, 1, 1, headers.length).setValues([headers]);
+  if (values.length) sheet.getRange(2, 1, values.length, headers.length).setValues(values);
+
+  meta.month_sheets[month] = sheetName;
+  meta.month_hashes[month] = cmaxEventsHash_(events || []);
+  if (meta.available_months.indexOf(month) < 0) meta.available_months.push(month);
+  if (meta.history_loaded_months.indexOf(month) < 0) meta.history_loaded_months.push(month);
+  meta.available_months = cmaxRelevantMonths_(meta.available_months);
+  meta.history_loaded_months = cmaxRelevantMonths_(meta.history_loaded_months);
+  meta.training_team = Object.keys(trainingTeam).sort();
+  meta.available_activities = Object.keys(activities).sort();
+  meta.synced_at = new Date().toISOString();
+  props.setProperty('CMAX_VIEW_META_JSON', JSON.stringify(meta));
+  writeCmaxMaterializedCaches_(items, meta);
+}
+
+function fetchCmaxDailyEventsForMonth_(month) {
+  var range = cmaxMonthRange_(month);
+  var response = fetchCmaxAgendaWithAutomaticToken_(range);
+  var code = response.getResponseCode();
+  var text = response.getContentText();
+  if (code === 401 || code === 403) throw new Error('Autenticação CMAX recusada mesmo após renovação automática.');
+  if (code < 200 || code >= 300) throw new Error('CMAX respondeu HTTP ' + code + ': ' + text.slice(0, 240));
+
+  var payload;
+  try { payload = JSON.parse(text); } catch (error) { throw new Error('CMAX retornou uma resposta que não é JSON.'); }
+  var candidates = collectCmaxAgendaCandidates_(payload);
+  var syncedAt = new Date().toISOString();
+  var events = candidates.map(function(item) {
+    return normalizeCmaxAgendaEvent_(item, syncedAt);
+  }).filter(function(item) {
+    return item && item.mes === month && isCmaxPositiveResult_(item.resultado);
+  });
+
+  var unique = {};
+  events.forEach(function(item) { unique[item.event_key] = item; });
+  events = Object.keys(unique).map(function(key) { return unique[key]; });
+
+  return {
+    events: events,
+    result: {
+      ok: true,
+      month: month,
+      imported: events.length,
+      candidates: candidates.length,
+      ignored: Math.max(0, candidates.length - events.length),
+      synced_at: syncedAt
+    }
+  };
+}
+
+function fetchCmaxAgendaWithAutomaticToken_(range) {
+  var props = PropertiesService.getScriptProperties();
+  var token = String(props.getProperty('CMAX_JWT_TOKEN') || '').trim();
+  if (!token) token = renewCmaxJwtToken_('');
+  var response = fetchCmaxAgendaWithToken_(range, token);
+  if (response.getResponseCode() !== 401 && response.getResponseCode() !== 403) return response;
+  token = renewCmaxJwtToken_(token);
+  return fetchCmaxAgendaWithToken_(range, token);
+}
+
+function fetchCmaxAgendaWithToken_(range, token) {
+  return UrlFetchApp.fetch(CMAX_AGENDA_URL, {
+    method: 'post',
+    contentType: 'application/json',
+    headers: {
+      Authorization: 'JWT ' + token,
+      Accept: 'application/json, text/plain, */*',
+      'Django-Timezone': 'America/Sao_Paulo',
+      Referer: 'https://www.multbovinos.com/'
+    },
+    payload: JSON.stringify({
+      origem: 'tela',
+      data_de: range.start,
+      data_ate: range.end
+    }),
+    muteHttpExceptions: true
+  });
+}
+
+function renewCmaxJwtToken_(currentToken) {
+  var props = PropertiesService.getScriptProperties();
+  var refreshUrl = String(props.getProperty('CMAX_TOKEN_REFRESH_URL') || '').trim();
+  if (currentToken && refreshUrl) {
+    var refreshed = requestCmaxToken_(refreshUrl, { token: currentToken });
+    if (refreshed) {
+      props.setProperty('CMAX_JWT_TOKEN', refreshed);
+      return refreshed;
+    }
+  }
+  var username = String(props.getProperty('CMAX_EMAIL') || props.getProperty('CMAX_USERNAME') || '').trim();
+  var password = String(props.getProperty('CMAX_PASSWORD') || '');
+  if (username && password) {
+    var authUrl = String(props.getProperty('CMAX_TOKEN_AUTH_URL') || CMAX_TOKEN_AUTH_URL).trim();
+    var authenticated = requestCmaxToken_(authUrl, { email: username, password: password });
+    if (authenticated) {
+      props.setProperty('CMAX_JWT_TOKEN', authenticated);
+      return authenticated;
+    }
+  }
+  throw new Error('Não foi possível renovar a autenticação CMAX automaticamente. Configure CMAX_EMAIL e CMAX_PASSWORD nas propriedades do Apps Script.');
+}
+
+function requestCmaxToken_(url, payload) {
+  if (!url) return '';
+  var response = UrlFetchApp.fetch(url, {
+    method: 'post',
+    contentType: 'application/json',
+    headers: { Accept: 'application/json, text/plain, */*' },
+    payload: JSON.stringify(payload || {}),
+    muteHttpExceptions: true
+  });
+  if (response.getResponseCode() < 200 || response.getResponseCode() >= 300) return '';
+  try {
+    var parsed = JSON.parse(response.getContentText());
+    return String(parsed.token || parsed.access || parsed.jwt || (parsed.dados_acesso || {}).token || '').trim();
+  } catch (ignored) {
+    return '';
+  }
+}
+
+function collectCmaxAgendaCandidates_(value, depth, output, seen, inheritedDate) {
+  depth = depth || 0;
+  output = output || [];
+  seen = seen || {};
+  if (value === null || value === undefined || depth > 10) return output;
+  if (Array.isArray(value)) {
+    value.forEach(function(item) { collectCmaxAgendaCandidates_(item, depth + 1, output, seen, inheritedDate); });
+    return output;
+  }
+  if (typeof value !== 'object') return output;
+  var ownDate = cmaxOwnValue_(value, ['data', 'data_evento', 'data_inicio', 'start', 'date']);
+  var eventDate = ownDate || inheritedDate;
+  var result = cmaxOwnValue_(value, ['resultado_texto', 'resultado', 'status_texto', 'status']);
+  var id = cmaxOwnValue_(value, ['id', 'evento_id', 'event_id', 'uid']);
+  var eventSignal = cmaxOwnValue_(value, [
+    'contato', 'contato_texto', 'cliente', 'cliente_nome', 'responsavel', 'responsavel_texto',
+    'grupo_evento', 'grupo_evento_texto', 'tipo_evento_texto', 'tipo_comunicacao'
+  ]);
+  if (eventDate && result !== '' && eventSignal !== '') {
+    if (!ownDate) {
+      value = cmaxCloneWithParentDate_(value, eventDate);
+    }
+    var signature = String(id || '') + '|' + String(eventDate || '') + '|' + JSON.stringify(value).slice(0, 180);
+    if (!seen[signature]) {
+      seen[signature] = true;
+      output.push(value);
+    }
+  }
+  Object.keys(value).forEach(function(key) {
+    collectCmaxAgendaCandidates_(value[key], depth + 1, output, seen, eventDate);
+  });
+  return output;
+}
+
+function normalizeCmaxAgendaEvent_(raw, syncedAt) {
+  var rawDate = deepFindFirst_(raw, ['data', 'data_evento', 'data_inicio', 'start', 'date', '_cmax_parent_date']);
+  var date = parseCmaxDate_(rawDate);
+  if (!date) return null;
+  var eventId = sanitizeText_(deepFindFirst_(raw, ['id', 'evento_id', 'event_id', 'uid']));
+  var consultant = cmaxScalarText_(deepFindFirst_(raw, [
+    'responsavel_texto', 'responsavel_nome', 'consultor', 'usuario_texto', 'responsavel'
+  ]));
+  var client = cmaxScalarText_(deepFindFirst_(raw, [
+    'contato_texto', 'contato_nome', 'cliente', 'cliente_nome', 'contato'
+  ]));
+  var type = cmaxScalarText_(deepFindFirst_(raw, [
+    'grupo_evento_texto', 'tipo_evento_texto', 'tipo_texto', 'atividade_texto', 'descricao_tipo', 'titulo', 'grupo_evento'
+  ]));
+  var result = cmaxScalarText_(deepFindFirst_(raw, ['resultado_texto', 'resultado', 'status_texto', 'status']));
+  if (/^1(?:\.0)?$/.test(result)) result = 'Positivo';
+  var description = sanitizeText_(deepFindFirst_(raw, ['descricao', 'observacao', 'obs', 'assunto', 'titulo']));
+  var isoDate = Utilities.formatDate(date, Session.getScriptTimeZone(), 'yyyy-MM-dd');
+  var month = isoDate.slice(0, 7);
+  var key = eventId || [isoDate, consultant, client, type, result].join('|').toUpperCase();
+  return {
+    event_key: key,
+    event_id: eventId,
+    data: isoDate,
+    mes: month,
+    ano: month.slice(0, 4),
+    consultor: consultant || 'Sem consultor',
+    cliente: client || 'Cliente não identificado',
+    tipo: type || 'Agenda CMAX',
+    resultado: result,
+    descricao: description,
+    hora_inicio: cmaxEventTime_(raw, [
+      'hora_inicio', 'hora_inicial', 'hora_de', 'horario_inicio', 'horario_de', 'inicio_hora', 'hr_inicio', 'start_time'
+    ]),
+    hora_fim: cmaxEventTime_(raw, [
+      'hora_fim', 'hora_final', 'hora_ate', 'horario_fim', 'horario_ate', 'fim_hora', 'hr_fim', 'end_time'
+    ]),
+    sincronizado_em: syncedAt,
+    raw_json: JSON.stringify(raw)
+  };
+}
+
+function cmaxScalarText_(value) {
+  if (value === null || value === undefined) return '';
+  if (typeof value !== 'object') return sanitizeText_(value);
+  return sanitizeText_(deepFindFirst_(value, ['nome', 'name', 'texto', 'descricao', 'label', 'status', 'resultado', 'id']));
+}
+
+function cmaxOwnValue_(value, aliases) {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return '';
+  var aliasMap = {};
+  (aliases || []).forEach(function(alias) { aliasMap[String(alias).toLowerCase()] = true; });
+  var keys = Object.keys(value);
+  for (var i = 0; i < keys.length; i++) {
+    if (aliasMap[String(keys[i]).toLowerCase()]) {
+      var found = value[keys[i]];
+      return found === null || found === undefined ? '' : found;
+    }
+  }
+  return '';
+}
+
+function cmaxCloneWithParentDate_(value, date) {
+  var clone = {};
+  Object.keys(value || {}).forEach(function(key) { clone[key] = value[key]; });
+  clone._cmax_parent_date = date;
+  return clone;
+}
+
+function cmaxEventTime_(raw, aliases) {
+  var own = cmaxOwnValue_(raw, aliases);
+  var normalizedOwn = normalizeCmaxSheetTime_(own);
+  if (/^\d{2}:\d{2}$/.test(normalizedOwn)) return normalizedOwn;
+  var nested = deepFindFirst_(raw, aliases);
+  var normalizedNested = normalizeCmaxSheetTime_(nested);
+  if (/^\d{2}:\d{2}$/.test(normalizedNested)) return normalizedNested;
+  var wantsEnd = (aliases || []).some(function(alias) {
+    return /fim|final|ate|end|termino/i.test(normalizeCmaxKey_(alias));
+  });
+  return findCmaxSemanticTime_(raw, wantsEnd ? 'end' : 'start');
+}
+
+function normalizeCmaxKey_(value) {
+  return String(value || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, '_');
+}
+
+function findCmaxSemanticTime_(value, mode, depth) {
+  depth = depth || 0;
+  if (value === null || value === undefined || depth > 10) return '';
+  if (Array.isArray(value)) {
+    for (var arrayIndex = 0; arrayIndex < value.length; arrayIndex++) {
+      var arrayFound = findCmaxSemanticTime_(value[arrayIndex], mode, depth + 1);
+      if (arrayFound) return arrayFound;
+    }
+    return '';
+  }
+  if (typeof value !== 'object') return '';
+  var keys = Object.keys(value);
+  var keyPattern = mode === 'end'
+    ? /(^|_)(fim|final|ate|end|termino|encerramento)($|_)/
+    : /(^|_)(inicio|inicial|start|de)($|_)/;
+  for (var index = 0; index < keys.length; index++) {
+    var key = normalizeCmaxKey_(keys[index]);
+    if (!keyPattern.test(key)) continue;
+    var direct = normalizeCmaxSheetTime_(value[keys[index]]);
+    if (isCmaxValidTime_(direct)) return direct;
+  }
+  for (var intervalIndex = 0; intervalIndex < keys.length; intervalIndex++) {
+    var text = typeof value[keys[intervalIndex]] === 'string' ? value[keys[intervalIndex]] : '';
+    var interval = text.match(/(?:^|\D)(\d{1,2}:\d{2})\s*(?:-|a|ate|até)\s*(\d{1,2}:\d{2})(?:\D|$)/i);
+    if (interval) return normalizeCmaxSheetTime_(mode === 'end' ? interval[2] : interval[1]);
+  }
+  for (var childIndex = 0; childIndex < keys.length; childIndex++) {
+    var found = findCmaxSemanticTime_(value[keys[childIndex]], mode, depth + 1);
+    if (found) return found;
+  }
+  return '';
+}
+
+function parseCmaxRawJson_(value) {
+  if (!value) return null;
+  if (typeof value === 'object') return value;
+  try { return JSON.parse(String(value)); } catch (error) { return null; }
+}
+
+function isCmaxValidTime_(value) {
+  return /^\d{2}:\d{2}$/.test(String(value || ''));
+}
+
+function replaceCmaxDailyMonth_(month, events) {
+  var eventsByMonth = {};
+  eventsByMonth[month] = events;
+  replaceCmaxDailyMonths_(eventsByMonth);
+}
+
+function replaceCmaxDailyMonths_(eventsByMonth) {
+  var sheet = getCmaxDailySheet_();
+  var headers = getCmaxDailyHeaders_();
+  var range = sheet.getDataRange();
+  var values = range.getValues();
+  var displayValues = range.getDisplayValues();
+  var monthIndex = headers.indexOf('mes');
+  var startTimeIndex = headers.indexOf('hora_inicio');
+  var endTimeIndex = headers.indexOf('hora_fim');
+  var rawJsonIndex = headers.indexOf('raw_json');
+  var replacedMonths = {};
+  Object.keys(eventsByMonth || {}).forEach(function(month) { replacedMonths[month] = true; });
+  var retained = values.slice(1).map(function(row, rowIndex) {
+    var copy = row.slice();
+    copy[startTimeIndex] = normalizeCmaxSheetTime_(displayValues[rowIndex + 1][startTimeIndex] || copy[startTimeIndex]);
+    copy[endTimeIndex] = normalizeCmaxSheetTime_(displayValues[rowIndex + 1][endTimeIndex] || copy[endTimeIndex]);
+    if (!isCmaxValidTime_(copy[startTimeIndex]) || !isCmaxValidTime_(copy[endTimeIndex])) {
+      var raw = parseCmaxRawJson_(copy[rawJsonIndex]);
+      if (raw) {
+        copy[startTimeIndex] = cmaxEventTime_(raw, [
+          'hora_inicio', 'hora_inicial', 'hora_de', 'horario_inicio', 'horario_de', 'inicio_hora', 'hr_inicio', 'start_time'
+        ]);
+        copy[endTimeIndex] = cmaxEventTime_(raw, [
+          'hora_fim', 'hora_final', 'hora_ate', 'horario_fim', 'horario_ate', 'fim_hora', 'hr_fim', 'end_time'
+        ]);
+      }
+    }
+    return copy;
+  }).filter(function(row) { return !replacedMonths[normalizeCmaxSheetMonth_(row[monthIndex])]; });
+  var added = [];
+  Object.keys(eventsByMonth || {}).forEach(function(month) {
+    (eventsByMonth[month] || []).forEach(function(item) {
+      added.push(headers.map(function(header) { return item[header] === undefined ? '' : item[header]; }));
+    });
+  });
+  sheet.clearContents();
+  sheet.getRange(1, 1, 1, headers.length).setValues([headers]);
+  sheet.getRange(2, startTimeIndex + 1, Math.max(1, retained.length + added.length), 2).setNumberFormat('@');
+  if (retained.length + added.length) {
+    sheet.getRange(2, 1, retained.length + added.length, headers.length).setValues(retained.concat(added));
+  }
+  rebuildCmaxDailyMaterializedView_(retained.concat(added), headers);
+}
+
+function rebuildCmaxDailyMaterializedView_(rows, sourceHeaders) {
+  var viewHeaders = getCmaxDailyViewHeaders_();
+  var trainingCutoff = cmaxTrainingTeamCutoff_();
+  var items = (rows || []).map(function(row) {
+    var item = {};
+    sourceHeaders.forEach(function(header, index) { item[header] = row[index]; });
+    item.data = normalizeCmaxSheetDate_(item.data);
+    item.mes = normalizeCmaxSheetMonth_(item.mes || item.data);
+    item.ano = item.mes ? item.mes.slice(0, 4) : String(item.ano || '');
+    item.hora_inicio = normalizeCmaxSheetTime_(item.hora_inicio);
+    item.hora_fim = normalizeCmaxSheetTime_(item.hora_fim);
+    item.modalidade = normalizeCmaxModality_(item.descricao || item.tipo);
+    item.contabiliza_diaria = isCmaxDailyModality_(item.modalidade);
+    return item;
+  });
+  var trainingTeamMap = {};
+  items.forEach(function(item) {
+    if (item.contabiliza_diaria && item.data >= trainingCutoff) {
+      trainingTeamMap[sanitizeText_(item.consultor).toUpperCase()] = true;
+    }
+  });
+  var monthHashes = {};
+  var rawMonthItems = {};
+  items.forEach(function(item) {
+    (rawMonthItems[item.mes] || (rawMonthItems[item.mes] = [])).push(item);
+  });
+  Object.keys(rawMonthItems).forEach(function(month) { monthHashes[month] = cmaxEventsHash_(rawMonthItems[month]); });
+  items = items.filter(function(item) {
+    return !!trainingTeamMap[sanitizeText_(item.consultor).toUpperCase()];
+  }).sort(function(a, b) {
+    return String(b.mes).localeCompare(String(a.mes)) ||
+      String(a.consultor).localeCompare(String(b.consultor), 'pt-BR') ||
+      String(a.data).localeCompare(String(b.data)) ||
+      String(a.hora_inicio).localeCompare(String(b.hora_inicio));
+  });
+
+  var values = items.map(function(item) {
+    return viewHeaders.map(function(header) { return item[header] === undefined ? '' : item[header]; });
+  });
+  var viewSheet = getOrCreateSheet_(CMAX_DAILY_VIEW_SHEET);
+  viewSheet.clearContents();
+  viewSheet.getRange(1, 1, 1, viewHeaders.length).setValues([viewHeaders]);
+  if (values.length) viewSheet.getRange(2, 1, values.length, viewHeaders.length).setValues(values);
+
+  var ranges = {};
+  var availableMonths = {};
+  var availableActivities = {};
+  var syncedAt = '';
+  items.forEach(function(item, index) {
+    if (!ranges[item.mes]) ranges[item.mes] = { start: index + 2, count: 0 };
+    ranges[item.mes].count++;
+    availableMonths[item.mes] = true;
+    availableActivities[item.descricao || item.modalidade || item.tipo] = true;
+    if (String(item.sincronizado_em || '') > syncedAt) syncedAt = String(item.sincronizado_em || '');
+  });
+  var meta = {
+    ranges: ranges,
+    all: { start: 2, count: items.length },
+    available_months: cmaxRelevantMonths_(Object.keys(availableMonths)),
+    history_loaded_months: cmaxSnapshotMonths_(),
+    training_team_cutoff: trainingCutoff,
+    training_team: Object.keys(trainingTeamMap).sort(),
+    available_activities: Object.keys(availableActivities).sort(),
+    month_hashes: monthHashes,
+    synced_at: syncedAt,
+    rebuilt_at: new Date().toISOString()
+  };
+  PropertiesService.getScriptProperties().setProperty('CMAX_VIEW_META_JSON', JSON.stringify(meta));
+  writeCmaxMaterializedCaches_(items, meta);
+}
+
+function writeCmaxMaterializedCaches_(items, meta) {
+  var byMonth = {};
+  (items || []).forEach(function(item) {
+    if (!item.mes) return;
+    (byMonth[item.mes] || (byMonth[item.mes] = [])).push(item);
+  });
+  Object.keys(byMonth).forEach(function(month) {
+    var events = byMonth[month];
+    writeCompressedScriptCache_(cmaxViewCacheKey_({ month: month }), {
+      ok: true,
+      events: events,
+      total: events.length,
+      month: month,
+      available_months: cmaxRelevantMonths_(meta.available_months),
+      history_months: cmaxHistoryMonths_(),
+      history_loaded_months: cmaxSnapshotMonths_(meta),
+      training_team_cutoff: meta.training_team_cutoff || '',
+      training_team: meta.training_team || [],
+      available_activities: meta.available_activities || [],
+      history_sync: getCmaxDailyHistoryStatus_().history_sync,
+      synced_at: meta.synced_at || '',
+      materialized: true,
+      sheet: CMAX_DAILY_VIEW_SHEET
+    }, CMAX_VIEW_CACHE_SECONDS);
+  });
+}
+
+function sanitizeCmaxMonth_(value) {
+  var match = String(value || '').trim().match(/^(\d{4})-(0[1-9]|1[0-2])$/);
+  return match ? match[0] : '';
+}
+
+function normalizeCmaxSheetMonth_(value) {
+  if (value instanceof Date && !isNaN(value.getTime())) {
+    return Utilities.formatDate(value, Session.getScriptTimeZone(), 'yyyy-MM');
+  }
+  var text = String(value || '').trim();
+  var match = text.match(/^(\d{4})-(0[1-9]|1[0-2])/);
+  return match ? match[1] + '-' + match[2] : '';
+}
+
+function normalizeCmaxSheetDate_(value) {
+  if (value instanceof Date && !isNaN(value.getTime())) {
+    return Utilities.formatDate(value, Session.getScriptTimeZone(), 'yyyy-MM-dd');
+  }
+  var parsed = parseCmaxDate_(value);
+  return parsed ? Utilities.formatDate(parsed, Session.getScriptTimeZone(), 'yyyy-MM-dd') : String(value || '');
+}
+
+function normalizeCmaxSheetTime_(value) {
+  if (value instanceof Date && !isNaN(value.getTime())) {
+    if (value.getUTCFullYear() <= 1900) return cmaxLegacyTimeFromHours_(value.getUTCHours(), value.getUTCMinutes());
+    return Utilities.formatDate(value, 'America/Sao_Paulo', 'HH:mm');
+  }
+  var text = String(value || '').trim();
+  if (/^\d{4}-\d{2}-\d{2}T/.test(text)) {
+    var legacy = text.match(/^(1899|1900)-\d{2}-\d{2}T(\d{2}):(\d{2})/);
+    if (legacy) return cmaxLegacyTimeFromHours_(Number(legacy[2]), Number(legacy[3]));
+    var parsed = new Date(text);
+    if (!isNaN(parsed.getTime())) return Utilities.formatDate(parsed, 'America/Sao_Paulo', 'HH:mm');
+  }
+  var iso = text.match(/T(\d{2}):(\d{2})/);
+  if (iso) return iso[1] + ':' + iso[2];
+  var time = text.match(/^(\d{1,2}):(\d{2})/);
+  if (time) return String(Number(time[1])).padStart(2, '0') + ':' + time[2];
+  return text;
+}
+
+function cmaxLegacyTimeFromHours_(hours, minutes) {
+  var adjusted = (Number(hours || 0) - 8 + 24) % 24;
+  return String(adjusted).padStart(2, '0') + ':' + String(Number(minutes || 0)).padStart(2, '0');
+}
+
+function normalizeCmaxModality_(value) {
+  return sanitizeText_(value).normalize('NFD').replace(/[\u0300-\u036f]/g, '').toUpperCase();
+}
+
+function isCmaxDailyModality_(value) {
+  var modality = normalizeCmaxModality_(value);
+  return modality === 'TREINAMENTO ON LINE' ||
+    modality === 'TREINAMENTO IN LOCO' ||
+    modality === 'TREINAMENTO ON LINE AVULSO' ||
+    modality === 'TREINAMENTO IN LOCO AVULSO';
+}
+
+function cmaxMonthRange_(month) {
+  var parts = month.split('-');
+  var year = Number(parts[0]);
+  var monthIndex = Number(parts[1]) - 1;
+  var lastDay = new Date(year, monthIndex + 1, 0).getDate();
+  return {
+    start: year + '-' + String(monthIndex + 1).padStart(2, '0') + '-01',
+    end: year + '-' + String(monthIndex + 1).padStart(2, '0') + '-' + String(lastDay).padStart(2, '0')
+  };
+}
+
+function parseCmaxDate_(value) {
+  if (value instanceof Date && !isNaN(value.getTime())) return value;
+  var text = String(value || '').trim();
+  var br = text.match(/^(\d{2})\/(\d{2})\/(\d{4})/);
+  if (br) return new Date(Number(br[3]), Number(br[2]) - 1, Number(br[1]));
+  var iso = text.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (iso) return new Date(Number(iso[1]), Number(iso[2]) - 1, Number(iso[3]));
+  var date = new Date(text);
+  return isNaN(date.getTime()) ? null : date;
+}
+
+function isCmaxPositiveResult_(value) {
+  var normalized = sanitizeText_(value).normalize('NFD').replace(/[\u0300-\u036f]/g, '').toUpperCase();
+  return normalized === 'POSITIVO' || normalized === 'POSITIVE' || normalized === '1';
 }
 
 function buildProjectUrl_(mapping, tasks) {
