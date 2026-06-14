@@ -71,3 +71,12 @@ Quando o token CMAX expira, o Apps Script autentica novamente em
   automaticamente caso a base esteja temporariamente ocupada.
 - Cada consultor possui uma visao calendario mensal com intensidade por volume,
   quantidade de diarias/atividades no dia e detalhamento ao clicar na data.
+# Senioridade e bonificacao
+
+- Junior: R$ 60,00 por diaria integral.
+- Pleno: R$ 85,00 por diaria integral.
+- Senior: R$ 110,00 por diaria integral.
+- Treinamento de ate 4 horas equivale a 0,5 diaria.
+- Treinamento acima de 4 horas equivale a 1 diaria.
+- A soma de treinamentos do mesmo consultor no mesmo dia fica limitada a 1 diaria.
+- A senioridade e compartilhada e editavel por administrador na guia Consultores.
