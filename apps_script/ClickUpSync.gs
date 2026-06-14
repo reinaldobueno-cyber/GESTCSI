@@ -5170,8 +5170,15 @@ function cmaxPendingHistoryMonths_() {
   var completed = {};
   cmaxProcessedHistoryMonths_().forEach(function(month) { completed[month] = true; });
   var forced = cmaxForcedHistoryMonths_();
-  return forced.concat(cmaxHistoryMonths_().filter(function(month) {
-    return !completed[month] && forced.indexOf(month) < 0;
+  var props = PropertiesService.getScriptProperties();
+  var meta;
+  try { meta = JSON.parse(props.getProperty('CMAX_VIEW_META_JSON') || 'null'); } catch (ignored) { meta = null; }
+  var monthSheets = meta && meta.month_sheets || {};
+  var missingSnapshots = cmaxHistoryMonths_().filter(function(month) {
+    return !monthSheets[month] && forced.indexOf(month) < 0;
+  });
+  return forced.concat(missingSnapshots).concat(cmaxHistoryMonths_().filter(function(month) {
+    return !completed[month] && forced.indexOf(month) < 0 && missingSnapshots.indexOf(month) < 0;
   }));
 }
 
@@ -5179,6 +5186,7 @@ function cmaxDailyMonthMatches_(month, events) {
   var props = PropertiesService.getScriptProperties();
   var meta;
   try { meta = JSON.parse(props.getProperty('CMAX_VIEW_META_JSON') || 'null'); } catch (ignored) { meta = null; }
+  if (!meta || !meta.month_sheets || !meta.month_sheets[month]) return false;
   var previousHash = meta && meta.month_hashes && meta.month_hashes[month];
   return !!previousHash && previousHash === cmaxEventsHash_(events || []);
 }
