@@ -135,6 +135,10 @@ function doGet(e) {
       requireAdmin_(params);
       return jsonOutput_(syncClickUpValidationSituation_(params, 'reprovado'), params.callback);
     }
+    if (action === 'stopLegacyClickUpMilestoneAudit') {
+      requireAdmin_(params);
+      return jsonOutput_(stopLegacyClickUpMilestoneAudit_(), params.callback);
+    }
     if (action === 'syncClickUpUserActivity') {
       requireAdmin_(params);
       return jsonOutput_(syncClickUpUserActivity_(params), params.callback);
@@ -366,7 +370,6 @@ function registerAllWebhooks() {
 function createTimeDrivenTriggers() {
   ScriptApp.newTrigger('processDirtyQueueTrigger').timeBased().everyMinutes(5).create();
   ScriptApp.newTrigger('syncAllProjectsTrigger').timeBased().everyHours(6).create();
-  ScriptApp.newTrigger('syncClickUpMilestoneClosingTrigger').timeBased().everyHours(6).create();
   installClickUpClosedMilestonesTrigger();
 }
 
@@ -383,6 +386,7 @@ function syncClickUpClosedMilestonesTrigger() {
 }
 
 function installClickUpClosedMilestonesTrigger() {
+  stopLegacyClickUpMilestoneAudit_();
   ScriptApp.getProjectTriggers().forEach(function(trigger) {
     if (trigger.getHandlerFunction() === 'syncClickUpClosedMilestonesTrigger') {
       ScriptApp.deleteTrigger(trigger);
@@ -390,6 +394,25 @@ function installClickUpClosedMilestonesTrigger() {
   });
   ScriptApp.newTrigger('syncClickUpClosedMilestonesTrigger').timeBased().everyHours(12).create();
   return { ok: true, handler: 'syncClickUpClosedMilestonesTrigger', every_hours: 12 };
+}
+
+function stopLegacyClickUpMilestoneAudit_() {
+  var props = PropertiesService.getScriptProperties();
+  if (props.getProperty('CLICKUP_MILESTONE_CLOSING_PHASE') === 'disabled' &&
+      props.getProperty('CLICKUP_MILESTONE_CLOSING_ACTIVE') !== '1') {
+    return { ok: true, legacy_audit_disabled: true, already_disabled: true };
+  }
+  props.setProperty('CLICKUP_MILESTONE_CLOSING_ACTIVE', '0');
+  props.setProperty('CLICKUP_MILESTONE_CLOSING_PHASE', 'disabled');
+  props.setProperty('CLICKUP_MILESTONE_CLOSING_UPDATED_AT', new Date().toISOString());
+  ScriptApp.getProjectTriggers().forEach(function(trigger) {
+    var handler = trigger.getHandlerFunction();
+    if (handler === 'syncClickUpMilestoneClosingTrigger' ||
+        handler === 'continueClickUpMilestoneClosingBackgroundTrigger') {
+      ScriptApp.deleteTrigger(trigger);
+    }
+  });
+  return { ok: true, legacy_audit_disabled: true };
 }
 
 function diagnosticarSetup() {
@@ -2151,6 +2174,7 @@ function confirmClickUpMilestoneStatuses_(params) {
 
 function syncClickUpClosedMilestones_(params) {
   params = params || {};
+  stopLegacyClickUpMilestoneAudit_();
   var startedAt = new Date().getTime();
   var lock = LockService.getScriptLock();
   if (!lock.tryLock(5000)) throw new Error('Outra atualização está finalizando. Tente novamente em alguns segundos.');
@@ -2159,7 +2183,12 @@ function syncClickUpClosedMilestones_(params) {
     var headers = getClickUpMilestoneClosingHeaders_();
     var current = loadClickUpMilestoneClosingCurrent_(sheet);
     var mappings = loadClickUpMilestoneClosingMappings_();
-    var tasks = fetchClickUpMilestonesBySituation_('aguardando', []).filter(function(task) {
+    var props = PropertiesService.getScriptProperties();
+    var previousCursor = toInt_(props.getProperty('CLICKUP_CLOSED_INCREMENTAL_SINCE'), 0);
+    var since = previousCursor
+      ? Math.max(0, previousCursor - 5 * 60 * 1000)
+      : startedAt - 48 * 60 * 60 * 1000;
+    var tasks = fetchClickUpRecentMilestoneCoverageTasks_(since, { max_pages: 5 }).filter(function(task) {
       var status = task && task.status && (task.status.status || task.status.type || task.status.label) || '';
       return clickUpMilestoneSituation_(status) === 'aguardando';
     });
@@ -2183,6 +2212,7 @@ function syncClickUpClosedMilestones_(params) {
       if (sanitizeText_(current[taskId] && current[taskId].status_atual) !== beforeStatus) changed += 1;
     });
     writeClickUpMilestoneClosingCurrent_(sheet, headers, current);
+    props.setProperty('CLICKUP_CLOSED_INCREMENTAL_SINCE', String(startedAt));
     var summary = {
       ok: true,
       confirmed: tasks.length,
@@ -2201,6 +2231,7 @@ function syncClickUpClosedMilestones_(params) {
 
 function syncClickUpValidationSituation_(params, situation) {
   params = params || {};
+  stopLegacyClickUpMilestoneAudit_();
   var startedAt = new Date().getTime();
   var month = sanitizeText_(params.month || params.mes).slice(0, 7);
   var lock = LockService.getScriptLock();
