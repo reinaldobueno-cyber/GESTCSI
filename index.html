@@ -5080,6 +5080,7 @@ var FECHAMENTO_MARCOS = [];
 var FECHAMENTO_META = {};
 var FECHAMENTO_LOADED = false;
 var FECHAMENTO_LOADING = false;
+var FECHAMENTO_POLL_TIMER = null;
 var FECHAMENTO_FILTER = { month:'', consultor:'todos', projetoBusca:'', situacao:'todos' };
 function fechamentoRestoreCache() {
   try {
@@ -5202,20 +5203,26 @@ function fechamentoStartSync(btn) {
   if (btn) { btn.disabled = true; btn.textContent = 'Atualizando...'; }
   chamarAppsScriptJsonp('startClickUpMilestoneClosingBackground', {
     auth_token: authTokenParam()
-  }, 30000).then(function(resp) {
+  }, 15000).then(function(resp) {
     if (!resp || resp.ok === false) throw new Error((resp && (resp.error || resp.message)) || 'Não foi possível iniciar');
-    var recent = resp.recent_refresh || {};
-    if (btn) btn.textContent = 'Carregando dados...';
-    return fechamentoLoad(true).then(function() {
-      if (btn) { btn.disabled = false; btn.textContent = original || 'Atualizar ClickUp'; }
-      showToast('Atualizado: '+Number(recent.detected || 0)+' marco(s) encontrado(s) nas alterações recentes', 'ok');
-      return null;
-    });
+    FECHAMENTO_META.background_sync = resp.background_sync || {active:true};
+    if (btn) { btn.disabled = false; btn.textContent = original || 'Atualizar ClickUp'; }
+    showToast('Atualização ClickUp agendada. O painel será recarregado automaticamente.', 'ok');
+    initFechamento();
+    fechamentoSchedulePoll();
   }).catch(function(error) {
     if (btn) { btn.disabled = false; btn.textContent = original || 'Atualizar ClickUp'; }
     showToast((error && error.message) || 'Erro ao atualizar fechamento', 'err');
   });
   return false;
+}
+function fechamentoSchedulePoll() {
+  if (FECHAMENTO_POLL_TIMER) clearTimeout(FECHAMENTO_POLL_TIMER);
+  FECHAMENTO_POLL_TIMER = setTimeout(function() {
+    fechamentoLoad(true).then(function() {
+      if (FECHAMENTO_META.background_sync && FECHAMENTO_META.background_sync.active) fechamentoSchedulePoll();
+    });
+  }, 15000);
 }
 function initFechamento() {
   var box = document.getElementById('fech-content');
@@ -11364,24 +11371,34 @@ function carregarDiariasCmax(force) {
 }
 function sincronizarDiariasCmax(btn) {
   if(btn){btn.disabled=true;btn.textContent='Atualizando...';}
-  CMAX_DAILY_STATE.error='';CMAX_DAILY_STATE.loading=true;renderDiariasCmax();
-  chamarAppsScriptJsonp('startCmaxDailyHistoryBackground',{auth_token:authTokenParam()},120000).then(function(resp){
+  CMAX_DAILY_STATE.error='';renderDiariasCmax();
+  chamarAppsScriptJsonp('startCmaxDailyHistoryBackground',{auth_token:authTokenParam()},15000).then(function(resp){
     if(!resp||resp.ok===false)throw new Error((resp&&(resp.error||resp.raw_error))||'Falha ao sincronizar agenda CMAX');
     CMAX_DAILY_STATE.historySync=resp.history_sync||null;
-    CMAX_DAILY_STATE.loaded=false;CMAX_DAILY_STATE.loading=false;
-    showToast('Mês atual atualizado. O histórico CMAX continuará carregando em segundo plano.','ok');
-    carregarDiariasCmax(true);
-  }).catch(function(error){CMAX_DAILY_STATE.loading=false;CMAX_DAILY_STATE.error=error.message||String(error);renderDiariasCmax();showToast(CMAX_DAILY_STATE.error,'err');});
+    if(btn){btn.disabled=false;btn.textContent='Atualizar histórico CMAX';}
+    showToast('Atualização CMAX agendada. A tela será atualizada automaticamente.','ok');
+    renderDiariasCmax();
+    cmaxScheduleHistoryPoll();
+  }).catch(function(error){if(btn){btn.disabled=false;btn.textContent='Atualizar histórico CMAX';}CMAX_DAILY_STATE.error=error.message||String(error);renderDiariasCmax();showToast(CMAX_DAILY_STATE.error,'err');});
 }
 function cmaxScheduleHistoryPoll() {
   if(CMAX_HISTORY_POLL_TIMER){clearTimeout(CMAX_HISTORY_POLL_TIMER);CMAX_HISTORY_POLL_TIMER=null;}
   if(!(CMAX_DAILY_STATE.historySync&&CMAX_DAILY_STATE.historySync.active))return;
   CMAX_HISTORY_POLL_TIMER=setTimeout(function(){
+    var previousLastMonth=CMAX_DAILY_STATE.historySync&&CMAX_DAILY_STATE.historySync.last_month||'';
+    var wasActive=!!(CMAX_DAILY_STATE.historySync&&CMAX_DAILY_STATE.historySync.active);
     chamarAppsScriptJsonp('getCmaxDailyHistoryStatus',{},15000).then(function(resp){
       if(resp&&resp.history_sync)CMAX_DAILY_STATE.historySync=resp.history_sync;
       if(resp&&Array.isArray(resp.history_months))CMAX_DAILY_STATE.months=resp.history_months;
       if(resp&&Array.isArray(resp.history_loaded_months))CMAX_DAILY_STATE.loadedMonths=resp.history_loaded_months;
       renderDiariasCmax();
+      var newLastMonth=CMAX_DAILY_STATE.historySync&&CMAX_DAILY_STATE.historySync.last_month||'';
+      var isActive=!!(CMAX_DAILY_STATE.historySync&&CMAX_DAILY_STATE.historySync.active);
+      if((newLastMonth&&newLastMonth!==previousLastMonth&&newLastMonth===CMAX_DAILY_STATE.month)||(wasActive&&!isActive)){
+        CMAX_DAILY_STATE.loaded=false;
+        carregarDiariasCmax(true);
+        return;
+      }
       cmaxScheduleHistoryPoll();
     }).catch(function(){cmaxScheduleHistoryPoll();});
   },20000);

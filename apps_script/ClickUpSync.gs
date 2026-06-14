@@ -1423,17 +1423,12 @@ function startClickUpMilestoneClosingBackground_(params) {
   var props = PropertiesService.getScriptProperties();
   migrateClickUpMilestoneClosingSchema_();
   if (props.getProperty('CLICKUP_MILESTONE_CLOSING_ACTIVE') === '1') {
-    var activeRefresh = syncClickUpRecentMilestoneCoverage_();
-    var activeHistory = ensureClickUpMilestoneHistoryCoverage_();
     props.setProperty('CLICKUP_MILESTONE_CLOSING_UPDATED_AT', new Date().toISOString());
-    if (activeRefresh.last_error) props.setProperty('CLICKUP_MILESTONE_CLOSING_ERROR', activeRefresh.last_error);
     scheduleClickUpMilestoneClosingBackground_(1000);
     return {
       ok: true,
       scheduled: true,
       already_active: true,
-      recent_refresh: activeRefresh,
-      history_refresh: activeHistory,
       background_sync: getClickUpMilestoneClosingBackgroundStatus_()
     };
   }
@@ -1442,37 +1437,41 @@ function startClickUpMilestoneClosingBackground_(params) {
   props.setProperty('CLICKUP_MILESTONE_CLOSING_PROCESSED', '0');
   props.setProperty('CLICKUP_MILESTONE_CLOSING_ERRORS', '0');
   props.setProperty('CLICKUP_MILESTONE_CLOSING_DETECTED', '0');
+  props.setProperty('CLICKUP_MILESTONE_CLOSING_PHASE', 'recent');
   props.setProperty('CLICKUP_MILESTONE_CLOSING_STARTED_AT', new Date().toISOString());
   props.deleteProperty('CLICKUP_MILESTONE_CLOSING_ERROR');
-  var recentRefresh = syncClickUpRecentMilestoneCoverage_();
-  var historyRefresh = ensureClickUpMilestoneHistoryCoverage_();
-  props.setProperty('CLICKUP_MILESTONE_CLOSING_DETECTED', String(recentRefresh.detected));
-  props.setProperty('CLICKUP_MILESTONE_CLOSING_ERRORS', String(recentRefresh.errors));
-  if (recentRefresh.last_error) props.setProperty('CLICKUP_MILESTONE_CLOSING_ERROR', recentRefresh.last_error);
-  props.setProperty('CLICKUP_MILESTONE_CLOSING_TOTAL', String(loadClickUpMilestoneClosingMappings_().length));
+  if (clickUpMilestoneClosingDistinctMonths_().length <= 1) {
+    props.deleteProperty('CLICKUP_MILESTONE_HISTORY_REBUILT');
+  }
+  props.setProperty('CLICKUP_MILESTONE_CLOSING_TOTAL', '0');
   props.setProperty('CLICKUP_MILESTONE_CLOSING_UPDATED_AT', new Date().toISOString());
   scheduleClickUpMilestoneClosingBackground_(1000);
   return {
     ok: true,
     scheduled: true,
-    recent_refresh: recentRefresh,
-    history_refresh: historyRefresh,
     background_sync: getClickUpMilestoneClosingBackgroundStatus_()
   };
+}
+
+function clickUpMilestoneClosingDistinctMonths_() {
+  var sheet = getClickUpMilestoneClosingSheet_();
+  var lastRow = sheet.getLastRow();
+  if (lastRow < 2) return [];
+  var monthColumn = getClickUpMilestoneClosingHeaders_().indexOf('mes_fechamento') + 1;
+  var found = {};
+  sheet.getRange(2, monthColumn, lastRow - 1, 1).getDisplayValues().forEach(function(row) {
+    var month = normalizeClickUpMonthReference_(row[0]);
+    if (month) found[month] = true;
+  });
+  return Object.keys(found);
 }
 
 function migrateClickUpMilestoneClosingSchema_() {
   var props = PropertiesService.getScriptProperties();
   if (props.getProperty('CLICKUP_MILESTONE_CLOSING_SCHEMA_VERSION') === CLICKUP_MILESTONE_CLOSING_SCHEMA_VERSION) return;
   var sheet = getClickUpMilestoneClosingSheet_();
-  sheet.clearContents();
   ensureHeaders_(sheet, getClickUpMilestoneClosingHeaders_());
   props.setProperty('CLICKUP_MILESTONE_CLOSING_SCHEMA_VERSION', CLICKUP_MILESTONE_CLOSING_SCHEMA_VERSION);
-  props.setProperty('CLICKUP_MILESTONE_CLOSING_ACTIVE', '0');
-  props.setProperty('CLICKUP_MILESTONE_CLOSING_OFFSET', '0');
-  props.deleteProperty('CLICKUP_MILESTONE_INCREMENTAL_SINCE');
-  props.deleteProperty('CLICKUP_MILESTONE_HISTORY_REBUILT');
-  clearClickUpMilestoneClosingBackgroundTriggers_();
 }
 
 function sincronizarFechamentoMarcosClickUp() {
@@ -1494,8 +1493,46 @@ function syncClickUpMilestoneClosingTrigger() {
 
 function continueClickUpMilestoneClosingBackgroundTrigger() {
   var props = PropertiesService.getScriptProperties();
+  try {
+    continueClickUpMilestoneClosingBackgroundWorker_();
+  } catch (error) {
+    props.setProperty('CLICKUP_MILESTONE_CLOSING_ERROR', simplifyErrorMessage_(error));
+    props.setProperty('CLICKUP_MILESTONE_CLOSING_UPDATED_AT', new Date().toISOString());
+    if (props.getProperty('CLICKUP_MILESTONE_CLOSING_ACTIVE') === '1') {
+      scheduleClickUpMilestoneClosingBackground_(60000);
+    }
+  }
+}
+
+function continueClickUpMilestoneClosingBackgroundWorker_() {
+  var props = PropertiesService.getScriptProperties();
   if (props.getProperty('CLICKUP_MILESTONE_CLOSING_ACTIVE') !== '1') {
     clearClickUpMilestoneClosingBackgroundTriggers_();
+    return;
+  }
+  var phase = props.getProperty('CLICKUP_MILESTONE_CLOSING_PHASE') || 'recent';
+  if (phase === 'recent') {
+    var recent = syncClickUpRecentMilestoneCoverage_();
+    props.setProperty('CLICKUP_MILESTONE_CLOSING_DETECTED', String(recent.detected || 0));
+    props.setProperty('CLICKUP_MILESTONE_CLOSING_ERRORS', String(recent.errors || 0));
+    props.setProperty('CLICKUP_MILESTONE_CLOSING_PHASE', 'history');
+    props.setProperty('CLICKUP_MILESTONE_CLOSING_UPDATED_AT', new Date().toISOString());
+    if (recent.last_error) props.setProperty('CLICKUP_MILESTONE_CLOSING_ERROR', recent.last_error);
+    scheduleClickUpMilestoneClosingBackground_(5000);
+    return;
+  }
+  if (phase === 'history') {
+    var history = ensureClickUpMilestoneHistoryCoverage_();
+    props.setProperty('CLICKUP_MILESTONE_CLOSING_DETECTED', String(
+      toInt_(props.getProperty('CLICKUP_MILESTONE_CLOSING_DETECTED'), 0) + Number(history.detected || 0)
+    ));
+    props.setProperty('CLICKUP_MILESTONE_CLOSING_ERRORS', String(
+      toInt_(props.getProperty('CLICKUP_MILESTONE_CLOSING_ERRORS'), 0) + Number(history.errors || 0)
+    ));
+    props.setProperty('CLICKUP_MILESTONE_CLOSING_PHASE', 'projects');
+    props.setProperty('CLICKUP_MILESTONE_CLOSING_UPDATED_AT', new Date().toISOString());
+    if (history.last_error) props.setProperty('CLICKUP_MILESTONE_CLOSING_ERROR', history.last_error);
+    scheduleClickUpMilestoneClosingBackground_(5000);
     return;
   }
   var offset = toInt_(props.getProperty('CLICKUP_MILESTONE_CLOSING_OFFSET'), 0);
@@ -1512,6 +1549,7 @@ function continueClickUpMilestoneClosingBackgroundTrigger() {
   if (result.last_error) props.setProperty('CLICKUP_MILESTONE_CLOSING_ERROR', result.last_error);
   if (result.done) {
     props.setProperty('CLICKUP_MILESTONE_CLOSING_ACTIVE', '0');
+    props.setProperty('CLICKUP_MILESTONE_CLOSING_PHASE', 'complete');
     props.setProperty('CLICKUP_MILESTONE_CLOSING_COMPLETED_AT', new Date().toISOString());
     clearClickUpMilestoneClosingBackgroundTriggers_();
     return;
@@ -1783,6 +1821,7 @@ function getClickUpMilestoneClosingBackgroundStatus_() {
     processed: toInt_(props.getProperty('CLICKUP_MILESTONE_CLOSING_PROCESSED'), 0),
     errors: toInt_(props.getProperty('CLICKUP_MILESTONE_CLOSING_ERRORS'), 0),
     detected: toInt_(props.getProperty('CLICKUP_MILESTONE_CLOSING_DETECTED'), 0),
+    phase: props.getProperty('CLICKUP_MILESTONE_CLOSING_PHASE') || '',
     started_at: props.getProperty('CLICKUP_MILESTONE_CLOSING_STARTED_AT') || '',
     updated_at: props.getProperty('CLICKUP_MILESTONE_CLOSING_UPDATED_AT') || '',
     completed_at: props.getProperty('CLICKUP_MILESTONE_CLOSING_COMPLETED_AT') || '',
@@ -4834,7 +4873,7 @@ function startCmaxDailyHistoryBackground_(params) {
   var props = PropertiesService.getScriptProperties();
   var currentMonth = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'yyyy-MM');
   var startMonth = sanitizeCmaxMonth_(params.start_month || props.getProperty('CMAX_HISTORY_START_MONTH')) || CMAX_HISTORY_DEFAULT_START_MONTH;
-  var currentResult = syncCmaxDailyEvents_({ month: currentMonth });
+  addCmaxForcedHistoryMonths_([currentMonth]);
   props.setProperty('CMAX_HISTORY_BACKGROUND_ACTIVE', '1');
   props.setProperty('CMAX_HISTORY_BACKGROUND_START_MONTH', startMonth);
   props.setProperty('CMAX_HISTORY_BACKGROUND_FAILURES', '0');
@@ -4849,7 +4888,6 @@ function startCmaxDailyHistoryBackground_(params) {
     ok: true,
     scheduled: true,
     current_month: currentMonth,
-    current_imported: currentResult.imported,
     start_month: startMonth,
     history_sync: getCmaxDailyHistoryBackgroundStatus_()
   };
@@ -4862,7 +4900,7 @@ function continueCmaxDailyHistoryBackgroundTrigger() {
     return;
   }
   try {
-    var result = continueCmaxDailyHistoryBatch_({ batch_size: props.getProperty('CMAX_HISTORY_BATCH_SIZE') || '3' });
+    var result = continueCmaxDailyHistoryBatch_({ batch_size: props.getProperty('CMAX_HISTORY_BATCH_SIZE') || '1' });
     if (result.done) return;
     scheduleCmaxDailyHistoryBackground_(5000);
   } catch (error) {
@@ -4884,24 +4922,35 @@ function continueCmaxDailyHistoryBatch_(params) {
   if (props.getProperty('CMAX_HISTORY_BACKGROUND_ACTIVE') !== '1') {
     return { ok: true, done: true, history_sync: getCmaxDailyHistoryBackgroundStatus_() };
   }
-  var batchSize = Math.max(1, Math.min(toInt_(params.batch_size, 3), 6));
+  var batchSize = Math.max(1, Math.min(toInt_(params.batch_size, 1), 2));
   var pendingMonths = cmaxPendingHistoryMonths_();
   var batchMonths = pendingMonths.slice(0, batchSize);
+  var attemptedMonths = batchMonths.slice();
   var eventsByMonth = {};
   batchMonths.forEach(function(month) {
     eventsByMonth[month] = fetchCmaxDailyEventsForMonth_(month).events;
   });
   if (batchMonths.length) {
+    var unchangedMonths = batchMonths.filter(function(month) {
+      return cmaxDailyMonthMatches_(month, eventsByMonth[month]);
+    });
+    if (unchangedMonths.length) markCmaxHistoryMonthsCompleted_(unchangedMonths);
+    unchangedMonths.forEach(function(month) { delete eventsByMonth[month]; });
+    batchMonths = batchMonths.filter(function(month) { return unchangedMonths.indexOf(month) < 0; });
+  }
+  if (batchMonths.length) {
     var writeLock = LockService.getScriptLock();
-    if (!writeLock.tryLock(60000)) throw new Error('Outra atualização CMAX está finalizando uma gravação. Aguarde alguns segundos.');
+    if (!writeLock.tryLock(1000)) {
+      return { ok: true, done: false, busy: true, history_sync: getCmaxDailyHistoryBackgroundStatus_() };
+    }
     try {
       replaceCmaxDailyMonths_(eventsByMonth);
       markCmaxHistoryMonthsCompleted_(batchMonths);
     } finally {
       writeLock.releaseLock();
     }
-    props.setProperty('CMAX_HISTORY_BACKGROUND_LAST_MONTH', batchMonths[batchMonths.length - 1]);
   }
+  if (attemptedMonths.length) props.setProperty('CMAX_HISTORY_BACKGROUND_LAST_MONTH', attemptedMonths[attemptedMonths.length - 1]);
   var remainingMonths = cmaxPendingHistoryMonths_();
   props.setProperty('CMAX_HISTORY_BACKGROUND_FAILURES', '0');
   props.setProperty('CMAX_HISTORY_BACKGROUND_UPDATED_AT', new Date().toISOString());
@@ -5045,7 +5094,43 @@ function cmaxMonthsPresentInSheet_() {
 function cmaxPendingHistoryMonths_() {
   var completed = {};
   cmaxProcessedHistoryMonths_().forEach(function(month) { completed[month] = true; });
-  return cmaxHistoryMonths_().filter(function(month) { return !completed[month]; });
+  var forced = cmaxForcedHistoryMonths_();
+  return forced.concat(cmaxHistoryMonths_().filter(function(month) {
+    return !completed[month] && forced.indexOf(month) < 0;
+  }));
+}
+
+function cmaxDailyMonthMatches_(month, events) {
+  var sheet = getCmaxDailySheet_();
+  var headers = getCmaxDailyHeaders_();
+  var lastRow = sheet.getLastRow();
+  var existing = [];
+  if (lastRow > 1) {
+    existing = sheet.getRange(2, 1, lastRow - 1, headers.length).getDisplayValues().filter(function(row) {
+      return normalizeCmaxSheetMonth_(row[headers.indexOf('mes')]) === month;
+    });
+  }
+  var fields = ['event_key', 'data', 'consultor', 'cliente', 'tipo', 'resultado', 'descricao', 'hora_inicio', 'hora_fim'];
+  function normalizeField(field, value) {
+    if (field === 'data') return normalizeCmaxSheetDate_(value);
+    if (field === 'hora_inicio' || field === 'hora_fim') return normalizeCmaxSheetTime_(value);
+    return sanitizeText_(value);
+  }
+  function signatureFromRow(row) {
+    return fields.map(function(field) {
+      return normalizeField(field, row[headers.indexOf(field)]);
+    }).join('|');
+  }
+  function signatureFromEvent(event) {
+    return fields.map(function(field) {
+      return normalizeField(field, event && event[field]);
+    }).join('|');
+  }
+  var current = existing.map(signatureFromRow).sort();
+  var incoming = (events || []).map(signatureFromEvent).sort();
+  return current.length === incoming.length && current.every(function(value, index) {
+    return value === incoming[index];
+  });
 }
 
 function markCmaxHistoryMonthsCompleted_(months) {
@@ -5057,7 +5142,38 @@ function markCmaxHistoryMonthsCompleted_(months) {
     if (month) completed[month] = true;
   });
   props.setProperty('CMAX_HISTORY_COMPLETED_MONTHS_JSON', JSON.stringify(Object.keys(completed).sort().reverse()));
+  removeCmaxForcedHistoryMonths_(months);
   CMAX_HISTORY_COMPLETION_CACHE_ = completed;
+}
+
+function cmaxForcedHistoryMonths_() {
+  var props = PropertiesService.getScriptProperties();
+  try {
+    return JSON.parse(props.getProperty('CMAX_HISTORY_FORCED_MONTHS_JSON') || '[]').map(sanitizeCmaxMonth_).filter(function(month) {
+      return !!month;
+    });
+  } catch (ignored) {
+    return [];
+  }
+}
+
+function addCmaxForcedHistoryMonths_(months) {
+  var props = PropertiesService.getScriptProperties();
+  var forced = cmaxForcedHistoryMonths_();
+  (months || []).forEach(function(month) {
+    month = sanitizeCmaxMonth_(month);
+    if (month && forced.indexOf(month) < 0) forced.push(month);
+  });
+  props.setProperty('CMAX_HISTORY_FORCED_MONTHS_JSON', JSON.stringify(forced));
+}
+
+function removeCmaxForcedHistoryMonths_(months) {
+  var props = PropertiesService.getScriptProperties();
+  var remove = {};
+  (months || []).forEach(function(month) { remove[sanitizeCmaxMonth_(month)] = true; });
+  props.setProperty('CMAX_HISTORY_FORCED_MONTHS_JSON', JSON.stringify(cmaxForcedHistoryMonths_().filter(function(month) {
+    return !remove[month];
+  })));
 }
 
 function updateCmaxHistoryProgressProperties_() {
