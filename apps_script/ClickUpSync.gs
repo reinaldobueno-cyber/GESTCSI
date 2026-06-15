@@ -28,6 +28,8 @@
 var CLICKUP_API_BASE = 'https://api.clickup.com/api/v2';
 var CLICKUP_DEFAULT_WORKSPACE_ID = '9007083069';
 var CLICKUP_MILESTONE_BONUS_VALUE = 30;
+var CLICKUP_PROJECT_CLOSING_BONUS_VALUE = 80;
+var CLICKUP_PROJECT_CLOSING_BONUS_START = '2026-06-15';
 var CLICKUP_MILESTONE_AUDIT_TASK_IDS = [];
 var CLICKUP_MILESTONE_CLOSING_SCHEMA_VERSION = 'strict-milestones-v2';
 var MONTHS = ['JAN', 'FEV', 'MAR', 'ABR', 'MAI', 'JUN', 'JUL', 'AGO', 'SET', 'OUT', 'NOV', 'DEZ'];
@@ -1520,7 +1522,7 @@ function getClickUpMilestoneClosing_(params) {
     item.consultor = clickUpMilestoneConsultant_(item.consultor || item.responsaveis);
     return item;
   }).filter(function(item) {
-    return !!sanitizeText_(item.task_id) && normalizeKey_(item.item_tipo) === 'MARCO';
+    return !!sanitizeText_(item.task_id) && /^(MARCO|FECHAMENTO DE PROJETO)$/.test(normalizeKey_(item.item_tipo));
   }) : [];
   rows = rows.filter(function(item) {
     return String(item.mes_fechamento || '').slice(0, 7) >= '2024-01';
@@ -1573,6 +1575,7 @@ function upsertClickUpMilestoneClosing_(mapping, normalized, options) {
       validationAt = sanitizeText_(milestone.updated_at) || now;
     }
     var isValidation = situation === 'aprovado' || situation === 'reprovado';
+    var isProjectClosing = isProjectClosingMilestone_(milestone);
     var clearComment = options.fetch_comments !== false &&
       options.authoritative &&
       (!options.validation_comments_only || isValidation);
@@ -1593,7 +1596,7 @@ function upsertClickUpMilestoneClosing_(mapping, normalized, options) {
     }
     current[taskId] = {
       task_id: taskId,
-      item_tipo: 'Marco',
+      item_tipo: isProjectClosing ? 'Fechamento de projeto' : 'Marco',
       project_key: mapping.project_key || '',
       projeto: mapping.cliente || normalized.cliente || '',
       consultor: clickUpMilestoneConsultant_(milestone.responsaveis || normalized.consultor || mapping.consultor),
@@ -1607,7 +1610,11 @@ function upsertClickUpMilestoneClosing_(mapping, normalized, options) {
       mes_validacao: clickUpMonthReference_(validationAt),
       justificativa: justification,
       justificativa_por: justificationBy,
-      valor_bonus: situation === 'aprovado' ? CLICKUP_MILESTONE_BONUS_VALUE : 0,
+      valor_bonus: situation === 'aprovado'
+        ? (isProjectClosing && String(validationAt || '').slice(0, 10) >= CLICKUP_PROJECT_CLOSING_BONUS_START
+          ? CLICKUP_PROJECT_CLOSING_BONUS_VALUE
+          : (isProjectClosing ? 0 : CLICKUP_MILESTONE_BONUS_VALUE))
+        : 0,
       link: milestone.task_url || ('https://app.clickup.com/t/' + taskId),
       responsaveis: milestone.responsaveis || '',
       updated_at: milestone.updated_at || now,
@@ -1725,6 +1732,11 @@ function parseLatestClickUpTaskComment_(response) {
       text: meaningful.slice(0, 5).map(function(comment) { return comment.text; }).join(' | '),
       user: meaningful[0].user
     };
+}
+
+function isProjectClosingMilestone_(milestone) {
+  var key = normalizeKey_(milestone && (milestone.nome || milestone.name));
+  return /FECHAMENTO (DO|DE) PROJETO|ENCERRAMENTO (DO|DE) PROJETO|ENTREGA FINAL/.test(key);
 }
 
 function fetchLatestClickUpTaskComment_(taskId) {
@@ -3628,7 +3640,7 @@ function getClickUpMilestoneClosingHeaders_() {
 function inferProjectStatusFromSummary_(resumo) {
   var total = (resumo.tasks_concluidas || 0) + (resumo.tasks_pendentes || 0) + (resumo.marcos_concluidos || 0) + (resumo.marcos_pendentes || 0);
   var pend = (resumo.tasks_pendentes || 0) + (resumo.marcos_pendentes || 0);
-  if (total && !pend) return 'Concluido';
+  if (total && !pend) return 'Aguardando entrega';
   return 'Em Andamento';
 }
 
