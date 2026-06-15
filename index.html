@@ -9030,7 +9030,16 @@ function dashRenderUntrackedClickUpList(items, totalUntracked) {
   if (!total) {
     return '<div class="dashx-chart-card"><div class="dashx-chart-head"><div><div class="dashx-chart-title">Projetos sem rastreio técnico '+towerInfoButton('aging')+'</div><div class="dashx-chart-sub">Todos os projetos do recorte atual possuem base ClickUp sincronizada.</div></div><div class="dashx-chart-meta"><span class="dashx-chart-note">0 sem ClickUp</span></div></div><div class="dashx-unavailable"><strong>Nenhuma pendência técnica</strong><span>Não há projetos sem rastreio ClickUp neste recorte.</span></div></div>';
   }
-  var list = (items || []).slice();
+  var list = (items || []).slice().sort(function(a,b){
+    var aEntry=dashProjectEntryInfo(a.projeto||{});
+    var bEntry=dashProjectEntryInfo(b.projeto||{});
+    var aMonths=aEntry.months===null||aEntry.months===undefined?-1:Number(aEntry.months);
+    var bMonths=bEntry.months===null||bEntry.months===undefined?-1:Number(bEntry.months);
+    if(bMonths!==aMonths)return bMonths-aMonths;
+    var consultants=String(a.consultor||(a.projeto&&a.projeto.consultor)||'').localeCompare(String(b.consultor||(b.projeto&&b.projeto.consultor)||''));
+    if(consultants)return consultants;
+    return String((a.projeto&&a.projeto.cliente)||'').localeCompare(String((b.projeto&&b.projeto.cliente)||''));
+  });
   var rows = list.length ? list.map(function(item){
     var p = item.projeto || {};
     var entry = dashProjectEntryInfo(p);
