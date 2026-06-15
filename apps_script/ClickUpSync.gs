@@ -2555,10 +2555,14 @@ function continueClickUpUserActivityBackgroundTrigger() {
     return;
   }
   try {
+    var batchSize = Math.max(3, Math.min(
+      toInt_(getScriptProperty_('CLICKUP_ACTIVITY_BACKGROUND_BATCH_SIZE', '12'), 12),
+      20
+    ));
     var result = syncClickUpUserActivity_({
       force_estimated: '1',
       resume_scan: '1',
-      scan_batch_size: '3'
+      scan_batch_size: String(batchSize)
     });
     if (result && result.busy) {
       scheduleClickUpUserActivityBackground_(15000);
@@ -2645,7 +2649,10 @@ function syncClickUpUserActivityApprox_(params, meta) {
     end_ms: meta.end_ms,
     fetched_at: meta.fetched_at || new Date(),
     execution_deadline_ms: new Date().getTime() + 240000,
-    project_timeout_ms: 150000
+    project_timeout_ms: Math.max(30000, Math.min(
+      toInt_(getScriptProperty_('CLICKUP_ACTIVITY_PROJECT_TIMEOUT_MS', '45000'), 45000),
+      90000
+    ))
   });
   var accumulatedRows = (scanOffset > 0 || retryMode)
     ? mergeClickUpUserActivityRows_(existingRows, approx.rows, meta.fetched_at || new Date())

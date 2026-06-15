@@ -2319,7 +2319,8 @@ button.dashx-mini-chip:hover{background:#f3f8f3;border-color:#b9c9b8;}
 .dashx-burndown-box .value{margin-top:8px;font-family:'Manrope','Inter',sans-serif;font-size:32px;font-weight:900;letter-spacing:-.05em;color:#13231b;}
 .dashx-burndown-box .sub{margin-top:6px;font-size:11px;color:#68756c;line-height:1.45;}
 .dashx-funnel{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;}
-.dashx-funnel-step{position:relative;border-radius:16px;border:1px solid #e3ebe3;background:#fbfcfa;padding:14px 16px;min-height:128px;}
+.dashx-funnel-step{position:relative;border-radius:16px;border:1px solid #e3ebe3;background:#fbfcfa;padding:14px 16px;min-height:128px;text-align:left;color:inherit;font:inherit;cursor:pointer;}
+.dashx-funnel-step:hover{border-color:#b9cdbb;box-shadow:0 8px 18px rgba(29,49,37,.07);}
 .dashx-funnel-step::after{content:'';position:absolute;top:50%;right:-7px;width:14px;height:14px;border-top:1px solid #dce5db;border-right:1px solid #dce5db;background:#fbfcfa;transform:translateY(-50%) rotate(45deg);}
 .dashx-funnel-step:last-child::after{display:none;}
 .dashx-funnel-label{font-size:10px;font-weight:900;letter-spacing:.16em;text-transform:uppercase;color:#7f8d82;}
@@ -3422,6 +3423,8 @@ var activePeriod = 'all';
 var fS='all', fC='all', fM='all', fQ='';
 var DASH_FILTERS = { consultor:'all', vendedor:'all', status:'all', tipo:'all' };
 var DASH_HEALTH_VIEW = 'issues';
+var DASH_HEALTH_DATA = null;
+var DASH_FUNNEL_PROJECTS = [];
 var DASH_CLICKUP_CONSULTOR = '';
 
 function setSidebarAlertBadge(id, value, title) {
@@ -7663,6 +7666,28 @@ function dashSetHealthView(view) {
   DASH_HEALTH_VIEW = view || 'issues';
   initDash();
 }
+function dashOpenHealthAudit(view) {
+  view = view || 'issues';
+  var health = DASH_HEALTH_DATA || {};
+  var definitions = {
+    issues: ['Completude cadastral', 'Confere, em cada projeto, cliente, consultor, status, link, mês e data de atualização. Pendência significa que ao menos um desses campos está vazio.'],
+    syncCritical: ['Sync ClickUp em 24h', 'Considera somente projetos com rastreio técnico verificável. Está pendente quando não há data válida de sync ou quando a última sincronização ocorreu há mais de 48 horas.'],
+    syncErrors: ['Falhas de sync', 'Lista somente erros explícitos registrados pela sincronização ClickUp.'],
+    stale: ['Sem update 7+ dias', 'Lista projetos cuja última atualização operacional registrada ultrapassou o SLA de sete dias.']
+  };
+  var def = definitions[view] || definitions.issues;
+  var rows = ((health.views && health.views[view]) || []).slice().sort(function(a, b) {
+    return dashCritRank(b.criticidade) - dashCritRank(a.criticidade) || String(a.cliente || '').localeCompare(String(b.cliente || ''));
+  });
+  var body = rows.length ? rows.map(function(item) {
+    var detail = item.faltas ? item.faltas.join(', ') : (item.detalhe || '-');
+    return '<tr><td><strong>'+escapeHtml(item.cliente || '-')+'</strong></td><td>'+escapeHtml(item.consultor || '-')+'</td><td>'+escapeHtml(item.status || '-')+'</td><td>'+escapeHtml(item.criticidade || '-')+'</td><td>'+escapeHtml(detail)+'</td><td>'+dashProjectActionCell(item.projeto || null)+'</td></tr>';
+  }).join('') : '<tr class="empty-row"><td colspan="6">Nenhum projeto pendente nesta regra.</td></tr>';
+  var html = '<div class="dashx-focus-note"><div><strong>Como é calculado:</strong> '+escapeHtml(def[1])+'</div><div class="dashx-focus-hint">'+rows.length+' projeto(s)</div></div><div class="dashx-table-wrap" style="margin-top:12px"><table class="dashx-table"><thead><tr><th>Projeto</th><th>Consultor</th><th>Status</th><th>Criticidade</th><th>Motivo</th><th>Ação</th></tr></thead><tbody>'+body+'</tbody></table></div>';
+  dashOpenAuditModal(def[0], html);
+  return false;
+}
+window.dashOpenHealthAudit = dashOpenHealthAudit;
 function dashSetClickUpConsultor(nome) {
   DASH_CLICKUP_CONSULTOR = nome || '';
   initDash();
@@ -8824,12 +8849,12 @@ function dashRenderHealthSection(health) {
 }
 function dashRenderReliableHealthSection(health) {
   var mini =
-    dashMiniCard('Completude cadastral', health.completude === null ? '-' : dashPct(health.completude), 'Cliente, consultor, status, link, mês, atualização e campos operacionais essenciais.', dashMetricClass(health.completude, 70, 90, false), 'dataCompleteness')+
-    dashMiniCard('Projetos com problema', health.inconsistencias.length, 'Linhas com pelo menos um campo essencial ausente.', health.inconsistencias.length ? 'warn' : 'good', 'dataInconsistencies')+
-    dashMiniCard('Sync ClickUp em 24h', health.syncOkPct === null ? '-' : dashPct(health.syncOkPct), health.syncCandidates+' projeto(s) com rastreio técnico verificável.', dashMetricClass(health.syncOkPct, 70, 90, false), 'syncFreshness')+
-    dashMiniCard('Falhas de sync', health.syncErrors, 'Erros explícitos retornados pela sincronização ClickUp.', health.syncErrors ? 'bad' : 'good', 'syncErrors')+
-    dashMiniCard('Sem update 7+ dias', health.views.stale.length, 'Projetos com data de atualização operacional acima do SLA.', health.views.stale.length ? 'warn' : 'good', 'stale');
-  return '<div class="dashx-stack"><div class="dashx-inline-note"><strong>Regra enxuta:</strong> esta seção mostra apenas campos ausentes, sincronização ClickUp verificável e tempo desde a última atualização. A antiga “latência da base” foi removida porque não media latência real.</div><div class="dashx-health-grid">'+mini+'</div></div>';
+    dashMiniCard('Completude cadastral', health.completude === null ? '-' : dashPct(health.completude), 'Cliente, consultor, status, link, mês e atualização.', dashMetricClass(health.completude, 70, 90, false), 'dataCompleteness', {clickable:true,onClick:"return dashOpenHealthAudit('issues')",foot:'Clique para ver a regra e os projetos'})+
+    dashMiniCard('Projetos com problema', health.inconsistencias.length, 'Projetos com ao menos um campo essencial ausente.', health.inconsistencias.length ? 'warn' : 'good', 'dataInconsistencies', {clickable:true,onClick:"return dashOpenHealthAudit('issues')",foot:'Clique para ver quais campos faltam'})+
+    dashMiniCard('Sync ClickUp em 24h', health.syncOkPct === null ? '-' : dashPct(health.syncOkPct), health.syncCandidates+' projeto(s) com rastreio técnico verificável.', dashMetricClass(health.syncOkPct, 70, 90, false), 'syncFreshness', {clickable:true,onClick:"return dashOpenHealthAudit('syncCritical')",foot:'Clique para auditar sync antigo ou ausente'})+
+    dashMiniCard('Falhas de sync', health.syncErrors, 'Erros explícitos retornados pela sincronização ClickUp.', health.syncErrors ? 'bad' : 'good', 'syncErrors', {clickable:true,onClick:"return dashOpenHealthAudit('syncErrors')",foot:'Clique para abrir os erros'})+
+    dashMiniCard('Sem update 7+ dias', health.views.stale.length, 'Projetos com data de atualização operacional acima do SLA.', health.views.stale.length ? 'warn' : 'good', 'stale', {clickable:true,onClick:"return dashOpenHealthAudit('stale')",foot:'Clique para ver projetos e motivos'});
+  return '<div class="dashx-stack"><div class="dashx-inline-note"><strong>Todos os cards são auditáveis.</strong> Clique para ver a definição da regra, os projetos envolvidos e o link de origem.</div><div class="dashx-health-grid">'+mini+'</div></div>';
 }
 function dashRenderHeatmap(map) {
   var consultores = Object.keys(map || {}).sort(function(a, b){ return a.localeCompare(b); });
@@ -8941,6 +8966,60 @@ function dashRenderExecution(execution) {
   }).join('') : '<tr class="empty-row"><td colspan="7">Nenhum projeto com saldo negativo no recorte atual.</td></tr>';
   return '<div class="dashx-burndown">'+hero+'<div class="dashx-grid-2"><div>'+ranking+'</div><div class="dashx-table-wrap"><table class="dashx-table"><thead><tr><th>Cliente</th><th>Consultor</th><th class="num">Contratadas</th><th class="num">Realizadas</th><th class="num">Saldo</th><th class="num">% consumo</th><th>Status</th></tr></thead><tbody>'+table+'</tbody></table></div></div></div>';
 }
+function dashNextActionInfo(p) {
+  p = p || {};
+  var fields = [
+    ['Próxima ação', p.proxima_acao],
+    ['Data da próxima ação', p.proxima_acao_data],
+    ['Next action', p.next_action],
+    ['Acompanhamento', p.acompanhamento],
+    ['Observação', p.obs]
+  ];
+  var keyword = /(proxim|agenda|reunia|reuniao|retorn|alinhar|valid|enviar|fazer|definir|confirm|trein|capacita|verificar|resolver|continuar|implantar|acompanhar)/;
+  for (var i = 0; i < fields.length; i++) {
+    var value = String(fields[i][1] || '').trim();
+    if (!value) continue;
+    if (i <= 2 || keyword.test(normalizarTextoProjeto(value))) {
+      return {found:true, source:fields[i][0], value:value};
+    }
+  }
+  return {found:false, source:'Nenhuma evidência', value:'Não há próxima ação explícita nem texto operacional reconhecido em próxima ação, acompanhamento ou observação.'};
+}
+function dashFunnelStageReached(stage, target) {
+  var order = {sem:0,venda:1,kickoff:2,treinamento:3,ativacao:4};
+  return Number(order[stage] || 0) >= Number(order[target] || 0);
+}
+function dashOpenFunnelAudit(mode, index) {
+  var list = DASH_FUNNEL_PROJECTS || [];
+  if (mode === 'project') {
+    var p = list[Number(index || 0)] || {};
+    var stage = dashProjectStageInfo(p);
+    var action = dashNextActionInfo(p);
+    var details = [
+      ['Etapa atual', dashStageLabel(stage.stage)],
+      ['Dias na etapa', stage.daysInStage === null ? '-' : String(stage.daysInStage)],
+      ['Data da venda', stage.vendaDate ? fd(stage.vendaDate.toISOString()) : '-'],
+      ['Kickoff', stage.kickDate ? fd(stage.kickDate.toISOString()) : '-'],
+      ['1º treinamento', stage.trainDate ? fd(stage.trainDate.toISOString()) : '-'],
+      ['Ativação', stage.activationDate ? fd(stage.activationDate.toISOString()) : (stage.activationEstimated ? 'Estimada pela regra do funil' : '-')],
+      ['Próxima ação detectada?', action.found ? 'Sim' : 'Não'],
+      ['Fonte da ação', action.source],
+      ['Conteúdo', action.value]
+    ];
+    var body = details.map(function(item){ return '<tr><th>'+escapeHtml(item[0])+'</th><td>'+escapeHtml(item[1])+'</td></tr>'; }).join('');
+    dashOpenAuditModal('Funil — '+String(p.cliente || 'Projeto'), '<div class="dashx-focus-note"><div><strong>Definição:</strong> a próxima ação só é considerada registrada quando existe um campo explícito ou um texto operacional reconhecido em acompanhamento/observação.</div><div>'+dashProjectActionCell(p)+'</div></div><div class="dashx-table-wrap" style="margin-top:12px"><table class="dashx-table"><tbody>'+body+'</tbody></table></div>');
+    return false;
+  }
+  var target = String(mode || 'venda');
+  var rows = list.filter(function(p){ return dashFunnelStageReached(dashProjectStageInfo(p).stage, target); });
+  var bodyRows = rows.length ? rows.map(function(p) {
+    var stage = dashProjectStageInfo(p);
+    return '<tr><td><strong>'+escapeHtml(p.cliente || '-')+'</strong></td><td>'+escapeHtml(p.consultor || '-')+'</td><td>'+dashStageLabel(stage.stage)+'</td><td>'+(stage.daysInStage === null ? '-' : stage.daysInStage)+'</td><td>'+dashProjectActionCell(p)+'</td></tr>';
+  }).join('') : '<tr class="empty-row"><td colspan="5">Nenhum projeto nesta etapa.</td></tr>';
+  dashOpenAuditModal('Funil — '+dashStageLabel(target), '<div class="dashx-focus-note"><div><strong>Regra:</strong> lista projetos que já alcançaram esta etapa, conforme datas e status disponíveis na base de 2026.</div><div class="dashx-focus-hint">'+rows.length+' projeto(s)</div></div><div class="dashx-table-wrap" style="margin-top:12px"><table class="dashx-table"><thead><tr><th>Projeto</th><th>Consultor</th><th>Etapa atual</th><th>Dias na etapa</th><th>Ação</th></tr></thead><tbody>'+bodyRows+'</tbody></table></div>');
+  return false;
+}
+window.dashOpenFunnelAudit = dashOpenFunnelAudit;
 function dashRenderFunnel(funnel, list) {
   var required = dashMissingFields(list, [
     {label:'data de venda', aliases:['data_venda']},
@@ -8955,13 +9034,17 @@ function dashRenderFunnel(funnel, list) {
     {label:'1º Treinamento', value:funnel.totalTrein, conv:funnel.convKT, sub:'Conversão Kickoff → Treinamento'},
     {label:'Ativação', value:funnel.totalAtiv, conv:funnel.convTA, sub:'Conversão Treinamento → Ativação'}
   ];
-  var grid = '<div class="dashx-funnel">'+steps.map(function(step){
-    return '<div class="dashx-funnel-step"><div class="dashx-funnel-label">'+step.label+'</div><div class="dashx-funnel-value">'+step.value+'</div>'+(step.conv === undefined || step.conv === null ? '' : '<div class="dashx-funnel-conv">'+step.conv+'% de conversão</div>')+'<div class="dashx-funnel-sub">'+step.sub+'</div></div>';
+  DASH_FUNNEL_PROJECTS = list.slice();
+  var stepModes = ['venda','kickoff','treinamento','ativacao'];
+  var grid = '<div class="dashx-funnel">'+steps.map(function(step, stepIndex){
+    return '<button type="button" class="dashx-funnel-step" onclick="return dashOpenFunnelAudit(\''+stepModes[stepIndex]+'\')" title="Clique para auditar esta etapa"><div class="dashx-funnel-label">'+step.label+'</div><div class="dashx-funnel-value">'+step.value+'</div>'+(step.conv === undefined || step.conv === null ? '' : '<div class="dashx-funnel-conv">'+step.conv+'% de conversão</div>')+'<div class="dashx-funnel-sub">'+step.sub+' · Clique para detalhar</div></button>';
   }).join('')+'</div>';
   var rows = funnel.stalled.length ? funnel.stalled.map(function(item){
-    return '<tr><td><strong>'+item.projeto.cliente+'</strong></td><td>'+dashStageLabel(item.stage.stage)+'</td><td>'+(item.projeto.consultor || '-')+'</td><td class="num">'+(item.stage.daysInStage === null ? '-' : item.stage.daysInStage)+'</td><td>'+(towerTemProximaAcao(item.projeto) ? 'Ação registrada' : towerBadge('Definir próxima ação', 'o'))+'</td></tr>';
+    var projectIndex = list.indexOf(item.projeto);
+    var action = dashNextActionInfo(item.projeto);
+    return '<tr class="clickable" onclick="return dashOpenFunnelAudit(\'project\','+projectIndex+')" title="Clique para entender etapa, datas e próxima ação"><td><strong>'+item.projeto.cliente+'</strong></td><td>'+dashStageLabel(item.stage.stage)+'</td><td>'+(item.projeto.consultor || '-')+'</td><td class="num">'+(item.stage.daysInStage === null ? '-' : item.stage.daysInStage)+'</td><td>'+(action.found ? '<button type="button" class="dashx-score-pill action good" onclick="event.stopPropagation();return dashOpenFunnelAudit(\'project\','+projectIndex+')">Ação registrada · ver detalhe</button>' : '<button type="button" class="dashx-score-pill action warn" onclick="event.stopPropagation();return dashOpenFunnelAudit(\'project\','+projectIndex+')">Sem próxima ação · entender</button>')+'</td></tr>';
   }).join('') : '<tr class="empty-row"><td colspan="5">Nenhum projeto parado fora da etapa final no recorte atual.</td></tr>';
-  return '<div class="dashx-stack">'+grid+'<div class="dashx-table-wrap"><table class="dashx-table"><thead><tr><th>Cliente</th><th>Etapa atual</th><th>Consultor</th><th class="num">Dias na etapa</th><th>Próxima ação</th></tr></thead><tbody>'+rows+'</tbody></table></div></div>';
+  return '<div class="dashx-stack"><div class="dashx-inline-note"><strong>Tudo é auditável:</strong> clique nas etapas ou em qualquer projeto para entender datas, regra e o conteúdo considerado como próxima ação.</div>'+grid+'<div class="dashx-table-wrap"><table class="dashx-table"><thead><tr><th>Cliente</th><th>Etapa atual</th><th>Consultor</th><th class="num">Dias na etapa</th><th>Próxima ação</th></tr></thead><tbody>'+rows+'</tbody></table></div></div>';
 }
 function dashRenderCohort(cohort, list) {
   var required = dashMissingFields(list, [
@@ -9000,6 +9083,7 @@ function initDash() {
   var analyses = list.map(towerAnaliseProjeto);
   var total = list.length;
   var health = dashDataHealth(list);
+  DASH_HEALTH_DATA = health;
   var operation = dashOperation(list, analyses);
   var funnel = dashFunnel(list);
   var cohort = dashCohort(list);
@@ -9020,11 +9104,10 @@ function initDash() {
   '</div>';
   var hero = '<div class="dashx-hero"><div class="dashx-hero-top"><div class="dashx-title-wrap"><div class="dashx-eyebrow">Dashboard Executivo CSI</div><div class="dashx-title">Visão operacional explicável</div><div class="dashx-sub">Somente indicadores de 2026 com fonte e regra auditáveis. MRR, rankings subjetivos e diárias sem conciliação foram retirados desta visão.</div></div><div class="dashx-meta"><span class="dashx-meta-chip"><b>Escopo</b> '+rotuloEscopoUsuario()+'</span><span class="dashx-meta-chip"><b>Ano</b> 2026</span><span class="dashx-meta-chip"><b>Projetos</b> '+total+'</span><span class="dashx-meta-chip"><b>Última base</b> '+(TOWER_INFO_CONTEXT.ultima || '-')+'</span></div></div>'+dashRenderFilters(base)+'</div>';
   var prioritySection = '<div class="dashx-section"><div class="dashx-section-head"><div><div class="dashx-section-kicker">Prioridade</div><div class="dashx-section-title">Carteira e entregas de 2026</div><div class="dashx-section-sub">Heatmap da entrada de projetos e produtividade baseada no Fechamento de Marcos validado.</div></div></div><div class="dashx-section-body"><div class="dashx-stack"><div class="dashx-focus-note"><div><strong>Distribuição da carteira.</strong> Cada célula mostra quantos projetos de 2026 entraram por consultor e mês.</div><div class="dashx-focus-hint">sem score subjetivo</div></div>'+dashRenderHeatmap(operation.heatMap)+dashRenderMilestoneProductivity2026()+dashRenderStatusStack(statusByMonth)+'</div></div></div>';
-  var clickupSection = '<div class="dashx-section"><div class="dashx-section-head"><div><div class="dashx-section-kicker">ClickUp</div><div class="dashx-section-title">Rastreio técnico verificável</div><div class="dashx-section-sub">Confirma quais projetos possuem vínculo ClickUp e há quantos dias receberam atualização.</div></div><div class="dashx-section-answer"><span class="dashx-answer-chip">'+tracked+' rastreados • '+untracked+' sem ClickUp</span></div></div><div class="dashx-section-body"><div class="dashx-stack">'+dashRenderClickUpTracker(operation, total)+dashRenderUntrackedClickUpList(operation.untrackedProjects || [], operation.untrackedTotal)+'</div></div></div>';
   var healthSection = '<div class="dashx-section"><div class="dashx-section-head"><div><div class="dashx-section-kicker">Qualidade</div><div class="dashx-section-title">Saúde dos dados</div><div class="dashx-section-sub">Somente verificações objetivas de cadastro, sync e atualização.</div></div></div><div class="dashx-section-body">'+dashRenderReliableHealthSection(health)+'</div></div>';
   var funnelSection = '<div class="dashx-section"><div class="dashx-section-head"><div><div class="dashx-section-kicker">Evolução</div><div class="dashx-section-title">Funil de Implantação</div><div class="dashx-section-sub">Acompanha venda, kickoff, primeiro treinamento e ativação com as datas disponíveis.</div></div><div class="dashx-section-answer"><span class="dashx-answer-chip">'+(activeRate === null ? 'Conversão indisponível' : (activeRate+'% de ativação'))+'</span></div></div><div class="dashx-section-body">'+dashRenderFunnel(funnel, list)+'</div></div>';
   var cohortSection = '<div class="dashx-section"><div class="dashx-section-head"><div><div class="dashx-section-kicker">Evolução</div><div class="dashx-section-title">Cohort Mensal</div><div class="dashx-section-sub">Mostra se os projetos vendidos em cada mês avançaram nas etapas de implantação.</div></div></div><div class="dashx-section-body">'+dashRenderCohort(cohort, list)+'</div></div>';
-  dc.innerHTML = '<div class="dashx-shell">'+hero+topCards+prioritySection+clickupSection+healthSection+funnelSection+cohortSection+'</div>';
+  dc.innerHTML = '<div class="dashx-shell">'+hero+topCards+prioritySection+cohortSection+funnelSection+healthSection+'</div>';
   dashBindDashboardInteractions(dc);
 }
 
