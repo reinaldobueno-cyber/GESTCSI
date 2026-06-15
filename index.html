@@ -3146,6 +3146,8 @@ body.theme-dark .tower-kpis [style*="background:#fff"]{
 .cmax-calendar-day{min-height:116px;border:1px solid var(--border);border-radius:10px;padding:9px;background:var(--surf2);color:var(--text);text-align:left;cursor:pointer;display:flex;flex-direction:column;justify-content:space-between}
 .cmax-calendar-day.empty{visibility:hidden;cursor:default}
 .cmax-calendar-day.weekend{opacity:.48}
+.cmax-calendar-day.special{opacity:1;border-color:#e1a33e;box-shadow:inset 0 0 0 2px rgba(225,163,62,.2)}
+.cmax-special-label{display:inline-flex;align-items:center;border:1px solid #e1a33e;border-radius:999px;background:#fff6df;color:#8a5a0a;padding:3px 7px;font-size:8px;font-weight:900;text-transform:uppercase;letter-spacing:.05em;margin-left:5px}
 .cmax-calendar-day.has-events:hover,.cmax-calendar-day.on{outline:2px solid var(--green);outline-offset:1px}
 .cmax-calendar-day-num{font-size:12px;font-weight:900}
 .cmax-calendar-day-count{font-size:11px;font-weight:900}.cmax-calendar-day-count small{display:block;font-size:9px;font-weight:800;margin-top:3px}
@@ -3184,9 +3186,11 @@ body.theme-dark .tower-kpis [style*="background:#fff"]{
 .bonus-activity{border:1px solid #dce5ef;border-radius:12px;background:#f7fafd;padding:15px 16px;min-height:88px}.bonus-activity.primary{background:#eaf6ff;border-color:#a8d7f5}
 .bonus-activity.rejected{background:#fff5f3;border-color:#f3c5bd}.bonus-activity.rejected strong{color:#b44535}
 .bonus-activity span{display:block;color:#687b98;font-size:9px;font-weight:900;letter-spacing:.1em;text-transform:uppercase}.bonus-activity strong{display:block;color:#173b67;font-size:22px;margin-top:8px}.bonus-activity small{display:block;color:#92a3b8;font-size:10px;margin-top:5px}
-.bonus-financial{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;padding:0 28px 22px}.bonus-financial-item{border-left:4px solid #667eea;border-radius:10px;background:#f5f8fb;padding:14px 16px}.bonus-financial-item.marcos{border-left-color:#ed8936}.bonus-financial-item.total{border-left-color:#38a169;background:#edfbf1}.bonus-financial-item span{display:block;font-size:9px;font-weight:900;letter-spacing:.1em;text-transform:uppercase;color:#687b98}.bonus-financial-item strong{display:block;font-size:18px;color:#173b67;margin-top:7px}.bonus-financial-item.total strong{color:#237543;font-size:21px}
+.bonus-financial{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;padding:0 28px 22px}.bonus-financial-item{border-left:4px solid #667eea;border-radius:10px;background:#f5f8fb;padding:14px 16px}.bonus-financial-item.marcos{border-left-color:#ed8936}.bonus-financial-item.indicacoes{border-left-color:#8b5cf6}.bonus-financial-item.total{border-left-color:#38a169;background:#edfbf1}.bonus-financial-item span{display:block;font-size:9px;font-weight:900;letter-spacing:.1em;text-transform:uppercase;color:#687b98}.bonus-financial-item strong{display:block;font-size:18px;color:#173b67;margin-top:7px}.bonus-financial-item.total strong{color:#237543;font-size:21px}
+.bonus-indication-form{display:grid;grid-template-columns:1.1fr 1.4fr .8fr 1fr 1fr 1.2fr auto;gap:8px;align-items:end}.bonus-indication-field label{display:block;font-size:8px;font-weight:900;letter-spacing:.09em;text-transform:uppercase;color:var(--muted);margin:0 0 5px 3px}.bonus-indication-field input,.bonus-indication-field select{width:100%;border:1px solid var(--border);border-radius:8px;background:var(--surf2);color:var(--text);padding:9px;font:800 10px 'Inter',sans-serif}
 .bonus-section{padding:16px;border-top:1px solid var(--border)}.bonus-section:first-of-type{border-top:0}.bonus-section-title{font-size:12px;font-weight:900;color:var(--text);margin-bottom:10px}
 .bonus-empty{padding:30px;text-align:center;color:var(--text2)}
+@media(max-width:1200px){.bonus-indication-form{grid-template-columns:repeat(3,1fr)}}
 @media(max-width:1050px){.bonus-exec-grid{grid-template-columns:repeat(2,1fr)}.bonus-exec-columns{grid-template-columns:1fr}}
 @media(max-width:900px){.bonus-activity-grid{grid-template-columns:repeat(2,1fr)}.bonus-financial{grid-template-columns:1fr}.bonus-report-head{padding:20px}.bonus-report-total strong{font-size:24px}.bonus-rank-row{grid-template-columns:24px 1fr auto}.bonus-rank-track{display:none}}
 @media print{nav,.period-bar,.sidenav,.bonus-actions{display:none!important}.app-shell,.main-content{display:block!important}.page{display:none!important}.page.on{display:block!important}.bonus-exec,.bonus-admin-table,.bonus-report{break-inside:avoid}}
@@ -5423,6 +5427,7 @@ window.fechamentoSyncRejected = fechamentoSyncRejected;
 window.fechamentoSyncApproved = fechamentoSyncApproved;
 
 var BONUS_FILTER = {month:fechamentoCurrentMonth(), consultant:'todos'};
+var BONUS_INDICATION_STATE = {items:[],loadedMonth:'',loading:false};
 function bonusNamesMatch(a,b) {
   var aKey=consultantCompKey(a),bKey=consultantCompKey(b);
   if(!aKey||!bKey)return false;
@@ -5447,6 +5452,7 @@ function bonusMonthOptions() {
   var months={};
   (FECHAMENTO_MARCOS||[]).forEach(function(item){if(item.mes_fechamento)months[item.mes_fechamento]=true;});
   (CMAX_DAILY_STATE.months||[]).concat((CMAX_DAILY_STATE.events||[]).map(function(item){return item.mes;})).forEach(function(month){if(month)months[month]=true;});
+  (BONUS_INDICATION_STATE.items||[]).forEach(function(item){if(item.month)months[item.month]=true;});
   months[BONUS_FILTER.month||fechamentoCurrentMonth()]=true;
   return Object.keys(months).filter(function(month){return month>='2024-01';}).sort().reverse();
 }
@@ -5466,6 +5472,7 @@ function bonusLoad() {
   initBonus();
   fechamentoLoad(false);
   consultantCompensationLoad(false);
+  bonusLoadIndications(false);
   if(CMAX_DAILY_STATE.month!==month) {
     CMAX_DAILY_STATE.month=month;
     CMAX_DAILY_STATE.loaded=false;
@@ -5475,7 +5482,7 @@ function bonusLoad() {
 }
 function bonusRefresh(btn) {
   if(btn){btn.disabled=true;btn.textContent='Atualizando...';}
-  Promise.resolve(fechamentoLoad(true)).then(function(){
+  Promise.all([fechamentoLoad(true),bonusLoadIndications(true)]).then(function(){
     carregarDiariasCmax(true);
     setTimeout(function(){
       initBonus();
@@ -5484,15 +5491,60 @@ function bonusRefresh(btn) {
   });
   return false;
 }
+function bonusLoadIndications(force) {
+  var month=BONUS_FILTER.month||fechamentoCurrentMonth();
+  if(!authTokenParam()||BONUS_INDICATION_STATE.loading||(!force&&BONUS_INDICATION_STATE.loadedMonth===month))return Promise.resolve(null);
+  BONUS_INDICATION_STATE.loading=true;
+  return chamarAppsScriptJsonp('getBonusSalesIndications',{auth_token:authTokenParam(),month:month},15000).then(function(resp){
+    if(!resp||resp.ok===false||!Array.isArray(resp.items))throw new Error((resp&&resp.error)||'Falha ao carregar indicações.');
+    BONUS_INDICATION_STATE.items=resp.items;
+    BONUS_INDICATION_STATE.loadedMonth=month;
+    BONUS_INDICATION_STATE.loading=false;
+    initBonus();
+    return resp;
+  }).catch(function(error){
+    BONUS_INDICATION_STATE.loading=false;
+    showToast((error&&error.message)||'Falha ao carregar indicações','err');
+    return null;
+  });
+}
+function bonusSaveIndication(button) {
+  var form=document.getElementById('bonus-indication-form');
+  if(!form)return false;
+  var data=new FormData(form),params={auth_token:authTokenParam()};
+  data.forEach(function(value,key){params[key]=value;});
+  if(button){button.disabled=true;button.textContent='Salvando...';}
+  return chamarAppsScriptJsonp('saveBonusSalesIndication',params,15000).then(function(resp){
+    if(!resp||resp.ok===false)throw new Error((resp&&resp.error)||'Falha ao salvar indicação.');
+    form.reset();
+    BONUS_INDICATION_STATE.loadedMonth='';
+    showToast('Indicação convertida salva para todos.','ok');
+    return bonusLoadIndications(true);
+  }).catch(function(error){
+    showToast((error&&error.message)||'Falha ao salvar indicação','err');
+  }).finally(function(){if(button){button.disabled=false;button.textContent='Lançar indicação';}});
+}
+function bonusDeleteIndication(id,button) {
+  if(!confirm('Excluir esta indicação convertida?'))return false;
+  if(button)button.disabled=true;
+  return chamarAppsScriptJsonp('deleteBonusSalesIndication',{auth_token:authTokenParam(),id:id},15000).then(function(resp){
+    if(!resp||resp.ok===false)throw new Error((resp&&resp.error)||'Falha ao excluir indicação.');
+    BONUS_INDICATION_STATE.loadedMonth='';
+    showToast('Indicação excluída.','ok');
+    return bonusLoadIndications(true);
+  }).catch(function(error){if(button)button.disabled=false;showToast((error&&error.message)||'Falha ao excluir indicação','err');});
+}
 function bonusDataset() {
   var month=BONUS_FILTER.month||fechamentoCurrentMonth();
   var daily=(CMAX_DAILY_STATE.events||[]).filter(function(item){return String(item.mes||'')===month&&cmaxCountsDaily(item);});
   var monthMilestones=(FECHAMENTO_MARCOS||[]).filter(function(item){return String(item.mes_fechamento||'')===month;});
   var milestones=monthMilestones.filter(function(item){return item.situacao==='aprovado';});
   var rejectedMilestones=monthMilestones.filter(function(item){return item.situacao==='reprovado';});
+  var indications=(BONUS_INDICATION_STATE.items||[]).filter(function(item){return String(item.month||'')===month;});
   var names=bonusCanonicalNames(
     daily.map(function(item){return item.consultor;})
       .concat(monthMilestones.map(function(item){return item.consultor;}))
+      .concat(indications.map(function(item){return item.consultant_name;}))
   );
   var userName=AUTH_STATE.user&&(AUTH_STATE.user.name||AUTH_STATE.user.username)||'';
   var isAdmin=AUTH_STATE.user&&AUTH_STATE.user.role==='admin';
@@ -5508,12 +5560,15 @@ function bonusDataset() {
     var comp=consultantCompensation(name);
     var dailyRows=events.map(function(item,index){
       var equivalent=allocated[index]||0;
-      return {item:item,equivalent:equivalent,value:equivalent*Number(comp.daily_value||0)};
+      var special=cmaxSpecialDayInfo(item.data);
+      return {item:item,equivalent:equivalent,multiplier:special.multiplier,specialLabel:special.label,value:equivalent*Number(comp.daily_value||0)*special.multiplier};
     }).filter(function(row){return row.equivalent>0;});
     var marcoRows=milestones.filter(function(item){return bonusNamesMatch(item.consultor,name);});
     var rejectedRows=rejectedMilestones.filter(function(item){return bonusNamesMatch(item.consultor,name);});
+    var indicationRows=indications.filter(function(item){return bonusNamesMatch(item.consultant_name,name);});
     var dailyValue=dailyRows.reduce(function(total,row){return total+row.value;},0);
     var milestoneValue=marcoRows.reduce(function(total,item){return total+Number(item.valor_bonus||30);},0);
+    var indicationValue=indicationRows.reduce(function(total,item){return total+Number(item.value||0);},0);
     return {
       name:name,
       seniority:comp.seniority||'',
@@ -5522,17 +5577,25 @@ function bonusDataset() {
       dailyRows:dailyRows,
       milestoneRows:marcoRows,
       rejectedRows:rejectedRows,
+      indicationRows:indicationRows,
       milestoneValue:milestoneValue,
-      total:dailyValue+milestoneValue
+      indicationValue:indicationValue,
+      total:dailyValue+milestoneValue+indicationValue
     };
   });
 }
 function bonusDailyDetails(person) {
   var rows=person.dailyRows.map(function(row){
     var item=row.item,info=cmaxDateInfo(item.data),start=cmaxTime(item.hora_inicio)||'-',end=cmaxTime(item.hora_fim);
-    return '<tr><td>'+escapeHtml(info.date)+'</td><td><strong>'+escapeHtml(item.cliente||'-')+'</strong></td><td>'+escapeHtml(cmaxModeLabel(item))+'</td><td>'+escapeHtml(start+(end?' - '+end:''))+'</td><td>'+cmaxEquivalentLabel(row.equivalent)+'</td><td><strong>'+consultantMoney(row.value)+'</strong></td></tr>';
+    return '<tr><td>'+escapeHtml(info.date)+cmaxSpecialLabel(item.data)+'</td><td><strong>'+escapeHtml(item.cliente||'-')+'</strong></td><td>'+escapeHtml(cmaxModeLabel(item))+'</td><td>'+escapeHtml(start+(end?' - '+end:''))+'</td><td>'+cmaxEquivalentLabel(row.equivalent)+(row.multiplier>1?' &times; 1,5':'')+'</td><td><strong>'+consultantMoney(row.value)+'</strong></td></tr>';
   }).join('');
   return rows?'<div class="dashx-table-wrap"><table class="dashx-table"><thead><tr><th>Data</th><th>Cliente</th><th>Modalidade</th><th>Hor&aacute;rio</th><th>Equiv.</th><th>Valor</th></tr></thead><tbody>'+rows+'</tbody></table></div>':'<div class="bonus-empty">Nenhuma di&aacute;ria contabiliz&aacute;vel neste m&ecirc;s.</div>';
+}
+function bonusIndicationDetails(person) {
+  var rows=person.indicationRows.map(function(item){
+    return '<tr><td>'+escapeHtml(cmaxDate(item.indication_date))+'</td><td>'+escapeHtml(cmaxDate(item.sale_date))+'</td><td><strong>'+escapeHtml(item.client||'-')+'</strong></td><td>'+escapeHtml(item.indication_type==='upgrade'?'Upgrade':'Módulo')+'</td><td>'+escapeHtml(item.notes||'-')+'</td><td><strong>'+consultantMoney(item.value)+'</strong></td><td><button class="project-link-btn warn" onclick="return bonusDeleteIndication(\''+escapeHtml(item.id)+'\',this)">Excluir</button></td></tr>';
+  }).join('');
+  return rows?'<div class="dashx-table-wrap"><table class="dashx-table"><thead><tr><th>Indicado em</th><th>Venda em</th><th>Cliente</th><th>Tipo</th><th>Observação</th><th>Valor</th><th>Ação</th></tr></thead><tbody>'+rows+'</tbody></table></div>':'<div class="bonus-empty">Nenhuma indicação convertida neste mês.</div>';
 }
 function bonusMilestoneDetails(person) {
   var rows=person.milestoneRows.map(function(item){
@@ -5551,14 +5614,18 @@ function bonusRejectedDetails(person) {
 function bonusPersonReport(person) {
   var initial=String(person.name||'?').trim().charAt(0).toUpperCase();
   var online=person.dailyRows.filter(function(row){return cmaxModality(cmaxModeLabel(row.item)).indexOf('ON LINE')>=0;}).length;
+  var special=person.dailyRows.reduce(function(total,row){return total+(row.multiplier>1?row.equivalent:0);},0);
   return '<section class="bonus-report"><div class="bonus-report-head"><div class="bonus-person"><div class="bonus-avatar">'+escapeHtml(initial)+'</div><div><div class="bonus-person-name">'+escapeHtml(person.name)+'</div><div class="bonus-person-meta">'+escapeHtml(consultantSeniorityLabel(person.seniority))+' &middot; '+escapeHtml(bonusMonthLabel(BONUS_FILTER.month))+'</div></div></div><div class="bonus-report-total"><span>Total da bonifica&ccedil;&atilde;o</span><strong>'+consultantMoney(person.total)+'</strong></div></div>'+
-    '<div class="bonus-activity-grid"><div class="bonus-activity primary"><span>Di&aacute;rias realizadas</span><strong>'+cmaxEquivalentLabel(person.dailyEquivalent)+'</strong><small>equivalente contabilizado</small></div><div class="bonus-activity"><span>Treinamentos on-line</span><strong>'+online+'</strong><small>registros contabiliz&aacute;veis</small></div><div class="bonus-activity"><span>Marcos aprovados</span><strong>'+person.milestoneRows.length+'</strong><small>entregas validadas</small></div><div class="bonus-activity rejected"><span>Marcos reprovados</span><strong>'+person.rejectedRows.length+'</strong><small>não geram bonificação</small></div></div>'+
-    '<div class="bonus-financial"><div class="bonus-financial-item"><span>Valor das di&aacute;rias</span><strong>'+consultantMoney(person.dailyValue)+'</strong></div><div class="bonus-financial-item marcos"><span>Valor dos marcos</span><strong>'+consultantMoney(person.milestoneValue)+'</strong></div><div class="bonus-financial-item total"><span>Total remunera&ccedil;&atilde;o</span><strong>'+consultantMoney(person.total)+'</strong></div></div>'+
-    '<div class="bonus-section"><div class="bonus-section-title">Detalhamento das di&aacute;rias</div>'+bonusDailyDetails(person)+'</div><div class="bonus-section"><div class="bonus-section-title">Detalhamento dos marcos aprovados</div>'+bonusMilestoneDetails(person)+'</div><div class="bonus-section"><div class="bonus-section-title">Detalhamento dos marcos reprovados e seus motivos</div>'+bonusRejectedDetails(person)+'</div></section>';
+    '<div class="bonus-activity-grid"><div class="bonus-activity primary"><span>Di&aacute;rias realizadas</span><strong>'+cmaxEquivalentLabel(person.dailyEquivalent)+'</strong><small>equivalente contabilizado</small></div><div class="bonus-activity"><span>Di&aacute;rias especiais</span><strong>'+cmaxEquivalentLabel(special)+'</strong><small>fins de semana / feriados (1,5x)</small></div><div class="bonus-activity"><span>Marcos aprovados</span><strong>'+person.milestoneRows.length+'</strong><small>entregas validadas</small></div><div class="bonus-activity"><span>Indica&ccedil;&otilde;es convertidas</span><strong>'+person.indicationRows.length+'</strong><small>upgrade / módulo</small></div><div class="bonus-activity rejected"><span>Marcos reprovados</span><strong>'+person.rejectedRows.length+'</strong><small>não geram bonificação</small></div></div>'+
+    '<div class="bonus-financial"><div class="bonus-financial-item"><span>Valor das di&aacute;rias</span><strong>'+consultantMoney(person.dailyValue)+'</strong></div><div class="bonus-financial-item marcos"><span>Valor dos marcos</span><strong>'+consultantMoney(person.milestoneValue)+'</strong></div><div class="bonus-financial-item indicacoes"><span>Valor das indica&ccedil;&otilde;es</span><strong>'+consultantMoney(person.indicationValue)+'</strong></div><div class="bonus-financial-item total"><span>Total remunera&ccedil;&atilde;o</span><strong>'+consultantMoney(person.total)+'</strong></div></div>'+
+    '<div class="bonus-section"><div class="bonus-section-title">Detalhamento das di&aacute;rias</div>'+bonusDailyDetails(person)+'</div><div class="bonus-section"><div class="bonus-section-title">Detalhamento dos marcos aprovados</div>'+bonusMilestoneDetails(person)+'</div><div class="bonus-section"><div class="bonus-section-title">Indica&ccedil;&otilde;es convertidas</div>'+bonusIndicationDetails(person)+'</div><div class="bonus-section"><div class="bonus-section-title">Detalhamento dos marcos reprovados e seus motivos</div>'+bonusRejectedDetails(person)+'</div></section>';
 }
 function bonusExecutivePanel(people,daily,milestones,equivalents,total) {
   var approved=people.reduce(function(sum,p){return sum+p.milestoneRows.length;},0);
   var rejected=people.reduce(function(sum,p){return sum+p.rejectedRows.length;},0);
+  var indications=people.reduce(function(sum,p){return sum+p.indicationRows.length;},0);
+  var indicationValue=people.reduce(function(sum,p){return sum+p.indicationValue;},0);
+  var special=people.reduce(function(sum,p){return sum+p.dailyRows.reduce(function(value,row){return value+(row.multiplier>1?row.equivalent:0);},0);},0);
   var validationTotal=approved+rejected;
   var approvalRate=validationTotal?Math.round(approved/validationTotal*100):0;
   var active=people.filter(function(p){return p.total>0;}).length;
@@ -5570,7 +5637,7 @@ function bonusExecutivePanel(people,daily,milestones,equivalents,total) {
   var missingSeniority=people.filter(function(p){return p.dailyEquivalent>0&&!p.seniority;});
   var rankRows=ranked.map(function(person,index){
     var pct=maxTotal?Math.max(2,person.total/maxTotal*100):0;
-    return '<div class="bonus-rank-row"><div class="bonus-rank-pos">'+(index+1)+'</div><div><div class="bonus-rank-name">'+escapeHtml(person.name)+'</div><div class="bonus-rank-meta">'+cmaxEquivalentLabel(person.dailyEquivalent)+' di&aacute;ria(s) &middot; '+person.milestoneRows.length+' aprovado(s) &middot; '+person.rejectedRows.length+' reprovado(s)</div></div><div class="bonus-rank-track"><div class="bonus-rank-fill" style="width:'+pct.toFixed(1)+'%"></div></div><div class="bonus-rank-value">'+consultantMoney(person.total)+'</div></div>';
+    return '<div class="bonus-rank-row"><div class="bonus-rank-pos">'+(index+1)+'</div><div><div class="bonus-rank-name">'+escapeHtml(person.name)+'</div><div class="bonus-rank-meta">'+cmaxEquivalentLabel(person.dailyEquivalent)+' di&aacute;ria(s) &middot; '+person.milestoneRows.length+' aprovado(s) &middot; '+person.indicationRows.length+' indica&ccedil;&atilde;o(&otilde;es) &middot; '+person.rejectedRows.length+' reprovado(s)</div></div><div class="bonus-rank-track"><div class="bonus-rank-fill" style="width:'+pct.toFixed(1)+'%"></div></div><div class="bonus-rank-value">'+consultantMoney(person.total)+'</div></div>';
   }).join('');
   var insights=[];
   if(ranked[0])insights.push('<div class="bonus-insight good"><strong>Maior bonifica&ccedil;&atilde;o: '+escapeHtml(ranked[0].name)+'</strong><span>'+consultantMoney(ranked[0].total)+' no fechamento selecionado.</span></div>');
@@ -5580,7 +5647,7 @@ function bonusExecutivePanel(people,daily,milestones,equivalents,total) {
   if(missingSeniority.length)insights.push('<div class="bonus-insight warn"><strong>Cadastro financeiro incompleto</strong><span>'+escapeHtml(missingSeniority.map(function(p){return p.name;}).join(', '))+' possuem di&aacute;rias sem senioridade configurada.</span></div>');
   if(!insights.length)insights.push('<div class="bonus-insight"><strong>Sem ocorr&ecirc;ncias para destacar</strong><span>Atualize as bases para gerar a leitura executiva.</span></div>');
   return '<section class="bonus-exec"><div class="bonus-exec-head"><div><div class="bonus-exec-kicker">Vis&atilde;o administrativa e diretoria</div><div class="bonus-exec-title">Fechamento CSI &middot; '+escapeHtml(bonusMonthLabel(BONUS_FILTER.month))+'</div><div class="bonus-exec-meta">'+active+' consultor(es) com bonifica&ccedil;&atilde;o &middot; dados consolidados do CMAX e ClickUp</div></div><div class="bonus-exec-total"><span>Total previsto</span><strong>'+consultantMoney(total)+'</strong></div></div>'+
-    '<div class="bonus-exec-grid"><div class="bonus-exec-kpi good"><span>Valor das di&aacute;rias</span><strong>'+consultantMoney(daily)+'</strong><small>'+cmaxEquivalentLabel(equivalents)+' equivalente(s)</small></div><div class="bonus-exec-kpi"><span>Valor dos marcos</span><strong>'+consultantMoney(milestones)+'</strong><small>'+approved+' aprovado(s)</small></div><div class="bonus-exec-kpi warn"><span>Marcos reprovados</span><strong>'+rejected+'</strong><small>não geram bonifica&ccedil;&atilde;o</small></div><div class="bonus-exec-kpi good"><span>Taxa de aprova&ccedil;&atilde;o</span><strong>'+approvalRate+'%</strong><small>'+approved+' de '+validationTotal+' valida&ccedil;&otilde;es</small></div><div class="bonus-exec-kpi"><span>M&eacute;dia por consultor ativo</span><strong>'+consultantMoney(active?total/active:0)+'</strong><small>'+active+' com valor no m&ecirc;s</small></div></div>'+
+    '<div class="bonus-exec-grid"><div class="bonus-exec-kpi good"><span>Valor das di&aacute;rias</span><strong>'+consultantMoney(daily)+'</strong><small>'+cmaxEquivalentLabel(equivalents)+' equivalente(s); '+cmaxEquivalentLabel(special)+' especial(is)</small></div><div class="bonus-exec-kpi"><span>Valor dos marcos</span><strong>'+consultantMoney(milestones)+'</strong><small>'+approved+' aprovado(s)</small></div><div class="bonus-exec-kpi good"><span>Indica&ccedil;&otilde;es convertidas</span><strong>'+consultantMoney(indicationValue)+'</strong><small>'+indications+' venda(s)</small></div><div class="bonus-exec-kpi warn"><span>Marcos reprovados</span><strong>'+rejected+'</strong><small>não geram bonifica&ccedil;&atilde;o</small></div><div class="bonus-exec-kpi good"><span>Taxa de aprova&ccedil;&atilde;o</span><strong>'+approvalRate+'%</strong><small>'+approved+' de '+validationTotal+' valida&ccedil;&otilde;es</small></div><div class="bonus-exec-kpi"><span>M&eacute;dia por consultor ativo</span><strong>'+consultantMoney(active?total/active:0)+'</strong><small>'+active+' com valor no m&ecirc;s</small></div></div>'+
     '<div class="bonus-exec-columns"><div class="bonus-exec-panel"><div class="bonus-exec-panel-title">Ranking e composi&ccedil;&atilde;o do fechamento</div>'+(rankRows||'<div class="bonus-empty">Nenhum valor encontrado.</div>')+'</div><div class="bonus-exec-panel"><div class="bonus-exec-panel-title">Insights gerenciais</div>'+insights.join('')+'</div></div></section>';
 }
 function bonusAdminRejectedTable(people) {
@@ -5604,26 +5671,32 @@ function initBonus() {
   var people=bonusDataset(),isAdmin=AUTH_STATE.user&&AUTH_STATE.user.role==='admin';
   var daily=people.reduce(function(total,p){return total+p.dailyValue;},0);
   var milestones=people.reduce(function(total,p){return total+p.milestoneValue;},0);
+  var indications=people.reduce(function(total,p){return total+p.indicationValue;},0);
   var rejected=people.reduce(function(total,p){return total+p.rejectedRows.length;},0);
   var equivalents=people.reduce(function(total,p){return total+p.dailyEquivalent;},0);
-  var total=daily+milestones;
+  var total=daily+milestones+indications;
   var monthOptions=bonusMonthOptions().map(function(month){return '<option value="'+escapeHtml(month)+'" '+(month===BONUS_FILTER.month?'selected':'')+'>'+escapeHtml(bonusMonthLabel(month))+'</option>';}).join('');
   var allNames=bonusCanonicalNames(
     (CMAX_DAILY_STATE.events||[]).map(function(item){return item.consultor;})
       .concat((FECHAMENTO_MARCOS||[]).map(function(item){return item.consultor;}))
+      .concat((BONUS_INDICATION_STATE.items||[]).map(function(item){return item.consultant_name;}))
+      .concat(Object.keys(CONSULTANT_COMP_STATE.items||{}).map(function(key){return CONSULTANT_COMP_STATE.items[key].consultant_name;}))
   );
   var consultantOptions='<option value="todos">Todos os consultores</option>'+allNames.sort().map(function(name){return '<option value="'+escapeHtml(name)+'" '+(BONUS_FILTER.consultant===name?'selected':'')+'>'+escapeHtml(name)+'</option>';}).join('');
-  var adminRows=people.map(function(person){return '<tr><td><strong>'+escapeHtml(person.name)+'</strong><div class="cmax-date-sub">'+escapeHtml(consultantSeniorityLabel(person.seniority))+'</div></td><td>'+cmaxEquivalentLabel(person.dailyEquivalent)+'</td><td>'+consultantMoney(person.dailyValue)+'</td><td>'+person.milestoneRows.length+'</td><td>'+person.rejectedRows.length+'</td><td>'+consultantMoney(person.milestoneValue)+'</td><td><strong>'+consultantMoney(person.total)+'</strong></td></tr>';}).join('');
+  var adminRows=people.map(function(person){return '<tr><td><strong>'+escapeHtml(person.name)+'</strong><div class="cmax-date-sub">'+escapeHtml(consultantSeniorityLabel(person.seniority))+'</div></td><td>'+cmaxEquivalentLabel(person.dailyEquivalent)+'</td><td>'+consultantMoney(person.dailyValue)+'</td><td>'+person.milestoneRows.length+'</td><td>'+person.rejectedRows.length+'</td><td>'+consultantMoney(person.milestoneValue)+'</td><td>'+person.indicationRows.length+'</td><td>'+consultantMoney(person.indicationValue)+'</td><td><strong>'+consultantMoney(person.total)+'</strong></td></tr>';}).join('');
+  var indicationForm='<section class="bonus-admin-table"><div class="bonus-section"><div class="bonus-admin-label">Lan&ccedil;ar indica&ccedil;&atilde;o convertida</div><div class="bonus-admin-sub">Upgrade gera R$ 150,00 e m&oacute;dulo gera R$ 50,00. O valor entra no m&ecirc;s da venda.</div><form id="bonus-indication-form" class="bonus-indication-form" onsubmit="event.preventDefault();return bonusSaveIndication(this.querySelector(\'button[type=submit]\'))"><div class="bonus-indication-field"><label>Consultor</label><select name="consultant_name" required><option value="">Selecione</option>'+allNames.sort().map(function(name){return '<option value="'+escapeHtml(name)+'">'+escapeHtml(name)+'</option>';}).join('')+'</select></div><div class="bonus-indication-field"><label>Cliente</label><input name="client" required placeholder="Nome do cliente"></div><div class="bonus-indication-field"><label>Tipo</label><select name="indication_type" required><option value="upgrade">Upgrade - R$ 150</option><option value="modulo">M&oacute;dulo - R$ 50</option></select></div><div class="bonus-indication-field"><label>Data da indica&ccedil;&atilde;o</label><input name="indication_date" type="date" required></div><div class="bonus-indication-field"><label>Data da venda</label><input name="sale_date" type="date" required></div><div class="bonus-indication-field"><label>Observa&ccedil;&atilde;o</label><input name="notes" placeholder="Opcional"></div><button class="btn-syncall" type="submit">Lan&ccedil;ar indica&ccedil;&atilde;o</button></form></div></section>';
   var status=(CMAX_DAILY_STATE.loading?'Carregando di&aacute;rias do m&ecirc;s selecionado. ':'')+(FECHAMENTO_LOADING?'Carregando fechamento de marcos. ':'');
   box.innerHTML='<div class="bonus-shell"><div class="bonus-hero"><div><div class="bonus-title">Bonifica&ccedil;&atilde;o mensal</div><div class="bonus-sub">Relat&oacute;rio consolidado alimentado pelas di&aacute;rias contabiliz&aacute;veis do CMAX e pelos marcos aprovados na valida&ccedil;&atilde;o t&eacute;cnica.</div></div><div class="bonus-actions"><select class="bonus-select" onchange="return bonusSetMonth(this.value)">'+monthOptions+'</select>'+(isAdmin?'<select class="bonus-select" onchange="return bonusSetConsultant(this.value)">'+consultantOptions+'</select>':'')+'<button class="btn-syncall" onclick="return bonusRefresh(this)">Atualizar relat&oacute;rio</button><button class="btn-syncall" onclick="window.print()">Imprimir / PDF</button></div></div>'+
     (status?'<div class="cmax-status">'+status+'</div>':'')+
-    bonusExecutivePanel(people,daily,milestones,equivalents,total)+
-    (isAdmin?'<section class="bonus-admin-table"><div class="bonus-section"><div class="bonus-admin-label">Base detalhada administrativa</div><div class="bonus-admin-sub">Composi&ccedil;&atilde;o financeira por consultor para confer&ecirc;ncia e envio ao administrativo.</div><div class="dashx-table-wrap"><table class="dashx-table"><thead><tr><th>Consultor</th><th>Di&aacute;rias</th><th>Valor di&aacute;rias</th><th>Aprovados</th><th>Reprovados</th><th>Valor marcos</th><th>Total</th></tr></thead><tbody>'+adminRows+'</tbody></table></div></div><div class="bonus-section"><div class="bonus-admin-label">Marcos reprovados e justificativas</div><div class="bonus-admin-sub">Pontos que não geraram bonifica&ccedil;&atilde;o e precisam de transpar&ecirc;ncia com o time.</div>'+bonusAdminRejectedTable(people)+'</div></section>':'')+
+    bonusExecutivePanel(people,daily,milestones,equivalents,total)+indicationForm+
+    (isAdmin?'<section class="bonus-admin-table"><div class="bonus-section"><div class="bonus-admin-label">Base detalhada administrativa</div><div class="bonus-admin-sub">Composi&ccedil;&atilde;o financeira por consultor para confer&ecirc;ncia e envio ao administrativo.</div><div class="dashx-table-wrap"><table class="dashx-table"><thead><tr><th>Consultor</th><th>Di&aacute;rias</th><th>Valor di&aacute;rias</th><th>Aprovados</th><th>Reprovados</th><th>Valor marcos</th><th>Indica&ccedil;&otilde;es</th><th>Valor indica&ccedil;&otilde;es</th><th>Total</th></tr></thead><tbody>'+adminRows+'</tbody></table></div></div><div class="bonus-section"><div class="bonus-admin-label">Marcos reprovados e justificativas</div><div class="bonus-admin-sub">Pontos que não geraram bonifica&ccedil;&atilde;o e precisam de transpar&ecirc;ncia com o time.</div>'+bonusAdminRejectedTable(people)+'</div></section>':'')+
     (people.map(bonusPersonReport).join('')||'<div class="bonus-empty">Nenhuma bonifica&ccedil;&atilde;o encontrada para este usu&aacute;rio no m&ecirc;s selecionado.</div>')+'</div>';
 }
 window.bonusSetMonth=bonusSetMonth;
 window.bonusSetConsultant=bonusSetConsultant;
 window.bonusRefresh=bonusRefresh;
+window.bonusSaveIndication=bonusSaveIndication;
+window.bonusDeleteIndication=bonusDeleteIndication;
 
 function initAdmin() {
   var el = document.getElementById('admin-content');
@@ -11620,6 +11693,37 @@ function cmaxDateInfo(value) {
   var weekday=['Domingo','Segunda-feira','Terça-feira','Quarta-feira','Quinta-feira','Sexta-feira','Sábado'][date.getDay()];
   return {date:parts[2]+'/'+parts[1]+'/'+parts[0],weekday:weekday};
 }
+function cmaxIsoDate(date) {
+  return date.getFullYear()+'-'+String(date.getMonth()+1).padStart(2,'0')+'-'+String(date.getDate()).padStart(2,'0');
+}
+function cmaxEasterDate(year) {
+  var a=year%19,b=Math.floor(year/100),c=year%100,d=Math.floor(b/4),e=b%4,f=Math.floor((b+8)/25),g=Math.floor((b-f+1)/3);
+  var h=(19*a+b-d-g+15)%30,i=Math.floor(c/4),k=c%4,l=(32+2*e+2*i-h-k)%7,m=Math.floor((a+11*h+22*l)/451);
+  return new Date(year,Math.floor((h+l-7*m+114)/31)-1,((h+l-7*m+114)%31)+1);
+}
+function cmaxSpecialDayInfo(value) {
+  var parts=String(value||'').slice(0,10).split('-');
+  if(parts.length!==3)return {special:false,multiplier:1,label:''};
+  var date=new Date(Number(parts[0]),Number(parts[1])-1,Number(parts[2])),dow=date.getDay(),iso=cmaxIsoDate(date),year=date.getFullYear();
+  if(dow===0||dow===6)return {special:true,multiplier:1.5,label:dow===0?'Domingo':'Sábado'};
+  var fixed={
+    '01-01':'Confraternização Universal','04-21':'Tiradentes','05-01':'Dia do Trabalho','09-07':'Independência do Brasil',
+    '10-12':'Nossa Senhora Aparecida','11-02':'Finados','11-15':'Proclamação da República','11-20':'Consciência Negra','12-25':'Natal',
+    '05-24':'Padroeira de Goiânia','10-24':'Aniversário de Goiânia'
+  };
+  var fixedLabel=fixed[iso.slice(5)];
+  if(fixedLabel)return {special:true,multiplier:1.5,label:fixedLabel};
+  var easter=cmaxEasterDate(year),goodFriday=new Date(easter),corpus=new Date(easter);
+  goodFriday.setDate(easter.getDate()-2);
+  corpus.setDate(easter.getDate()+60);
+  if(iso===cmaxIsoDate(goodFriday))return {special:true,multiplier:1.5,label:'Sexta-feira da Paixão'};
+  if(iso===cmaxIsoDate(corpus))return {special:true,multiplier:1.5,label:'Corpus Christi'};
+  return {special:false,multiplier:1,label:''};
+}
+function cmaxSpecialLabel(value) {
+  var info=cmaxSpecialDayInfo(value);
+  return info.special?'<span class="cmax-special-label" title="Diária com multiplicador financeiro de 1,5x">Especial 1,5x &middot; '+escapeHtml(info.label)+'</span>':'';
+}
 function cmaxTime(value) {
   var text=String(value||'').trim();
   if(!text)return '';
@@ -11673,6 +11777,12 @@ function cmaxDailyEquivalentTotal(events) {
     days[key]=Math.min(1,(days[key]||0)+cmaxEventDailyEquivalent(item));
   });
   return Object.keys(days).reduce(function(total,key){return total+days[key];},0);
+}
+function cmaxSpecialEquivalentTotal(events) {
+  var allocated=cmaxAllocatedDailyEquivalents(events);
+  return (events||[]).reduce(function(total,item,index){
+    return total+(cmaxSpecialDayInfo(item.data).special?(allocated[index]||0):0);
+  },0);
 }
 function cmaxConsultantFinancial(events,name) {
   var equivalent=cmaxDailyEquivalentTotal(events);
@@ -11796,8 +11906,8 @@ function abrirCalendarioCmax(encodedName) {
   var cells='';
   for(var blank=0;blank<offset;blank++)cells+='<button class="cmax-calendar-day empty"></button>';
   for(var day=1;day<=lastDay;day++){
-    var dayEvents=byDay[day]||[],daily=cmaxDailyEquivalentTotal(dayEvents),dow=new Date(year,monthIndex,day).getDay();
-    cells+='<button class="cmax-calendar-day '+(dayEvents.length?'has-events ':'')+((dow===0||dow===6)?'weekend':'')+'" style="background:'+cmaxCalendarColor(dayEvents.length,max)+'" onclick="cmaxCalendarShowDay('+day+',decodeURIComponent(\''+encodeURIComponent(name)+'\'),this)"><span class="cmax-calendar-day-num">'+day+'</span><span class="cmax-calendar-day-count">'+cmaxEquivalentLabel(daily)+' di&aacute;ria(s)<small>'+dayEvents.length+' atividade(s)</small></span></button>';
+    var dayEvents=byDay[day]||[],daily=cmaxDailyEquivalentTotal(dayEvents),dow=new Date(year,monthIndex,day).getDay(),special=cmaxSpecialDayInfo(month+'-'+String(day).padStart(2,'0'));
+    cells+='<button class="cmax-calendar-day '+(dayEvents.length?'has-events ':'')+((dow===0||dow===6)?'weekend ':'')+(special.special?'special':'')+'" style="background:'+cmaxCalendarColor(dayEvents.length,max)+'" onclick="cmaxCalendarShowDay('+day+',decodeURIComponent(\''+encodeURIComponent(name)+'\'),this)"><span class="cmax-calendar-day-num">'+day+(special.special?'<span class="cmax-special-label">1,5x</span>':'')+'</span><span class="cmax-calendar-day-count">'+cmaxEquivalentLabel(daily)+' di&aacute;ria(s)<small>'+dayEvents.length+' atividade(s)</small></span></button>';
   }
   var wrap=document.createElement('div');
   wrap.id='cmax-calendar-modal';
@@ -11819,7 +11929,7 @@ function cmaxCalendarShowDay(day,encodedName,button) {
   var rows=events.map(function(item,index){
     var start=cmaxTime(item.hora_inicio)||'-',end=cmaxTime(item.hora_fim);
     var equivalent=allocated[index]||0;
-    return '<tr><td><strong>'+escapeHtml(item.cliente||'-')+'</strong></td><td>'+cmaxActivityLabel(item)+'</td><td>'+escapeHtml(start+(end?' - '+end:''))+'</td><td class="'+(equivalent?'cmax-daily-yes':'cmax-daily-no')+'">'+(equivalent?cmaxEquivalentLabel(equivalent):'Não')+'</td></tr>';
+    return '<tr><td><strong>'+escapeHtml(item.cliente||'-')+'</strong></td><td>'+cmaxActivityLabel(item)+'</td><td>'+escapeHtml(start+(end?' - '+end:''))+'</td><td class="'+(equivalent?'cmax-daily-yes':'cmax-daily-no')+'">'+(equivalent?cmaxEquivalentLabel(equivalent)+cmaxSpecialLabel(item.data):'Não')+'</td></tr>';
   }).join('');
   detail.innerHTML='<div class="cmax-calendar-detail-title">'+escapeHtml(info.weekday)+' &middot; '+escapeHtml(info.date)+' &middot; '+cmaxEquivalentLabel(cmaxDailyEquivalentTotal(events))+' di&aacute;ria(s) &middot; '+events.length+' atividade(s)</div>'+(rows?'<div class="dashx-table-wrap"><table class="dashx-table"><thead><tr><th>Cliente</th><th>Atividade</th><th>Hor&aacute;rio</th><th>Equiv. di&aacute;ria</th></tr></thead><tbody>'+rows+'</tbody></table></div>':'<div class="cmax-empty">Nenhum registro neste dia.</div>');
 }
@@ -11843,6 +11953,7 @@ function renderDiariasCmax() {
   });
   var clients=new Set(list.map(function(x){return String(x.cliente||'');}).filter(Boolean)).size;
   var dailyEquivalent=cmaxDailyEquivalentTotal(list);
+  var specialEquivalent=cmaxSpecialEquivalentTotal(list);
   var modalities={};
   list.forEach(function(item){var key=cmaxModeLabel(item);modalities[key]=(modalities[key]||0)+1;});
   var modalityCards=Object.keys(modalities).sort(function(a,b){
@@ -11875,13 +11986,13 @@ function renderDiariasCmax() {
       var start=cmaxTime(item.hora_inicio)||'-';
       var end=cmaxTime(item.hora_fim);
       var equivalent=allocated[index]||0;
-      return '<tr><td><strong>'+escapeHtml(item.cliente||'-')+'</strong></td><td>'+cmaxActivityLabel(item)+'</td><td><div class="cmax-date-main">'+escapeHtml(dateInfo.weekday)+'</div><div class="cmax-date-sub">'+escapeHtml(dateInfo.date)+'</div></td><td>'+escapeHtml(start+(end?' - '+end:''))+'</td><td class="'+(equivalent?'cmax-daily-yes':'cmax-daily-no')+'">'+(equivalent?cmaxEquivalentLabel(equivalent):'Não')+'</td></tr>';
+      return '<tr><td><strong>'+escapeHtml(item.cliente||'-')+'</strong></td><td>'+cmaxActivityLabel(item)+'</td><td><div class="cmax-date-main">'+escapeHtml(dateInfo.weekday)+cmaxSpecialLabel(item.data)+'</div><div class="cmax-date-sub">'+escapeHtml(dateInfo.date)+'</div></td><td>'+escapeHtml(start+(end?' - '+end:''))+'</td><td class="'+(equivalent?'cmax-daily-yes':'cmax-daily-no')+'">'+(equivalent?cmaxEquivalentLabel(equivalent)+(cmaxSpecialDayInfo(item.data).special?' &times; 1,5':''):'Não')+'</td></tr>';
     }).join('');
     return '<section class="cmax-group '+(expanded?'open':'')+'"><div class="cmax-group-head" onclick="return cmaxToggleConsultant(\''+encodeURIComponent(name)+'\')"><span class="cmax-counts"><button class="cmax-group-toggle" title="'+(expanded?'Minimizar':'Ver todas as atividades')+'">&#9662;</button><span>'+escapeHtml(name)+'</span><button class="cmax-calendar-btn" onclick="event.stopPropagation();abrirCalendarioCmax(\''+encodeURIComponent(name)+'\')">Vis&atilde;o calend&aacute;rio</button></span><span class="cmax-counts"><span class="cmax-count-pill">'+cmaxEquivalentLabel(consultantDaily)+' di&aacute;ria(s)</span><span class="cmax-count-pill">'+events.length+' registro(s)</span></span></div><div class="cmax-group-body"><div class="dashx-table-wrap"><table class="dashx-table"><thead><tr><th>Cliente</th><th>Modalidade registrada</th><th>Dia realizado</th><th>Hor&aacute;rio</th><th>Equiv. di&aacute;ria</th></tr></thead><tbody>'+rows+'</tbody></table></div></div></section>';
   }).join('');
   var history=s.historySync||{};
   var status=s.loading?'Consultando a base salva...':s.error?escapeHtml(s.error):history.error?('Carga hist&oacute;rica interrompida: '+escapeHtml(history.error)):history.active?('Hist&oacute;rico CMAX em andamento: '+(s.loadedMonths||[]).length+' de '+months.length+' m&ecirc;s(es) dispon&iacute;veis. &Uacute;ltimo processado: '+escapeHtml(history.last_month||'-')+'; pr&oacute;ximo: '+escapeHtml(history.next_month||'-')+'.'):(s.syncedAt?'Hist&oacute;rico carregado: '+(s.loadedMonths||[]).length+' de '+months.length+' m&ecirc;s(es). &Uacute;ltima sincroniza&ccedil;&atilde;o: '+escapeHtml(s.syncedAt):'Ainda sem sincroniza&ccedil;&atilde;o CMAX.');
-  box.innerHTML='<div class="cmax-shell"><div class="cmax-hero"><div><div class="cmax-title">Di&aacute;rias e atividades realizadas no CMAX</div><div class="cmax-sub">Meio per&iacute;odo de treinamento (at&eacute; 4 horas) vale <strong>0,5 di&aacute;ria</strong>; acima disso vale <strong>1 di&aacute;ria</strong>. A soma do consultor no mesmo dia fica limitada a 1 di&aacute;ria.</div></div></div><div class="cmax-status">'+status+'</div><div class="cmax-filter-block"><div class="cmax-filter-label">Ano e m&ecirc;s realizado <span style="text-transform:none;letter-spacing:0">(clique novamente no m&ecirc;s para ver o geral)</span></div>'+monthChips+'<div class="cmax-filter-label" style="margin-top:14px">Consultores do time de treinamento</div><div class="cmax-filter-chips">'+consultantChips+'</div><div class="cmax-filter-label" style="margin-top:14px">Atividades <span style="text-transform:none;letter-spacing:0">(treinamentos destacados contam como di&aacute;ria)</span></div><div class="cmax-filter-chips">'+activityChips+'</div><input class="cmax-filter-search" type="search" placeholder="Filtrar cliente..." value="'+escapeHtml(s.search)+'" oninput="CMAX_DAILY_STATE.search=this.value;renderDiariasCmax()">'+(syncButton?'<div class="cmax-filter-footer">'+syncButton+'</div>':'')+'</div><div class="cmax-summary"><div class="cmax-card"><span>Di&aacute;rias equivalentes</span><strong>'+cmaxEquivalentLabel(dailyEquivalent)+'</strong></div><div class="cmax-card"><span>Registros positivos</span><strong>'+list.length+'</strong></div><div class="cmax-card"><span>Consultores com atividade</span><strong>'+Object.keys(byConsultant).length+'</strong></div><div class="cmax-card"><span>Clientes atendidos</span><strong>'+clients+'</strong></div></div><div><div class="sh"><div class="sh-title">Quantitativo por modalidade</div></div><div class="cmax-modalities">'+modalityCards+'</div></div>'+(groups||'<div class="cmax-empty">Nenhuma atividade positiva encontrada neste recorte.</div>')+'</div>';
+  box.innerHTML='<div class="cmax-shell"><div class="cmax-hero"><div><div class="cmax-title">Di&aacute;rias e atividades realizadas no CMAX</div><div class="cmax-sub">Meio per&iacute;odo de treinamento (at&eacute; 4 horas) vale <strong>0,5 di&aacute;ria</strong>; acima disso vale <strong>1 di&aacute;ria</strong>. Fins de semana e feriados nacionais/oficiais de Goi&acirc;nia recebem destaque e multiplicador financeiro de <strong>1,5x</strong>.</div></div></div><div class="cmax-status">'+status+'</div><div class="cmax-filter-block"><div class="cmax-filter-label">Ano e m&ecirc;s realizado <span style="text-transform:none;letter-spacing:0">(clique novamente no m&ecirc;s para ver o geral)</span></div>'+monthChips+'<div class="cmax-filter-label" style="margin-top:14px">Consultores do time de treinamento</div><div class="cmax-filter-chips">'+consultantChips+'</div><div class="cmax-filter-label" style="margin-top:14px">Atividades <span style="text-transform:none;letter-spacing:0">(treinamentos destacados contam como di&aacute;ria)</span></div><div class="cmax-filter-chips">'+activityChips+'</div><input class="cmax-filter-search" type="search" placeholder="Filtrar cliente..." value="'+escapeHtml(s.search)+'" oninput="CMAX_DAILY_STATE.search=this.value;renderDiariasCmax()">'+(syncButton?'<div class="cmax-filter-footer">'+syncButton+'</div>':'')+'</div><div class="cmax-summary"><div class="cmax-card"><span>Di&aacute;rias equivalentes</span><strong>'+cmaxEquivalentLabel(dailyEquivalent)+'</strong></div><div class="cmax-card"><span>Di&aacute;rias especiais 1,5x</span><strong>'+cmaxEquivalentLabel(specialEquivalent)+'</strong></div><div class="cmax-card"><span>Registros positivos</span><strong>'+list.length+'</strong></div><div class="cmax-card"><span>Consultores com atividade</span><strong>'+Object.keys(byConsultant).length+'</strong></div><div class="cmax-card"><span>Clientes atendidos</span><strong>'+clients+'</strong></div></div><div><div class="sh"><div class="sh-title">Quantitativo por modalidade</div></div><div class="cmax-modalities">'+modalityCards+'</div></div>'+(groups||'<div class="cmax-empty">Nenhuma atividade positiva encontrada neste recorte.</div>')+'</div>';
 }
 function carregarDiariasCmax(force) {
   if(!force&&CMAX_DAILY_STATE.loaded){renderDiariasCmax();return;}

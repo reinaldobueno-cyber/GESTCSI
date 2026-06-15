@@ -160,6 +160,18 @@ function doGet(e) {
     if (action === 'setConsultantSeniority') {
       return jsonOutput_(setConsultantSeniority_(params), params.callback);
     }
+    if (action === 'getBonusSalesIndications') {
+      requireAdmin_(params);
+      return jsonOutput_(getBonusSalesIndications_(params), params.callback);
+    }
+    if (action === 'saveBonusSalesIndication') {
+      requireAdmin_(params);
+      return jsonOutput_(saveBonusSalesIndication_(params), params.callback);
+    }
+    if (action === 'deleteBonusSalesIndication') {
+      requireAdmin_(params);
+      return jsonOutput_(deleteBonusSalesIndication_(params), params.callback);
+    }
     if (action === 'getCmaxDailyHistoryStatus') {
       return jsonOutput_(getCmaxDailyHistoryStatus_(), params.callback);
     }
@@ -4565,6 +4577,106 @@ function setConsultantSeniority_(params) {
       updated_by: admin.name || admin.username
     }
   };
+}
+
+var BONUS_SALES_INDICATIONS_SHEET = 'BONUS_INDICACOES';
+var BONUS_SALES_INDICATION_VALUES = { upgrade: 150, modulo: 50 };
+
+function getBonusSalesIndicationsSheet_() {
+  var sheet = getOrCreateSheet_(BONUS_SALES_INDICATIONS_SHEET);
+  ensureHeaders_(sheet, [
+    'id',
+    'consultant_name',
+    'client',
+    'indication_type',
+    'indication_date',
+    'sale_date',
+    'month',
+    'value',
+    'notes',
+    'created_at',
+    'created_by'
+  ]);
+  return sheet;
+}
+
+function normalizeBonusSalesIndicationType_(value) {
+  var key = normalizeKey_(value).toLowerCase();
+  if (key === 'upgrade') return 'upgrade';
+  if (key === 'modulo' || key === 'módulo') return 'modulo';
+  return '';
+}
+
+function getBonusSalesIndications_(params) {
+  requireAdmin_(params || {});
+  var month = sanitizeMonth_(params.month);
+  var sheet = getBonusSalesIndicationsSheet_();
+  var values = sheet.getDataRange().getValues();
+  var header = values[0] || [];
+  var items = values.slice(1).map(function(row) {
+    var item = rowToObject_(header, row);
+    return {
+      id: sanitizeText_(item.id),
+      consultant_name: sanitizeText_(item.consultant_name),
+      client: sanitizeText_(item.client),
+      indication_type: normalizeBonusSalesIndicationType_(item.indication_type),
+      indication_date: item.indication_date instanceof Date ? Utilities.formatDate(item.indication_date, Session.getScriptTimeZone(), 'yyyy-MM-dd') : String(item.indication_date || '').slice(0, 10),
+      sale_date: item.sale_date instanceof Date ? Utilities.formatDate(item.sale_date, Session.getScriptTimeZone(), 'yyyy-MM-dd') : String(item.sale_date || '').slice(0, 10),
+      month: sanitizeMonth_(item.month),
+      value: Number(item.value || 0),
+      notes: sanitizeText_(item.notes),
+      created_at: item.created_at instanceof Date ? item.created_at.toISOString() : String(item.created_at || ''),
+      created_by: sanitizeText_(item.created_by)
+    };
+  }).filter(function(item) {
+    return item.id && (!month || item.month === month);
+  });
+  return { ok: true, items: items, month: month || '' };
+}
+
+function saveBonusSalesIndication_(params) {
+  var admin = requireAdmin_(params || {});
+  var consultant = sanitizeText_(params.consultant_name || params.consultor);
+  var client = sanitizeText_(params.client || params.cliente);
+  var type = normalizeBonusSalesIndicationType_(params.indication_type || params.tipo);
+  var indicationDate = String(params.indication_date || params.data_indicacao || '').slice(0, 10);
+  var saleDate = String(params.sale_date || params.data_venda || '').slice(0, 10);
+  if (!consultant || !client || !type || !/^\d{4}-\d{2}-\d{2}$/.test(indicationDate) || !/^\d{4}-\d{2}-\d{2}$/.test(saleDate)) {
+    throw new Error('Informe consultor, cliente, tipo, data da indicacao e data da venda.');
+  }
+  var sheet = getBonusSalesIndicationsSheet_();
+  var id = Utilities.getUuid();
+  sheet.appendRow([
+    id,
+    consultant,
+    client,
+    type,
+    indicationDate,
+    saleDate,
+    saleDate.slice(0, 7),
+    BONUS_SALES_INDICATION_VALUES[type],
+    sanitizeText_(params.notes || params.observacao),
+    new Date(),
+    admin.name || admin.username
+  ]);
+  return { ok: true, id: id, value: BONUS_SALES_INDICATION_VALUES[type], month: saleDate.slice(0, 7) };
+}
+
+function deleteBonusSalesIndication_(params) {
+  requireAdmin_(params || {});
+  var id = sanitizeText_(params.id);
+  if (!id) throw new Error('Indicacao obrigatoria.');
+  var sheet = getBonusSalesIndicationsSheet_();
+  var values = sheet.getDataRange().getValues();
+  var header = values[0] || [];
+  var idIndex = header.indexOf('id');
+  for (var i = values.length - 1; i >= 1; i--) {
+    if (sanitizeText_(values[i][idIndex]) === id) {
+      sheet.deleteRow(i + 1);
+      return { ok: true, id: id };
+    }
+  }
+  throw new Error('Indicacao nao encontrada.');
 }
 
 function logProjectFollowup_(params) {
