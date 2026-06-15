@@ -5515,11 +5515,16 @@ function bonusSaveIndication(button) {
   data.forEach(function(value,key){params[key]=value;});
   if(button){button.disabled=true;button.textContent='Salvando...';}
   return chamarAppsScriptJsonp('saveBonusSalesIndication',params,15000).then(function(resp){
-    if(!resp||resp.ok===false)throw new Error((resp&&resp.error)||'Falha ao salvar indicação.');
+    if(!resp||resp.ok===false||!resp.item)throw new Error((resp&&resp.error)||'Falha ao salvar indicação.');
     form.reset();
-    BONUS_INDICATION_STATE.loadedMonth='';
-    showToast('Indicação convertida salva para todos.','ok');
-    return bonusLoadIndications(true);
+    BONUS_FILTER.month=resp.item.month;
+    BONUS_FILTER.consultant='todos';
+    BONUS_INDICATION_STATE.items=(BONUS_INDICATION_STATE.items||[]).filter(function(item){return item.id!==resp.item.id&&item.month===resp.item.month;}).concat([resp.item]);
+    BONUS_INDICATION_STATE.loadedMonth=resp.item.month;
+    initBonus();
+    showToast('Indicação de '+resp.item.consultant_name+' salva e aberta em '+bonusMonthLabel(resp.item.month)+'.','ok');
+    bonusLoadIndications(true);
+    return resp;
   }).catch(function(error){
     showToast((error&&error.message)||'Falha ao salvar indicação','err');
   }).finally(function(){if(button){button.disabled=false;button.textContent='Lançar indicação';}});
