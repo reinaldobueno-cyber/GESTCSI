@@ -3517,6 +3517,7 @@ function sl(s) {
   if (n.indexOf('atras') >= 0) return 'Atrasado';
   if (n.indexOf('parado') >= 0) return 'Parado';
   if (n.indexOf('andamento') >= 0) return 'Em Andamento';
+  if (n.indexOf('aguardando entrega') >= 0) return 'Aguardando entrega';
   if (n.indexOf('aguardando') >= 0) return 'Aguardando In&iacute;cio';
   if (n.indexOf('conclu') >= 0) return 'Conclu&iacute;do';
   return s;
@@ -5231,6 +5232,24 @@ function fechamentoNormalizeRows(rows) {
     return String(item.mes_fechamento || '') >= '2024-01';
   });
 }
+function fechamentoIsProjectClosing(item) {
+  var type = fechamentoSearchKey(item && item.item_tipo);
+  var name = fechamentoSearchKey(item && item.marco);
+  return type === 'fechamento de projeto' ||
+    /fechamento (do|de) projeto|encerramento (do|de) projeto|entrega final/.test(name);
+}
+function fechamentoApplyProjectStatuses() {
+  var approved = (FECHAMENTO_MARCOS || []).filter(function(item) {
+    return item.situacao === 'aprovado' && fechamentoIsProjectClosing(item);
+  });
+  (DATA.projetos || []).forEach(function(project) {
+    if (!project || project.status !== 'Aguardando entrega') return;
+    var match = approved.some(function(item) {
+      return normalizeClienteKey(item.projeto) === normalizeClienteKey(project.cliente);
+    });
+    if (match) project.status = 'Concluído';
+  });
+}
 function fechamentoApplySyncRows(rows, syncMonth) {
   var normalized = fechamentoNormalizeRows(rows);
   var month = fechamentoMonthKey(syncMonth);
@@ -5283,6 +5302,7 @@ function fechamentoLoad(force) {
     FECHAMENTO_LOADING = false;
     delete FECHAMENTO_META.error;
     fechamentoSaveCache();
+    fechamentoApplyProjectStatuses();
     if (!FECHAMENTO_FILTER.month) FECHAMENTO_FILTER.month = fechamentoCurrentMonth();
     initFechamento();
     initBonus();
@@ -5351,6 +5371,7 @@ function fechamentoRunSync(action, label, btn) {
     FECHAMENTO_LOADED = true;
     FECHAMENTO_LOADING = false;
     fechamentoSaveCache();
+    fechamentoApplyProjectStatuses();
     initFechamento();
     initBonus();
     if (btn) { btn.disabled = false; btn.textContent = original || label; }
@@ -5448,26 +5469,26 @@ function initFechamento() {
       var comment = item.justificativa
         ? escapeHtml(item.justificativa)+(item.justificativa_por ? '<div class="closing-project-meta">por '+escapeHtml(item.justificativa_por)+'</div>' : '')
         : '<span style="color:var(--muted)">Nenhum comentário textual ou anexo encontrado.</span>';
-      return '<div class="closing-project-card"><div><div class="closing-project-title">'+escapeHtml(item.projeto || 'Projeto não mapeado')+'</div><div class="closing-project-marco">'+escapeHtml(item.marco || '-')+'</div><div class="closing-project-meta">'+escapeHtml(item.fase || '-')+'<br>Closed: '+(item.closed_at ? formatarDataHoraProjeto(item.closed_at) : '-')+(item.validation_at ? ' · Validado: '+formatarDataHoraProjeto(item.validation_at) : '')+'</div></div>'+
+      return '<div class="closing-project-card"><div><div class="closing-project-title">'+escapeHtml(item.projeto || 'Projeto não mapeado')+'</div><div class="closing-project-marco">'+escapeHtml(item.marco || '-')+'</div><div class="closing-project-meta">'+escapeHtml(item.item_tipo || 'Marco')+' · '+escapeHtml(item.fase || '-')+'<br>Closed: '+(item.closed_at ? formatarDataHoraProjeto(item.closed_at) : '-')+(item.validation_at ? ' · Validado: '+formatarDataHoraProjeto(item.validation_at) : '')+'</div></div>'+
         '<div><span class="closing-status '+escapeHtml(status)+'">'+escapeHtml(item.status_atual || status)+'</span><div class="closing-project-comment" style="margin-top:7px">'+comment+'</div></div>'+
         '<div><strong>'+fechamentoMoney(item.valor_bonus)+'</strong><div style="margin-top:8px"><a class="project-link-btn" href="'+escapeHtml(item.link || '#')+'" target="_blank" rel="noopener">Abrir marco</a></div></div></div>';
     }).join('');
-    return '<section class="closing-consultant-card"><div class="closing-consultant-head"><div><div class="closing-consultant-name">'+escapeHtml(consultant)+'</div><div class="closing-project-meta">Marcos que entraram em Closed no período selecionado</div></div><div class="closing-consultant-metrics"><div class="closing-consultant-metric"><strong>'+consultantRows.length+'</strong><span>Marcos</span></div><div class="closing-consultant-metric"><strong>'+consultantWaiting+'</strong><span>Aguardando</span></div><div class="closing-consultant-metric"><strong>'+consultantApproved+' / '+consultantRejected+'</strong><span>Aprov. / Reprov.</span></div><div class="closing-consultant-metric"><strong>'+fechamentoMoney(consultantBonus)+'</strong><span>Bônus</span></div></div></div><div class="closing-project-list">'+projectCards+'</div></section>';
+    return '<section class="closing-consultant-card"><div class="closing-consultant-head"><div><div class="closing-consultant-name">'+escapeHtml(consultant)+'</div><div class="closing-project-meta">Entregas que entraram em Closed no período selecionado</div></div><div class="closing-consultant-metrics"><div class="closing-consultant-metric"><strong>'+consultantRows.length+'</strong><span>Entregas</span></div><div class="closing-consultant-metric"><strong>'+consultantWaiting+'</strong><span>Aguardando</span></div><div class="closing-consultant-metric"><strong>'+consultantApproved+' / '+consultantRejected+'</strong><span>Aprov. / Reprov.</span></div><div class="closing-consultant-metric"><strong>'+fechamentoMoney(consultantBonus)+'</strong><span>Bônus</span></div></div></div><div class="closing-project-list">'+projectCards+'</div></section>';
   }).join('') || '<div class="empty">Nenhum marco encontrado neste recorte. Atualize os Closed ou consulte as validações.</div>';
   var error = FECHAMENTO_META.error ? '<div class="dashx-focus-note" style="margin-bottom:12px"><strong>'+escapeHtml(FECHAMENTO_META.error)+'</strong></div>' : '';
   var bg = FECHAMENTO_META.background_sync || {};
   var syncNote = bg.active && bg.phase !== 'disabled'
     ? '<div class="dashx-focus-note" style="margin-bottom:12px"><strong>Leitura ClickUp em andamento:</strong> '+Number(bg.processed || 0)+' de '+Number(bg.total || 0)+' projetos processados, '+Number(bg.detected || 0)+' marcos detectados e '+Number(bg.errors || 0)+' erro(s).</div>'
     : '';
-  box.innerHTML = '<div class="closing-head"><div><div class="closing-title">Fechamento de marcos</div><div class="closing-sub">Exibe os marcos que entraram em Closed no mês selecionado e acompanha a validação técnica posterior. Somente aprovados entram na bonificação de R$ 30 por marco.</div></div>'+
-    '</div>'+error+syncNote+
+  box.innerHTML = '<div class="closing-head"><div><div class="closing-title">Fechamento de entregas</div><div class="closing-sub">Marcos aprovados geram R$ 30. O marco especial “Fechamento do projeto”, “Encerramento do projeto” ou “Entrega final” aprovado a partir de 15/06/2026 gera R$ 80 e formaliza a conclusão.</div></div>'+
+    '</div><div class="dashx-inline-note" style="margin-bottom:12px"><strong>Fluxo recomendado:</strong> 1. Finalize a implantação. 2. O projeto entra em Aguardando entrega. 3. Crie ou localize o marco “Fechamento do projeto” no ClickUp. 4. Após entregar e validar com o cliente, mova o marco para Aprovado Gestão. 5. O projeto passa para Concluído e o bônus de R$ 80 entra no fechamento. Para projetos antigos, valide um por um; não há pagamento retroativo automático.</div>'+error+syncNote+
     '<div class="closing-filter-block"><div class="closing-filter-label">Mês em que entrou em Closed <span style="text-transform:none;letter-spacing:0;font-weight:700">(clique novamente no mês selecionado para ver o geral)</span></div>'+monthChips+
     '<div class="closing-filter-label" style="margin-top:14px">Consultores</div><div class="closing-filter-chips">'+consultantChips+'</div>'+
     '<div class="closing-filter-label" style="margin-top:14px">Validação técnica</div><div class="closing-filter-chips">'+statusChips+'</div>'+
     '<div class="closing-filter-label" style="margin-top:14px">Filtrar cliente</div><input id="fechamento-client-search" class="closing-client-search" type="search" value="'+escapeHtml(FECHAMENTO_FILTER.projetoBusca || '')+'" placeholder="Digite o nome do cliente..." oninput="fechamentoSetProjectSearch(this.value)">'+
     (AUTH_STATE.user && AUTH_STATE.user.role === 'admin' ? '<div class="closing-project-meta" style="margin-top:12px">Closed atualiza a fila geral compartilhada. Reprovados e Aprovados consultam somente a validação e os comentários do mês selecionado.</div><div class="closing-filter-footer" style="gap:8px;flex-wrap:wrap"><button class="btn-syncall" onclick="return fechamentoStartSync(this)">Atualizar Closed</button><button class="btn-syncall" onclick="return fechamentoSyncRejected(this)">Buscar Reprovados</button><button class="btn-syncall" onclick="return fechamentoSyncApproved(this)">Buscar Aprovados</button></div>' : '')+
     '</div>'+
-    '<div class="closing-kpis"><div class="closing-kpi"><span>Marcos no recorte</span><strong>'+list.length+'</strong></div><div class="closing-kpi"><span>Aguardando validação</span><strong>'+waiting+'</strong></div><div class="closing-kpi"><span>Aprovados / Reprovados</span><strong>'+approved+' / '+rejected+'</strong></div><div class="closing-kpi"><span>Bonificação aprovada</span><strong>'+fechamentoMoney(bonus)+'</strong></div></div>'+
+    '<div class="closing-kpis"><div class="closing-kpi"><span>Entregas no recorte</span><strong>'+list.length+'</strong></div><div class="closing-kpi"><span>Aguardando validação</span><strong>'+waiting+'</strong></div><div class="closing-kpi"><span>Aprovados / Reprovados</span><strong>'+approved+' / '+rejected+'</strong></div><div class="closing-kpi"><span>Bonificação aprovada</span><strong>'+fechamentoMoney(bonus)+'</strong></div></div>'+
     consultantCards;
 }
 window.fechamentoLoad = fechamentoLoad;
@@ -5657,9 +5678,9 @@ function bonusIndicationDetails(person) {
 }
 function bonusMilestoneDetails(person) {
   var rows=person.milestoneRows.map(function(item){
-    return '<tr><td>'+(item.validation_at?escapeHtml(formatarDataHoraProjeto(item.validation_at)):'-')+'</td><td><strong>'+escapeHtml(item.projeto||'-')+'</strong></td><td>'+escapeHtml(item.marco||'-')+'</td><td>'+escapeHtml(item.justificativa||'-')+'</td><td><strong>'+fechamentoMoney(item.valor_bonus||30)+'</strong></td></tr>';
+    return '<tr><td>'+(item.validation_at?escapeHtml(formatarDataHoraProjeto(item.validation_at)):'-')+'</td><td><strong>'+escapeHtml(item.projeto||'-')+'</strong></td><td>'+escapeHtml(item.item_tipo||'Marco')+'</td><td>'+escapeHtml(item.marco||'-')+'</td><td>'+escapeHtml(item.justificativa||'-')+'</td><td><strong>'+fechamentoMoney(item.valor_bonus||30)+'</strong></td></tr>';
   }).join('');
-  return rows?'<div class="dashx-table-wrap"><table class="dashx-table"><thead><tr><th>Aprovado em</th><th>Projeto</th><th>Marco</th><th>Coment&aacute;rio</th><th>Valor</th></tr></thead><tbody>'+rows+'</tbody></table></div>':'<div class="bonus-empty">Nenhum marco aprovado neste m&ecirc;s.</div>';
+  return rows?'<div class="dashx-table-wrap"><table class="dashx-table"><thead><tr><th>Aprovado em</th><th>Projeto</th><th>Tipo</th><th>Entrega</th><th>Coment&aacute;rio</th><th>Valor</th></tr></thead><tbody>'+rows+'</tbody></table></div>':'<div class="bonus-empty">Nenhuma entrega aprovada neste m&ecirc;s.</div>';
 }
 function bonusRejectedDetails(person) {
   var rows=person.rejectedRows.map(function(item){
@@ -7583,6 +7604,7 @@ function dashStatusKey(status) {
   var n = normalizarTextoProjeto(status || '');
   if (n.indexOf('atras') >= 0) return 'atrasado';
   if (n.indexOf('parado') >= 0) return 'parado';
+  if (n.indexOf('aguardando entrega') >= 0) return 'aguardando_entrega';
   if (n.indexOf('aguard') >= 0) return 'aguardando';
   if (n.indexOf('conclu') >= 0) return 'concluido';
   if (n.indexOf('cancel') >= 0) return 'cancelado';
@@ -8802,6 +8824,7 @@ function dashRenderStatusStack(items) {
   var labels = {
     andamento:'Em andamento',
     aguardando:'Aguardando início',
+    aguardando_entrega:'Aguardando entrega',
     parado:'Parado',
     concluido:'Concluído',
     cancelado:'Cancelado',
@@ -8810,6 +8833,7 @@ function dashRenderStatusStack(items) {
   var colors = {
     andamento:'#d9b57e',
     aguardando:'#6f95c0',
+    aguardando_entrega:'#9b7fc4',
     parado:'#9aa59d',
     concluido:'#6d8e72',
     cancelado:'#c96c5f',
@@ -8817,7 +8841,7 @@ function dashRenderStatusStack(items) {
   };
   var rows = items.map(function(item){
     var total = item.total || 1;
-    var order = ['andamento','aguardando','parado','concluido','cancelado','outro'];
+    var order = ['andamento','aguardando','aguardando_entrega','parado','concluido','cancelado','outro'];
     var segs = order.map(function(key){
       var count = Number((item.counts && item.counts[key]) || 0);
       if (!count) return '';
@@ -8825,7 +8849,7 @@ function dashRenderStatusStack(items) {
     }).join('');
     return '<div class="dashx-status-row"><div class="dashx-status-name">'+item.mes+'</div><div class="dashx-status-track">'+segs+'</div><div class="dashx-status-total">'+item.total+'</div></div>';
   }).join('');
-  return '<div class="dashx-chart-card"><div class="dashx-chart-head"><div><div class="dashx-chart-title">Status dos projetos por período '+towerInfoButton('projectRisk')+'</div><div class="dashx-chart-sub">Distribuição mensal do portfólio para entender concentração de projetos em andamento, aguardando, parados e concluídos.</div></div></div><div class="dashx-status-stack">'+rows+'</div><div class="dashx-chart-legend"><span class="dashx-legend-item"><span class="dashx-legend-swatch" style="background:#d9b57e"></span>Em andamento</span><span class="dashx-legend-item"><span class="dashx-legend-swatch" style="background:#6f95c0"></span>Aguardando início</span><span class="dashx-legend-item"><span class="dashx-legend-swatch" style="background:#9aa59d"></span>Parado</span><span class="dashx-legend-item"><span class="dashx-legend-swatch" style="background:#6d8e72"></span>Concluído</span><span class="dashx-legend-item"><span class="dashx-legend-swatch" style="background:#c96c5f"></span>Cancelado</span></div></div>';
+  return '<div class="dashx-chart-card"><div class="dashx-chart-head"><div><div class="dashx-chart-title">Status dos projetos por período '+towerInfoButton('projectRisk')+'</div><div class="dashx-chart-sub">Distribuição mensal do portfólio para entender concentração de projetos em andamento, aguardando entrega, parados e concluídos.</div></div></div><div class="dashx-status-stack">'+rows+'</div><div class="dashx-chart-legend"><span class="dashx-legend-item"><span class="dashx-legend-swatch" style="background:#d9b57e"></span>Em andamento</span><span class="dashx-legend-item"><span class="dashx-legend-swatch" style="background:#6f95c0"></span>Aguardando início</span><span class="dashx-legend-item"><span class="dashx-legend-swatch" style="background:#9b7fc4"></span>Aguardando entrega</span><span class="dashx-legend-item"><span class="dashx-legend-swatch" style="background:#9aa59d"></span>Parado</span><span class="dashx-legend-item"><span class="dashx-legend-swatch" style="background:#6d8e72"></span>Concluído</span><span class="dashx-legend-item"><span class="dashx-legend-swatch" style="background:#c96c5f"></span>Cancelado</span></div></div>';
 }
 function dashRenderActionNow(analyses, operation) {
   var criticos = (analyses || []).filter(function(a){ return a.actionToday || a.risco; }).sort(function(a, b){
@@ -8954,6 +8978,9 @@ function dashOpenTopKpiAudit(mode) {
   }else if(mode==='activation'){
     title='Projetos que chegaram &agrave; ativa&ccedil;&atilde;o';
     list=list.filter(function(p){return dashProjectStageInfo(p).stage==='ativacao';});
+  }else if(mode==='delivery'){
+    title='Projetos aguardando entrega e fechamento';
+    list=list.filter(function(p){return dashStatusKey(p&&p.status)==='aguardando_entrega';});
   }
   var rows=list.map(function(p){
     var days=dashClickUpAgingDays(p);
@@ -9249,6 +9276,7 @@ function dashRenderTrainingRealizationTest(list) {
 }
 
 function initDash() {
+  fechamentoApplyProjectStatuses();
   var sourceAll = projetosVisiveisParaUsuario(Array.isArray(DATA.projetos) ? DATA.projetos.slice() : []).filter(function(p) {
     return gestaoClickupProjectYear(p) === 2026;
   });
@@ -9277,10 +9305,12 @@ function initDash() {
   var auditable = Math.max(0, total - cancelled);
   var trackedPct = auditable ? Math.round((tracked / auditable) * 100) : null;
   var stale15 = Number(operation.bins['16–30'] || 0) + Number(operation.bins['31–45'] || 0) + Number(operation.bins['45+'] || 0);
+  var awaitingDelivery = list.filter(function(p){ return dashStatusKey(p && p.status) === 'aguardando_entrega'; }).length;
   var topCards = '<div class="dashx-top-grid">'+
     dashKpiCard('Projetos 2026', total, 'Somente a carteira identificada como 2026. Clique para listar.', 'good', 'activeProjects', '<span class="dashx-kpi-delta neutral">Recorte fixo 2026</span>', "return dashOpenTopKpiAudit('projects')")+
     dashKpiCard('Com rastreio ClickUp', trackedPct === null ? '-' : dashPct(trackedPct), tracked+' de '+auditable+' projeto(s) auditáveis possuem rastreio técnico. Clique para listar.', dashMetricClass(trackedPct, 70, 90, false), 'aging', '<span class="dashx-kpi-delta neutral">'+untracked+' sem ClickUp</span>', "return dashOpenTopKpiAudit('tracked')")+
     dashKpiCard('ClickUp 15+ dias', stale15, 'Projetos rastreados sem atualização recente no ClickUp. Clique para listar.', stale15 ? 'bad' : 'good', 'aging', '<span class="dashx-kpi-delta neutral">Regra: atualização ClickUp</span>', "return dashOpenTopKpiAudit('stale')")+
+    dashKpiCard('Aguardando entrega', awaitingDelivery, 'Implantação concluída sem encerramento formal. Clique para listar e realizar o fechamento.', awaitingDelivery ? 'warn' : 'good', 'projectRisk', '<span class="dashx-kpi-delta neutral">Fechamento aprovado: R$ 80</span>', "return dashOpenTopKpiAudit('delivery')")+
     dashKpiCard('Taxa de ativação', activeRate === null ? '-' : dashPct(activeRate), activeRate === null ? 'Conversão indisponível.' : 'Conversão da jornada venda → ativação. Clique para listar.', dashMetricClass(activeRate, 40, 70, false), 'funnel', '<span class="dashx-kpi-delta neutral">Base 2026</span>', "return dashOpenTopKpiAudit('activation')")+
     dashKpiCard('Saúde dos dados', health.completude === null ? '-' : dashPct(health.completude), health.completude === null ? 'Não há base suficiente.' : (health.inconsistencias.length+' projeto(s) com campo essencial ausente. Clique para listar.'), dashMetricClass(health.completude, 70, 90, false), 'dataHealthSummary', '<span class="dashx-kpi-delta neutral">'+health.syncErrors+' falha(s) de sync</span>', "return dashOpenTopKpiAudit('health')")+
   '</div>';
@@ -13282,7 +13312,13 @@ function normalizarProjetoPlanilha(p) {
   projeto.cliente = String(cliente || '').trim();
   projeto.consultor = String(consultor || '').trim();
   projeto.mes = String(mes || '').toUpperCase().trim();
-  projeto.status = String(status || '').trim();
+  projeto.status_original = String(status || '').trim();
+  projeto.status = projeto.status_original;
+  var statusKey = normalizarTextoProjeto(projeto.status_original);
+  var dataEncerramento = valorPorAlias(projeto, ['data_enc','data_encerramento','encerrado_em']);
+  if (statusKey.indexOf('conclu') >= 0 && !dashParseDate(dataEncerramento)) {
+    projeto.status = 'Aguardando entrega';
+  }
   projeto.tipo = String(tipo || '').trim();
   projeto.formato = String(formato || '').trim();
 
