@@ -2797,6 +2797,7 @@ function mergeClickUpUserActivityRows_(existingRows, batchRows, fetchedAt) {
       current[field] = toInt_(current[field], 0) + toInt_(batch[field], 0);
     });
     current.atividades_hoje_json = mergeClickUpTodayActionsJson_(current.atividades_hoje_json, batch.atividades_hoje_json);
+    current.atividades_7_dias_json = mergeClickUpTodayActionsJson_(current.atividades_7_dias_json, batch.atividades_7_dias_json, 300);
     current.sincronizado_em = batch.sincronizado_em || current.sincronizado_em;
     current.periodo_inicio = current.periodo_inicio || batch.periodo_inicio;
     current.periodo_fim = batch.periodo_fim || current.periodo_fim;
@@ -2846,7 +2847,7 @@ function normalizeClickUpDateMillis_(value) {
   return isNaN(date.getTime()) ? 0 : date.getTime();
 }
 
-function mergeClickUpTodayActionsJson_(currentJson, batchJson) {
+function mergeClickUpTodayActionsJson_(currentJson, batchJson, limit) {
   var seen = {};
   var merged = [];
   [currentJson, batchJson].forEach(function(raw) {
@@ -2874,6 +2875,7 @@ function mergeClickUpTodayActionsJson_(currentJson, batchJson) {
   merged.sort(function(a, b) {
     return normalizeClickUpDateMillis_(b && b.horario) - normalizeClickUpDateMillis_(a && a.horario);
   });
+  if (Number(limit || 0) > 0) merged = merged.slice(0, Number(limit));
   return JSON.stringify(merged);
 }
 
@@ -2920,6 +2922,7 @@ function buildApproxClickUpUserActivityFromTasks_(mappings, options) {
   var projectsRead = 0;
   options.day_start_ms = startOfDayMillis_(options.fetched_at || new Date());
   options.day_end_ms = options.day_start_ms + 24 * 60 * 60 * 1000 - 1;
+  options.seven_day_start_ms = options.day_start_ms - 6 * 24 * 60 * 60 * 1000;
 
   (options.members || []).forEach(function(member) {
     ensureApproxUser_(byKey, member.email, member.id, member.name, member.role, {
@@ -2982,6 +2985,9 @@ function buildApproxClickUpUserActivityFromTasks_(mappings, options) {
     item.tarefas_concluidas_hoje = item.tarefas_concluidas_hoje || 0;
     item.tarefas_criadas_hoje = item.tarefas_criadas_hoje || 0;
     item.atividades_hoje_json = JSON.stringify(item._today_actions || []);
+    item.atividades_7_dias_json = JSON.stringify((item._seven_day_actions || []).sort(function(a, b) {
+      return normalizeClickUpDateMillis_(b && b.horario) - normalizeClickUpDateMillis_(a && a.horario);
+    }).slice(0, 300));
     item.modo_controle = 'estimado_por_tarefas';
     delete item._projects;
     delete item._first_action;
@@ -2991,6 +2997,8 @@ function buildApproxClickUpUserActivityFromTasks_(mappings, options) {
     delete item._last_action_ctx;
     delete item._first_created_ctx;
     delete item._today_actions;
+    delete item._seven_day_actions;
+    delete item._seven_day_action_keys;
     return item;
   }).filter(function(item) {
     return item.total_eventos_periodo || item.clickup_last_active || item.email || item.nome;
@@ -3067,7 +3075,9 @@ function ensureApproxUser_(byKey, email, id, name, role, extras) {
       _first_action_ctx: null,
       _last_action_ctx: null,
       _first_created_ctx: null,
-      _today_actions: []
+      _today_actions: [],
+      _seven_day_actions: [],
+      _seven_day_action_keys: {}
     };
   }
   var item = byKey[key];
@@ -3091,6 +3101,8 @@ function aggregateApproxTaskForUsers_(byKey, task, mapping, options) {
   var createdInPeriod = created && created >= Number(options.start_ms || 0) && created <= Number(options.end_ms || new Date().getTime());
   var updatedToday = updated && updated >= Number(options.day_start_ms || 0) && updated <= Number(options.day_end_ms || 0);
   var createdToday = created && created >= Number(options.day_start_ms || 0) && created <= Number(options.day_end_ms || 0);
+  var updatedSevenDays = updated && updated >= Number(options.seven_day_start_ms || 0) && updated <= Number(options.day_end_ms || 0);
+  var createdSevenDays = created && created >= Number(options.seven_day_start_ms || 0) && created <= Number(options.day_end_ms || 0);
   var done = isClosedStatus_(task.status && (task.status.status || task.status.type || task.status.label) || '');
   var projectKey = sanitizeText_(mapping.project_key || mapping.cliente || '');
   var context = buildApproxTaskContext_(task, mapping);
@@ -3124,6 +3136,14 @@ function aggregateApproxTaskForUsers_(byKey, task, mapping, options) {
         created: !!createdToday,
         completed: !!(done && updatedToday),
         timestamp: updated || created
+      });
+    }
+    if (updatedSevenDays || createdSevenDays) {
+      addApproxSevenDayAction_(item, task, mapping, context, {
+        updated: !!updatedSevenDays,
+        created: !!createdSevenDays,
+        completed: !!(done && updatedSevenDays),
+        timestamp: updatedSevenDays ? updated : created
       });
     }
     if (projectKey) item._projects[projectKey] = true;
@@ -3164,6 +3184,14 @@ function aggregateApproxTaskForUsers_(byKey, task, mapping, options) {
           timestamp: updatedToday ? updated : created
         });
       }
+      if (createdSevenDays || updatedSevenDays) {
+        addApproxSevenDayAction_(creatorItem, task, mapping, context, {
+          updated: !!updatedSevenDays,
+          created: !!createdSevenDays,
+          completed: false,
+          timestamp: updatedSevenDays ? updated : created
+        });
+      }
       if (updatedInPeriod || createdInPeriod) {
         creatorItem.total_eventos_periodo += 1;
         creatorItem.total_acoes_periodo += 1;
@@ -3192,6 +3220,28 @@ function addApproxTodayAction_(item, task, mapping, context, flags) {
   var key = [taskId, tipo, flags.timestamp || ''].join('|');
   if (item._today_actions.some(function(action) { return action.key === key; })) return;
   item._today_actions.push({
+    key: key,
+    horario: flags.timestamp ? new Date(flags.timestamp).toISOString() : '',
+    tipo: tipo,
+    projeto: sanitizeText_(mapping && mapping.cliente || mapping && mapping.project_key || ''),
+    item_tipo: isMilestoneTask_(task || {}) ? 'Marco' : 'Task',
+    item_nome: sanitizeText_(task && task.name || ''),
+    lista: sanitizeText_(task && task.list && task.list.name || ''),
+    link: context && context.link || '',
+    contexto: context && context.contexto || ''
+  });
+}
+
+function addApproxSevenDayAction_(item, task, mapping, context, flags) {
+  flags = flags || {};
+  if (!item._seven_day_actions) item._seven_day_actions = [];
+  if (!item._seven_day_action_keys) item._seven_day_action_keys = {};
+  var tipo = flags.completed ? 'Concluida' : flags.created ? 'Criada' : 'Atualizada';
+  var taskId = sanitizeText_(task && task.id);
+  var key = [taskId, tipo, flags.timestamp || ''].join('|');
+  if (item._seven_day_action_keys[key]) return;
+  item._seven_day_action_keys[key] = true;
+  item._seven_day_actions.push({
     key: key,
     horario: flags.timestamp ? new Date(flags.timestamp).toISOString() : '',
     tipo: tipo,
@@ -3468,7 +3518,8 @@ function getClickUpUserActivityHeaders_() {
     'projetos_erros_json_controle',
     'projetos_proximo_offset_controle',
     'sincronizacao_completa_controle',
-    'modo_controle'
+    'modo_controle',
+    'atividades_7_dias_json'
   ];
 }
 
