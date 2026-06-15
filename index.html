@@ -11680,7 +11680,7 @@ function initAlert(){
   document.getElementById('rows-exc').innerHTML=buildMonthGroupedRows(exc,'exc-');
 }
 
-var CONSULTANT_COMP_STATE={loaded:false,loading:false,items:{},rates:{junior:60,pleno:85,senior:110}};
+var CONSULTANT_COMP_STATE={loaded:false,loading:false,items:{},rates:{junior:60,pleno:85,senior:110,master:220}};
 var CMAX_DAILY_STATE = {events:[], loading:false, loaded:false, error:'', month:cmaxCurrentMonth(), consultant:'', activity:'', search:'', syncedAt:'', months:[], loadedMonths:[], trainingTeam:[], trainingTeamCutoff:'', activities:[], historySync:null, expanded:{}, requestSeq:0, monthResponses:{}};
 var CMAX_HISTORY_POLL_TIMER=null;
 var CMAX_PREFETCH_RUNNING=false;
@@ -11694,7 +11694,7 @@ function consultantCompTokens(name) {
 }
 function consultantCompensation(name) {
   var key=consultantCompKey(name);
-  if(CONSULTANT_COMP_STATE.items[key])return CONSULTANT_COMP_STATE.items[key];
+  if(CONSULTANT_COMP_STATE.items[key]&&CONSULTANT_COMP_STATE.items[key].seniority)return CONSULTANT_COMP_STATE.items[key];
   var tokens=consultantCompTokens(name);
   var best=null,bestScore=0,firstTokenMatches=[];
   Object.keys(CONSULTANT_COMP_STATE.items).forEach(function(itemKey){
@@ -11704,10 +11704,13 @@ function consultantCompensation(name) {
     var score=tokens.filter(function(token){return itemTokens.indexOf(token)>=0;}).length;
     if(score>=2&&score>bestScore){best=CONSULTANT_COMP_STATE.items[itemKey];bestScore=score;}
   });
-  return best||(firstTokenMatches.length===1?firstTokenMatches[0]:null)||{seniority:'',daily_value:0};
+  var matched=best||(firstTokenMatches.length===1?firstTokenMatches[0]:null);
+  if(matched&&matched.seniority)return matched;
+  if(tokens[0]==='GUILHERME')return {consultant_key:'GUILHERME',consultant_name:name,seniority:'master',daily_value:220,source:'default'};
+  return {seniority:'',daily_value:0};
 }
 function consultantSeniorityLabel(value) {
-  return value==='junior'?'Junior':value==='pleno'?'Pleno':value==='senior'?'Senior':'Definir senioridade';
+  return value==='junior'?'Junior':value==='pleno'?'Pleno':value==='senior'?'Senior':value==='master'?'Master':'Definir senioridade';
 }
 function consultantMoney(value) {
   return Number(value||0).toLocaleString('pt-BR',{style:'currency',currency:'BRL'});
@@ -11738,7 +11741,7 @@ function consultantSeniorityControl(name) {
     return '<span class="consultant-seniority-badge" title="Configurado no cadastro de usuários">'+consultantSeniorityLabel(comp.seniority)+' - '+consultantMoney(comp.daily_value)+'</span>';
   }
   if(AUTH_STATE.user&&AUTH_STATE.user.role==='admin'){
-    return '<select class="consultant-seniority" title="Senioridade para cálculo de diária" onclick="event.stopPropagation()" onchange="event.stopPropagation();return consultantSetSeniority(decodeURIComponent(\''+encodeURIComponent(name)+'\'),this.value,this)"><option value="">Senioridade</option><option value="junior" '+(comp.seniority==='junior'?'selected':'')+'>Junior</option><option value="pleno" '+(comp.seniority==='pleno'?'selected':'')+'>Pleno</option><option value="senior" '+(comp.seniority==='senior'?'selected':'')+'>Senior</option></select>';
+    return '<select class="consultant-seniority" title="Senioridade para cálculo de diária" onclick="event.stopPropagation()" onchange="event.stopPropagation();return consultantSetSeniority(decodeURIComponent(\''+encodeURIComponent(name)+'\'),this.value,this)"><option value="">Senioridade</option><option value="junior" '+(comp.seniority==='junior'?'selected':'')+'>Junior</option><option value="pleno" '+(comp.seniority==='pleno'?'selected':'')+'>Pleno</option><option value="senior" '+(comp.seniority==='senior'?'selected':'')+'>Senior</option><option value="master" '+(comp.seniority==='master'?'selected':'')+'>Master</option></select>';
   }
   return '<span class="cmax-count-pill">Sem senioridade</span>';
 }
@@ -11746,7 +11749,7 @@ function adminUserSeniorityControl(user) {
   var name=user.name||user.username;
   var comp=consultantCompensation(name);
   var seniority=user.seniority||comp.seniority||'';
-  return '<select class="admin-seniority" title="Senioridade para cálculo de diária" onchange="return userSetSeniority(decodeURIComponent(\''+encodeURIComponent(user.username)+'\'),decodeURIComponent(\''+encodeURIComponent(name)+'\'),this.value,this)"><option value="">Sem senioridade</option><option value="junior" '+(seniority==='junior'?'selected':'')+'>Junior - R$ 60</option><option value="pleno" '+(seniority==='pleno'?'selected':'')+'>Pleno - R$ 85</option><option value="senior" '+(seniority==='senior'?'selected':'')+'>Senior - R$ 110</option></select>';
+  return '<select class="admin-seniority" title="Senioridade para cálculo de diária" onchange="return userSetSeniority(decodeURIComponent(\''+encodeURIComponent(user.username)+'\'),decodeURIComponent(\''+encodeURIComponent(name)+'\'),this.value,this)"><option value="">Sem senioridade</option><option value="junior" '+(seniority==='junior'?'selected':'')+'>Junior - R$ 60</option><option value="pleno" '+(seniority==='pleno'?'selected':'')+'>Pleno - R$ 85</option><option value="senior" '+(seniority==='senior'?'selected':'')+'>Senior - R$ 110</option><option value="master" '+(seniority==='master'?'selected':'')+'>Master - R$ 220</option></select>';
 }
 function userSetSeniority(username,name,seniority,select) {
   if(!seniority)return false;

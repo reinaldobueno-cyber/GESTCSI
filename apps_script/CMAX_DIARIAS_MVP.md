@@ -76,6 +76,7 @@ Quando o token CMAX expira, o Apps Script autentica novamente em
 - Junior: R$ 60,00 por diaria integral.
 - Pleno: R$ 85,00 por diaria integral.
 - Senior: R$ 110,00 por diaria integral.
+- Master: R$ 220,00 por diaria integral, atualmente aplicada ao Guilherme.
 - Treinamento de ate 4 horas equivale a 0,5 diaria.
 - Treinamento acima de 4 horas equivale a 1 diaria.
 - A soma de treinamentos do mesmo consultor no mesmo dia fica limitada a 1 diaria.
