@@ -8928,7 +8928,10 @@ function dashOpenTopKpiAudit(mode) {
     list=list.filter(function(p){return dashStatusKey(p&&p.status)!=='cancelado'&&dashProjectHasClickUpTrace(p);});
   }else if(mode==='stale'){
     title='Projetos com ClickUp sem atualiza&ccedil;&atilde;o h&aacute; 15+ dias';
-    list=list.filter(function(p){var days=dashClickUpAgingDays(p);return dashProjectHasClickUpTrace(p)&&days!==null&&days>15;});
+    list=list.filter(function(p){
+      var days=dashClickUpAgingDays(p);
+      return dashStatusKey(p&&p.status)!=='cancelado'&&dashProjectHasClickUpTrace(p)&&days!==null&&days>15;
+    });
   }else if(mode==='activation'){
     title='Projetos que chegaram &agrave; ativa&ccedil;&atilde;o';
     list=list.filter(function(p){return dashProjectStageInfo(p).stage==='ativacao';});
