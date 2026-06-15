@@ -3165,13 +3165,18 @@ body.theme-dark .tower-kpis [style*="background:#fff"]{
 .bonus-card span{display:block;font-size:9px;text-transform:uppercase;letter-spacing:.12em;font-weight:900;color:var(--muted)}
 .bonus-card strong{display:block;margin-top:7px;font-size:25px;color:var(--text)}
 .bonus-card.total{border-color:#78a98a;background:#edf8ef}.bonus-card.total strong{color:#23623d}
-.bonus-admin-table,.bonus-report{background:var(--surf);border:1px solid var(--border);border-radius:14px;overflow:hidden}
-.bonus-report-head{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:18px;border-bottom:1px solid var(--border);background:linear-gradient(135deg,var(--surf2),var(--surf))}
-.bonus-person{display:flex;align-items:center;gap:12px}.bonus-avatar{width:42px;height:42px;border-radius:50%;display:grid;place-items:center;background:var(--green);color:#fff;font-size:18px;font-weight:900}
-.bonus-person-name{font-size:17px;font-weight:900;color:var(--text)}.bonus-person-meta{font-size:10px;color:var(--muted);margin-top:3px}
-.bonus-report-total{text-align:right}.bonus-report-total span{display:block;font-size:9px;text-transform:uppercase;letter-spacing:.1em;font-weight:900;color:var(--muted)}.bonus-report-total strong{display:block;font-size:24px;color:#23623d;margin-top:4px}
+.bonus-admin-table,.bonus-report{background:var(--surf);border:1px solid var(--border);border-radius:18px;overflow:hidden;box-shadow:0 14px 35px rgba(30,64,105,.08)}
+.bonus-report-head{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:25px 28px;border-bottom:0;background:linear-gradient(120deg,#234b78,#2f72b5);color:#fff}
+.bonus-person{display:flex;align-items:center;gap:16px}.bonus-avatar{width:58px;height:58px;border:3px solid rgba(255,255,255,.55);border-radius:50%;display:grid;place-items:center;background:rgba(255,255,255,.13);color:#fff;font-size:23px;font-weight:900}
+.bonus-person-name{font-size:22px;font-weight:900;color:#fff}.bonus-person-meta{font-size:11px;color:#d9edff;margin-top:5px}
+.bonus-report-total{text-align:right}.bonus-report-total span{display:block;font-size:10px;text-transform:uppercase;letter-spacing:.12em;font-weight:900;color:#c8e5ff}.bonus-report-total strong{display:block;font-size:30px;color:#fff;margin-top:5px}
+.bonus-activity-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;padding:20px 28px}
+.bonus-activity{border:1px solid #dce5ef;border-radius:12px;background:#f7fafd;padding:15px 16px;min-height:88px}.bonus-activity.primary{background:#eaf6ff;border-color:#a8d7f5}
+.bonus-activity span{display:block;color:#687b98;font-size:9px;font-weight:900;letter-spacing:.1em;text-transform:uppercase}.bonus-activity strong{display:block;color:#173b67;font-size:22px;margin-top:8px}.bonus-activity small{display:block;color:#92a3b8;font-size:10px;margin-top:5px}
+.bonus-financial{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;padding:0 28px 22px}.bonus-financial-item{border-left:4px solid #667eea;border-radius:10px;background:#f5f8fb;padding:14px 16px}.bonus-financial-item.marcos{border-left-color:#ed8936}.bonus-financial-item.total{border-left-color:#38a169;background:#edfbf1}.bonus-financial-item span{display:block;font-size:9px;font-weight:900;letter-spacing:.1em;text-transform:uppercase;color:#687b98}.bonus-financial-item strong{display:block;font-size:18px;color:#173b67;margin-top:7px}.bonus-financial-item.total strong{color:#237543;font-size:21px}
 .bonus-section{padding:16px;border-top:1px solid var(--border)}.bonus-section:first-of-type{border-top:0}.bonus-section-title{font-size:12px;font-weight:900;color:var(--text);margin-bottom:10px}
 .bonus-empty{padding:30px;text-align:center;color:var(--text2)}
+@media(max-width:900px){.bonus-activity-grid{grid-template-columns:repeat(2,1fr)}.bonus-financial{grid-template-columns:1fr}.bonus-report-head{padding:20px}.bonus-report-total strong{font-size:24px}}
 @media print{nav,.period-bar,.sidenav,.bonus-actions,.bonus-admin-table{display:none!important}.app-shell,.main-content{display:block!important}.page{display:none!important}.page.on{display:block!important}.bonus-report{break-inside:avoid}}
 body.theme-dark .pb.on,
 body.theme-dark .fb.on,
@@ -3306,7 +3311,7 @@ body.theme-dark *{
 <button class="snb" onclick="goTab('log',this)"><span class="snb-icon">&#128506;</span><span class="snb-label">Log&iacute;stica</span><span class="snb-badge" id="n-log" hidden>0</span></button>
 <button class="snb" onclick="goTab('praz',this)"><span class="snb-icon">&#8987;</span><span class="snb-label">Prazos</span><span class="snb-badge" id="n-praz" hidden>0</span></button>
 <button class="snb" onclick="goTab('alert',this)"><span class="snb-icon">&#128680;</span><span class="snb-label">Alertas</span><span class="snb-badge" id="n-alert" hidden>0</span></button>
-<button class="snb" onclick="goTab('bonus',this)"><span class="snb-icon">&#128176;</span><span class="snb-label">Bonifica&ccedil;&atilde;o</span></button>
+<button class="snb" id="nav-bonus" style="display:none" onclick="goTab('bonus',this)"><span class="snb-icon">&#128176;</span><span class="snb-label">Bonifica&ccedil;&atilde;o</span></button>
 </div>
 <div class="main-content">
 <div class="page on" id="page-dash"><div id="dash-content"></div></div>
@@ -3656,6 +3661,8 @@ function authSet(session) {
   if (navUser) navUser.textContent = AUTH_STATE.user ? (AUTH_STATE.user.name || AUTH_STATE.user.username) : 'PMO';
   var adminNav = document.getElementById('nav-admin');
   if (adminNav) adminNav.style.display = AUTH_STATE.user && AUTH_STATE.user.role === 'admin' ? '' : 'none';
+  var bonusNav = document.getElementById('nav-bonus');
+  if (bonusNav) bonusNav.style.display = AUTH_STATE.user && AUTH_STATE.user.role === 'admin' ? '' : 'none';
   if (AUTH_STATE.user) {
     storageSet(UPDATE_ACTOR_KEY, AUTH_STATE.user.name || AUTH_STATE.user.username);
     try { iniciarPainelAutenticado(); } catch(e) {}
@@ -4083,6 +4090,10 @@ window.identificarUsuarioAtualizacao = function(nome) {
   return n;
 };
 function goTab(id, btn) {
+  if (id === 'bonus' && (!AUTH_STATE.user || AUTH_STATE.user.role !== 'admin')) {
+    showToast('Bonificação disponível somente para administradores.', 'err');
+    return false;
+  }
   document.querySelectorAll('.page').forEach(function(x){ x.classList.remove('on'); });
   document.querySelectorAll('.tab,.snb,.btn-admin-top').forEach(function(x){ x.classList.remove('on'); });
   var pg = document.getElementById('page-'+id);
@@ -5515,13 +5526,20 @@ function bonusMilestoneDetails(person) {
 }
 function bonusPersonReport(person) {
   var initial=String(person.name||'?').trim().charAt(0).toUpperCase();
+  var online=person.dailyRows.filter(function(row){return cmaxModality(cmaxModeLabel(row.item)).indexOf('ON LINE')>=0;}).length;
+  var inLoco=person.dailyRows.filter(function(row){return cmaxModality(cmaxModeLabel(row.item)).indexOf('IN LOCO')>=0;}).length;
   return '<section class="bonus-report"><div class="bonus-report-head"><div class="bonus-person"><div class="bonus-avatar">'+escapeHtml(initial)+'</div><div><div class="bonus-person-name">'+escapeHtml(person.name)+'</div><div class="bonus-person-meta">'+escapeHtml(consultantSeniorityLabel(person.seniority))+' &middot; '+escapeHtml(bonusMonthLabel(BONUS_FILTER.month))+'</div></div></div><div class="bonus-report-total"><span>Total da bonifica&ccedil;&atilde;o</span><strong>'+consultantMoney(person.total)+'</strong></div></div>'+
-    '<div class="bonus-summary" style="padding:16px"><div class="bonus-card"><span>Di&aacute;rias equivalentes</span><strong>'+cmaxEquivalentLabel(person.dailyEquivalent)+'</strong></div><div class="bonus-card"><span>Valor das di&aacute;rias</span><strong>'+consultantMoney(person.dailyValue)+'</strong></div><div class="bonus-card"><span>Marcos aprovados</span><strong>'+person.milestoneRows.length+'</strong></div><div class="bonus-card"><span>Valor dos marcos</span><strong>'+consultantMoney(person.milestoneValue)+'</strong></div></div>'+
+    '<div class="bonus-activity-grid"><div class="bonus-activity primary"><span>Di&aacute;rias realizadas</span><strong>'+cmaxEquivalentLabel(person.dailyEquivalent)+'</strong><small>equivalente contabilizado</small></div><div class="bonus-activity"><span>Treinamentos on-line</span><strong>'+online+'</strong><small>registros contabiliz&aacute;veis</small></div><div class="bonus-activity"><span>Treinamentos in loco</span><strong>'+inLoco+'</strong><small>registros contabiliz&aacute;veis</small></div><div class="bonus-activity"><span>Marcos aprovados</span><strong>'+person.milestoneRows.length+'</strong><small>entregas validadas</small></div></div>'+
+    '<div class="bonus-financial"><div class="bonus-financial-item"><span>Valor das di&aacute;rias</span><strong>'+consultantMoney(person.dailyValue)+'</strong></div><div class="bonus-financial-item marcos"><span>Valor dos marcos</span><strong>'+consultantMoney(person.milestoneValue)+'</strong></div><div class="bonus-financial-item total"><span>Total remunera&ccedil;&atilde;o</span><strong>'+consultantMoney(person.total)+'</strong></div></div>'+
     '<div class="bonus-section"><div class="bonus-section-title">Detalhamento das di&aacute;rias</div>'+bonusDailyDetails(person)+'</div><div class="bonus-section"><div class="bonus-section-title">Detalhamento dos marcos aprovados</div>'+bonusMilestoneDetails(person)+'</div></section>';
 }
 function initBonus() {
   var box=document.getElementById('bonus-content');
   if(!box)return;
+  if(!AUTH_STATE.user||AUTH_STATE.user.role!=='admin'){
+    box.innerHTML='<div class="empty">Acesso restrito ao administrador.</div>';
+    return;
+  }
   var people=bonusDataset(),isAdmin=AUTH_STATE.user&&AUTH_STATE.user.role==='admin';
   var daily=people.reduce(function(total,p){return total+p.dailyValue;},0);
   var milestones=people.reduce(function(total,p){return total+p.milestoneValue;},0);
