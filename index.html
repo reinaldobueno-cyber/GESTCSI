@@ -5454,7 +5454,7 @@ function bonusNamesMatch(a,b) {
 }
 function bonusCanonicalNames(values) {
   return (values||[]).reduce(function(names,value){
-    var name=String(value||'').trim();
+    var name=consultantCanonicalName(value);
     if(name&&!names.some(function(current){return bonusNamesMatch(current,name);}))names.push(name);
     return names;
   },[]);
@@ -11686,8 +11686,14 @@ var CMAX_HISTORY_POLL_TIMER=null;
 var CMAX_PREFETCH_RUNNING=false;
 var CMAX_BROWSER_CACHE_PREFIX='gestcsi_cmax_view_v5_';
 
+function consultantCanonicalName(name) {
+  var value=String(name||'').trim();
+  var key=value.normalize('NFD').replace(/[\u0300-\u036f]/g,'').toUpperCase();
+  if(key==='YASMIN.SOUSA@MULTIBOVINOS.COM.BR')return 'Yasmin Sousa';
+  return value;
+}
 function consultantCompKey(name) {
-  return String(name||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toUpperCase().trim();
+  return consultantCanonicalName(name).normalize('NFD').replace(/[\u0300-\u036f]/g,'').toUpperCase().trim();
 }
 function consultantCompTokens(name) {
   return consultantCompKey(name).split(/\s+/).filter(function(token){return token.length>2;});
