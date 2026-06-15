@@ -10906,6 +10906,7 @@ var GESTAO_CLICKUP_VIEW_DATA = [];
 var GESTAO_CLICKUP_USER_ACTIVITY = null;
 var GESTAO_CLICKUP_USER_ACTIVITY_LOADING = null;
 var GESTAO_CLICKUP_ACTIVITY_DAY_KEY = '';
+var GESTAO_CLICKUP_ACTIVITY_POLL_TIMER = null;
 function gestaoRenderClickupUserActivityShell() {
   if (!AUTH_STATE.user || AUTH_STATE.user.role !== 'admin') {
     return '<div class="dashx-focus-note" style="margin-bottom:14px"><div><strong>Uso dos usuários ClickUp.</strong> Esta visão fica disponível para administrador do painel.</div><div class="dashx-focus-hint">controle restrito</div></div>';
@@ -11124,7 +11125,7 @@ function gestaoRenderClickUpUserActivity(users, meta) {
   }
   if (!users.length) {
     if (backgroundSync.active) {
-      return '<div class="dashx-unavailable"><strong>Estimativa em segundo plano ativa</strong><span>O Apps Script continuará processando sozinho. Você pode fechar a página e voltar depois.</span></div>';
+      return '<div class="dashx-unavailable"><strong>Estimativa em segundo plano ativa</strong><span>'+gestaoActivityNum(backgroundSync.projects_read)+(gestaoActivityNum(backgroundSync.projects_total)?' de '+gestaoActivityNum(backgroundSync.projects_total):'')+' projetos processados. A tela será atualizada automaticamente.</span></div>';
     }
     return '<div class="dashx-unavailable"><strong>Sem dados de uso ainda</strong><span>Clique em “Gerar estimativa” acima para criar a visão aproximada por tarefas.</span></div>';
   }
@@ -11147,7 +11148,7 @@ function gestaoRenderClickUpUserActivity(users, meta) {
   var syncComplete = String(coverageUser.sincronizacao_completa_controle || '').toLowerCase() === 'sim';
   if (users._needsGenerate && !estimatedMode) {
     if (backgroundSync.active) {
-      return '<div class="dashx-unavailable"><strong>Estimativa em segundo plano ativa</strong><span>A base antiga será substituída conforme os lotes forem concluídos. Você pode fechar a página e voltar depois.</span></div>';
+      return '<div class="dashx-unavailable"><strong>Estimativa em segundo plano ativa</strong><span>'+gestaoActivityNum(backgroundSync.projects_read)+(gestaoActivityNum(backgroundSync.projects_total)?' de '+gestaoActivityNum(backgroundSync.projects_total):'')+' projetos processados. A base antiga será substituída conforme os lotes forem concluídos.</span></div>';
     }
     return '<div class="dashx-unavailable"><strong>Base antiga detectada</strong><span>Essas linhas foram geradas antes do modo estimado por tarefas, por isso faltam links, aparecem campos vazios e os números podem ficar deslocados. Clique em “Gerar estimativa” para reescrever a base no formato correto.</span></div>';
   }
@@ -11218,62 +11219,37 @@ function gestaoSyncClickUpUserActivity(btn) {
     return false;
   }
   var original = btn ? btn.textContent : '';
-  if (btn) { btn.disabled = true; btn.textContent = 'Sincronizando...'; }
-  var initialBatchSize = 1;
-  var maxRecoveryRetries = 24;
-  function waitBeforeRetry(offset, batchSize, recoveryRetries, message) {
-    if (recoveryRetries >= maxRecoveryRetries) return Promise.reject(new Error(message || 'Não foi possível retomar automaticamente'));
-    var waitSeconds = 15;
-    if (btn) btn.textContent = 'Aguardando execução...';
-    return new Promise(function(resolve) {
-      setTimeout(resolve, waitSeconds * 1000);
-    }).then(function() {
-      return runBatch(offset, 1, recoveryRetries + 1);
-    });
-  }
-  function runBatch(offset, batchSize, recoveryRetries) {
-    recoveryRetries = recoveryRetries || 0;
-    var startedAt = Date.now();
-    if (btn) btn.textContent = offset ? ('Sincronizando '+offset+'...') : 'Preparando...';
-    return chamarAppsScriptJsonp('syncClickUpUserActivity', {
-      auth_token:authTokenParam(),
-      force_estimated:'1',
-      resume_scan:'1',
-      scan_offset:String(offset || 0),
-      scan_batch_size:String(batchSize)
-    }, 300000).then(function(resp){
-      if (resp && resp.busy) return waitBeforeRetry(offset, batchSize, recoveryRetries, resp.error);
-      if (!resp || resp.ok === false) throw new Error((resp && (resp.error || resp.message)) || 'Falha na sincronização');
-      var total = gestaoActivityNum(resp.projects_selected || resp.projects_eligible);
-      var read = gestaoActivityNum(resp.projects_read);
-      var errors = gestaoActivityNum(resp.projects_errors);
-      if (btn) btn.textContent = 'Sincronizando '+Math.min(gestaoActivityNum(resp.next_offset), total)+'/'+total;
-      var elapsed = Date.now() - startedAt;
-      var nextBatchSize = elapsed < 40000 ? Math.min(3, batchSize + 1) : (elapsed > 120000 ? 1 : batchSize);
-      if (!resp.done) return runBatch(gestaoActivityNum(resp.next_offset), nextBatchSize, 0);
-      return {resp:resp, total:total, read:read, errors:errors};
-    }, function(error) {
-      var message = String(error && error.message || error || '');
-      if (/timeout|ainda esta em andamento/i.test(message)) {
-        return waitBeforeRetry(offset, batchSize, recoveryRetries, message);
-      }
-      throw error;
-    });
-  }
-  showToast('Iniciando ou retomando leitura completa do ClickUp...', 'ok');
-  runBatch(0, initialBatchSize, 0).then(function(result){
-    GESTAO_CLICKUP_USER_ACTIVITY = null;
-    showToast('Uso ClickUp sincronizado: '+result.read+' de '+result.total+' projetos lidos'+(result.errors ? ', '+result.errors+' com erro' : ''), result.errors ? 'warn' : 'ok');
-    gestaoReloadClickUpUserActivity(true);
+  if (btn) { btn.disabled = true; btn.textContent = 'Iniciando...'; }
+  chamarAppsScriptJsonp('startClickUpUserActivityBackground',{auth_token:authTokenParam()},30000).then(function(resp){
+    if(!resp||resp.ok===false)throw new Error((resp&&(resp.error||resp.message))||'Não foi possível iniciar a estimativa');
+    showToast(resp.already_active?'Estimativa já estava em andamento. Acompanhando progresso...':'Estimativa iniciada. Os resultados aparecerão automaticamente.','ok');
+    gestaoPollClickUpUserActivity(true);
   }).catch(function(error){
-    showToast('Sincronização pausada. Clique novamente em Gerar estimativa para continuar.', 'warn');
-    var box = document.getElementById('clickup-user-activity-content');
-    if (box) box.innerHTML = '<div class="dashx-unavailable"><strong>Sincronização pausada sem perder progresso</strong><span>'+escapeHtml((error && error.message) || 'O Apps Script demorou além do limite')+'. Clique em Gerar estimativa novamente para continuar do último lote confirmado.</span></div>';
-    setTimeout(function(){ gestaoReloadClickUpUserActivity(true); }, 800);
+    showToast((error&&error.message)||'Erro ao iniciar estimativa','err');
   }).finally(function(){
-    if (btn) { btn.disabled = false; btn.textContent = original || 'Sincronizar uso'; }
+    if(btn){btn.disabled=false;btn.textContent=original||'Gerar estimativa';}
   });
   return false;
+}
+function gestaoPollClickUpUserActivity(immediate) {
+  if(GESTAO_CLICKUP_ACTIVITY_POLL_TIMER){clearTimeout(GESTAO_CLICKUP_ACTIVITY_POLL_TIMER);GESTAO_CLICKUP_ACTIVITY_POLL_TIMER=null;}
+  function poll(){
+    gestaoLoadClickUpUserActivity(true).then(function(users){
+      var box=document.getElementById('clickup-user-activity-content');
+      if(box)box.innerHTML=gestaoRenderClickUpUserActivity(users);
+      var bg=users._backgroundSync||{};
+      if(bg.active){
+        var read=gestaoActivityNum(bg.projects_read),total=gestaoActivityNum(bg.projects_total);
+        showToast('Estimativa em andamento: '+read+(total?' de '+total:'')+' projetos processados.','ok');
+        GESTAO_CLICKUP_ACTIVITY_POLL_TIMER=setTimeout(poll,7000);
+      }else{
+        showToast('Estimativa ClickUp concluída e carregada.','ok');
+      }
+    }).catch(function(){
+      GESTAO_CLICKUP_ACTIVITY_POLL_TIMER=setTimeout(poll,10000);
+    });
+  }
+  GESTAO_CLICKUP_ACTIVITY_POLL_TIMER=setTimeout(poll,immediate?1200:7000);
 }
 function gestaoForceClickUpUserActivity(btn) {
   if (!AUTH_STATE.user || AUTH_STATE.user.role !== 'admin') {

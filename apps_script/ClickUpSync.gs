@@ -2534,14 +2534,16 @@ function syncClickUpUserActivity_(params) {
 function startClickUpUserActivityBackground_(params) {
   params = params || {};
   var props = PropertiesService.getScriptProperties();
+  var alreadyActive = props.getProperty('CLICKUP_ACTIVITY_BACKGROUND_ACTIVE') === '1';
   props.setProperty('CLICKUP_ACTIVITY_BACKGROUND_ACTIVE', '1');
   props.setProperty('CLICKUP_ACTIVITY_BACKGROUND_FAILURES', '0');
-  props.setProperty('CLICKUP_ACTIVITY_BACKGROUND_STARTED_AT', new Date().toISOString());
+  if (!alreadyActive) props.setProperty('CLICKUP_ACTIVITY_BACKGROUND_STARTED_AT', new Date().toISOString());
   props.deleteProperty('CLICKUP_ACTIVITY_BACKGROUND_ERROR');
-  scheduleClickUpUserActivityBackground_(60000);
+  scheduleClickUpUserActivityBackground_(1000);
   return {
     ok: true,
     scheduled: true,
+    already_active: alreadyActive,
     message: 'Estimativa agendada em segundo plano. A pagina pode ser fechada.'
   };
 }
@@ -2556,10 +2558,10 @@ function continueClickUpUserActivityBackgroundTrigger() {
     var result = syncClickUpUserActivity_({
       force_estimated: '1',
       resume_scan: '1',
-      scan_batch_size: '2'
+      scan_batch_size: '3'
     });
     if (result && result.busy) {
-      scheduleClickUpUserActivityBackground_(60000);
+      scheduleClickUpUserActivityBackground_(15000);
       return;
     }
     props.setProperty('CLICKUP_ACTIVITY_BACKGROUND_FAILURES', '0');
@@ -2571,7 +2573,7 @@ function continueClickUpUserActivityBackgroundTrigger() {
       clearClickUpUserActivityBackgroundTriggers_();
       return;
     }
-    scheduleClickUpUserActivityBackground_(60000);
+    scheduleClickUpUserActivityBackground_(5000);
   } catch (error) {
     var failures = toInt_(props.getProperty('CLICKUP_ACTIVITY_BACKGROUND_FAILURES'), 0) + 1;
     props.setProperty('CLICKUP_ACTIVITY_BACKGROUND_FAILURES', String(failures));
@@ -2581,7 +2583,7 @@ function continueClickUpUserActivityBackgroundTrigger() {
       clearClickUpUserActivityBackgroundTriggers_();
       return;
     }
-    scheduleClickUpUserActivityBackground_(60000);
+    scheduleClickUpUserActivityBackground_(30000);
   }
 }
 
@@ -2736,12 +2738,17 @@ function getClickUpUserActivity_(params) {
 
 function getClickUpUserActivityBackgroundStatus_() {
   var props = PropertiesService.getScriptProperties();
+  var rows = readClickUpUserActivityRows_();
+  var progress = rows.length ? rows[0] : {};
   return {
     active: props.getProperty('CLICKUP_ACTIVITY_BACKGROUND_ACTIVE') === '1',
     started_at: props.getProperty('CLICKUP_ACTIVITY_BACKGROUND_STARTED_AT') || '',
     updated_at: props.getProperty('CLICKUP_ACTIVITY_BACKGROUND_UPDATED_AT') || '',
     completed_at: props.getProperty('CLICKUP_ACTIVITY_BACKGROUND_COMPLETED_AT') || '',
-    error: props.getProperty('CLICKUP_ACTIVITY_BACKGROUND_ERROR') || ''
+    error: props.getProperty('CLICKUP_ACTIVITY_BACKGROUND_ERROR') || '',
+    projects_read: toInt_(progress.projetos_lidos_controle, 0),
+    projects_total: toInt_(progress.projetos_selecionados_controle, 0),
+    projects_errors: toInt_(progress.projetos_com_erro_controle, 0)
   };
 }
 
