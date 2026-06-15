@@ -2535,6 +2535,24 @@ function startClickUpUserActivityBackground_(params) {
   params = params || {};
   var props = PropertiesService.getScriptProperties();
   var alreadyActive = props.getProperty('CLICKUP_ACTIVITY_BACKGROUND_ACTIVE') === '1';
+  var existingRows = readClickUpUserActivityRows_();
+  var previousComplete = existingRows.length &&
+    String(existingRows[0].sincronizacao_completa_controle || '').toLowerCase() === 'sim';
+  if (alreadyActive && previousComplete) {
+    props.setProperty('CLICKUP_ACTIVITY_BACKGROUND_ACTIVE', '0');
+    clearClickUpUserActivityBackgroundTriggers_();
+    alreadyActive = false;
+  }
+  if (!alreadyActive && previousComplete) {
+    existingRows.forEach(function(row) {
+      row.projetos_lidos_controle = 0;
+      row.projetos_com_erro_controle = 0;
+      row.projetos_erros_json_controle = '[]';
+      row.projetos_proximo_offset_controle = 0;
+      row.sincronizacao_completa_controle = 'nao';
+    });
+    writeClickUpUserActivitySummary_(existingRows, { auto_resize: false });
+  }
   props.setProperty('CLICKUP_ACTIVITY_BACKGROUND_ACTIVE', '1');
   props.setProperty('CLICKUP_ACTIVITY_BACKGROUND_FAILURES', '0');
   if (!alreadyActive) props.setProperty('CLICKUP_ACTIVITY_BACKGROUND_STARTED_AT', new Date().toISOString());
@@ -2658,13 +2676,17 @@ function syncClickUpUserActivityApprox_(params, meta) {
     ? mergeClickUpUserActivityRows_(existingRows, approx.rows, meta.fetched_at || new Date())
     : approx.rows;
   var previousRead = (scanOffset > 0 || retryMode) && existingRows.length ? toInt_(existingRows[0].projetos_lidos_controle, 0) : 0;
-  var cumulativeRead = previousRead + approx.projects_read;
   var errorDetails = retryMode
     ? mergeClickUpActivityErrors_(existingErrorDetails.filter(function(item) { return String(item.project_key || '') !== retryProjectKey; }), approx.errors)
     : mergeClickUpActivityErrors_(scanOffset > 0 ? existingErrorDetails : [], approx.errors);
   var cumulativeErrors = errorDetails.length;
   var nextOffset = retryMode ? storedNextOffset : scanOffset + mappings.length;
   var scanDone = retryMode ? storedComplete : nextOffset >= eligibleMappings.length;
+  // Progress represents attempted projects. Failures remain visible separately and
+  // must not make a completed scan look permanently stuck below the total.
+  var cumulativeRead = retryMode
+    ? Math.max(previousRead, storedNextOffset)
+    : Math.min(eligibleMappings.length, nextOffset);
   accumulatedRows.forEach(function(item) {
     item.projetos_configurados_controle = configuredMappings.length;
     item.projetos_elegiveis_controle = eligibleMappings.length;
@@ -2747,8 +2769,10 @@ function getClickUpUserActivityBackgroundStatus_() {
   var props = PropertiesService.getScriptProperties();
   var rows = readClickUpUserActivityRows_();
   var progress = rows.length ? rows[0] : {};
+  var complete = String(progress.sincronizacao_completa_controle || '').toLowerCase() === 'sim';
+  var active = props.getProperty('CLICKUP_ACTIVITY_BACKGROUND_ACTIVE') === '1' && !complete;
   return {
-    active: props.getProperty('CLICKUP_ACTIVITY_BACKGROUND_ACTIVE') === '1',
+    active: active,
     started_at: props.getProperty('CLICKUP_ACTIVITY_BACKGROUND_STARTED_AT') || '',
     updated_at: props.getProperty('CLICKUP_ACTIVITY_BACKGROUND_UPDATED_AT') || '',
     completed_at: props.getProperty('CLICKUP_ACTIVITY_BACKGROUND_COMPLETED_AT') || '',
