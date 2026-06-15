@@ -4608,7 +4608,7 @@ function setUserSeniority_(params) {
   var admin = requireAdmin_(params || {});
   var username = sanitizeText_(params.username).toLowerCase();
   var seniority = normalizeConsultantSeniority_(params.seniority);
-  if (!seniority) throw new Error('Selecione Junior, Pleno ou Senior.');
+  if (!seniority) throw new Error('Selecione Junior, Pleno, Senior ou Master.');
   var found = findUserRow_(username);
   if (!found) throw new Error('Usuario nao encontrado.');
   var seniorityCol = found.header.indexOf('seniority') + 1;
@@ -4632,7 +4632,8 @@ var CONSULTANT_COMPENSATION_SHEET = 'CONSULTORES_REMUNERACAO';
 var CONSULTANT_SENIORITY_RATES = {
   junior: 60,
   pleno: 85,
-  senior: 110
+  senior: 110,
+  master: 220
 };
 
 function getConsultantCompensationSheet_() {
@@ -4651,7 +4652,7 @@ function getConsultantCompensationSheet_() {
 
 function normalizeConsultantSeniority_(value) {
   var key = normalizeKey_(value).toLowerCase();
-  if (key === 'junior' || key === 'pleno' || key === 'senior') return key;
+  if (key === 'junior' || key === 'pleno' || key === 'senior' || key === 'master') return key;
   return '';
 }
 
@@ -4702,6 +4703,15 @@ function getConsultantCompensationData_() {
       };
     });
   }
+  if (!byKey.GUILHERME || !byKey.GUILHERME.seniority) {
+    byKey.GUILHERME = {
+      consultant_key: 'GUILHERME',
+      consultant_name: 'Guilherme',
+      seniority: 'master',
+      daily_value: CONSULTANT_SENIORITY_RATES.master,
+      source: 'default'
+    };
+  }
   return {
     ok: true,
     consultants: Object.keys(byKey).map(function(key) { return byKey[key]; }),
@@ -4715,7 +4725,7 @@ function setConsultantSeniority_(params) {
   var key = normalizeKey_(name);
   var seniority = normalizeConsultantSeniority_(params.seniority);
   if (!name || !key) throw new Error('Consultor obrigatorio.');
-  if (!seniority) throw new Error('Selecione Junior, Pleno ou Senior.');
+  if (!seniority) throw new Error('Selecione Junior, Pleno, Senior ou Master.');
   var sheet = getConsultantCompensationSheet_();
   var values = sheet.getDataRange().getValues();
   var header = values[0];
