@@ -4712,6 +4712,15 @@ function getConsultantCompensationData_() {
       source: 'default'
     };
   }
+  if (!byKey.EVELYN || !byKey.EVELYN.seniority) {
+    byKey.EVELYN = {
+      consultant_key: 'EVELYN',
+      consultant_name: 'Evelyn',
+      seniority: 'pleno',
+      daily_value: CONSULTANT_SENIORITY_RATES.pleno,
+      source: 'default'
+    };
+  }
   return {
     ok: true,
     consultants: Object.keys(byKey).map(function(key) { return byKey[key]; }),
