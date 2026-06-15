@@ -4148,6 +4148,10 @@ function goTab(id, btn) {
     consultantCompensationLoad(true);
     carregarDiariasCmax(false);
   }
+  if (id === 'dash') {
+    carregarDiariasCmax(false);
+    cmaxPrefetchMonths();
+  }
   if (id === 'fech') {
     fechamentoLoad(false);
   }
@@ -7722,13 +7726,13 @@ function dashSetHealthView(view) {
 }
 function dashSyncErrorResolution(detail,project) {
   var text=normalizarTextoProjeto(detail||'');
-  if(text.indexOf('limite maximo')>=0&&text.indexOf('50000')>=0)return 'Reduzir ou dividir o conteúdo muito extenso na origem e executar novamente o Sync ClickUp.';
-  if(text.indexOf('folder id invalid')>=0||text.indexOf('input 011')>=0)return 'Corrigir o Folder ID/lista vinculada no ClickUp e atualizar o link ou identificador do projeto antes de sincronizar novamente.';
-  if(text.indexOf('list id')>=0&&text.indexOf('invalid')>=0)return 'Corrigir o List ID do projeto no ClickUp e executar novamente o Sync ClickUp.';
-  if(text.indexOf('unauthorized')>=0||text.indexOf('401')>=0||text.indexOf('token')>=0)return 'Renovar a autenticação/token do ClickUp e executar novamente a sincronização.';
-  if(text.indexOf('rate limit')>=0||text.indexOf('429')>=0)return 'Aguardar alguns minutos e executar novamente o Sync ClickUp.';
-  if(text.indexOf('sem link')>=0||!dashProjectLink(project))return 'Cadastrar ou corrigir o link do projeto no ClickUp e executar novamente o Sync ClickUp.';
-  return 'Revisar o vínculo do projeto e o erro retornado pelo ClickUp; após corrigir, executar novamente o Sync ClickUp.';
+  if(text.indexOf('limite maximo')>=0&&text.indexOf('50000')>=0)return '1. Abra o projeto. 2. Reduza textos/listas muito extensos no ClickUp. 3. Clique em Sync ClickUp novamente.';
+  if(text.indexOf('folder id invalid')>=0||text.indexOf('input 011')>=0)return '1. Abra o projeto. 2. Confirme a pasta/lista correta no ClickUp. 3. Corrija o link ou ID no cadastro. 4. Execute Sync ClickUp.';
+  if(text.indexOf('list id')>=0&&text.indexOf('invalid')>=0)return '1. Abra o projeto. 2. Copie o link da lista correta no ClickUp. 3. Atualize o cadastro. 4. Execute Sync ClickUp.';
+  if(text.indexOf('unauthorized')>=0||text.indexOf('401')>=0||text.indexOf('token')>=0)return '1. Renove o token do ClickUp no Apps Script. 2. Execute Sync ClickUp novamente.';
+  if(text.indexOf('rate limit')>=0||text.indexOf('429')>=0)return '1. Aguarde 10 minutos. 2. Execute Sync ClickUp novamente.';
+  if(text.indexOf('sem link')>=0||!dashProjectLink(project))return '1. Localize o projeto no ClickUp. 2. Cadastre o link correto no painel. 3. Execute Sync ClickUp.';
+  return '1. Abra o projeto. 2. Confira link, pasta e lista no ClickUp. 3. Corrija o cadastro. 4. Execute Sync ClickUp novamente.';
 }
 function dashOpenHealthAudit(view) {
   view = view || 'issues';
@@ -7745,10 +7749,11 @@ function dashOpenHealthAudit(view) {
   });
   var body = rows.length ? rows.map(function(item) {
     var detail = item.faltas ? item.faltas.join(', ') : (item.detalhe || '-');
-    var resolution=view==='syncErrors'?'<td>'+escapeHtml(dashSyncErrorResolution(detail,item.projeto||null))+'</td>':'';
+    var steps=dashSyncErrorResolution(detail,item.projeto||null).split(/\s*\d+\.\s*/).filter(Boolean);
+    var resolution=view==='syncErrors'?'<td><strong>Ação recomendada</strong><ol style="margin:6px 0 0;padding-left:18px">'+steps.map(function(step){return '<li style="margin-bottom:4px">'+escapeHtml(step)+'</li>';}).join('')+'</ol></td>':'';
     return '<tr><td><strong>'+escapeHtml(item.cliente || '-')+'</strong></td><td>'+escapeHtml(item.consultor || '-')+'</td><td>'+escapeHtml(item.status || '-')+'</td><td>'+escapeHtml(item.criticidade || '-')+'</td><td>'+escapeHtml(detail)+'</td>'+resolution+'<td>'+dashProjectActionCell(item.projeto || null)+'</td></tr>';
   }).join('') : '<tr class="empty-row"><td colspan="'+(view==='syncErrors'?7:6)+'">Nenhum projeto pendente nesta regra.</td></tr>';
-  var resolutionHead=view==='syncErrors'?'<th>Como resolver</th>':'';
+  var resolutionHead=view==='syncErrors'?'<th>Passos para corrigir</th>':'';
   var html = '<div class="dashx-focus-note"><div><strong>Como é calculado:</strong> '+escapeHtml(def[1])+'</div><div class="dashx-focus-hint">'+rows.length+' projeto(s)</div></div><div class="dashx-table-wrap" style="margin-top:12px"><table class="dashx-table"><thead><tr><th>Projeto</th><th>Consultor</th><th>Status</th><th>Criticidade</th><th>Motivo</th>'+resolutionHead+'<th>Ação</th></tr></thead><tbody>'+body+'</tbody></table></div>';
   dashOpenAuditModal(def[0], html);
   return false;
@@ -9212,6 +9217,13 @@ function dashRenderIdleSignal(list) {
 }
 function dashRenderTrainingRealizationTest(list) {
   var scheduled=(list||[]).filter(function(p){return !!dashParseDate(p&&p.data_inicio);});
+  var available2026=cmaxNormalizeMonths(CMAX_DAILY_STATE.loadedMonths).filter(function(month){return month.slice(0,4)==='2026';});
+  var cached2026=available2026.filter(function(month){return !!cmaxCachedResponse(month);});
+  var loading=CMAX_PREFETCH_RUNNING||!available2026.length||cached2026.length<available2026.length;
+  if(loading){
+    var coverage=available2026.length?cached2026.length+' de '+available2026.length+' meses de 2026':'aguardando lista de meses';
+    return '<div class="dashx-unavailable"><strong>Carregando histórico CMAX para validar a métrica</strong><span>'+escapeHtml(coverage)+'. O resultado ainda não é conclusivo e será atualizado automaticamente. Mantenha esta página aberta ou clique abaixo para continuar o carregamento.</span><button class="btn-syncall" style="margin-top:10px" onclick="carregarDiariasCmax(false);cmaxPrefetchMonths();return false">Carregar histórico CMAX</button></div>';
+  }
   var events=cmaxAllLoadedEvents().filter(function(item){return cmaxCountsDaily(item)&&String(item.data||'').slice(0,4)==='2026';});
   var byClient={};
   events.forEach(function(item){
@@ -9233,7 +9245,7 @@ function dashRenderTrainingRealizationTest(list) {
   }).slice(0,20).map(function(row){
     return '<tr><td><strong>'+escapeHtml(row.project.cliente||'-')+'</strong></td><td>'+escapeHtml(row.project.consultor||'-')+'</td><td>'+escapeHtml(fd(row.scheduled.toISOString()))+'</td><td>'+(row.realized?escapeHtml(cmaxDate(row.realized.data)):'Não encontrado')+'</td><td>'+(row.realized?'<span class="dashx-score-pill good">Conciliado</span>':'<span class="dashx-score-pill warn">Revisar nome / realização</span>')+'</td></tr>';
   }).join('')||'<tr><td colspan="5">Nenhum projeto com treinamento agendado no recorte.</td></tr>';
-  return '<div class="dashx-chart-card"><div class="dashx-chart-head"><div><div class="dashx-chart-title">Teste experimental: treinamento agendado x realizado</div><div class="dashx-chart-sub">Compara projetos com <strong>data_inicio</strong> contra treinamentos realizados no CMAX em 2026, usando correspondência exata do nome normalizado do cliente. Ainda não substitui a taxa de ativação.</div></div><div class="dashx-chart-meta"><span class="dashx-chart-note">'+(rate===null?'-':rate+'%')+' conciliado</span></div></div><div class="dashx-top-grid"><div class="dashx-card neutral"><div class="dashx-card-label">Treinamentos agendados</div><div class="dashx-card-value">'+scheduled.length+'</div><div class="dashx-card-note">projetos com data_inicio</div></div><div class="dashx-card good"><div class="dashx-card-label">Realizados encontrados</div><div class="dashx-card-value">'+realized.length+'</div><div class="dashx-card-note">cliente conciliado com treinamento CMAX</div></div><div class="dashx-card warn"><div class="dashx-card-label">Sem realização encontrada</div><div class="dashx-card-value">'+pending.length+'</div><div class="dashx-card-note">pode ser pendência ou diferença no nome</div></div></div><div class="dashx-inline-note"><strong>Leitura do teste:</strong> uma conciliação alta indica que a nova métrica é viável. Casos não encontrados precisam ser revisados antes de tornar o indicador oficial.</div><div class="dashx-table-wrap"><table class="dashx-table"><thead><tr><th>Projeto</th><th>Consultor</th><th>Agendado</th><th>Primeiro realizado CMAX</th><th>Resultado</th></tr></thead><tbody>'+sample+'</tbody></table></div></div>';
+  return '<div class="dashx-chart-card"><div class="dashx-chart-head"><div><div class="dashx-chart-title">Teste experimental: treinamento agendado x realizado</div><div class="dashx-chart-sub">Compara projetos com <strong>data_inicio</strong> contra treinamentos realizados no CMAX em 2026, usando correspondência exata do nome normalizado do cliente. Ainda não substitui a taxa de ativação.</div></div><div class="dashx-chart-meta"><span class="dashx-chart-note">'+cached2026.length+' meses analisados</span><span class="dashx-chart-note">'+(rate===null?'-':rate+'%')+' conciliado</span></div></div><div class="dashx-top-grid"><div class="dashx-card neutral"><div class="dashx-card-label">Treinamentos agendados</div><div class="dashx-card-value">'+scheduled.length+'</div><div class="dashx-card-note">projetos com data_inicio</div></div><div class="dashx-card good"><div class="dashx-card-label">Realizados encontrados</div><div class="dashx-card-value">'+realized.length+'</div><div class="dashx-card-note">cliente conciliado com treinamento CMAX</div></div><div class="dashx-card warn"><div class="dashx-card-label">Sem realização encontrada</div><div class="dashx-card-value">'+pending.length+'</div><div class="dashx-card-note">pode ser pendência ou diferença no nome</div></div></div><div class="dashx-inline-note"><strong>Como avaliar:</strong> confira primeiro os realizados encontrados. Depois revise os casos não encontrados para distinguir treinamento ainda não realizado de diferença no nome do cliente. Só adote esta métrica quando a conciliação estiver confiável.</div><div class="dashx-table-wrap"><table class="dashx-table"><thead><tr><th>Projeto</th><th>Consultor</th><th>Agendado</th><th>Primeiro realizado CMAX</th><th>Resultado</th></tr></thead><tbody>'+sample+'</tbody></table></div></div>';
 }
 
 function initDash() {
@@ -11991,15 +12003,23 @@ function cmaxAllLoadedEvents() {
 function cmaxPrefetchMonths() {
   if(CMAX_PREFETCH_RUNNING)return;
   var pending=cmaxNormalizeMonths(CMAX_DAILY_STATE.loadedMonths).filter(function(month){return !cmaxCachedResponse(month);});
-  if(!pending.length)return;
+  if(!pending.length){
+    if(document.getElementById('page-dash')&&document.getElementById('page-dash').classList.contains('on'))initDash();
+    return;
+  }
   CMAX_PREFETCH_RUNNING=true;
   function next(){
     var month=pending.shift();
-    if(!month){CMAX_PREFETCH_RUNNING=false;return;}
+    if(!month){
+      CMAX_PREFETCH_RUNNING=false;
+      if(document.getElementById('page-dash')&&document.getElementById('page-dash').classList.contains('on'))initDash();
+      return;
+    }
     chamarAppsScriptJsonp('getCmaxDailyEvents',{month:month},30000).then(function(resp){
       if(resp&&resp.ok!==false&&!resp.building_view){
         CMAX_DAILY_STATE.monthResponses[month]=resp;
         cmaxWriteBrowserCache(month,resp);
+        if(document.getElementById('page-dash')&&document.getElementById('page-dash').classList.contains('on'))initDash();
       }
       setTimeout(next,100);
     }).catch(function(){setTimeout(next,1000);});
