@@ -4646,6 +4646,11 @@ function saveBonusSalesIndication_(params) {
   }
   var sheet = getBonusSalesIndicationsSheet_();
   var id = Utilities.getUuid();
+  var month = saleDate.slice(0, 7);
+  var value = BONUS_SALES_INDICATION_VALUES[type];
+  var notes = sanitizeText_(params.notes || params.observacao);
+  var createdAt = new Date();
+  var createdBy = admin.name || admin.username;
   sheet.appendRow([
     id,
     consultant,
@@ -4653,13 +4658,28 @@ function saveBonusSalesIndication_(params) {
     type,
     indicationDate,
     saleDate,
-    saleDate.slice(0, 7),
-    BONUS_SALES_INDICATION_VALUES[type],
-    sanitizeText_(params.notes || params.observacao),
-    new Date(),
-    admin.name || admin.username
+    month,
+    value,
+    notes,
+    createdAt,
+    createdBy
   ]);
-  return { ok: true, id: id, value: BONUS_SALES_INDICATION_VALUES[type], month: saleDate.slice(0, 7) };
+  return {
+    ok: true,
+    item: {
+      id: id,
+      consultant_name: consultant,
+      client: client,
+      indication_type: type,
+      indication_date: indicationDate,
+      sale_date: saleDate,
+      month: month,
+      value: value,
+      notes: notes,
+      created_at: createdAt.toISOString(),
+      created_by: createdBy
+    }
+  };
 }
 
 function deleteBonusSalesIndication_(params) {
