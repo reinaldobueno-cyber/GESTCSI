@@ -5194,6 +5194,16 @@ function fechamentoNormalizeRows(rows) {
     return String(item.mes_fechamento || '') >= '2024-01';
   });
 }
+function fechamentoApplySyncRows(rows, syncMonth) {
+  var normalized = fechamentoNormalizeRows(rows);
+  var month = fechamentoMonthKey(syncMonth);
+  if (!month) return normalized;
+  return (FECHAMENTO_MARCOS || []).filter(function(item) {
+    return String(item.mes_fechamento || '') !== month;
+  }).concat(normalized.filter(function(item) {
+    return String(item.mes_fechamento || '') === month;
+  }));
+}
 function fechamentoLoad(force) {
   if (!authTokenParam()) return Promise.resolve(null);
   if (FECHAMENTO_LOADING) {
@@ -5299,7 +5309,7 @@ function fechamentoRunSync(action, label, btn) {
     if (!recent || recent.ok === false || !Array.isArray(recent.marcos)) {
       throw new Error((recent && (recent.error || recent.message)) || 'Não foi possível atualizar as alterações recentes');
     }
-    FECHAMENTO_MARCOS = fechamentoNormalizeRows(recent.marcos);
+    FECHAMENTO_MARCOS = fechamentoApplySyncRows(recent.marcos, syncMonth);
     FECHAMENTO_META = recent;
     FECHAMENTO_LOADED = true;
     FECHAMENTO_LOADING = false;
@@ -9104,10 +9114,11 @@ function initDash() {
   '</div>';
   var hero = '<div class="dashx-hero"><div class="dashx-hero-top"><div class="dashx-title-wrap"><div class="dashx-eyebrow">Dashboard Executivo CSI</div><div class="dashx-title">Visão operacional explicável</div><div class="dashx-sub">Somente indicadores de 2026 com fonte e regra auditáveis. MRR, rankings subjetivos e diárias sem conciliação foram retirados desta visão.</div></div><div class="dashx-meta"><span class="dashx-meta-chip"><b>Escopo</b> '+rotuloEscopoUsuario()+'</span><span class="dashx-meta-chip"><b>Ano</b> 2026</span><span class="dashx-meta-chip"><b>Projetos</b> '+total+'</span><span class="dashx-meta-chip"><b>Última base</b> '+(TOWER_INFO_CONTEXT.ultima || '-')+'</span></div></div>'+dashRenderFilters(base)+'</div>';
   var prioritySection = '<div class="dashx-section"><div class="dashx-section-head"><div><div class="dashx-section-kicker">Prioridade</div><div class="dashx-section-title">Carteira e entregas de 2026</div><div class="dashx-section-sub">Heatmap da entrada de projetos e produtividade baseada no Fechamento de Marcos validado.</div></div></div><div class="dashx-section-body"><div class="dashx-stack"><div class="dashx-focus-note"><div><strong>Distribuição da carteira.</strong> Cada célula mostra quantos projetos de 2026 entraram por consultor e mês.</div><div class="dashx-focus-hint">sem score subjetivo</div></div>'+dashRenderHeatmap(operation.heatMap)+dashRenderMilestoneProductivity2026()+dashRenderStatusStack(statusByMonth)+'</div></div></div>';
+  var clickUpTrackingSection = '<div class="dashx-section"><div class="dashx-section-head"><div><div class="dashx-section-kicker">Rastreabilidade</div><div class="dashx-section-title">Cobertura técnica do ClickUp</div><div class="dashx-section-sub">Mostra a cobertura de rastreio por consultor e identifica os projetos que ainda não entram na auditoria técnica do ClickUp.</div></div><div class="dashx-section-answer"><span class="dashx-answer-chip">'+tracked+' rastreado(s) · '+untracked+' sem ClickUp</span></div></div><div class="dashx-section-body"><div class="dashx-stack">'+dashRenderClickUpTracker(operation, total)+dashRenderUntrackedClickUpList(operation.untrackedProjects || [], operation.untrackedTotal)+'</div></div></div>';
   var healthSection = '<div class="dashx-section"><div class="dashx-section-head"><div><div class="dashx-section-kicker">Qualidade</div><div class="dashx-section-title">Saúde dos dados</div><div class="dashx-section-sub">Somente verificações objetivas de cadastro, sync e atualização.</div></div></div><div class="dashx-section-body">'+dashRenderReliableHealthSection(health)+'</div></div>';
   var funnelSection = '<div class="dashx-section"><div class="dashx-section-head"><div><div class="dashx-section-kicker">Evolução</div><div class="dashx-section-title">Funil de Implantação</div><div class="dashx-section-sub">Acompanha venda, kickoff, primeiro treinamento e ativação com as datas disponíveis.</div></div><div class="dashx-section-answer"><span class="dashx-answer-chip">'+(activeRate === null ? 'Conversão indisponível' : (activeRate+'% de ativação'))+'</span></div></div><div class="dashx-section-body">'+dashRenderFunnel(funnel, list)+'</div></div>';
   var cohortSection = '<div class="dashx-section"><div class="dashx-section-head"><div><div class="dashx-section-kicker">Evolução</div><div class="dashx-section-title">Cohort Mensal</div><div class="dashx-section-sub">Mostra se os projetos vendidos em cada mês avançaram nas etapas de implantação.</div></div></div><div class="dashx-section-body">'+dashRenderCohort(cohort, list)+'</div></div>';
-  dc.innerHTML = '<div class="dashx-shell">'+hero+topCards+prioritySection+cohortSection+funnelSection+healthSection+'</div>';
+  dc.innerHTML = '<div class="dashx-shell">'+hero+topCards+prioritySection+clickUpTrackingSection+cohortSection+funnelSection+healthSection+'</div>';
   dashBindDashboardInteractions(dc);
 }
 
