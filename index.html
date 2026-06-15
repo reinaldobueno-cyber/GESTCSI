@@ -7718,6 +7718,16 @@ function dashSetHealthView(view) {
   DASH_HEALTH_VIEW = view || 'issues';
   initDash();
 }
+function dashSyncErrorResolution(detail,project) {
+  var text=normalizarTextoProjeto(detail||'');
+  if(text.indexOf('limite maximo')>=0&&text.indexOf('50000')>=0)return 'Reduzir ou dividir o conteúdo muito extenso na origem e executar novamente o Sync ClickUp.';
+  if(text.indexOf('folder id invalid')>=0||text.indexOf('input 011')>=0)return 'Corrigir o Folder ID/lista vinculada no ClickUp e atualizar o link ou identificador do projeto antes de sincronizar novamente.';
+  if(text.indexOf('list id')>=0&&text.indexOf('invalid')>=0)return 'Corrigir o List ID do projeto no ClickUp e executar novamente o Sync ClickUp.';
+  if(text.indexOf('unauthorized')>=0||text.indexOf('401')>=0||text.indexOf('token')>=0)return 'Renovar a autenticação/token do ClickUp e executar novamente a sincronização.';
+  if(text.indexOf('rate limit')>=0||text.indexOf('429')>=0)return 'Aguardar alguns minutos e executar novamente o Sync ClickUp.';
+  if(text.indexOf('sem link')>=0||!dashProjectLink(project))return 'Cadastrar ou corrigir o link do projeto no ClickUp e executar novamente o Sync ClickUp.';
+  return 'Revisar o vínculo do projeto e o erro retornado pelo ClickUp; após corrigir, executar novamente o Sync ClickUp.';
+}
 function dashOpenHealthAudit(view) {
   view = view || 'issues';
   var health = DASH_HEALTH_DATA || {};
@@ -7733,9 +7743,11 @@ function dashOpenHealthAudit(view) {
   });
   var body = rows.length ? rows.map(function(item) {
     var detail = item.faltas ? item.faltas.join(', ') : (item.detalhe || '-');
-    return '<tr><td><strong>'+escapeHtml(item.cliente || '-')+'</strong></td><td>'+escapeHtml(item.consultor || '-')+'</td><td>'+escapeHtml(item.status || '-')+'</td><td>'+escapeHtml(item.criticidade || '-')+'</td><td>'+escapeHtml(detail)+'</td><td>'+dashProjectActionCell(item.projeto || null)+'</td></tr>';
-  }).join('') : '<tr class="empty-row"><td colspan="6">Nenhum projeto pendente nesta regra.</td></tr>';
-  var html = '<div class="dashx-focus-note"><div><strong>Como é calculado:</strong> '+escapeHtml(def[1])+'</div><div class="dashx-focus-hint">'+rows.length+' projeto(s)</div></div><div class="dashx-table-wrap" style="margin-top:12px"><table class="dashx-table"><thead><tr><th>Projeto</th><th>Consultor</th><th>Status</th><th>Criticidade</th><th>Motivo</th><th>Ação</th></tr></thead><tbody>'+body+'</tbody></table></div>';
+    var resolution=view==='syncErrors'?'<td>'+escapeHtml(dashSyncErrorResolution(detail,item.projeto||null))+'</td>':'';
+    return '<tr><td><strong>'+escapeHtml(item.cliente || '-')+'</strong></td><td>'+escapeHtml(item.consultor || '-')+'</td><td>'+escapeHtml(item.status || '-')+'</td><td>'+escapeHtml(item.criticidade || '-')+'</td><td>'+escapeHtml(detail)+'</td>'+resolution+'<td>'+dashProjectActionCell(item.projeto || null)+'</td></tr>';
+  }).join('') : '<tr class="empty-row"><td colspan="'+(view==='syncErrors'?7:6)+'">Nenhum projeto pendente nesta regra.</td></tr>';
+  var resolutionHead=view==='syncErrors'?'<th>Como resolver</th>':'';
+  var html = '<div class="dashx-focus-note"><div><strong>Como é calculado:</strong> '+escapeHtml(def[1])+'</div><div class="dashx-focus-hint">'+rows.length+' projeto(s)</div></div><div class="dashx-table-wrap" style="margin-top:12px"><table class="dashx-table"><thead><tr><th>Projeto</th><th>Consultor</th><th>Status</th><th>Criticidade</th><th>Motivo</th>'+resolutionHead+'<th>Ação</th></tr></thead><tbody>'+body+'</tbody></table></div>';
   dashOpenAuditModal(def[0], html);
   return false;
 }
