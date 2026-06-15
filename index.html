@@ -9210,6 +9210,31 @@ function dashRenderIdleSignal(list) {
   }).join('')||'<div class="empty">Sem consultores para analisar.</div>';
   return '<div class="dashx-chart-card"><div class="dashx-chart-head"><div><div class="dashx-chart-title">Sinal combinado de ociosidade</div><div class="dashx-chart-sub">Possível ociosidade significa ausência simultânea de atividades na agenda CMAX do mês e de atualizações ClickUp nos projetos ativos nos últimos 7 dias. É um sinal para investigação, não uma conclusão sobre produtividade.</div></div><div class="dashx-chart-meta"><span class="dashx-chart-note">'+possible+' possível(is)</span></div></div><div class="dashx-bars">'+content+'</div></div>';
 }
+function dashRenderTrainingRealizationTest(list) {
+  var scheduled=(list||[]).filter(function(p){return !!dashParseDate(p&&p.data_inicio);});
+  var events=cmaxAllLoadedEvents().filter(function(item){return cmaxCountsDaily(item)&&String(item.data||'').slice(0,4)==='2026';});
+  var byClient={};
+  events.forEach(function(item){
+    var key=normalizeClienteKey(item.cliente);
+    if(!key)return;
+    if(!byClient[key])byClient[key]=[];
+    byClient[key].push(item);
+  });
+  var rows=scheduled.map(function(p){
+    var matches=byClient[normalizeClienteKey(p.cliente)]||[];
+    var first=matches.slice().sort(function(a,b){return String(a.data||'').localeCompare(String(b.data||''));})[0]||null;
+    return {project:p,scheduled:dashParseDate(p.data_inicio),realized:first,matches:matches.length};
+  });
+  var realized=rows.filter(function(row){return !!row.realized;});
+  var pending=rows.filter(function(row){return !row.realized;});
+  var rate=scheduled.length?Math.round(realized.length/scheduled.length*100):null;
+  var sample=rows.sort(function(a,b){
+    return Number(!!a.realized)-Number(!!b.realized)||String(a.project.cliente||'').localeCompare(String(b.project.cliente||''));
+  }).slice(0,20).map(function(row){
+    return '<tr><td><strong>'+escapeHtml(row.project.cliente||'-')+'</strong></td><td>'+escapeHtml(row.project.consultor||'-')+'</td><td>'+escapeHtml(fd(row.scheduled.toISOString()))+'</td><td>'+(row.realized?escapeHtml(cmaxDate(row.realized.data)):'Não encontrado')+'</td><td>'+(row.realized?'<span class="dashx-score-pill good">Conciliado</span>':'<span class="dashx-score-pill warn">Revisar nome / realização</span>')+'</td></tr>';
+  }).join('')||'<tr><td colspan="5">Nenhum projeto com treinamento agendado no recorte.</td></tr>';
+  return '<div class="dashx-chart-card"><div class="dashx-chart-head"><div><div class="dashx-chart-title">Teste experimental: treinamento agendado x realizado</div><div class="dashx-chart-sub">Compara projetos com <strong>data_inicio</strong> contra treinamentos realizados no CMAX em 2026, usando correspondência exata do nome normalizado do cliente. Ainda não substitui a taxa de ativação.</div></div><div class="dashx-chart-meta"><span class="dashx-chart-note">'+(rate===null?'-':rate+'%')+' conciliado</span></div></div><div class="dashx-top-grid"><div class="dashx-card neutral"><div class="dashx-card-label">Treinamentos agendados</div><div class="dashx-card-value">'+scheduled.length+'</div><div class="dashx-card-note">projetos com data_inicio</div></div><div class="dashx-card good"><div class="dashx-card-label">Realizados encontrados</div><div class="dashx-card-value">'+realized.length+'</div><div class="dashx-card-note">cliente conciliado com treinamento CMAX</div></div><div class="dashx-card warn"><div class="dashx-card-label">Sem realização encontrada</div><div class="dashx-card-value">'+pending.length+'</div><div class="dashx-card-note">pode ser pendência ou diferença no nome</div></div></div><div class="dashx-inline-note"><strong>Leitura do teste:</strong> uma conciliação alta indica que a nova métrica é viável. Casos não encontrados precisam ser revisados antes de tornar o indicador oficial.</div><div class="dashx-table-wrap"><table class="dashx-table"><thead><tr><th>Projeto</th><th>Consultor</th><th>Agendado</th><th>Primeiro realizado CMAX</th><th>Resultado</th></tr></thead><tbody>'+sample+'</tbody></table></div></div>';
+}
 
 function initDash() {
   var sourceAll = projetosVisiveisParaUsuario(Array.isArray(DATA.projetos) ? DATA.projetos.slice() : []).filter(function(p) {
@@ -9251,10 +9276,11 @@ function initDash() {
   var prioritySection = '<div class="dashx-section"><div class="dashx-section-head"><div><div class="dashx-section-kicker">Prioridade</div><div class="dashx-section-title">Carteira e entregas de 2026</div><div class="dashx-section-sub">Heatmap da entrada de projetos e produtividade baseada no Fechamento de Marcos validado.</div></div></div><div class="dashx-section-body"><div class="dashx-stack"><div class="dashx-focus-note"><div><strong>Distribuição da carteira.</strong> Cada célula mostra quantos projetos de 2026 entraram por consultor e mês.</div><div class="dashx-focus-hint">sem score subjetivo</div></div>'+dashRenderHeatmap(operation.heatMap)+dashRenderMilestoneProductivity2026()+dashRenderStatusStack(statusByMonth)+'</div></div></div>';
   var clickUpTrackingSection = '<div class="dashx-section"><div class="dashx-section-head"><div><div class="dashx-section-kicker">Rastreabilidade</div><div class="dashx-section-title">Cobertura técnica do ClickUp</div><div class="dashx-section-sub">Mostra a cobertura de rastreio por consultor e identifica os projetos que ainda não entram na auditoria técnica do ClickUp.</div></div><div class="dashx-section-answer"><span class="dashx-answer-chip">'+tracked+' rastreado(s) · '+untracked+' sem ClickUp</span></div></div><div class="dashx-section-body"><div class="dashx-stack">'+dashRenderClickUpTracker(operation, total)+dashRenderUntrackedClickUpList(operation.untrackedProjects || [], operation.untrackedTotal)+'</div></div></div>';
   var idleSection = '<div class="dashx-section"><div class="dashx-section-head"><div><div class="dashx-section-kicker">Capacidade</div><div class="dashx-section-title">Sinais de ociosidade</div><div class="dashx-section-sub">Cruza agenda CMAX, carteira ativa e movimentações recentes do ClickUp para indicar onde a liderança deve investigar disponibilidade.</div></div></div><div class="dashx-section-body">'+dashRenderIdleSignal(list)+'</div></div>';
+  var trainingTestSection = '<div class="dashx-section"><div class="dashx-section-head"><div><div class="dashx-section-kicker">Experimento auditável</div><div class="dashx-section-title">Validação da nova métrica de treinamento</div><div class="dashx-section-sub">Testa se data_inicio funciona melhor como agendamento e se o CMAX consegue comprovar a realização.</div></div></div><div class="dashx-section-body">'+dashRenderTrainingRealizationTest(list)+'</div></div>';
   var healthSection = '<div class="dashx-section"><div class="dashx-section-head"><div><div class="dashx-section-kicker">Qualidade</div><div class="dashx-section-title">Saúde dos dados</div><div class="dashx-section-sub">Somente verificações objetivas de cadastro, sync e atualização.</div></div></div><div class="dashx-section-body">'+dashRenderReliableHealthSection(health)+'</div></div>';
   var funnelSection = '<div class="dashx-section"><div class="dashx-section-head"><div><div class="dashx-section-kicker">Evolução</div><div class="dashx-section-title">Funil de Implantação</div><div class="dashx-section-sub">Acompanha venda, kickoff, primeiro treinamento e ativação com as datas disponíveis.</div></div><div class="dashx-section-answer"><span class="dashx-answer-chip">'+(activeRate === null ? 'Conversão indisponível' : (activeRate+'% de ativação'))+'</span></div></div><div class="dashx-section-body">'+dashRenderFunnel(funnel, list)+'</div></div>';
   var cohortSection = '<div class="dashx-section"><div class="dashx-section-head"><div><div class="dashx-section-kicker">Evolução</div><div class="dashx-section-title">Cohort Mensal</div><div class="dashx-section-sub">Mostra se os projetos vendidos em cada mês avançaram nas etapas de implantação.</div></div></div><div class="dashx-section-body">'+dashRenderCohort(cohort, list)+'</div></div>';
-  dc.innerHTML = '<div class="dashx-shell">'+hero+topCards+prioritySection+idleSection+clickUpTrackingSection+cohortSection+funnelSection+healthSection+'</div>';
+  dc.innerHTML = '<div class="dashx-shell">'+hero+topCards+prioritySection+trainingTestSection+idleSection+clickUpTrackingSection+cohortSection+funnelSection+healthSection+'</div>';
   dashBindDashboardInteractions(dc);
 }
 
@@ -11949,6 +11975,18 @@ function cmaxCombinedCachedResponse() {
   responses.forEach(function(resp){base.events=base.events.concat(resp.events||[]);});
   base.total=base.events.length;
   return base;
+}
+function cmaxAllLoadedEvents() {
+  var responses=cmaxNormalizeMonths(CMAX_DAILY_STATE.loadedMonths).map(cmaxCachedResponse).filter(Boolean);
+  var events=(CMAX_DAILY_STATE.events||[]).slice();
+  responses.forEach(function(resp){events=events.concat(resp.events||[]);});
+  var seen={};
+  return events.filter(function(item){
+    var key=String(item.event_key||item.event_id||[item.data,item.consultor,item.cliente,item.descricao,item.hora_inicio].join('|'));
+    if(seen[key])return false;
+    seen[key]=true;
+    return true;
+  });
 }
 function cmaxPrefetchMonths() {
   if(CMAX_PREFETCH_RUNNING)return;
