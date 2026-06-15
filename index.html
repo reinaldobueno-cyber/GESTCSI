@@ -366,6 +366,8 @@ nav{background:var(--nav);height:58px;display:flex;align-items:center;justify-co
 .kpi.kpi-btn{cursor:pointer;transition:transform .16s ease,box-shadow .16s ease,border-color .16s ease;}
 .kpi.kpi-btn:hover{transform:translateY(-1px);box-shadow:0 10px 24px rgba(20,32,24,.06);}
 .kpi.kpi-btn.active{border-color:rgba(45,110,78,.32);box-shadow:0 0 0 3px rgba(45,110,78,.08);}
+.dashx-card.clickable{cursor:pointer;transition:transform .16s ease,box-shadow .16s ease,border-color .16s ease;}
+.dashx-card.clickable:hover{transform:translateY(-2px);box-shadow:0 12px 26px rgba(20,32,24,.09);border-color:rgba(45,110,78,.34);}
 /* AVULSO */
 .av-split{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-top:14px;}
 .av-col{background:var(--surf);border:1px solid var(--border);border-radius:10px;overflow:hidden;}
@@ -4419,7 +4421,9 @@ function acompStatusAtivo(p) {
   return s !== 'concluido' && s !== 'cancelado';
 }
 function acompProjetosNoRecorte() {
-  var base = projetosVisiveisParaUsuario(DATA.projetos || []).filter(function(p){ return p && p.cliente; });
+  var base = projetosVisiveisParaUsuario(DATA.projetos || []).filter(function(p){
+    return p && p.cliente && gestaoClickupProjectYear(p) === 2026;
+  });
   if (activePeriod !== 'all') base = base.filter(function(p){ return String(p.mes || '').toUpperCase() === activePeriod; });
   return base;
 }
@@ -4504,7 +4508,7 @@ function acompProjetoView(p, followupMap) {
   };
 }
 function acompBase() {
-  var base = acompProjetosNoRecorte().filter(acompStatusAtivo);
+  var base = acompProjetosNoRecorte();
   var followupMap = acompLatestFollowupMap();
   return ordenarProjetosPainel(base).map(function(p){ return acompProjetoView(p, followupMap); });
 }
@@ -4514,6 +4518,8 @@ function acompPercent(a, b) {
 function acompFilterList(list) {
   if (ACOMP_VIEW_FILTER === 'todos') return list;
   if (ACOMP_VIEW_FILTER === 'acompanhados') return list.filter(function(x){ return x.temRegistro; });
+  if (ACOMP_VIEW_FILTER === 'sem-registro') return list.filter(function(x){ return x.bucket === 'sem'; });
+  if (ACOMP_VIEW_FILTER === 'criticos') return list.filter(function(x){ return x.bucket === 'sem' || x.bucket === '31-45' || x.bucket === '45+'; });
   if (ACOMP_VIEW_FILTER === 'pendentes') return list.filter(function(x){ return x.bucket === 'sem' || x.bucket === '31-45' || x.bucket === '45+'; });
   return list.filter(function(x){ return x.bucket === ACOMP_VIEW_FILTER; });
 }
@@ -4876,7 +4882,7 @@ function acompRenderMonths(list) {
   var months = ['JAN','FEV','MAR','ABR','MAI','JUN','JUL','AGO','SET','OUT','NOV','DEZ'];
   var followupMap = acompLatestFollowupMap();
   return months.map(function(m){
-    var rows = projetosVisiveisParaUsuario(DATA.projetos || []).filter(function(p){ return p && p.cliente && acompStatusAtivo(p) && String(p.mes || '').toUpperCase() === m; }).map(function(p){ return acompProjetoView(p, followupMap); });
+    var rows = projetosVisiveisParaUsuario(DATA.projetos || []).filter(function(p){ return p && p.cliente && gestaoClickupProjectYear(p) === 2026 && String(p.mes || '').toUpperCase() === m; }).map(function(p){ return acompProjetoView(p, followupMap); });
     var ok = rows.filter(function(x){ return x.bucket !== 'sem'; }).length;
     return '<div class="acom-month"><div class="acom-month-name">'+m+'</div>'+
       '<div class="acom-month-row"><span>Acomp.</span><strong>'+ok+'/'+rows.length+'</strong></div>'+
@@ -4907,7 +4913,7 @@ function acompRenderRows(list) {
     var pa = a.bucket === 'sem' ? 999 : Number(a.dias || 0);
     var pb = b.bucket === 'sem' ? 999 : Number(b.dias || 0);
     return pb - pa;
-  }).slice(0, 40);
+  });
   return rows.map(function(x){
     var meta = x.bucketMeta;
     var cls = meta.cls === 'ok' ? 'ok' : meta.cls === 'bad' ? 'bad' : meta.cls === 'warn' ? 'warn' : 'neu';
@@ -4916,7 +4922,7 @@ function acompRenderRows(list) {
     if (x.responsavel) texto += '<div class="dashx-list-sub">Respons&aacute;vel: '+escapeHtml(x.responsavel)+'</div>';
     if (x.followupStatus) texto += '<div class="dashx-list-sub">Observa&ccedil;&atilde;o: '+acompFollowupStatusMeta(x.followupStatus).text+(x.statusComment ? ' - '+escapeHtml(x.statusComment).slice(0, 90) : '')+'</div>';
     var obsInicial = x.obsInicial ? '<div class="dashx-list-sub">Obs inicial: '+escapeHtml(x.obsInicial).slice(0, 90)+'</div>' : '';
-    return '<tr><td><strong>'+escapeHtml(x.cliente)+'</strong><div class="dashx-list-sub">'+escapeHtml(x.mes)+' &bull; '+escapeHtml(x.consultor)+'</div></td>'+
+    return '<tr class="clickable" onclick="return acompProjectInfoPopup(\''+jsQuote(x.projectKey)+'\')" title="Clique para abrir o projeto"><td><strong>'+escapeHtml(x.cliente)+'</strong><div class="dashx-list-sub">'+escapeHtml(x.mes)+' &bull; '+escapeHtml(x.consultor)+'</div></td>'+
       '<td><span class="acom-status '+cls+'">'+meta.label+'</span></td>'+
       '<td>'+(x.dias !== null && x.dias !== undefined ? x.dias+'d' : '-')+'</td>'+
       '<td>'+escapeHtml(x.fonte)+'</td>'+
@@ -5095,15 +5101,17 @@ function initAcomp() {
   var resumoBase = acompResumoBase();
   var total = list.length;
   var acompanhados = list.filter(function(x){ return x.temRegistro; }).length;
-  var pendentes = list.filter(function(x){ return x.bucket === 'sem' || x.bucket === '31-45' || x.bucket === '45+'; }).length;
-  var criticos = pendentes;
+  var semRegistro = list.filter(function(x){ return x.bucket === 'sem'; }).length;
+  var criticos = list.filter(function(x){ return x.bucket === 'sem' || x.bucket === '31-45' || x.bucket === '45+'; }).length;
+  var pendentes = criticos;
   setSidebarAlertBadge('n-acom', pendentes, pendentes + ' projeto(s) com acompanhamento pendente');
   var periodo = activePeriod === 'all' ? 'Todos os meses' : activePeriod;
   var syncNote = ACOMP_REMOTE_ERROR ? 'Hist&oacute;rico do site indispon&iacute;vel' : (ACOMP_REMOTE_LOADED ? 'Hist&oacute;rico do site carregado' : (ACOMP_REMOTE_LOADING ? 'Carregando hist&oacute;rico do site...' : 'Hist&oacute;rico do site ainda n&atilde;o carregado'));
   var filters = [
     ['todos','Todos'],
     ['acompanhados','Acompanhados'],
-    ['pendentes','Pendentes'],
+    ['sem-registro','Sem registro'],
+    ['criticos','Cr&iacute;ticos'],
     ['0-7','0-7 dias'],
     ['8-15','8-15 dias'],
     ['16-30','16-30 dias'],
@@ -5114,13 +5122,14 @@ function initAcomp() {
   }).join('');
   el.innerHTML =
     '<div class="acom-shell">'+
-      '<div class="acom-hero"><div><div class="acom-kicker">Setup proposto</div><div class="acom-title">Controle mensal de acompanhamento</div><div class="acom-sub">Observa&ccedil;&otilde;es s&atilde;o o contexto inicial do projeto. Acompanhamento &eacute; o registro datado que mostra se a coordena&ccedil;&atilde;o olhou aquele projeto no per&iacute;odo. A base de acompanhamento considera apenas projetos ativos; conclu&iacute;dos e cancelados ficam fora da rotina mensal.</div></div><div class="acom-hero-meta"><span class="acom-chip"><b>Per&iacute;odo</b> '+periodo+'</span><span class="acom-chip"><b>Total</b> '+resumoBase.total+' projeto(s)</span><span class="acom-chip"><b>Ativos</b> '+total+'</span><span class="acom-chip"><b>Concl./cancel.</b> '+resumoBase.fora+'</span><span class="acom-chip"><b>Pendentes</b> '+pendentes+'</span></div></div>'+
+      '<div class="acom-hero"><div><div class="acom-kicker">Setup proposto</div><div class="acom-title">Controle mensal de acompanhamento</div><div class="acom-sub">Observa&ccedil;&otilde;es s&atilde;o o contexto inicial do projeto. Acompanhamento &eacute; o registro datado que mostra se a coordena&ccedil;&atilde;o olhou aquele projeto no per&iacute;odo. A base usa o mesmo recorte fixo de projetos de 2026 da vis&atilde;o executiva.</div></div><div class="acom-hero-meta"><span class="acom-chip"><b>Per&iacute;odo</b> '+periodo+'</span><span class="acom-chip"><b>Total 2026</b> '+resumoBase.total+' projeto(s)</span><span class="acom-chip"><b>Ativos</b> '+resumoBase.ativos+'</span><span class="acom-chip"><b>Concl./cancel.</b> '+resumoBase.fora+'</span><span class="acom-chip"><b>Cr&iacute;ticos</b> '+criticos+'</span></div></div>'+
       '<div class="kpis">'+
-        kpi('Carteira ativa', total, 'b')+
-        kpi('Acompanhados', acompanhados, 'g', 'onclick="return setAcompFilter(\'acompanhados\')"', acompPercent(acompanhados,total)+'% da carteira')+
-        kpi('Faltam registrar', pendentes, pendentes ? 'o' : 'g', 'onclick="return setAcompFilter(\'pendentes\')"', pendentes ? 'prioridade da coordena&ccedil;&atilde;o' : 'cobertura completa')+
-        kpi('Cr&iacute;ticos', criticos, criticos ? 'r' : 'g', 'onclick="return setAcompFilter(\'pendentes\')"', 'sem registro ou acima de 30 dias')+
+        kpi('Carteira 2026', total, 'b', 'onclick="return setAcompFilter(\'todos\')"', 'clique para listar todos')+
+        kpi('Acompanhados', acompanhados, 'g', 'onclick="return setAcompFilter(\'acompanhados\')"', acompPercent(acompanhados,total)+'% da carteira &middot; clique para listar')+
+        kpi('Faltam registrar', semRegistro, semRegistro ? 'o' : 'g', 'onclick="return setAcompFilter(\'sem-registro\')"', semRegistro ? 'clique para listar os sem registro' : 'cobertura completa')+
+        kpi('Cr&iacute;ticos', criticos, criticos ? 'r' : 'g', 'onclick="return setAcompFilter(\'criticos\')"', 'sem registro ou acima de 30 dias &middot; clique para listar')+
       '</div>'+
+      '<div class="acom-panel"><div class="acom-panel-head"><div><div class="acom-panel-title">Projetos do filtro</div><div class="acom-panel-note">Clique em um projeto para abrir os detalhes</div></div></div><div class="acom-panel-body"><div class="dashx-table-wrap"><table class="dashx-table"><thead><tr><th>Projeto</th><th>Faixa</th><th>Dias</th><th>Fonte</th><th>Status</th><th>Registro</th></tr></thead><tbody>'+acompRenderRows(list)+'</tbody></table></div></div></div>'+
       '<div class="acom-panel"><div class="acom-panel-head"><div><div class="acom-panel-title">Registrar no site</div><div class="acom-panel-note">'+syncNote+'</div></div></div><div class="acom-panel-body"><form id="acom-form" class="acom-form" onsubmit="return salvarAcompanhamentoProjeto(this.querySelector(\'.acom-save\'))">'+
         '<div class="acom-field"><label for="acom-form-project-search">Projeto</label><input id="acom-form-project-search" type="search" placeholder="Digite para filtrar cliente, consultor ou m&ecirc;s" autocomplete="off" oninput="acompFilterProjectSelect()"><select id="acom-form-project" required onchange="acompProjectSelectChanged()" onclick="acompCommitProjectSelection()" onkeyup="if(event.key===\'Enter\') acompCommitProjectSelection()"><option value="">Selecione o projeto</option>'+acompProjectOptions(list)+'</select><div id="acom-form-project-help" class="acom-field-help">Digite para filtrar. A lista abaixo permanece agrupada por m&ecirc;s de entrada e data da venda.</div></div>'+
         '<div class="acom-field"><label for="acom-form-date">Data</label><input id="acom-form-date" type="date" value="'+acompTodayIso()+'" required></div>'+
@@ -8018,8 +8027,9 @@ function dashMissingFields(list, defs) {
 function dashUnavailableCard(title, missing) {
   return '<div class="dashx-unavailable"><strong>KPI indispon&iacute;vel — campo necess&aacute;rio n&atilde;o encontrado</strong><span>'+title+'</span><span>Campo(s) faltando: '+(missing && missing.length ? missing.join(', ') : 'n&atilde;o identificado')+'</span></div>';
 }
-function dashKpiCard(label, value, note, statusClass, infoKey, alertHtml) {
-  return '<div class="dashx-card '+(statusClass || 'neutral')+'">'+
+function dashKpiCard(label, value, note, statusClass, infoKey, alertHtml, onClick) {
+  var action=onClick?' clickable" role="button" tabindex="0" onclick="'+onClick+'" onkeydown="if(event.key===\'Enter\'||event.key===\' \'){event.preventDefault();'+onClick+'}"':'"';
+  return '<div class="dashx-card '+(statusClass || 'neutral')+action+'>'+
     '<div class="dashx-card-head"><div class="dashx-card-label">'+label+'</div>'+towerInfoButton(infoKey || 'source')+'</div>'+
     '<div class="dashx-card-value">'+value+'</div>'+
     '<div class="dashx-card-meta">'+(alertHtml || '')+(note ? '<div class="dashx-card-note">'+note+'</div>' : '')+'</div>'+
@@ -8876,6 +8886,30 @@ function dashRenderHealthSection(health) {
     '<div class="dashx-stack"><div class="dashx-health-toolbar"><div><div class="dashx-health-title">'+activeTitle+'</div><div class="dashx-health-sub">'+activeSub+'</div></div><div class="dashx-health-actions"><span class="dashx-table-chip">'+activeRows.length+' projeto(s)</span></div></div><div class="dashx-table-wrap"><table class="dashx-table"><thead><tr><th>Cliente</th><th>Consultor</th><th>Status</th><th>Criticidade</th><th>Detalhe</th><th>Ação</th></tr></thead><tbody>'+rows+'</tbody></table></div></div>'+
   '</div>';
 }
+function dashOpenTopKpiAudit(mode) {
+  if(mode==='health')return dashOpenHealthAudit('issues');
+  var list=ordenarProjetosPainel(projetosVisiveisParaUsuario(Array.isArray(DATA.projetos)?DATA.projetos.slice():[]).filter(function(p){
+    return gestaoClickupProjectYear(p)===2026;
+  }));
+  var title='Projetos de 2026';
+  if(mode==='tracked'){
+    title='Projetos com rastreio ClickUp';
+    list=list.filter(function(p){return dashStatusKey(p&&p.status)!=='cancelado'&&dashProjectHasClickUpTrace(p);});
+  }else if(mode==='stale'){
+    title='Projetos com ClickUp sem atualiza&ccedil;&atilde;o h&aacute; 15+ dias';
+    list=list.filter(function(p){var days=dashClickUpAgingDays(p);return dashProjectHasClickUpTrace(p)&&days!==null&&days>15;});
+  }else if(mode==='activation'){
+    title='Projetos que chegaram &agrave; ativa&ccedil;&atilde;o';
+    list=list.filter(function(p){return dashProjectStageInfo(p).stage==='ativacao';});
+  }
+  var rows=list.map(function(p){
+    var days=dashClickUpAgingDays(p);
+    return '<tr><td><strong>'+escapeHtml(p.cliente||'-')+'</strong></td><td>'+escapeHtml(p.consultor||'-')+'</td><td>'+escapeHtml(p.status||'-')+'</td><td>'+(days===null?'-':days+'d')+'</td><td>'+dashProjectActionCell(p)+'</td></tr>';
+  }).join('')||'<tr><td colspan="5">Nenhum projeto nesta regra.</td></tr>';
+  dashOpenAuditModal(title,'<div class="dashx-focus-note"><div><strong>Lista audit&aacute;vel do indicador selecionado.</strong></div><div class="dashx-focus-hint">'+list.length+' projeto(s)</div></div><div class="dashx-table-wrap" style="margin-top:12px"><table class="dashx-table"><thead><tr><th>Projeto</th><th>Consultor</th><th>Status</th><th>Dias ClickUp</th><th>A&ccedil;&atilde;o</th></tr></thead><tbody>'+rows+'</tbody></table></div>');
+  return false;
+}
+window.dashOpenTopKpiAudit=dashOpenTopKpiAudit;
 function dashRenderReliableHealthSection(health) {
   var mini =
     dashMiniCard('Completude cadastral', health.completude === null ? '-' : dashPct(health.completude), 'Cliente, consultor, status, link, mês e atualização.', dashMetricClass(health.completude, 70, 90, false), 'dataCompleteness', {clickable:true,onClick:"return dashOpenHealthAudit('issues')",foot:'Clique para ver a regra e os projetos'})+
@@ -9128,11 +9162,11 @@ function initDash() {
   var trackedPct = auditable ? Math.round((tracked / auditable) * 100) : null;
   var stale15 = Number(operation.bins['16–30'] || 0) + Number(operation.bins['31–45'] || 0) + Number(operation.bins['45+'] || 0);
   var topCards = '<div class="dashx-top-grid">'+
-    dashKpiCard('Projetos 2026', total, 'Somente a carteira identificada como 2026.', 'good', 'activeProjects', '<span class="dashx-kpi-delta neutral">Recorte fixo 2026</span>')+
-    dashKpiCard('Com rastreio ClickUp', trackedPct === null ? '-' : dashPct(trackedPct), tracked+' de '+auditable+' projeto(s) auditáveis possuem rastreio técnico.', dashMetricClass(trackedPct, 70, 90, false), 'aging', '<span class="dashx-kpi-delta neutral">'+untracked+' sem ClickUp</span>')+
-    dashKpiCard('ClickUp 15+ dias', stale15, 'Projetos rastreados sem atualização recente no ClickUp.', stale15 ? 'bad' : 'good', 'aging', '<span class="dashx-kpi-delta neutral">Regra: atualização ClickUp</span>')+
-    dashKpiCard('Taxa de ativação', activeRate === null ? '-' : dashPct(activeRate), activeRate === null ? 'Conversão indisponível.' : 'Conversão da jornada venda → ativação.', dashMetricClass(activeRate, 40, 70, false), 'funnel', '<span class="dashx-kpi-delta neutral">Base 2026</span>')+
-    dashKpiCard('Saúde dos dados', health.completude === null ? '-' : dashPct(health.completude), health.completude === null ? 'Não há base suficiente.' : (health.inconsistencias.length+' projeto(s) com campo essencial ausente.'), dashMetricClass(health.completude, 70, 90, false), 'dataHealthSummary', '<span class="dashx-kpi-delta neutral">'+health.syncErrors+' falha(s) de sync</span>')+
+    dashKpiCard('Projetos 2026', total, 'Somente a carteira identificada como 2026. Clique para listar.', 'good', 'activeProjects', '<span class="dashx-kpi-delta neutral">Recorte fixo 2026</span>', "return dashOpenTopKpiAudit('projects')")+
+    dashKpiCard('Com rastreio ClickUp', trackedPct === null ? '-' : dashPct(trackedPct), tracked+' de '+auditable+' projeto(s) auditáveis possuem rastreio técnico. Clique para listar.', dashMetricClass(trackedPct, 70, 90, false), 'aging', '<span class="dashx-kpi-delta neutral">'+untracked+' sem ClickUp</span>', "return dashOpenTopKpiAudit('tracked')")+
+    dashKpiCard('ClickUp 15+ dias', stale15, 'Projetos rastreados sem atualização recente no ClickUp. Clique para listar.', stale15 ? 'bad' : 'good', 'aging', '<span class="dashx-kpi-delta neutral">Regra: atualização ClickUp</span>', "return dashOpenTopKpiAudit('stale')")+
+    dashKpiCard('Taxa de ativação', activeRate === null ? '-' : dashPct(activeRate), activeRate === null ? 'Conversão indisponível.' : 'Conversão da jornada venda → ativação. Clique para listar.', dashMetricClass(activeRate, 40, 70, false), 'funnel', '<span class="dashx-kpi-delta neutral">Base 2026</span>', "return dashOpenTopKpiAudit('activation')")+
+    dashKpiCard('Saúde dos dados', health.completude === null ? '-' : dashPct(health.completude), health.completude === null ? 'Não há base suficiente.' : (health.inconsistencias.length+' projeto(s) com campo essencial ausente. Clique para listar.'), dashMetricClass(health.completude, 70, 90, false), 'dataHealthSummary', '<span class="dashx-kpi-delta neutral">'+health.syncErrors+' falha(s) de sync</span>', "return dashOpenTopKpiAudit('health')")+
   '</div>';
   var hero = '<div class="dashx-hero"><div class="dashx-hero-top"><div class="dashx-title-wrap"><div class="dashx-eyebrow">Dashboard Executivo CSI</div><div class="dashx-title">Visão operacional explicável</div><div class="dashx-sub">Somente indicadores de 2026 com fonte e regra auditáveis. MRR, rankings subjetivos e diárias sem conciliação foram retirados desta visão.</div></div><div class="dashx-meta"><span class="dashx-meta-chip"><b>Escopo</b> '+rotuloEscopoUsuario()+'</span><span class="dashx-meta-chip"><b>Ano</b> 2026</span><span class="dashx-meta-chip"><b>Projetos</b> '+total+'</span><span class="dashx-meta-chip"><b>Última base</b> '+(TOWER_INFO_CONTEXT.ultima || '-')+'</span></div></div>'+dashRenderFilters(base)+'</div>';
   var prioritySection = '<div class="dashx-section"><div class="dashx-section-head"><div><div class="dashx-section-kicker">Prioridade</div><div class="dashx-section-title">Carteira e entregas de 2026</div><div class="dashx-section-sub">Heatmap da entrada de projetos e produtividade baseada no Fechamento de Marcos validado.</div></div></div><div class="dashx-section-body"><div class="dashx-stack"><div class="dashx-focus-note"><div><strong>Distribuição da carteira.</strong> Cada célula mostra quantos projetos de 2026 entraram por consultor e mês.</div><div class="dashx-focus-hint">sem score subjetivo</div></div>'+dashRenderHeatmap(operation.heatMap)+dashRenderMilestoneProductivity2026()+dashRenderStatusStack(statusByMonth)+'</div></div></div>';
@@ -11690,6 +11724,11 @@ function consultantCanonicalName(name) {
   var value=String(name||'').trim();
   var key=value.normalize('NFD').replace(/[\u0300-\u036f]/g,'').toUpperCase();
   if(key==='YASMIN.SOUSA@MULTIBOVINOS.COM.BR')return 'Yasmin Sousa';
+  if(value.indexOf('@')>0){
+    return value.split('@')[0].split(/[._-]+/).filter(Boolean).map(function(part){
+      return part.charAt(0).toUpperCase()+part.slice(1).toLowerCase();
+    }).join(' ');
+  }
   return value;
 }
 function consultantCompKey(name) {
