@@ -2616,7 +2616,7 @@ function syncClickUpUserActivityApprox_(params, meta) {
     };
   }
   try {
-  var configuredMappings = loadProjectMappings_().filter(function(mapping) {
+  var configuredMappings = enrichClickUpActivityMappingsWithConsultants_(loadProjectMappings_()).filter(function(mapping) {
     return mapping.enabled;
   });
   var eligibleMappings = configuredMappings.filter(function(mapping) {
@@ -2934,6 +2934,7 @@ function buildApproxClickUpUserActivityFromTasks_(mappings, options) {
 
   (mappings || []).forEach(function(mapping) {
     try {
+      associateApproxProjectWithConsultant_(byKey, mapping);
       var projectDeadline = new Date().getTime() + Math.max(30000, Number(options.project_timeout_ms || 150000));
       if (options.execution_deadline_ms) projectDeadline = Math.min(projectDeadline, Number(options.execution_deadline_ms));
       var payload = fetchProjectTasks_(mapping, { deadline_ms: projectDeadline });
@@ -2977,7 +2978,7 @@ function buildApproxClickUpUserActivityFromTasks_(mappings, options) {
     item.dias_sem_acao = item.ultima_acao ? daysBetween_(new Date(item.ultima_acao), options.fetched_at) : '';
     item.total_eventos_periodo = item.total_eventos_periodo || 0;
     item.total_acoes_periodo = item.total_acoes_periodo || 0;
-    item.projetos_associados = Object.keys(item._projects || {}).length;
+    item.projetos_associados = Object.keys(item._portfolio_projects || {}).length;
     item.tarefas_atribuidas = item.tarefas_atribuidas || 0;
     item.tarefas_concluidas_estimadas = item.tarefas_concluidas_estimadas || 0;
     item.tarefas_criadas_estimadas = item.tarefas_criadas_estimadas || 0;
@@ -2990,6 +2991,7 @@ function buildApproxClickUpUserActivityFromTasks_(mappings, options) {
     }).slice(0, 300));
     item.modo_controle = 'estimado_por_tarefas';
     delete item._projects;
+    delete item._portfolio_projects;
     delete item._first_action;
     delete item._last_action;
     delete item._first_created;
@@ -3069,6 +3071,7 @@ function ensureApproxUser_(byKey, email, id, name, role, extras) {
       tarefas_criadas_hoje: 0,
       projetos_associados: 0,
       _projects: {},
+      _portfolio_projects: {},
       _first_action: 0,
       _last_action: 0,
       _first_created: 0,
@@ -3091,6 +3094,59 @@ function ensureApproxUser_(byKey, email, id, name, role, extras) {
   return item;
 }
 
+function findApproxUserByConsultant_(byKey, consultant) {
+  var target = normalizeKey_(consultant);
+  if (!target) return null;
+  var exact = null;
+  var partial = null;
+  Object.keys(byKey || {}).some(function(key) {
+    var item = byKey[key] || {};
+    var name = normalizeKey_(item.nome);
+    var email = normalizeKey_(item.email);
+    if (target === name || target === email) {
+      exact = item;
+      return true;
+    }
+    if (!partial && ((name && (target.indexOf(name) >= 0 || name.indexOf(target) >= 0)) ||
+        (email && (target.indexOf(email) >= 0 || email.indexOf(target) >= 0)))) {
+      partial = item;
+    }
+    return false;
+  });
+  return exact || partial;
+}
+
+function associateApproxProjectWithConsultant_(byKey, mapping) {
+  var item = findApproxUserByConsultant_(byKey, mapping && mapping.consultor);
+  var projectKey = sanitizeText_(mapping && (mapping.project_key || mapping.cliente));
+  if (!item || !projectKey) return null;
+  if (!item._portfolio_projects) item._portfolio_projects = {};
+  item._portfolio_projects[projectKey] = true;
+  return item;
+}
+
+function associateApproxConsultantMovement_(byKey, task, mapping, context, flags) {
+  flags = flags || {};
+  var item = associateApproxProjectWithConsultant_(byKey, mapping);
+  if (!item) return;
+  if (flags.updated_today || flags.created_today) {
+    addApproxTodayAction_(item, task, mapping, context, {
+      updated: flags.updated_today,
+      created: flags.created_today,
+      completed: !!(flags.completed && flags.updated_today),
+      timestamp: flags.updated_today ? flags.updated : flags.created
+    });
+  }
+  if (flags.updated_seven_days || flags.created_seven_days) {
+    addApproxSevenDayAction_(item, task, mapping, context, {
+      updated: flags.updated_seven_days,
+      created: flags.created_seven_days,
+      completed: !!(flags.completed && flags.updated_seven_days),
+      timestamp: flags.updated_seven_days ? flags.updated : flags.created
+    });
+  }
+}
+
 function aggregateApproxTaskForUsers_(byKey, task, mapping, options) {
   options = options || {};
   task = task || {};
@@ -3107,6 +3163,16 @@ function aggregateApproxTaskForUsers_(byKey, task, mapping, options) {
   var projectKey = sanitizeText_(mapping.project_key || mapping.cliente || '');
   var context = buildApproxTaskContext_(task, mapping);
   var seen = {};
+
+  associateApproxConsultantMovement_(byKey, task, mapping, context, {
+    updated_today: !!updatedToday,
+    created_today: !!createdToday,
+    updated_seven_days: !!updatedSevenDays,
+    created_seven_days: !!createdSevenDays,
+    completed: !!done,
+    updated: updated,
+    created: created
+  });
 
   (task.assignees || []).forEach(function(user) {
     var item = ensureApproxUser_(
@@ -3130,22 +3196,6 @@ function aggregateApproxTaskForUsers_(byKey, task, mapping, options) {
     if (updatedToday) item.tarefas_atualizadas_hoje += 1;
     if (done && updatedToday) item.tarefas_concluidas_hoje += 1;
     if (createdToday) item.tarefas_criadas_hoje += 1;
-    if (updatedToday || createdToday) {
-      addApproxTodayAction_(item, task, mapping, context, {
-        updated: !!updatedToday,
-        created: !!createdToday,
-        completed: !!(done && updatedToday),
-        timestamp: updated || created
-      });
-    }
-    if (updatedSevenDays || createdSevenDays) {
-      addApproxSevenDayAction_(item, task, mapping, context, {
-        updated: !!updatedSevenDays,
-        created: !!createdSevenDays,
-        completed: !!(done && updatedSevenDays),
-        timestamp: updatedSevenDays ? updated : created
-      });
-    }
     if (projectKey) item._projects[projectKey] = true;
     if (created && (!item._first_created || created < item._first_created)) {
       item._first_created = created;
@@ -3176,22 +3226,6 @@ function aggregateApproxTaskForUsers_(byKey, task, mapping, options) {
       creatorItem.tarefas_criadas_estimadas += 1;
       if (createdToday) creatorItem.tarefas_criadas_hoje += 1;
       if (updatedToday) creatorItem.tarefas_atualizadas_hoje += 1;
-      if (createdToday || updatedToday) {
-        addApproxTodayAction_(creatorItem, task, mapping, context, {
-          updated: !!updatedToday,
-          created: !!createdToday,
-          completed: false,
-          timestamp: updatedToday ? updated : created
-        });
-      }
-      if (createdSevenDays || updatedSevenDays) {
-        addApproxSevenDayAction_(creatorItem, task, mapping, context, {
-          updated: !!updatedSevenDays,
-          created: !!createdSevenDays,
-          completed: false,
-          timestamp: updatedSevenDays ? updated : created
-        });
-      }
       if (updatedInPeriod || createdInPeriod) {
         creatorItem.total_eventos_periodo += 1;
         creatorItem.total_acoes_periodo += 1;
@@ -3828,6 +3862,52 @@ function loadProjectMappings_() {
     });
   });
   return out;
+}
+
+function enrichClickUpActivityMappingsWithConsultants_(mappings) {
+  var cache = CacheService.getScriptCache();
+  var cacheKey = 'clickup_activity_consultants_v2';
+  var consultantMap = null;
+  try {
+    var cached = cache.get(cacheKey);
+    if (cached) consultantMap = JSON.parse(cached);
+  } catch (e) {
+    consultantMap = null;
+  }
+  if (!consultantMap) {
+    consultantMap = { by_project: {}, by_client: {} };
+    function addSource(item) {
+      var consultant = sanitizeText_(item && item.consultor);
+      var clientKey = normalizeKey_(item && item.cliente);
+      var projectKey = normalizeProjectKey_(item && item.project_key);
+      if (!consultant) return;
+      if (projectKey) consultantMap.by_project[projectKey] = consultant;
+      if (clientKey) consultantMap.by_client[clientKey] = consultant;
+    }
+    MONTHS.forEach(function(month) {
+      getMonthlyProjectsFromSheet_(month).forEach(addSource);
+    });
+    var inventorySheet = getClickUpInventorySheet_();
+    var inventoryValues = inventorySheet.getDataRange().getDisplayValues();
+    if (inventoryValues.length > 1) {
+      var inventoryHeader = inventoryValues[0];
+      inventoryValues.slice(1).forEach(function(row) {
+        addSource(rowToObject_(inventoryHeader, row));
+      });
+    }
+    try {
+      cache.put(cacheKey, JSON.stringify(consultantMap), 600);
+    } catch (e) {}
+  }
+  return (mappings || []).map(function(mapping) {
+    var enriched = {};
+    Object.keys(mapping || {}).forEach(function(key) { enriched[key] = mapping[key]; });
+    enriched.consultor = sanitizeText_(mapping && mapping.consultor) ||
+      consultantMap.by_project[normalizeProjectKey_(mapping && mapping.project_key)] ||
+      consultantMap.by_client[normalizeKey_(mapping && mapping.cliente)] ||
+      '';
+    return enriched;
+  });
 }
 
 function projectMappingFromConfigItem_(item) {
