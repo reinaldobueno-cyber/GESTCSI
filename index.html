@@ -5363,7 +5363,7 @@ function initFechamento() {
   });
   var monthNames = ['JAN','FEV','MAR','ABR','MAI','JUN','JUL','AGO','SET','OUT','NOV','DEZ'];
   var monthChips = '<div class="closing-year-groups">'+Object.keys(monthsByYear).sort().reverse().map(function(year) {
-      var chips = monthsByYear[year].map(function(month) {
+      var chips = monthsByYear[year].slice().sort().map(function(month) {
         var monthIndex = Number(String(month).slice(5,7)) - 1;
         var label = monthNames[monthIndex] || month;
         return '<button class="closing-filter-chip '+(month === FECHAMENTO_FILTER.month ? 'on' : '')+'" onclick="return fechamentoSetFilter(\'month\',\''+escapeHtml(month)+'\')">'+escapeHtml(label)+'</button>';
@@ -11975,7 +11975,7 @@ function renderDiariasCmax() {
   var monthsByYear={};
   months.forEach(function(month){var year=month.slice(0,4);if(!monthsByYear[year])monthsByYear[year]=[];monthsByYear[year].push(month);});
   var monthChips='<div class="cmax-year-groups">'+Object.keys(monthsByYear).sort().reverse().map(function(year){
-    return '<div class="cmax-year-group"><div class="cmax-year-label">'+year+'</div><div class="cmax-filter-chips">'+monthsByYear[year].sort().reverse().map(function(month){return cmaxChip('month',month,cmaxMonthLabel(month),(s.loadedMonths||[]).indexOf(month)>=0?'':'pending');}).join('')+'</div></div>';
+    return '<div class="cmax-year-group"><div class="cmax-year-label">'+year+'</div><div class="cmax-filter-chips">'+monthsByYear[year].sort().map(function(month){return cmaxChip('month',month,cmaxMonthLabel(month),(s.loadedMonths||[]).indexOf(month)>=0?'':'pending');}).join('')+'</div></div>';
   }).join('')+'</div>';
   var consultantChips=consultants.map(function(name){return cmaxChip('consultant',name,name);}).join('');
   var activityChips=(s.activities||[]).slice().sort(cmaxActivityOrder).map(function(name){return cmaxChip('activity',name,name,cmaxActivityCountsDaily(name)?'eligible':'');}).join('');
