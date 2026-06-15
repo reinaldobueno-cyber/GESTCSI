@@ -3121,7 +3121,9 @@ body.theme-dark .tower-kpis [style*="background:#fff"]{
 .cmax-empty{padding:28px;text-align:center;color:var(--text2)}
 .cmax-status{padding:10px 12px;border:1px solid var(--border);background:var(--surf);border-radius:10px;color:var(--text2);font-size:11px}
 .cmax-modalities{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:10px}
-.cmax-modality{background:var(--surf);border:1px solid var(--border);border-radius:12px;padding:12px 14px}
+.cmax-modality{width:100%;background:var(--surf);border:1px solid var(--border);border-radius:12px;padding:12px 14px;text-align:left;font:inherit;color:inherit}
+.cmax-modality.clickable{cursor:pointer;transition:transform .16s ease,box-shadow .16s ease,border-color .16s ease}
+.cmax-modality.clickable:hover{transform:translateY(-1px);border-color:var(--border2);box-shadow:0 8px 20px rgba(20,32,24,.08)}
 .cmax-modality span{display:block;color:var(--muted);font-size:9px;font-weight:900;letter-spacing:.1em;text-transform:uppercase}
 .cmax-modality strong{display:block;color:var(--text);font-size:21px;margin-top:5px}
 .cmax-modality.eligible{border-color:#78a98a;background:#edf8ef;box-shadow:inset 4px 0 0 #28744c}
@@ -9186,6 +9188,28 @@ function dashRenderCohort(cohort, list) {
   }).join('') : '<tr class="empty-row"><td colspan="6">Sem cohort disponível para o recorte atual.</td></tr>';
   return '<div class="dashx-matrix"><table><colgroup><col style="width:16%"><col style="width:12%"><col style="width:18%"><col style="width:18%"><col style="width:18%"><col style="width:18%"></colgroup><thead><tr><th>Mês da venda</th><th class="center">Vendidos</th><th class="center">Kickoff %</th><th class="center">1º Treinamento %</th><th class="center">Ativação %</th><th class="tempo">Tempo médio até ativação</th></tr></thead><tbody>'+rows+'</tbody></table></div><div class="dashx-cohort-note"><strong>Ativação:</strong> usa a data explícita de ativação quando ela existe. Quando não existe, o painel estima como ativado se o projeto já tem 1º treinamento e sinal operacional de andamento/conclusão ou diárias realizadas. Clique nos percentuais para auditar os projetos pendentes de cada mês.</div>';
 }
+function dashRenderIdleSignal(list) {
+  var month=cmaxCurrentMonth();
+  var monthEvents=(CMAX_DAILY_STATE.events||[]).filter(function(item){return String(item.mes||'')===month;});
+  var loaded=(CMAX_DAILY_STATE.loadedMonths||[]).indexOf(month)>=0||monthEvents.length>0;
+  if(!loaded)return '<div class="dashx-unavailable"><strong>Sinal de ociosidade aguardando agenda CMAX</strong><span>Carregue ou atualize o mês atual na guia Diárias CMAX para combinar agenda e movimentações ClickUp.</span></div>';
+  var activeProjects=(list||[]).filter(function(p){var status=dashStatusKey(p&&p.status);return status!=='cancelado'&&status!=='concluido';});
+  var names=bonusCanonicalNames((CMAX_DAILY_STATE.trainingTeam||[]).concat(activeProjects.map(function(p){return p.consultor;}))).filter(function(name){return name&&name!=='Sem consultor';});
+  var rows=names.map(function(name){
+    var cmax=monthEvents.filter(function(item){return bonusNamesMatch(item.consultor,name);}).length;
+    var projects=activeProjects.filter(function(p){return bonusNamesMatch(p.consultor,name);});
+    var recent=projects.filter(function(p){var date=dashLastClickUpUpdateDate(p);return date&&diffD(date,new Date())<=7;}).length;
+    var signal=cmax+recent;
+    return {name:name,cmax:cmax,projects:projects.length,recent:recent,possibleIdle:cmax===0&&recent===0,signal:signal};
+  }).sort(function(a,b){return Number(b.possibleIdle)-Number(a.possibleIdle)||a.signal-b.signal||a.name.localeCompare(b.name);});
+  var possible=rows.filter(function(row){return row.possibleIdle;}).length;
+  var max=Math.max(1,rows.reduce(function(value,row){return Math.max(value,row.signal);},0));
+  var content=rows.map(function(row){
+    var width=Math.max(row.signal?5:0,Math.round(row.signal/max*100));
+    return '<div class="dashx-bar-row"><div class="dashx-bar-label"><strong>'+escapeHtml(row.name)+'</strong><div class="dashx-list-sub">'+row.projects+' projeto(s) ativo(s) &middot; '+row.recent+' atualizado(s) no ClickUp em 7 dias &middot; '+row.cmax+' atividade(s) CMAX no m&ecirc;s</div></div><div class="dashx-bar-track"><div class="dashx-bar-fill" style="width:'+width+'%;background:'+(row.possibleIdle?'#c96c5f':'#6d8e72')+'"></div></div><div class="dashx-bar-value">'+(row.possibleIdle?'Possível ociosidade':row.signal+' sinais')+'</div></div>';
+  }).join('')||'<div class="empty">Sem consultores para analisar.</div>';
+  return '<div class="dashx-chart-card"><div class="dashx-chart-head"><div><div class="dashx-chart-title">Sinal combinado de ociosidade</div><div class="dashx-chart-sub">Possível ociosidade significa ausência simultânea de atividades na agenda CMAX do mês e de atualizações ClickUp nos projetos ativos nos últimos 7 dias. É um sinal para investigação, não uma conclusão sobre produtividade.</div></div><div class="dashx-chart-meta"><span class="dashx-chart-note">'+possible+' possível(is)</span></div></div><div class="dashx-bars">'+content+'</div></div>';
+}
 
 function initDash() {
   var sourceAll = projetosVisiveisParaUsuario(Array.isArray(DATA.projetos) ? DATA.projetos.slice() : []).filter(function(p) {
@@ -9226,10 +9250,11 @@ function initDash() {
   var hero = '<div class="dashx-hero"><div class="dashx-hero-top"><div class="dashx-title-wrap"><div class="dashx-eyebrow">Dashboard Executivo CSI</div><div class="dashx-title">Visão operacional explicável</div><div class="dashx-sub">Somente indicadores de 2026 com fonte e regra auditáveis. MRR, rankings subjetivos e diárias sem conciliação foram retirados desta visão.</div></div><div class="dashx-meta"><span class="dashx-meta-chip"><b>Escopo</b> '+rotuloEscopoUsuario()+'</span><span class="dashx-meta-chip"><b>Ano</b> 2026</span><span class="dashx-meta-chip"><b>Projetos</b> '+total+'</span><span class="dashx-meta-chip"><b>Última base</b> '+(TOWER_INFO_CONTEXT.ultima || '-')+'</span></div></div>'+dashRenderFilters(base)+'</div>';
   var prioritySection = '<div class="dashx-section"><div class="dashx-section-head"><div><div class="dashx-section-kicker">Prioridade</div><div class="dashx-section-title">Carteira e entregas de 2026</div><div class="dashx-section-sub">Heatmap da entrada de projetos e produtividade baseada no Fechamento de Marcos validado.</div></div></div><div class="dashx-section-body"><div class="dashx-stack"><div class="dashx-focus-note"><div><strong>Distribuição da carteira.</strong> Cada célula mostra quantos projetos de 2026 entraram por consultor e mês.</div><div class="dashx-focus-hint">sem score subjetivo</div></div>'+dashRenderHeatmap(operation.heatMap)+dashRenderMilestoneProductivity2026()+dashRenderStatusStack(statusByMonth)+'</div></div></div>';
   var clickUpTrackingSection = '<div class="dashx-section"><div class="dashx-section-head"><div><div class="dashx-section-kicker">Rastreabilidade</div><div class="dashx-section-title">Cobertura técnica do ClickUp</div><div class="dashx-section-sub">Mostra a cobertura de rastreio por consultor e identifica os projetos que ainda não entram na auditoria técnica do ClickUp.</div></div><div class="dashx-section-answer"><span class="dashx-answer-chip">'+tracked+' rastreado(s) · '+untracked+' sem ClickUp</span></div></div><div class="dashx-section-body"><div class="dashx-stack">'+dashRenderClickUpTracker(operation, total)+dashRenderUntrackedClickUpList(operation.untrackedProjects || [], operation.untrackedTotal)+'</div></div></div>';
+  var idleSection = '<div class="dashx-section"><div class="dashx-section-head"><div><div class="dashx-section-kicker">Capacidade</div><div class="dashx-section-title">Sinais de ociosidade</div><div class="dashx-section-sub">Cruza agenda CMAX, carteira ativa e movimentações recentes do ClickUp para indicar onde a liderança deve investigar disponibilidade.</div></div></div><div class="dashx-section-body">'+dashRenderIdleSignal(list)+'</div></div>';
   var healthSection = '<div class="dashx-section"><div class="dashx-section-head"><div><div class="dashx-section-kicker">Qualidade</div><div class="dashx-section-title">Saúde dos dados</div><div class="dashx-section-sub">Somente verificações objetivas de cadastro, sync e atualização.</div></div></div><div class="dashx-section-body">'+dashRenderReliableHealthSection(health)+'</div></div>';
   var funnelSection = '<div class="dashx-section"><div class="dashx-section-head"><div><div class="dashx-section-kicker">Evolução</div><div class="dashx-section-title">Funil de Implantação</div><div class="dashx-section-sub">Acompanha venda, kickoff, primeiro treinamento e ativação com as datas disponíveis.</div></div><div class="dashx-section-answer"><span class="dashx-answer-chip">'+(activeRate === null ? 'Conversão indisponível' : (activeRate+'% de ativação'))+'</span></div></div><div class="dashx-section-body">'+dashRenderFunnel(funnel, list)+'</div></div>';
   var cohortSection = '<div class="dashx-section"><div class="dashx-section-head"><div><div class="dashx-section-kicker">Evolução</div><div class="dashx-section-title">Cohort Mensal</div><div class="dashx-section-sub">Mostra se os projetos vendidos em cada mês avançaram nas etapas de implantação.</div></div></div><div class="dashx-section-body">'+dashRenderCohort(cohort, list)+'</div></div>';
-  dc.innerHTML = '<div class="dashx-shell">'+hero+topCards+prioritySection+clickUpTrackingSection+cohortSection+funnelSection+healthSection+'</div>';
+  dc.innerHTML = '<div class="dashx-shell">'+hero+topCards+prioritySection+idleSection+clickUpTrackingSection+cohortSection+funnelSection+healthSection+'</div>';
   dashBindDashboardInteractions(dc);
 }
 
@@ -12151,6 +12176,19 @@ function cmaxActivityLabel(item) {
   var label=escapeHtml(cmaxModeLabel(item));
   return cmaxCountsDaily(item)?'<span class="cmax-eligible-label">'+label+'</span>':label;
 }
+function cmaxOpenModality(encodedName) {
+  var name=decodeURIComponent(encodedName||'');
+  var events=cmaxFilteredEvents().filter(function(item){return cmaxModeLabel(item)===name;}).sort(function(a,b){
+    return String(a.data||'').localeCompare(String(b.data||''))||String(a.consultor||'').localeCompare(String(b.consultor||''))||String(a.hora_inicio||'').localeCompare(String(b.hora_inicio||''));
+  });
+  var rows=events.map(function(item){
+    var info=cmaxDateInfo(item.data),start=cmaxTime(item.hora_inicio)||'-',end=cmaxTime(item.hora_fim);
+    return '<tr><td><strong>'+escapeHtml(item.cliente||'-')+'</strong></td><td>'+escapeHtml(item.consultor||'-')+'</td><td>'+escapeHtml(info.date)+'</td><td>'+escapeHtml(start+(end?' - '+end:''))+'</td><td>'+(cmaxCountsDaily(item)?'<span class="cmax-eligible-label">Conta como di&aacute;ria</span>':'Atividade complementar')+'</td></tr>';
+  }).join('')||'<tr><td colspan="5">Nenhum registro nesta modalidade.</td></tr>';
+  dashOpenAuditModal(name+' — '+events.length+' registro(s)','<div class="dashx-focus-note"><div><strong>Detalhamento da modalidade no recorte selecionado.</strong></div><div class="dashx-focus-hint">'+events.length+' atividade(s)</div></div><div class="dashx-table-wrap" style="margin-top:12px"><table class="dashx-table"><thead><tr><th>Cliente</th><th>Consultor</th><th>Data</th><th>Hor&aacute;rio</th><th>Classifica&ccedil;&atilde;o</th></tr></thead><tbody>'+rows+'</tbody></table></div>');
+  return false;
+}
+window.cmaxOpenModality=cmaxOpenModality;
 function cmaxChip(key,value,label,extraClass) {
   return '<button class="cmax-filter-chip '+(extraClass||'')+' '+(CMAX_DAILY_STATE[key]===value?'on':'')+'" onclick="return cmaxSetFilter(\''+key+'\',decodeURIComponent(\''+encodeURIComponent(value)+'\'))">'+escapeHtml(label||value)+'</button>';
 }
@@ -12254,7 +12292,7 @@ function renderDiariasCmax() {
     var priority=cmaxActivityOrder(a,b);
     return priority||modalities[b]-modalities[a];
   }).map(function(name){
-    return '<div class="cmax-modality '+(cmaxActivityCountsDaily(name)?'eligible':'')+'"><span>'+escapeHtml(name)+'</span><strong>'+modalities[name]+'</strong></div>';
+    return '<button type="button" class="cmax-modality clickable '+(cmaxActivityCountsDaily(name)?'eligible':'')+'" onclick="return cmaxOpenModality(\''+encodeURIComponent(name)+'\')"><span>'+escapeHtml(name)+'</span><strong>'+modalities[name]+'</strong></button>';
   }).join('');
   var syncButton=AUTH_STATE.user&&AUTH_STATE.user.role==='admin'
     ? '<button class="btn-syncall" onclick="sincronizarDiariasCmax(this)">Atualizar hist&oacute;rico CMAX</button>'
@@ -12265,7 +12303,7 @@ function renderDiariasCmax() {
     return '<div class="cmax-year-group"><div class="cmax-year-label">'+year+'</div><div class="cmax-filter-chips">'+monthsByYear[year].sort().map(function(month){return cmaxChip('month',month,cmaxMonthLabel(month),(s.loadedMonths||[]).indexOf(month)>=0?'':'pending');}).join('')+'</div></div>';
   }).join('')+'</div>';
   var consultantChips=consultants.map(function(name){return cmaxChip('consultant',name,name);}).join('');
-  var activityChips=(s.activities||[]).slice().sort(cmaxActivityOrder).map(function(name){return cmaxChip('activity',name,name,cmaxActivityCountsDaily(name)?'eligible':'');}).join('');
+  var activityChips=(s.activities||[]).filter(cmaxActivityCountsDaily).sort(cmaxActivityOrder).map(function(name){return cmaxChip('activity',name,name,'eligible');}).join('');
   var groups=Object.keys(byConsultant).sort().map(function(name){
     var events=byConsultant[name].sort(function(a,b){
       var dateOrder=String(a.data||'').localeCompare(String(b.data||''));
@@ -12286,7 +12324,7 @@ function renderDiariasCmax() {
   }).join('');
   var history=s.historySync||{};
   var status=s.loading?'Consultando a base salva...':s.error?escapeHtml(s.error):history.error?('Carga hist&oacute;rica interrompida: '+escapeHtml(history.error)):history.active?('Hist&oacute;rico CMAX em andamento: '+(s.loadedMonths||[]).length+' de '+months.length+' m&ecirc;s(es) dispon&iacute;veis. &Uacute;ltimo processado: '+escapeHtml(history.last_month||'-')+'; pr&oacute;ximo: '+escapeHtml(history.next_month||'-')+'.'):(s.syncedAt?'Hist&oacute;rico carregado: '+(s.loadedMonths||[]).length+' de '+months.length+' m&ecirc;s(es). &Uacute;ltima sincroniza&ccedil;&atilde;o: '+escapeHtml(s.syncedAt):'Ainda sem sincroniza&ccedil;&atilde;o CMAX.');
-  box.innerHTML='<div class="cmax-shell"><div class="cmax-hero"><div><div class="cmax-title">Di&aacute;rias e atividades realizadas no CMAX</div><div class="cmax-sub">Meio per&iacute;odo de treinamento (at&eacute; 4 horas) vale <strong>0,5 di&aacute;ria</strong>; acima disso vale <strong>1 di&aacute;ria</strong>. Fins de semana e feriados nacionais/oficiais de Goi&acirc;nia recebem destaque e multiplicador financeiro de <strong>1,5x</strong>.</div></div></div><div class="cmax-status">'+status+'</div><div class="cmax-filter-block"><div class="cmax-filter-label">Ano e m&ecirc;s realizado <span style="text-transform:none;letter-spacing:0">(clique novamente no m&ecirc;s para ver o geral)</span></div>'+monthChips+'<div class="cmax-filter-label" style="margin-top:14px">Consultores do time de treinamento</div><div class="cmax-filter-chips">'+consultantChips+'</div><div class="cmax-filter-label" style="margin-top:14px">Atividades <span style="text-transform:none;letter-spacing:0">(treinamentos destacados contam como di&aacute;ria)</span></div><div class="cmax-filter-chips">'+activityChips+'</div><input class="cmax-filter-search" type="search" placeholder="Filtrar cliente..." value="'+escapeHtml(s.search)+'" oninput="CMAX_DAILY_STATE.search=this.value;renderDiariasCmax()">'+(syncButton?'<div class="cmax-filter-footer">'+syncButton+'</div>':'')+'</div><div class="cmax-summary"><div class="cmax-card"><span>Di&aacute;rias equivalentes</span><strong>'+cmaxEquivalentLabel(dailyEquivalent)+'</strong></div><div class="cmax-card"><span>Di&aacute;rias especiais 1,5x</span><strong>'+cmaxEquivalentLabel(specialEquivalent)+'</strong></div><div class="cmax-card"><span>Registros positivos</span><strong>'+list.length+'</strong></div><div class="cmax-card"><span>Consultores com atividade</span><strong>'+Object.keys(byConsultant).length+'</strong></div><div class="cmax-card"><span>Clientes atendidos</span><strong>'+clients+'</strong></div></div><div><div class="sh"><div class="sh-title">Quantitativo por modalidade</div></div><div class="cmax-modalities">'+modalityCards+'</div></div>'+(groups||'<div class="cmax-empty">Nenhuma atividade positiva encontrada neste recorte.</div>')+'</div>';
+  box.innerHTML='<div class="cmax-shell"><div class="cmax-hero"><div><div class="cmax-title">Di&aacute;rias e atividades realizadas no CMAX</div><div class="cmax-sub">Meio per&iacute;odo de treinamento (at&eacute; 4 horas) vale <strong>0,5 di&aacute;ria</strong>; acima disso vale <strong>1 di&aacute;ria</strong>. Fins de semana e feriados nacionais/oficiais de Goi&acirc;nia recebem destaque e multiplicador financeiro de <strong>1,5x</strong>.</div></div></div><div class="cmax-status">'+status+'</div><div class="cmax-filter-block"><div class="cmax-filter-label">Ano e m&ecirc;s realizado <span style="text-transform:none;letter-spacing:0">(clique novamente no m&ecirc;s para ver o geral)</span></div>'+monthChips+'<div class="cmax-filter-label" style="margin-top:14px">Consultores do time de treinamento</div><div class="cmax-filter-chips">'+consultantChips+'</div><div class="cmax-filter-label" style="margin-top:14px">Atividades que contam como di&aacute;ria <span style="text-transform:none;letter-spacing:0">(outras atividades permanecem nos cards, detalhes e calend&aacute;rio)</span></div><div class="cmax-filter-chips">'+activityChips+'</div><input class="cmax-filter-search" type="search" placeholder="Filtrar cliente..." value="'+escapeHtml(s.search)+'" oninput="CMAX_DAILY_STATE.search=this.value;renderDiariasCmax()">'+(syncButton?'<div class="cmax-filter-footer">'+syncButton+'</div>':'')+'</div><div class="cmax-summary"><div class="cmax-card"><span>Di&aacute;rias equivalentes</span><strong>'+cmaxEquivalentLabel(dailyEquivalent)+'</strong></div><div class="cmax-card"><span>Di&aacute;rias especiais 1,5x</span><strong>'+cmaxEquivalentLabel(specialEquivalent)+'</strong></div><div class="cmax-card"><span>Registros positivos</span><strong>'+list.length+'</strong></div><div class="cmax-card"><span>Consultores com atividade</span><strong>'+Object.keys(byConsultant).length+'</strong></div><div class="cmax-card"><span>Clientes atendidos</span><strong>'+clients+'</strong></div></div><div><div class="sh"><div class="sh-title">Quantitativo por modalidade <span style="font-weight:700;text-transform:none;letter-spacing:0;color:var(--muted)">Clique em um card para ver os registros</span></div></div><div class="cmax-modalities">'+modalityCards+'</div></div>'+(groups||'<div class="cmax-empty">Nenhuma atividade positiva encontrada neste recorte.</div>')+'</div>';
 }
 function carregarDiariasCmax(force) {
   if(!force&&CMAX_DAILY_STATE.loaded){renderDiariasCmax();return;}
