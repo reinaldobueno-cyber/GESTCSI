@@ -4607,6 +4607,14 @@ function normalizeBonusSalesIndicationType_(value) {
   return '';
 }
 
+function bonusSalesDateText_(value) {
+  if (value instanceof Date) return Utilities.formatDate(value, Session.getScriptTimeZone(), 'yyyy-MM-dd');
+  var text = String(value || '').trim();
+  var iso = text.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (iso) return iso[1] + '-' + iso[2] + '-' + iso[3];
+  return '';
+}
+
 function getBonusSalesIndications_(params) {
   requireAdmin_(params || {});
   var month = sanitizeMonth_(params.month);
@@ -4615,14 +4623,17 @@ function getBonusSalesIndications_(params) {
   var header = values[0] || [];
   var items = values.slice(1).map(function(row) {
     var item = rowToObject_(header, row);
+    var indicationDate = bonusSalesDateText_(item.indication_date);
+    var saleDate = bonusSalesDateText_(item.sale_date);
+    var month = saleDate ? saleDate.slice(0, 7) : sanitizeMonth_(item.month);
     return {
       id: sanitizeText_(item.id),
       consultant_name: sanitizeText_(item.consultant_name),
       client: sanitizeText_(item.client),
       indication_type: normalizeBonusSalesIndicationType_(item.indication_type),
-      indication_date: item.indication_date instanceof Date ? Utilities.formatDate(item.indication_date, Session.getScriptTimeZone(), 'yyyy-MM-dd') : String(item.indication_date || '').slice(0, 10),
-      sale_date: item.sale_date instanceof Date ? Utilities.formatDate(item.sale_date, Session.getScriptTimeZone(), 'yyyy-MM-dd') : String(item.sale_date || '').slice(0, 10),
-      month: sanitizeMonth_(item.month),
+      indication_date: indicationDate,
+      sale_date: saleDate,
+      month: month,
       value: Number(item.value || 0),
       notes: sanitizeText_(item.notes),
       created_at: item.created_at instanceof Date ? item.created_at.toISOString() : String(item.created_at || ''),
@@ -4664,6 +4675,9 @@ function saveBonusSalesIndication_(params) {
     createdAt,
     createdBy
   ]);
+  var appendedRow = sheet.getLastRow();
+  var monthColumn = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0].indexOf('month') + 1;
+  if (monthColumn) sheet.getRange(appendedRow, monthColumn).setNumberFormat('@').setValue(month);
   return {
     ok: true,
     item: {

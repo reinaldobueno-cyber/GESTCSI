@@ -5497,7 +5497,8 @@ function bonusLoadIndications(force) {
   BONUS_INDICATION_STATE.loading=true;
   return chamarAppsScriptJsonp('getBonusSalesIndications',{auth_token:authTokenParam(),month:month},15000).then(function(resp){
     if(!resp||resp.ok===false||!Array.isArray(resp.items))throw new Error((resp&&resp.error)||'Falha ao carregar indicações.');
-    BONUS_INDICATION_STATE.items=resp.items;
+    var pending=(BONUS_INDICATION_STATE.items||[]).filter(function(item){return item.month===month&&!resp.items.some(function(remote){return remote.id===item.id;});});
+    BONUS_INDICATION_STATE.items=resp.items.concat(pending);
     BONUS_INDICATION_STATE.loadedMonth=month;
     BONUS_INDICATION_STATE.loading=false;
     initBonus();
@@ -5534,6 +5535,7 @@ function bonusDeleteIndication(id,button) {
   if(button)button.disabled=true;
   return chamarAppsScriptJsonp('deleteBonusSalesIndication',{auth_token:authTokenParam(),id:id},15000).then(function(resp){
     if(!resp||resp.ok===false)throw new Error((resp&&resp.error)||'Falha ao excluir indicação.');
+    BONUS_INDICATION_STATE.items=(BONUS_INDICATION_STATE.items||[]).filter(function(item){return item.id!==id;});
     BONUS_INDICATION_STATE.loadedMonth='';
     showToast('Indicação excluída.','ok');
     return bonusLoadIndications(true);
