@@ -11707,6 +11707,7 @@ function consultantCompensation(name) {
   var matched=best||(firstTokenMatches.length===1?firstTokenMatches[0]:null);
   if(matched&&matched.seniority)return matched;
   if(tokens[0]==='GUILHERME')return {consultant_key:'GUILHERME',consultant_name:name,seniority:'master',daily_value:220,source:'default'};
+  if(tokens[0]==='EVELYN')return {consultant_key:'EVELYN',consultant_name:name,seniority:'pleno',daily_value:85,source:'default'};
   return {seniority:'',daily_value:0};
 }
 function consultantSeniorityLabel(value) {

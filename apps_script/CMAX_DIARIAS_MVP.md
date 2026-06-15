@@ -74,7 +74,7 @@ Quando o token CMAX expira, o Apps Script autentica novamente em
 # Senioridade e bonificacao
 
 - Junior: R$ 60,00 por diaria integral.
-- Pleno: R$ 85,00 por diaria integral.
+- Pleno: R$ 85,00 por diaria integral, atualmente aplicada a Evelyn.
 - Senior: R$ 110,00 por diaria integral.
 - Master: R$ 220,00 por diaria integral, atualmente aplicada ao Guilherme.
 - Treinamento de ate 4 horas equivale a 0,5 diaria.
