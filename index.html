@@ -4528,6 +4528,27 @@ function setAcompFilter(filter) {
   initAcomp();
   return false;
 }
+function acompOpenFilterPopup(filter,label) {
+  var previous=ACOMP_VIEW_FILTER;
+  ACOMP_VIEW_FILTER=filter||'todos';
+  var rows=acompFilterList(acompBase());
+  ACOMP_VIEW_FILTER=previous;
+  var months=ordenarMesesPainel(Array.from(new Set(rows.map(function(item){return item.mes||'SEM';}))));
+  var html=months.map(function(month){
+    var monthRows=rows.filter(function(item){return item.mes===month;}).sort(function(a,b){
+      return String(a.cliente||'').localeCompare(String(b.cliente||''));
+    });
+    var body=monthRows.map(function(x){
+      var meta=x.bucketMeta;
+      var cls=meta.cls==='ok'?'ok':meta.cls==='bad'?'bad':meta.cls==='warn'?'warn':'neu';
+      return '<tr class="clickable" onclick="return acompProjectInfoPopup(\''+jsQuote(x.projectKey)+'\')" title="Clique para abrir os detalhes"><td><strong>'+escapeHtml(x.cliente)+'</strong><div class="dashx-list-sub">'+escapeHtml(x.consultor)+'</div></td><td><span class="acom-status '+cls+'">'+meta.label+'</span></td><td>'+(x.dias!==null&&x.dias!==undefined?x.dias+'d':'-')+'</td><td>'+escapeHtml(x.status)+'</td><td>'+escapeHtml(x.fonte)+'</td></tr>';
+    }).join('');
+    return '<div class="bonus-section"><div class="bonus-section-title">'+escapeHtml(month)+' &middot; '+monthRows.length+' projeto(s)</div><div class="dashx-table-wrap"><table class="dashx-table"><thead><tr><th>Projeto</th><th>Faixa</th><th>Dias</th><th>Status</th><th>Fonte</th></tr></thead><tbody>'+body+'</tbody></table></div></div>';
+  }).join('');
+  dashOpenAuditModal((label||'Projetos de acompanhamento')+' — '+rows.length+' projeto(s)',html||'<div class="empty">Nenhum projeto para este filtro.</div>');
+  return false;
+}
+window.acompOpenFilterPopup=acompOpenFilterPopup;
 function abrirAcompanhamentosPendentes(btn) {
   ACOMP_VIEW_FILTER = 'pendentes';
   goTab('acom', btn || null);
@@ -5124,12 +5145,11 @@ function initAcomp() {
     '<div class="acom-shell">'+
       '<div class="acom-hero"><div><div class="acom-kicker">Setup proposto</div><div class="acom-title">Controle mensal de acompanhamento</div><div class="acom-sub">Observa&ccedil;&otilde;es s&atilde;o o contexto inicial do projeto. Acompanhamento &eacute; o registro datado que mostra se a coordena&ccedil;&atilde;o olhou aquele projeto no per&iacute;odo. A base usa o mesmo recorte fixo de projetos de 2026 da vis&atilde;o executiva.</div></div><div class="acom-hero-meta"><span class="acom-chip"><b>Per&iacute;odo</b> '+periodo+'</span><span class="acom-chip"><b>Total 2026</b> '+resumoBase.total+' projeto(s)</span><span class="acom-chip"><b>Ativos</b> '+resumoBase.ativos+'</span><span class="acom-chip"><b>Concl./cancel.</b> '+resumoBase.fora+'</span><span class="acom-chip"><b>Cr&iacute;ticos</b> '+criticos+'</span></div></div>'+
       '<div class="kpis">'+
-        kpi('Carteira 2026', total, 'b', 'onclick="return setAcompFilter(\'todos\')"', 'clique para listar todos')+
-        kpi('Acompanhados', acompanhados, 'g', 'onclick="return setAcompFilter(\'acompanhados\')"', acompPercent(acompanhados,total)+'% da carteira &middot; clique para listar')+
-        kpi('Faltam registrar', semRegistro, semRegistro ? 'o' : 'g', 'onclick="return setAcompFilter(\'sem-registro\')"', semRegistro ? 'clique para listar os sem registro' : 'cobertura completa')+
-        kpi('Cr&iacute;ticos', criticos, criticos ? 'r' : 'g', 'onclick="return setAcompFilter(\'criticos\')"', 'sem registro ou acima de 30 dias &middot; clique para listar')+
+        kpi('Carteira 2026', total, 'b', 'onclick="return acompOpenFilterPopup(\'todos\',\'Carteira 2026\')"', 'clique para listar todos')+
+        kpi('Acompanhados', acompanhados, 'g', 'onclick="return acompOpenFilterPopup(\'acompanhados\',\'Acompanhados\')"', acompPercent(acompanhados,total)+'% da carteira &middot; clique para listar')+
+        kpi('Faltam registrar', semRegistro, semRegistro ? 'o' : 'g', 'onclick="return acompOpenFilterPopup(\'sem-registro\',\'Faltam registrar\')"', semRegistro ? 'clique para listar os sem registro' : 'cobertura completa')+
+        kpi('Cr&iacute;ticos', criticos, criticos ? 'r' : 'g', 'onclick="return acompOpenFilterPopup(\'criticos\',\'Cr&iacute;ticos\')"', 'sem registro ou acima de 30 dias &middot; clique para listar')+
       '</div>'+
-      '<div class="acom-panel"><div class="acom-panel-head"><div><div class="acom-panel-title">Projetos do filtro</div><div class="acom-panel-note">Clique em um projeto para abrir os detalhes</div></div></div><div class="acom-panel-body"><div class="dashx-table-wrap"><table class="dashx-table"><thead><tr><th>Projeto</th><th>Faixa</th><th>Dias</th><th>Fonte</th><th>Status</th><th>Registro</th></tr></thead><tbody>'+acompRenderRows(list)+'</tbody></table></div></div></div>'+
       '<div class="acom-panel"><div class="acom-panel-head"><div><div class="acom-panel-title">Registrar no site</div><div class="acom-panel-note">'+syncNote+'</div></div></div><div class="acom-panel-body"><form id="acom-form" class="acom-form" onsubmit="return salvarAcompanhamentoProjeto(this.querySelector(\'.acom-save\'))">'+
         '<div class="acom-field"><label for="acom-form-project-search">Projeto</label><input id="acom-form-project-search" type="search" placeholder="Digite para filtrar cliente, consultor ou m&ecirc;s" autocomplete="off" oninput="acompFilterProjectSelect()"><select id="acom-form-project" required onchange="acompProjectSelectChanged()" onclick="acompCommitProjectSelection()" onkeyup="if(event.key===\'Enter\') acompCommitProjectSelection()"><option value="">Selecione o projeto</option>'+acompProjectOptions(list)+'</select><div id="acom-form-project-help" class="acom-field-help">Digite para filtrar. A lista abaixo permanece agrupada por m&ecirc;s de entrada e data da venda.</div></div>'+
         '<div class="acom-field"><label for="acom-form-date">Data</label><input id="acom-form-date" type="date" value="'+acompTodayIso()+'" required></div>'+
