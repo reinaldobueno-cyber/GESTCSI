@@ -11060,6 +11060,9 @@ function gestaoLoadClickUpUserActivity(force) {
     var users = Array.isArray(resp.users) ? resp.users : [];
     users._needsGenerate = !!(resp.needs_generate || resp.stale_schema);
     users._backgroundSync = resp.background_sync || {};
+    if (users.length && String(users[0].sincronizacao_completa_controle || '').toLowerCase() === 'sim') {
+      users._backgroundSync.active = false;
+    }
     GESTAO_CLICKUP_USER_ACTIVITY = users;
     GESTAO_CLICKUP_USER_ACTIVITY_LOADING = null;
     return users;
@@ -11312,6 +11315,7 @@ function gestaoRenderClickUpUserActivity(users, meta) {
   var projectErrorDetails = gestaoClickUpErrorDetails(users);
   var projectsNextOffset = gestaoActivityNum(coverageUser.projetos_proximo_offset_controle);
   var syncComplete = String(coverageUser.sincronizacao_completa_controle || '').toLowerCase() === 'sim';
+  if (syncComplete) projectsRead = Math.max(projectsRead, Math.min(projectsNextOffset, projectsSelected));
   if (users._needsGenerate && !estimatedMode) {
     if (backgroundSync.active) {
       return '<div class="dashx-unavailable"><strong>Estimativa em segundo plano ativa</strong><span>'+gestaoActivityNum(backgroundSync.projects_read)+(gestaoActivityNum(backgroundSync.projects_total)?' de '+gestaoActivityNum(backgroundSync.projects_total):'')+' projetos processados. A base antiga será substituída conforme os lotes forem concluídos.</span></div>';
@@ -11364,7 +11368,7 @@ function gestaoRenderClickUpUserActivity(users, meta) {
   var errorAction = projectErrorDetails.length
     ? ' <button type="button" class="project-link-btn warn" onclick="return gestaoOpenClickUpErrors()">'+projectErrorDetails.length+' com erro</button>'
     : (projectsWithError ? ' '+projectsWithError+' erro(s) antigos; gere novamente para detalhar.' : '');
-  var coverageNote = projectsConfigured ? ' Cobertura: '+projectsRead+' de '+projectsSelected+' projetos elegíveis lidos'+(projectsMissingId ? ', '+projectsMissingId+' habilitados sem ID ClickUp' : '')+'.'+coverageState : '';
+  var coverageNote = projectsConfigured ? ' Cobertura: '+projectsRead+' de '+projectsSelected+' projetos elegíveis tentados'+(projectsWithError ? ', '+projectsWithError+' com erro' : '')+(projectsMissingId ? ', '+projectsMissingId+' habilitados sem ID ClickUp' : '')+'.'+coverageState : '';
   return '<div class="dashx-focus-note" style="margin-bottom:14px"><div><strong>Controle de adoção.</strong> '+modeNote+' '+numbersNote+coverageNote+errorAction+'</div><div class="dashx-focus-hint">última sync '+escapeHtml(gestaoActivityDateLabel(synced))+'</div></div>'+cards+'<div class="dashx-table-wrap"><table class="dashx-table"><thead><tr><th>Usuário</th><th>Last active</th><th>Última ação</th><th>Sem sinal</th><th>Mov. hoje</th><th>Mov. últ. 7 dias</th><th class="num">Projetos carteira</th></tr></thead><tbody>'+rows+'</tbody></table></div>';
 }
 function gestaoReloadClickUpUserActivity(force) {
@@ -11389,7 +11393,19 @@ function gestaoSyncClickUpUserActivity(btn) {
   }
   var original = btn ? btn.textContent : '';
   if (btn) { btn.disabled = true; btn.textContent = 'Iniciando...'; }
-  chamarAppsScriptJsonp('startClickUpUserActivityBackground',{auth_token:authTokenParam()},30000).then(function(resp){
+  var current = Array.isArray(GESTAO_CLICKUP_USER_ACTIVITY) && GESTAO_CLICKUP_USER_ACTIVITY.length ? GESTAO_CLICKUP_USER_ACTIVITY[0] : {};
+  var complete = String((current && current.sincronizacao_completa_controle) || '').toLowerCase() === 'sim';
+  var bootstrap = complete
+    ? chamarAppsScriptJsonp('syncClickUpUserActivity', {
+        auth_token:authTokenParam(),
+        force_estimated:'1',
+        scan_offset:'0',
+        scan_batch_size:'1'
+      }, 90000)
+    : Promise.resolve(null);
+  bootstrap.then(function(){
+    return chamarAppsScriptJsonp('startClickUpUserActivityBackground',{auth_token:authTokenParam()},30000);
+  }).then(function(resp){
     if(!resp||resp.ok===false)throw new Error((resp&&(resp.error||resp.message))||'Não foi possível iniciar a estimativa');
     showToast(resp.already_active?'Estimativa já estava em andamento. Acompanhando progresso...':'Estimativa iniciada. Os resultados aparecerão automaticamente.','ok');
     gestaoPollClickUpUserActivity(true);
