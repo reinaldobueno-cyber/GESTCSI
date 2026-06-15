@@ -3154,6 +3154,25 @@ body.theme-dark .tower-kpis [style*="background:#fff"]{
 @media(max-width:800px){.cmax-calendar-day{min-height:82px;padding:6px}.cmax-calendar-day-count small{display:none}.cmax-calendar-modal{padding:11px}}
 @media(max-width:900px){.cmax-summary{grid-template-columns:repeat(2,1fr)}}
 @media(max-width:560px){.cmax-summary{grid-template-columns:1fr}}
+.bonus-shell{display:flex;flex-direction:column;gap:16px}
+.bonus-hero{display:flex;align-items:flex-start;justify-content:space-between;gap:16px;flex-wrap:wrap}
+.bonus-title{font-size:26px;font-weight:900;color:var(--text);letter-spacing:-.04em}
+.bonus-sub{font-size:12px;color:var(--text2);line-height:1.55;max-width:760px;margin-top:5px}
+.bonus-actions{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.bonus-select{border:1px solid var(--border);border-radius:9px;background:var(--surf);color:var(--text);padding:9px 11px;font:800 11px 'Inter',sans-serif}
+.bonus-summary{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px}
+.bonus-card{background:var(--surf);border:1px solid var(--border);border-radius:14px;padding:16px}
+.bonus-card span{display:block;font-size:9px;text-transform:uppercase;letter-spacing:.12em;font-weight:900;color:var(--muted)}
+.bonus-card strong{display:block;margin-top:7px;font-size:25px;color:var(--text)}
+.bonus-card.total{border-color:#78a98a;background:#edf8ef}.bonus-card.total strong{color:#23623d}
+.bonus-admin-table,.bonus-report{background:var(--surf);border:1px solid var(--border);border-radius:14px;overflow:hidden}
+.bonus-report-head{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:18px;border-bottom:1px solid var(--border);background:linear-gradient(135deg,var(--surf2),var(--surf))}
+.bonus-person{display:flex;align-items:center;gap:12px}.bonus-avatar{width:42px;height:42px;border-radius:50%;display:grid;place-items:center;background:var(--green);color:#fff;font-size:18px;font-weight:900}
+.bonus-person-name{font-size:17px;font-weight:900;color:var(--text)}.bonus-person-meta{font-size:10px;color:var(--muted);margin-top:3px}
+.bonus-report-total{text-align:right}.bonus-report-total span{display:block;font-size:9px;text-transform:uppercase;letter-spacing:.1em;font-weight:900;color:var(--muted)}.bonus-report-total strong{display:block;font-size:24px;color:#23623d;margin-top:4px}
+.bonus-section{padding:16px;border-top:1px solid var(--border)}.bonus-section:first-of-type{border-top:0}.bonus-section-title{font-size:12px;font-weight:900;color:var(--text);margin-bottom:10px}
+.bonus-empty{padding:30px;text-align:center;color:var(--text2)}
+@media print{nav,.period-bar,.sidenav,.bonus-actions,.bonus-admin-table{display:none!important}.app-shell,.main-content{display:block!important}.page{display:none!important}.page.on{display:block!important}.bonus-report{break-inside:avoid}}
 body.theme-dark .pb.on,
 body.theme-dark .fb.on,
 body.theme-dark .pf-btn.on,
@@ -3287,6 +3306,7 @@ body.theme-dark *{
 <button class="snb" onclick="goTab('log',this)"><span class="snb-icon">&#128506;</span><span class="snb-label">Log&iacute;stica</span><span class="snb-badge" id="n-log" hidden>0</span></button>
 <button class="snb" onclick="goTab('praz',this)"><span class="snb-icon">&#8987;</span><span class="snb-label">Prazos</span><span class="snb-badge" id="n-praz" hidden>0</span></button>
 <button class="snb" onclick="goTab('alert',this)"><span class="snb-icon">&#128680;</span><span class="snb-label">Alertas</span><span class="snb-badge" id="n-alert" hidden>0</span></button>
+<button class="snb" onclick="goTab('bonus',this)"><span class="snb-icon">&#128176;</span><span class="snb-label">Bonifica&ccedil;&atilde;o</span></button>
 </div>
 <div class="main-content">
 <div class="page on" id="page-dash"><div id="dash-content"></div></div>
@@ -3294,6 +3314,7 @@ body.theme-dark *{
 <div class="page" id="page-acom"><div id="acom-content"></div></div>
 <div class="page" id="page-cmax"><div id="cmax-content"></div></div>
 <div class="page" id="page-fech"><div id="fech-content"></div></div>
+<div class="page" id="page-bonus"><div id="bonus-content"></div></div>
 <div class="page" id="page-admin"><div id="admin-content"></div></div>
 <div class="page" id="page-all">
   <div class="kpis" id="kpis-all"></div>
@@ -4093,6 +4114,9 @@ function goTab(id, btn) {
   }
   if (id === 'fech') {
     fechamentoLoad(false);
+  }
+  if (id === 'bonus') {
+    bonusLoad();
   }
 }
 function setPeriod(p, btn) {
@@ -5184,6 +5208,7 @@ function fechamentoLoad(force) {
     fechamentoSaveCache();
     if (!FECHAMENTO_FILTER.month) FECHAMENTO_FILTER.month = fechamentoCurrentMonth();
     initFechamento();
+    initBonus();
     return resp;
   }).catch(function(error) {
     FECHAMENTO_LOADING = false;
@@ -5191,6 +5216,7 @@ function fechamentoLoad(force) {
       ? 'Não foi possível atualizar agora. Mantendo a última leitura válida.'
       : 'Não foi possível carregar o fechamento agora. Tente recarregar em alguns instantes.';
     initFechamento();
+    initBonus();
     return null;
   });
 }
@@ -5248,6 +5274,7 @@ function fechamentoRunSync(action, label, btn) {
     FECHAMENTO_LOADING = false;
     fechamentoSaveCache();
     initFechamento();
+    initBonus();
     if (btn) { btn.disabled = false; btn.textContent = original || label; }
     var changed = Number(recent.changed || 0);
     var confirmed = Number(recent.confirmed || 0);
@@ -5372,6 +5399,152 @@ window.fechamentoStartSync = fechamentoStartSync;
 window.fechamentoSyncRejected = fechamentoSyncRejected;
 window.fechamentoSyncApproved = fechamentoSyncApproved;
 
+var BONUS_FILTER = {month:fechamentoCurrentMonth(), consultant:'todos'};
+function bonusNamesMatch(a,b) {
+  var aKey=consultantCompKey(a),bKey=consultantCompKey(b);
+  if(!aKey||!bKey)return false;
+  if(aKey===bKey)return true;
+  var aTokens=consultantCompTokens(a),bTokens=consultantCompTokens(b);
+  var overlap=aTokens.filter(function(token){return bTokens.indexOf(token)>=0;}).length;
+  return overlap>=2||(overlap===1&&(aTokens.length===1||bTokens.length===1));
+}
+function bonusCanonicalNames(values) {
+  return (values||[]).reduce(function(names,value){
+    var name=String(value||'').trim();
+    if(name&&!names.some(function(current){return bonusNamesMatch(current,name);}))names.push(name);
+    return names;
+  },[]);
+}
+function bonusMonthLabel(month) {
+  var names=['JAN','FEV','MAR','ABR','MAI','JUN','JUL','AGO','SET','OUT','NOV','DEZ'];
+  var parts=String(month||'').split('-');
+  return (names[Number(parts[1]||0)-1]||month)+'/'+(parts[0]||'');
+}
+function bonusMonthOptions() {
+  var months={};
+  (FECHAMENTO_MARCOS||[]).forEach(function(item){if(item.mes_fechamento)months[item.mes_fechamento]=true;});
+  (CMAX_DAILY_STATE.months||[]).concat((CMAX_DAILY_STATE.events||[]).map(function(item){return item.mes;})).forEach(function(month){if(month)months[month]=true;});
+  months[BONUS_FILTER.month||fechamentoCurrentMonth()]=true;
+  return Object.keys(months).filter(function(month){return month>='2024-01';}).sort().reverse();
+}
+function bonusSetMonth(month) {
+  BONUS_FILTER.month=String(month||fechamentoCurrentMonth());
+  BONUS_FILTER.consultant='todos';
+  bonusLoad();
+  return false;
+}
+function bonusSetConsultant(name) {
+  BONUS_FILTER.consultant=String(name||'todos');
+  initBonus();
+  return false;
+}
+function bonusLoad() {
+  var month=BONUS_FILTER.month||fechamentoCurrentMonth();
+  initBonus();
+  fechamentoLoad(false);
+  consultantCompensationLoad(false);
+  if(CMAX_DAILY_STATE.month!==month) {
+    CMAX_DAILY_STATE.month=month;
+    CMAX_DAILY_STATE.loaded=false;
+  }
+  carregarDiariasCmax(false);
+  setTimeout(initBonus,350);
+}
+function bonusRefresh(btn) {
+  if(btn){btn.disabled=true;btn.textContent='Atualizando...';}
+  Promise.resolve(fechamentoLoad(true)).then(function(){
+    carregarDiariasCmax(true);
+    setTimeout(function(){
+      initBonus();
+      if(btn){btn.disabled=false;btn.textContent='Atualizar relat\u00f3rio';}
+    },700);
+  });
+  return false;
+}
+function bonusDataset() {
+  var month=BONUS_FILTER.month||fechamentoCurrentMonth();
+  var daily=(CMAX_DAILY_STATE.events||[]).filter(function(item){return String(item.mes||'')===month&&cmaxCountsDaily(item);});
+  var milestones=(FECHAMENTO_MARCOS||[]).filter(function(item){return String(item.mes_fechamento||'')===month&&item.situacao==='aprovado';});
+  var names=bonusCanonicalNames(
+    daily.map(function(item){return item.consultor;})
+      .concat(milestones.map(function(item){return item.consultor;}))
+  );
+  var userName=AUTH_STATE.user&&(AUTH_STATE.user.name||AUTH_STATE.user.username)||'';
+  var isAdmin=AUTH_STATE.user&&AUTH_STATE.user.role==='admin';
+  var allowed=names.filter(function(name){
+    if(!isAdmin&&!bonusNamesMatch(name,userName))return false;
+    return BONUS_FILTER.consultant==='todos'||bonusNamesMatch(name,BONUS_FILTER.consultant);
+  }).sort();
+  return allowed.map(function(name){
+    var events=daily.filter(function(item){return bonusNamesMatch(item.consultor,name);}).sort(function(a,b){
+      return String(a.data||'').localeCompare(String(b.data||''))||String(a.hora_inicio||'').localeCompare(String(b.hora_inicio||''));
+    });
+    var allocated=cmaxAllocatedDailyEquivalents(events);
+    var comp=consultantCompensation(name);
+    var dailyRows=events.map(function(item,index){
+      var equivalent=allocated[index]||0;
+      return {item:item,equivalent:equivalent,value:equivalent*Number(comp.daily_value||0)};
+    }).filter(function(row){return row.equivalent>0;});
+    var marcoRows=milestones.filter(function(item){return bonusNamesMatch(item.consultor,name);});
+    var dailyValue=dailyRows.reduce(function(total,row){return total+row.value;},0);
+    var milestoneValue=marcoRows.reduce(function(total,item){return total+Number(item.valor_bonus||30);},0);
+    return {
+      name:name,
+      seniority:comp.seniority||'',
+      dailyEquivalent:dailyRows.reduce(function(total,row){return total+row.equivalent;},0),
+      dailyValue:dailyValue,
+      dailyRows:dailyRows,
+      milestoneRows:marcoRows,
+      milestoneValue:milestoneValue,
+      total:dailyValue+milestoneValue
+    };
+  });
+}
+function bonusDailyDetails(person) {
+  var rows=person.dailyRows.map(function(row){
+    var item=row.item,info=cmaxDateInfo(item.data),start=cmaxTime(item.hora_inicio)||'-',end=cmaxTime(item.hora_fim);
+    return '<tr><td>'+escapeHtml(info.date)+'</td><td><strong>'+escapeHtml(item.cliente||'-')+'</strong></td><td>'+escapeHtml(cmaxModeLabel(item))+'</td><td>'+escapeHtml(start+(end?' - '+end:''))+'</td><td>'+cmaxEquivalentLabel(row.equivalent)+'</td><td><strong>'+consultantMoney(row.value)+'</strong></td></tr>';
+  }).join('');
+  return rows?'<div class="dashx-table-wrap"><table class="dashx-table"><thead><tr><th>Data</th><th>Cliente</th><th>Modalidade</th><th>Hor&aacute;rio</th><th>Equiv.</th><th>Valor</th></tr></thead><tbody>'+rows+'</tbody></table></div>':'<div class="bonus-empty">Nenhuma di&aacute;ria contabiliz&aacute;vel neste m&ecirc;s.</div>';
+}
+function bonusMilestoneDetails(person) {
+  var rows=person.milestoneRows.map(function(item){
+    return '<tr><td>'+(item.validation_at?escapeHtml(formatarDataHoraProjeto(item.validation_at)):'-')+'</td><td><strong>'+escapeHtml(item.projeto||'-')+'</strong></td><td>'+escapeHtml(item.marco||'-')+'</td><td>'+escapeHtml(item.justificativa||'-')+'</td><td><strong>'+fechamentoMoney(item.valor_bonus||30)+'</strong></td></tr>';
+  }).join('');
+  return rows?'<div class="dashx-table-wrap"><table class="dashx-table"><thead><tr><th>Aprovado em</th><th>Projeto</th><th>Marco</th><th>Coment&aacute;rio</th><th>Valor</th></tr></thead><tbody>'+rows+'</tbody></table></div>':'<div class="bonus-empty">Nenhum marco aprovado neste m&ecirc;s.</div>';
+}
+function bonusPersonReport(person) {
+  var initial=String(person.name||'?').trim().charAt(0).toUpperCase();
+  return '<section class="bonus-report"><div class="bonus-report-head"><div class="bonus-person"><div class="bonus-avatar">'+escapeHtml(initial)+'</div><div><div class="bonus-person-name">'+escapeHtml(person.name)+'</div><div class="bonus-person-meta">'+escapeHtml(consultantSeniorityLabel(person.seniority))+' &middot; '+escapeHtml(bonusMonthLabel(BONUS_FILTER.month))+'</div></div></div><div class="bonus-report-total"><span>Total da bonifica&ccedil;&atilde;o</span><strong>'+consultantMoney(person.total)+'</strong></div></div>'+
+    '<div class="bonus-summary" style="padding:16px"><div class="bonus-card"><span>Di&aacute;rias equivalentes</span><strong>'+cmaxEquivalentLabel(person.dailyEquivalent)+'</strong></div><div class="bonus-card"><span>Valor das di&aacute;rias</span><strong>'+consultantMoney(person.dailyValue)+'</strong></div><div class="bonus-card"><span>Marcos aprovados</span><strong>'+person.milestoneRows.length+'</strong></div><div class="bonus-card"><span>Valor dos marcos</span><strong>'+consultantMoney(person.milestoneValue)+'</strong></div></div>'+
+    '<div class="bonus-section"><div class="bonus-section-title">Detalhamento das di&aacute;rias</div>'+bonusDailyDetails(person)+'</div><div class="bonus-section"><div class="bonus-section-title">Detalhamento dos marcos aprovados</div>'+bonusMilestoneDetails(person)+'</div></section>';
+}
+function initBonus() {
+  var box=document.getElementById('bonus-content');
+  if(!box)return;
+  var people=bonusDataset(),isAdmin=AUTH_STATE.user&&AUTH_STATE.user.role==='admin';
+  var daily=people.reduce(function(total,p){return total+p.dailyValue;},0);
+  var milestones=people.reduce(function(total,p){return total+p.milestoneValue;},0);
+  var equivalents=people.reduce(function(total,p){return total+p.dailyEquivalent;},0);
+  var total=daily+milestones;
+  var monthOptions=bonusMonthOptions().map(function(month){return '<option value="'+escapeHtml(month)+'" '+(month===BONUS_FILTER.month?'selected':'')+'>'+escapeHtml(bonusMonthLabel(month))+'</option>';}).join('');
+  var allNames=bonusCanonicalNames(
+    (CMAX_DAILY_STATE.events||[]).map(function(item){return item.consultor;})
+      .concat((FECHAMENTO_MARCOS||[]).map(function(item){return item.consultor;}))
+  );
+  var consultantOptions='<option value="todos">Todos os consultores</option>'+allNames.sort().map(function(name){return '<option value="'+escapeHtml(name)+'" '+(BONUS_FILTER.consultant===name?'selected':'')+'>'+escapeHtml(name)+'</option>';}).join('');
+  var adminRows=people.map(function(person){return '<tr><td><strong>'+escapeHtml(person.name)+'</strong><div class="cmax-date-sub">'+escapeHtml(consultantSeniorityLabel(person.seniority))+'</div></td><td>'+cmaxEquivalentLabel(person.dailyEquivalent)+'</td><td>'+consultantMoney(person.dailyValue)+'</td><td>'+person.milestoneRows.length+'</td><td>'+consultantMoney(person.milestoneValue)+'</td><td><strong>'+consultantMoney(person.total)+'</strong></td></tr>';}).join('');
+  var status=(CMAX_DAILY_STATE.loading?'Carregando di&aacute;rias do m&ecirc;s selecionado. ':'')+(FECHAMENTO_LOADING?'Carregando fechamento de marcos. ':'');
+  box.innerHTML='<div class="bonus-shell"><div class="bonus-hero"><div><div class="bonus-title">Bonifica&ccedil;&atilde;o mensal</div><div class="bonus-sub">Relat&oacute;rio consolidado alimentado pelas di&aacute;rias contabiliz&aacute;veis do CMAX e pelos marcos aprovados na valida&ccedil;&atilde;o t&eacute;cnica.</div></div><div class="bonus-actions"><select class="bonus-select" onchange="return bonusSetMonth(this.value)">'+monthOptions+'</select>'+(isAdmin?'<select class="bonus-select" onchange="return bonusSetConsultant(this.value)">'+consultantOptions+'</select>':'')+'<button class="btn-syncall" onclick="return bonusRefresh(this)">Atualizar relat&oacute;rio</button><button class="btn-syncall" onclick="window.print()">Imprimir / PDF</button></div></div>'+
+    (status?'<div class="cmax-status">'+status+'</div>':'')+
+    '<div class="bonus-summary"><div class="bonus-card"><span>Di&aacute;rias equivalentes</span><strong>'+cmaxEquivalentLabel(equivalents)+'</strong></div><div class="bonus-card"><span>Valor das di&aacute;rias</span><strong>'+consultantMoney(daily)+'</strong></div><div class="bonus-card"><span>Marcos aprovados</span><strong>'+people.reduce(function(sum,p){return sum+p.milestoneRows.length;},0)+'</strong></div><div class="bonus-card"><span>Valor dos marcos</span><strong>'+consultantMoney(milestones)+'</strong></div><div class="bonus-card total"><span>Total da bonifica&ccedil;&atilde;o</span><strong>'+consultantMoney(total)+'</strong></div></div>'+
+    (isAdmin?'<section class="bonus-admin-table"><div class="bonus-section"><div class="bonus-section-title">Consolidado administrativo por consultor</div><div class="dashx-table-wrap"><table class="dashx-table"><thead><tr><th>Consultor</th><th>Di&aacute;rias</th><th>Valor di&aacute;rias</th><th>Marcos</th><th>Valor marcos</th><th>Total</th></tr></thead><tbody>'+adminRows+'</tbody></table></div></div></section>':'')+
+    (people.map(bonusPersonReport).join('')||'<div class="bonus-empty">Nenhuma bonifica&ccedil;&atilde;o encontrada para este usu&aacute;rio no m&ecirc;s selecionado.</div>')+'</div>';
+}
+window.bonusSetMonth=bonusSetMonth;
+window.bonusSetConsultant=bonusSetConsultant;
+window.bonusRefresh=bonusRefresh;
+
 function initAdmin() {
   var el = document.getElementById('admin-content');
   if (!el) return;
@@ -5448,7 +5621,7 @@ window.criarUsuarioPainel = criarUsuarioPainel;
 window.alternarUsuarioPainel = alternarUsuarioPainel;
 
 function renderAll() {
-  buildPeriodBar(); initDash(); initControlTower(); initAcomp(); initFechamento(); initAdmin(); initAll(); initCons(); initVend(); initAvul(); initLog(); initPraz(); initAlert(); initExec();
+  buildPeriodBar(); initDash(); initControlTower(); initAcomp(); initFechamento(); initBonus(); initAdmin(); initAll(); initCons(); initVend(); initAvul(); initLog(); initPraz(); initAlert(); initExec();
   consultantCompensationLoad(false);
   if (authTokenParam() && !FECHAMENTO_SESSION_REFRESHED) {
     FECHAMENTO_SESSION_REFRESHED = true;
@@ -11209,6 +11382,7 @@ function consultantCompensationLoad(force) {
     CONSULTANT_COMP_STATE.loading=false;
     initCons();
     renderDiariasCmax();
+    initBonus();
     return resp;
   }).catch(function(){
     CONSULTANT_COMP_STATE.loading=false;
@@ -11353,6 +11527,7 @@ function cmaxApplyResponse(resp) {
   }
   CMAX_DAILY_STATE.historySync=resp.history_sync||null;
   CMAX_DAILY_STATE.syncedAt=String(resp.synced_at||'');
+  initBonus();
 }
 function cmaxDate(value) {
   var parts=String(value||'').slice(0,10).split('-');
@@ -11657,14 +11832,14 @@ function carregarDiariasCmax(force) {
       return;
     }
     cmaxApplyResponse(resp);
-    CMAX_DAILY_STATE.loaded=true;CMAX_DAILY_STATE.loading=false;renderDiariasCmax();
+    CMAX_DAILY_STATE.loaded=true;CMAX_DAILY_STATE.loading=false;renderDiariasCmax();initBonus();
     cmaxScheduleHistoryPoll();
     cmaxPrefetchMonths();
   }).catch(function(error){
     if(requestSeq!==CMAX_DAILY_STATE.requestSeq||requestedMonth!==CMAX_DAILY_STATE.month)return;
     CMAX_DAILY_STATE.loading=false;
     CMAX_DAILY_STATE.error=(CMAX_DAILY_STATE.events||[]).length?'Exibindo a última leitura salva; atualização em segundo plano indisponível.':(error.message||String(error));
-    renderDiariasCmax();
+    renderDiariasCmax();initBonus();
   });
 }
 function sincronizarDiariasCmax(btn) {
