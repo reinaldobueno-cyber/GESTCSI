@@ -8899,7 +8899,7 @@ function dashRenderAgingTable(items) {
 }
 function dashRenderConsultorAgingTable(rows) {
   var body = rows.length ? rows.map(function(item){
-    return '<tr><td><strong>'+item.nome+'</strong><div class="dashx-list-sub">'+item.carteiraTotal+' projeto(s) na carteira</div></td><td class="num">'+item.rastreados+'</td><td class="num">'+item.semClickUp+'</td><td class="num">'+item.cancelados+'</td><td class="num">'+item['0–7']+'</td><td class="num">'+item['8–15']+'</td><td class="num">'+item['16–30']+'</td><td class="num">'+item['31–45']+'</td><td class="num">'+item['45+']+'</td></tr>';
+    return '<tr tabindex="0" role="button" data-dash-clickup-consultor="'+escapeHtml(item.nome)+'"><td><strong>'+item.nome+'</strong><div class="dashx-list-sub">'+item.carteiraTotal+' projeto(s) na carteira · clique para listar</div></td><td class="num">'+item.rastreados+'</td><td class="num">'+item.semClickUp+'</td><td class="num">'+item.cancelados+'</td><td class="num">'+item['0–7']+'</td><td class="num">'+item['8–15']+'</td><td class="num">'+item['16–30']+'</td><td class="num">'+item['31–45']+'</td><td class="num">'+item['45+']+'</td></tr>';
   }).join('') : '<tr class="empty-row"><td colspan="9">Nenhum consultor encontrado no recorte atual.</td></tr>';
   return '<div class="dashx-table-wrap"><table class="dashx-table"><thead><tr><th>Consultor</th><th class="num">Rastreados</th><th class="num">Sem ClickUp</th><th class="num">Cancelados</th><th class="num">&lt; 7 dias</th><th class="num">7–15</th><th class="num">15–30</th><th class="num">30–45</th><th class="num">45+</th></tr></thead><tbody>'+body+'</tbody></table></div>';
 }
@@ -8938,11 +8938,26 @@ function dashRenderUntrackedClickUpList(items, totalUntracked) {
 }
 function dashRenderClickUpTracker(operation, totalProjetos) {
   var rows = operation.agingByConsultor || [];
+  var selected = rows.filter(function(item){ return item.nome === DASH_CLICKUP_CONSULTOR; })[0] || rows[0] || null;
+  if (!DASH_CLICKUP_CONSULTOR && selected) DASH_CLICKUP_CONSULTOR = selected.nome;
   var totalTracked = Number(operation.trackedTotal || 0);
   var totalUntracked = Number(operation.untrackedTotal || 0);
   var totalCancelled = Number(operation.cancelledTotal || 0);
   var critical = Number((operation.bins['16–30'] || 0) + (operation.bins['31–45'] || 0) + (operation.bins['45+'] || 0));
-  return '<div class="dashx-chart-card"><div class="dashx-chart-head"><div><div class="dashx-chart-title">Rastreio ClickUp por consultor '+towerInfoButton('aging')+'</div><div class="dashx-chart-sub">Base total: <strong>'+totalProjetos+'</strong> projeto(s). Destes, <strong>'+totalTracked+'</strong> têm rastreio ClickUp, <strong>'+totalUntracked+'</strong> ainda estão sem rastreio técnico e <strong>'+totalCancelled+'</strong> cancelado(s) ficam fora da auditoria.</div></div></div><div class="dashx-chart-legend"><span class="dashx-legend-item"><span class="dashx-legend-swatch" style="background:#6d8e72"></span>'+totalTracked+' rastreados</span><span class="dashx-legend-item"><span class="dashx-legend-swatch" style="background:#9aa59d"></span>'+totalUntracked+' sem ClickUp</span><span class="dashx-legend-item"><span class="dashx-legend-swatch" style="background:#7f8c83"></span>'+totalCancelled+' cancelados</span><span class="dashx-legend-item"><span class="dashx-legend-swatch" style="background:#c96c5f"></span>'+critical+' com 15+ dias</span></div>'+dashRenderConsultorAgingTable(rows)+'</div>';
+  var details = selected && Array.isArray(selected.projetos) ? selected.projetos.slice().sort(function(a, b){
+    var ad = a.rastreado ? -(a.dias || 0) : Number.NEGATIVE_INFINITY;
+    var bd = b.rastreado ? -(b.dias || 0) : Number.NEGATIVE_INFINITY;
+    if (ad !== bd) return ad - bd;
+    return String((a.projeto && a.projeto.cliente) || '').localeCompare(String((b.projeto && b.projeto.cliente) || ''));
+  }) : [];
+  var detailRows = details.length ? details.map(function(item){
+    var p = item.projeto || {};
+    var faixa = item.rastreado ? (item.bucket + ' dias') : 'Sem ClickUp';
+    var motivo = item.rastreado ? (item.motivo || 'Sem detalhe adicional.') : 'Sem list_id/view_id ou sem resumo sincronizado.';
+    return '<tr><td><strong>'+String(p.cliente || '-')+'</strong></td><td>'+sl(String(p.status || '-'))+'</td><td class="num">'+(item.rastreado ? item.dias : '-')+'</td><td>'+faixa+'</td><td>'+motivo+'</td><td>'+dashProjectActionCell(p)+'</td></tr>';
+  }).join('') : '<tr class="empty-row"><td colspan="6">Nenhum projeto rastreado para este consultor.</td></tr>';
+  var audit = '<div id="dashx-clickup-audit" hidden><div class="dashx-focus-note"><div><strong>Auditoria ClickUp:</strong> '+((selected && selected.nome) || 'Consultor')+'.</div><div class="dashx-focus-hint">'+(selected ? (selected.rastreados+' rastreado(s) • '+selected.semClickUp+' sem ClickUp • '+selected.cancelados+' cancelado(s)') : 'nenhum consultor selecionado')+'</div></div><div class="dashx-table-wrap" style="margin-top:12px"><table class="dashx-table"><thead><tr><th>Projeto</th><th>Status</th><th class="num">Dias</th><th>Faixa</th><th>Motivo</th><th>Ação</th></tr></thead><tbody>'+detailRows+'</tbody></table></div></div>';
+  return '<div class="dashx-chart-card"><div class="dashx-chart-head"><div><div class="dashx-chart-title">Rastreio ClickUp por consultor '+towerInfoButton('aging')+'</div><div class="dashx-chart-sub">Base total atual: <strong>'+totalProjetos+'</strong> projeto(s), conforme a fonte dinâmica carregada pelo painel. Destes, <strong>'+totalTracked+'</strong> têm rastreio ClickUp, <strong>'+totalUntracked+'</strong> ainda estão sem rastreio técnico e <strong>'+totalCancelled+'</strong> cancelado(s) ficam fora da auditoria. Clique em um consultor para listar os projetos.</div></div></div><div class="dashx-chart-legend"><span class="dashx-legend-item"><span class="dashx-legend-swatch" style="background:#6d8e72"></span>'+totalTracked+' rastreados</span><span class="dashx-legend-item"><span class="dashx-legend-swatch" style="background:#9aa59d"></span>'+totalUntracked+' sem ClickUp</span><span class="dashx-legend-item"><span class="dashx-legend-swatch" style="background:#7f8c83"></span>'+totalCancelled+' cancelados</span><span class="dashx-legend-item"><span class="dashx-legend-swatch" style="background:#c96c5f"></span>'+critical+' com 15+ dias</span></div>'+dashRenderConsultorAgingTable(rows)+audit+'</div>';
 }
 function dashRenderExecution(execution) {
   if (execution.unavailable) return dashUnavailableCard('Burndown de diárias', execution.unavailable);
