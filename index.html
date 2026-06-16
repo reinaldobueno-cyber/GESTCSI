@@ -9357,66 +9357,6 @@ function dashOpenIdleAudit(name) {
   return false;
 }
 window.dashOpenIdleAudit=dashOpenIdleAudit;
-function dashTrainingTokens(value) {
-  var stop={DE:true,DA:true,DO:true,DAS:true,DOS:true,E:true,A:true,O:true,AS:true,OS:true,FAZ:true,FAZENDA:true,GRUPO:true,LTDA:true,ME:true,EPP:true};
-  return normalizeClienteKey(value).split(' ').filter(function(token){
-    return token.length>2&&!stop[token];
-  });
-}
-function dashTrainingMatchScore(project,event) {
-  var projectTokens=dashTrainingTokens(project&&project.cliente);
-  var eventTokens=dashTrainingTokens(event&&event.cliente);
-  if(!projectTokens.length||!eventTokens.length)return {score:0,why:'sem nome comparável'};
-  var overlap=projectTokens.filter(function(token){return eventTokens.indexOf(token)>=0;});
-  var tokenScore=overlap.length/Math.max(1,Math.min(projectTokens.length,eventTokens.length));
-  var exact=normalizeClienteKey(project&&project.cliente)===normalizeClienteKey(event&&event.cliente);
-  var consultant=bonusNamesMatch(project&&project.consultor,event&&event.consultor);
-  var scheduled=dashParseDate(project&&project.data_inicio);
-  var realized=dashParseDate(event&&event.data);
-  var days=scheduled&&realized?Math.abs(diffD(scheduled,realized)):9999;
-  var dateScore=days<=45?1:days<=90?.65:days<=150?.35:0;
-  var score=(exact?60:Math.round(tokenScore*45))+(consultant?25:0)+Math.round(dateScore*30);
-  var why=[];
-  if(exact)why.push('nome exato');
-  else if(overlap.length)why.push(overlap.slice(0,4).join(', '));
-  if(consultant)why.push('mesmo consultor');
-  if(days!==9999)why.push(days+'d da data');
-  return {score:score,why:why.join(' · ')||'baixa semelhança',days:days,overlap:overlap.length};
-}
-function dashFindTrainingMatch(project,events) {
-  var candidates=(events||[]).map(function(event){
-    var match=dashTrainingMatchScore(project,event);
-    return {event:event,score:match.score,why:match.why,days:match.days};
-  }).filter(function(item){return item.score>=60;}).sort(function(a,b){
-    return b.score-a.score||a.days-b.days||String(a.event.data||'').localeCompare(String(b.event.data||''));
-  });
-  return candidates[0]||null;
-}
-function dashRenderTrainingRealizationTest(list) {
-  var scheduled=(list||[]).filter(function(p){return !!dashParseDate(p&&p.data_inicio);});
-  var available2026=cmaxNormalizeMonths(CMAX_DAILY_STATE.loadedMonths).filter(function(month){return month.slice(0,4)==='2026';});
-  var cached2026=available2026.filter(function(month){return !!cmaxCachedResponse(month);});
-  var loading=CMAX_PREFETCH_RUNNING||CMAX_TRAINING_HISTORY_LOADING||!available2026.length||cached2026.length<available2026.length;
-  if(loading){
-    var coverage=available2026.length?cached2026.length+' de '+available2026.length+' meses de 2026':'aguardando lista de meses';
-    var buttonLabel=CMAX_PREFETCH_RUNNING||CMAX_TRAINING_HISTORY_LOADING?'Carregando...':'Carregar histórico CMAX';
-    return '<div class="dashx-unavailable"><strong>Carregando histórico CMAX para validar a métrica</strong><span>'+escapeHtml(coverage)+'. O resultado ainda não é conclusivo e será atualizado automaticamente. Mantenha esta página aberta ou clique abaixo para continuar o carregamento.</span><button class="btn-syncall" style="margin-top:10px" '+(CMAX_PREFETCH_RUNNING||CMAX_TRAINING_HISTORY_LOADING?'disabled':'')+' onclick="return dashLoadTrainingHistoryCmax(this)">'+buttonLabel+'</button></div>';
-  }
-  var events=cmaxAllLoadedEvents().filter(function(item){return cmaxCountsDaily(item)&&String(item.data||'').slice(0,4)==='2026';});
-  var rows=scheduled.map(function(p){
-    var match=dashFindTrainingMatch(p,events);
-    return {project:p,scheduled:dashParseDate(p.data_inicio),realized:match&&match.event||null,score:match&&match.score||0,why:match&&match.why||'',matches:match?1:0};
-  });
-  var realized=rows.filter(function(row){return !!row.realized;});
-  var pending=rows.filter(function(row){return !row.realized;});
-  var rate=scheduled.length?Math.round(realized.length/scheduled.length*100):null;
-  var sample=rows.sort(function(a,b){
-    return Number(!!a.realized)-Number(!!b.realized)||String(a.project.cliente||'').localeCompare(String(b.project.cliente||''));
-  }).slice(0,20).map(function(row){
-    return '<tr><td><strong>'+escapeHtml(row.project.cliente||'-')+'</strong></td><td>'+escapeHtml(row.project.consultor||'-')+'</td><td>'+escapeHtml(fd(row.scheduled.toISOString()))+'</td><td>'+(row.realized?escapeHtml(cmaxDate(row.realized.data))+'<div class="dashx-list-sub">'+escapeHtml(row.realized.cliente||'-')+'</div>':'Não encontrado')+'</td><td>'+(row.realized?'<span class="dashx-score-pill good">Conciliado '+row.score+'</span><div class="dashx-list-sub">'+escapeHtml(row.why)+'</div>':'<span class="dashx-score-pill warn">Sem correspondência confiável</span><div class="dashx-list-sub">busca por nome, consultor e janela de data</div>')+'</td></tr>';
-  }).join('')||'<tr><td colspan="5">Nenhum projeto com treinamento agendado no recorte.</td></tr>';
-  return '<div class="dashx-chart-card"><div class="dashx-chart-head"><div><div class="dashx-chart-title">Teste experimental: treinamento agendado x realizado</div><div class="dashx-chart-sub">Compara projetos com <strong>data_inicio</strong> contra treinamentos realizados no CMAX em 2026, usando pontuação por nome, consultor e proximidade de data. Ainda não substitui a taxa de 1º treinamento.</div></div><div class="dashx-chart-meta"><span class="dashx-chart-note">'+cached2026.length+' meses analisados</span><span class="dashx-chart-note">'+(rate===null?'-':rate+'%')+' conciliado</span></div></div><div class="dashx-top-grid"><div class="dashx-card neutral"><div class="dashx-card-label">Treinamentos agendados</div><div class="dashx-card-value">'+scheduled.length+'</div><div class="dashx-card-note">projetos com data_inicio</div></div><div class="dashx-card good"><div class="dashx-card-label">Realizados encontrados</div><div class="dashx-card-value">'+realized.length+'</div><div class="dashx-card-note">score mínimo 60/135</div></div><div class="dashx-card warn"><div class="dashx-card-label">Sem realização encontrada</div><div class="dashx-card-value">'+pending.length+'</div><div class="dashx-card-note">sem correspondência confiável</div></div></div><div class="dashx-inline-note"><strong>Como avaliar:</strong> o vínculo agora usa similaridade do nome, mesmo consultor e janela de data. O score e os termos encontrados aparecem na coluna Resultado para revisão.</div><div class="dashx-table-wrap"><table class="dashx-table"><thead><tr><th>Projeto</th><th>Consultor</th><th>Agendado</th><th>Primeiro realizado CMAX</th><th>Resultado</th></tr></thead><tbody>'+sample+'</tbody></table></div></div>';
-}
 
 function initDash() {
   fechamentoApplyProjectStatuses();
@@ -9463,11 +9403,10 @@ function initDash() {
   var prioritySection = '<div class="dashx-section"><div class="dashx-section-head"><div><div class="dashx-section-kicker">Prioridade</div><div class="dashx-section-title">Carteira e entregas de 2026</div><div class="dashx-section-sub">Heatmap da entrada de projetos e produtividade baseada no Fechamento de Marcos validado.</div></div></div><div class="dashx-section-body"><div class="dashx-stack"><div class="dashx-focus-note"><div><strong>Distribuição da carteira.</strong> Cada célula mostra quantos projetos de 2026 entraram por consultor e mês.</div><div class="dashx-focus-hint">sem score subjetivo</div></div>'+dashRenderHeatmap(operation.heatMap)+dashRenderMilestoneProductivity2026()+dashRenderStatusStack(statusByMonth)+'</div></div></div>';
   var clickUpTrackingSection = '<div class="dashx-section"><div class="dashx-section-head"><div><div class="dashx-section-kicker">Rastreabilidade</div><div class="dashx-section-title">Cobertura técnica do ClickUp</div><div class="dashx-section-sub">Mostra a cobertura de rastreio por consultor e identifica os projetos que ainda não entram na auditoria técnica do ClickUp.</div></div><div class="dashx-section-answer"><span class="dashx-answer-chip">'+tracked+' rastreado(s) · '+untracked+' sem ClickUp</span></div></div><div class="dashx-section-body"><div class="dashx-stack">'+dashRenderClickUpTracker(operation, total)+dashRenderUntrackedClickUpList(operation.untrackedProjects || [], operation.untrackedTotal)+'</div></div></div>';
   var idleSection = '<div class="dashx-section"><div class="dashx-section-head"><div><div class="dashx-section-kicker">Capacidade</div><div class="dashx-section-title">Sinais de ociosidade</div><div class="dashx-section-sub">Cruza agenda CMAX, carteira ativa e movimentações recentes do ClickUp para indicar onde a liderança deve investigar disponibilidade.</div></div></div><div class="dashx-section-body">'+dashRenderIdleSignal(list)+'</div></div>';
-  var trainingTestSection = '<div class="dashx-section"><div class="dashx-section-head"><div><div class="dashx-section-kicker">Experimento auditável</div><div class="dashx-section-title">Validação da nova métrica de treinamento</div><div class="dashx-section-sub">Testa se data_inicio funciona melhor como agendamento e se o CMAX consegue comprovar a realização.</div></div></div><div class="dashx-section-body">'+dashRenderTrainingRealizationTest(list)+'</div></div>';
   var healthSection = '<div class="dashx-section"><div class="dashx-section-head"><div><div class="dashx-section-kicker">Qualidade</div><div class="dashx-section-title">Saúde dos dados</div><div class="dashx-section-sub">Somente verificações objetivas de cadastro, sync e atualização.</div></div></div><div class="dashx-section-body">'+dashRenderReliableHealthSection(health)+'</div></div>';
   var funnelSection = '<div class="dashx-section"><div class="dashx-section-head"><div><div class="dashx-section-kicker">Evolução</div><div class="dashx-section-title">Funil de Implantação</div><div class="dashx-section-sub">Acompanha venda, kickoff, primeiro agendamento e primeiro treinamento com as datas disponíveis.</div></div><div class="dashx-section-answer"><span class="dashx-answer-chip">'+(activeRate === null ? 'Conversão indisponível' : (activeRate+'% com 1º treinamento'))+'</span></div></div><div class="dashx-section-body">'+dashRenderFunnel(funnel, list)+'</div></div>';
   var cohortSection = '<div class="dashx-section"><div class="dashx-section-head"><div><div class="dashx-section-kicker">Evolução</div><div class="dashx-section-title">Cohort Mensal</div><div class="dashx-section-sub">Mostra se os projetos vendidos em cada mês avançaram nas etapas de implantação.</div></div></div><div class="dashx-section-body">'+dashRenderCohort(cohort, list)+'</div></div>';
-  dc.innerHTML = '<div class="dashx-shell">'+hero+topCards+prioritySection+trainingTestSection+idleSection+clickUpTrackingSection+cohortSection+funnelSection+healthSection+'</div>';
+  dc.innerHTML = '<div class="dashx-shell">'+hero+topCards+prioritySection+idleSection+clickUpTrackingSection+cohortSection+funnelSection+healthSection+'</div>';
   dashBindDashboardInteractions(dc);
 }
 
