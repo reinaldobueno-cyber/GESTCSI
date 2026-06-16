@@ -11900,6 +11900,7 @@ function consultantCanonicalName(name) {
   var value=String(name||'').trim();
   var key=value.normalize('NFD').replace(/[\u0300-\u036f]/g,'').toUpperCase();
   if(key==='YASMIN.SOUSA@MULTIBOVINOS.COM.BR')return 'Yasmin Sousa';
+  if(key==='WAND'||key.indexOf('WANDERLEY')>=0||key.indexOf('WANDERLEI')>=0)return 'Wanderley Cabral';
   if(value.indexOf('@')>0){
     return value.split('@')[0].split(/[._-]+/).filter(Boolean).map(function(part){
       return part.charAt(0).toUpperCase()+part.slice(1).toLowerCase();
