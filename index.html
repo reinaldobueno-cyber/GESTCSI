@@ -9230,7 +9230,7 @@ function dashRenderIdleSignal(list) {
   var officialNames=Object.keys(CONSULTANT_COMP_STATE.items||{}).map(function(key){
     var item=CONSULTANT_COMP_STATE.items[key]||{};
     return item.daily_value>0&&item.seniority ? (item.consultant_name||item.consultant_key||'') : '';
-  }).filter(Boolean);
+  }).filter(function(name){return name&&cmaxOfficialTrainingConsultant(name);});
   var names=bonusCanonicalNames(officialNames.length?officialNames:activeProjects.map(function(p){return p.consultor;})).filter(function(name){return name&&name!=='Sem consultor';});
   var rows=names.map(function(name){
     var cmaxRows=monthEvents.filter(function(item){return bonusNamesMatch(item.consultor,name);});
@@ -12179,8 +12179,13 @@ function cmaxModality(value) {
   return String(value||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toUpperCase().trim();
 }
 function cmaxCountsDaily(item) {
+  if(item&&item.consultor&&!cmaxOfficialTrainingConsultant(item.consultor))return false;
   var mode=cmaxModality(item.modalidade||item.descricao||item.tipo);
   return mode==='TREINAMENTO ON LINE'||mode==='TREINAMENTO IN LOCO'||mode==='TREINAMENTO ON LINE AVULSO'||mode==='TREINAMENTO IN LOCO AVULSO';
+}
+function cmaxOfficialTrainingConsultant(name) {
+  var key=consultantCompKey(name);
+  return key.indexOf('LAIS')<0;
 }
 function cmaxTimeMinutes(value) {
   var time=cmaxTime(value);
@@ -12248,6 +12253,7 @@ function cmaxAvailableMonths() {
 function cmaxFilteredEvents() {
   var s=CMAX_DAILY_STATE;
   return (s.events||[]).filter(function(item){
+    if(!cmaxOfficialTrainingConsultant(item.consultor))return false;
     if(s.month && String(item.mes||'')!==s.month)return false;
     if(s.consultant && String(item.consultor||'')!==s.consultant)return false;
     if(s.activity && cmaxModeLabel(item)!==s.activity)return false;
@@ -12393,7 +12399,7 @@ function renderDiariasCmax() {
   if(!box)return;
   var s=CMAX_DAILY_STATE;
   var months=Array.from(new Set((s.months||[]).concat((s.events||[]).map(function(x){return String(x.mes||'');}).filter(Boolean)))).sort().reverse();
-  var consultants=(s.trainingTeam||[]).slice().sort();
+  var consultants=(s.trainingTeam||[]).filter(cmaxOfficialTrainingConsultant).slice().sort();
   var list=cmaxFilteredEvents();
   var byConsultant={};
   list.forEach(function(item){
