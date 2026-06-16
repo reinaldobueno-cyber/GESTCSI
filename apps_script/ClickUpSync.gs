@@ -5949,7 +5949,7 @@ function getCmaxDailyEventsLegacy_(params) {
   var trainingTeam = {};
   var trainingCutoff = cmaxTrainingTeamCutoff_();
   allEvents.forEach(function(item) {
-    if (item.contabiliza_diaria && item.data >= trainingCutoff) {
+    if (item.contabiliza_diaria && item.data >= trainingCutoff && isCmaxTrainingConsultant_(item.consultor)) {
       trainingTeam[sanitizeText_(item.consultor).toUpperCase()] = true;
     }
   });
@@ -6410,7 +6410,7 @@ function writeCmaxDailyMonthSnapshot_(month, events) {
   meta.training_team.forEach(function(name) { trainingTeam[sanitizeText_(name).toUpperCase()] = true; });
   (events || []).forEach(function(event) {
     var modality = normalizeCmaxModality_(event.descricao || event.tipo);
-    if (isCmaxDailyModality_(modality)) trainingTeam[sanitizeText_(event.consultor).toUpperCase()] = true;
+    if (isCmaxDailyModality_(modality) && isCmaxTrainingConsultant_(event.consultor)) trainingTeam[sanitizeText_(event.consultor).toUpperCase()] = true;
   });
   var activities = {};
   meta.available_activities.forEach(function(activity) { activities[activity] = true; });
@@ -6793,7 +6793,7 @@ function rebuildCmaxDailyMaterializedView_(rows, sourceHeaders) {
   });
   var trainingTeamMap = {};
   items.forEach(function(item) {
-    if (item.contabiliza_diaria && item.data >= trainingCutoff) {
+    if (item.contabiliza_diaria && item.data >= trainingCutoff && isCmaxTrainingConsultant_(item.consultor)) {
       trainingTeamMap[sanitizeText_(item.consultor).toUpperCase()] = true;
     }
   });
@@ -6930,6 +6930,10 @@ function isCmaxDailyModality_(value) {
     modality === 'TREINAMENTO IN LOCO' ||
     modality === 'TREINAMENTO ON LINE AVULSO' ||
     modality === 'TREINAMENTO IN LOCO AVULSO';
+}
+
+function isCmaxTrainingConsultant_(name) {
+  return normalizeKey_(name).indexOf('LAIS') < 0;
 }
 
 function cmaxMonthRange_(month) {
