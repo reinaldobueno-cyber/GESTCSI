@@ -5251,6 +5251,24 @@ function fechamentoApplyProjectStatuses() {
     if (match) project.status = 'Concluído';
   });
 }
+function fechamentoProjectFromItem(item) {
+  item = item || {};
+  var projectKey = String(item.project_key || '').trim();
+  if (projectKey) {
+    var byKey = acompProjetoPorChave(projectKey);
+    if (byKey) return byKey;
+  }
+  var itemName = normalizeClienteKey(item.projeto || '');
+  if (!itemName) return null;
+  return (DATA.projetos || []).filter(function(project) {
+    return normalizeClienteKey(project && project.cliente) === itemName;
+  })[0] || null;
+}
+function fechamentoEffectiveConsultant(item) {
+  var project = fechamentoProjectFromItem(item);
+  var carteira = project && project.consultor;
+  return consultantCanonicalName(carteira || (item && item.consultor) || 'Sem consultor');
+}
 function fechamentoApplySyncRows(rows, syncMonth) {
   var normalized = fechamentoNormalizeRows(rows);
   var month = fechamentoMonthKey(syncMonth);
@@ -5345,7 +5363,7 @@ function fechamentoFilteredRows() {
   return (FECHAMENTO_MARCOS || []).filter(function(item) {
     var month = String(FECHAMENTO_FILTER.month || '');
     if (month && month !== 'todos' && String(item.mes_fechamento || '') !== month) return false;
-    if (FECHAMENTO_FILTER.consultor !== 'todos' && !bonusNamesMatch(item.consultor, FECHAMENTO_FILTER.consultor)) return false;
+    if (FECHAMENTO_FILTER.consultor !== 'todos' && !bonusNamesMatch(fechamentoEffectiveConsultant(item), FECHAMENTO_FILTER.consultor)) return false;
     if (FECHAMENTO_FILTER.projetoBusca && fechamentoSearchKey(item.projeto).indexOf(fechamentoSearchKey(FECHAMENTO_FILTER.projetoBusca)) < 0) return false;
     if (FECHAMENTO_FILTER.situacao !== 'todos' && String(item.situacao || '') !== FECHAMENTO_FILTER.situacao) return false;
     return true;
@@ -5414,12 +5432,12 @@ function initFechamento() {
   var consultants = {};
   (FECHAMENTO_MARCOS || []).forEach(function(item) {
     if (item.mes_fechamento) months[item.mes_fechamento] = true;
-    if (item.consultor) consultants[item.consultor] = true;
+    if (item.consultor) consultants[fechamentoEffectiveConsultant(item)] = true;
   });
   if (!FECHAMENTO_FILTER.month) FECHAMENTO_FILTER.month = fechamentoCurrentMonth();
   var list = fechamentoFilteredRows();
   list.sort(function(a, b) {
-    var consultantCompare = String(a.consultor || 'Sem consultor').localeCompare(String(b.consultor || 'Sem consultor'));
+    var consultantCompare = String(fechamentoEffectiveConsultant(a) || 'Sem consultor').localeCompare(String(fechamentoEffectiveConsultant(b) || 'Sem consultor'));
     if (consultantCompare) return consultantCompare;
     return String(b.closed_at || '').localeCompare(String(a.closed_at || ''));
   });
@@ -5457,7 +5475,7 @@ function initFechamento() {
   }).join('');
   var byConsultant = {};
   list.forEach(function(item) {
-    var name = consultantCanonicalName(item.consultor || 'Sem consultor');
+    var name = fechamentoEffectiveConsultant(item);
     (byConsultant[name] || (byConsultant[name] = [])).push(item);
   });
   var consultantCards = Object.keys(byConsultant).sort().map(function(consultant) {
@@ -5471,8 +5489,13 @@ function initFechamento() {
       var comment = item.justificativa
         ? escapeHtml(item.justificativa)+(item.justificativa_por ? '<div class="closing-project-meta">por '+escapeHtml(item.justificativa_por)+'</div>' : '')
         : '<span style="color:var(--muted)">Nenhum comentário textual ou anexo encontrado.</span>';
+      var effectiveConsultant = fechamentoEffectiveConsultant(item);
+      var clickupOwner = consultantCanonicalName(item.consultor || item.responsaveis || '');
+      var ownerNote = clickupOwner && !bonusNamesMatch(clickupOwner, effectiveConsultant)
+        ? '<br>Respons&aacute;vel no marco: '+escapeHtml(clickupOwner)
+        : '';
       return '<div class="closing-project-card"><div><div class="closing-project-title">'+escapeHtml(item.projeto || 'Projeto não mapeado')+'</div><div class="closing-project-marco">'+escapeHtml(item.marco || '-')+'</div><div class="closing-project-meta">'+escapeHtml(item.item_tipo || 'Marco')+' · '+escapeHtml(item.fase || '-')+'<br>Closed: '+(item.closed_at ? formatarDataHoraProjeto(item.closed_at) : '-')+(item.validation_at ? ' · Validado: '+formatarDataHoraProjeto(item.validation_at) : '')+'</div></div>'+
-        '<div><span class="closing-status '+escapeHtml(status)+'">'+escapeHtml(item.status_atual || status)+'</span><div class="closing-project-comment" style="margin-top:7px">'+comment+'</div></div>'+
+        '<div><span class="closing-status '+escapeHtml(status)+'">'+escapeHtml(item.status_atual || status)+'</span><div class="closing-project-comment" style="margin-top:7px">'+comment+'<div class="closing-project-meta">'+ownerNote+'</div></div></div>'+
         '<div><strong>'+fechamentoMoney(item.valor_bonus)+'</strong><div style="margin-top:8px"><a class="project-link-btn" href="'+escapeHtml(item.link || '#')+'" target="_blank" rel="noopener">Abrir marco</a></div></div></div>';
     }).join('');
     return '<section class="closing-consultant-card"><div class="closing-consultant-head"><div><div class="closing-consultant-name">'+escapeHtml(consultant)+'</div><div class="closing-project-meta">Entregas que entraram em Closed no período selecionado</div></div><div class="closing-consultant-metrics"><div class="closing-consultant-metric"><strong>'+consultantRows.length+'</strong><span>Entregas</span></div><div class="closing-consultant-metric"><strong>'+consultantWaiting+'</strong><span>Aguardando</span></div><div class="closing-consultant-metric"><strong>'+consultantApproved+' / '+consultantRejected+'</strong><span>Aprov. / Reprov.</span></div><div class="closing-consultant-metric"><strong>'+fechamentoMoney(consultantBonus)+'</strong><span>Bônus</span></div></div></div><div class="closing-project-list">'+projectCards+'</div></section>';
@@ -5624,7 +5647,7 @@ function bonusDataset() {
   var indications=(BONUS_INDICATION_STATE.items||[]).filter(function(item){return String(item.month||'')===month;});
   var names=bonusCanonicalNames(
     daily.map(function(item){return item.consultor;})
-      .concat(monthMilestones.map(function(item){return item.consultor;}))
+      .concat(monthMilestones.map(function(item){return fechamentoEffectiveConsultant(item);}))
       .concat(indications.map(function(item){return item.consultant_name;}))
   );
   var userName=AUTH_STATE.user&&(AUTH_STATE.user.name||AUTH_STATE.user.username)||'';
@@ -5644,8 +5667,8 @@ function bonusDataset() {
       var special=cmaxSpecialDayInfo(item.data);
       return {item:item,equivalent:equivalent,multiplier:special.multiplier,specialLabel:special.label,value:equivalent*Number(comp.daily_value||0)*special.multiplier};
     }).filter(function(row){return row.equivalent>0;});
-    var marcoRows=milestones.filter(function(item){return bonusNamesMatch(item.consultor,name);});
-    var rejectedRows=rejectedMilestones.filter(function(item){return bonusNamesMatch(item.consultor,name);});
+    var marcoRows=milestones.filter(function(item){return bonusNamesMatch(fechamentoEffectiveConsultant(item),name);});
+    var rejectedRows=rejectedMilestones.filter(function(item){return bonusNamesMatch(fechamentoEffectiveConsultant(item),name);});
     var indicationRows=indications.filter(function(item){return bonusNamesMatch(item.consultant_name,name);});
     var dailyValue=dailyRows.reduce(function(total,row){return total+row.value;},0);
     var milestoneValue=marcoRows.reduce(function(total,item){return total+Number(item.valor_bonus||30);},0);
@@ -5759,7 +5782,7 @@ function initBonus() {
   var total=daily+milestones+indications;
   var closedRows=(FECHAMENTO_MARCOS||[]).filter(function(item){
     if(String(item.mes_fechamento||'')!==BONUS_FILTER.month)return false;
-    return BONUS_FILTER.consultant==='todos'||bonusNamesMatch(item.consultor,BONUS_FILTER.consultant);
+    return BONUS_FILTER.consultant==='todos'||bonusNamesMatch(fechamentoEffectiveConsultant(item),BONUS_FILTER.consultant);
   });
   var closedStats={
     total:closedRows.length,
@@ -5770,7 +5793,7 @@ function initBonus() {
   var monthOptions=bonusMonthOptions().map(function(month){return '<option value="'+escapeHtml(month)+'" '+(month===BONUS_FILTER.month?'selected':'')+'>'+escapeHtml(bonusMonthLabel(month))+'</option>';}).join('');
   var allNames=bonusCanonicalNames(
     (CMAX_DAILY_STATE.events||[]).map(function(item){return item.consultor;})
-      .concat((FECHAMENTO_MARCOS||[]).map(function(item){return item.consultor;}))
+      .concat((FECHAMENTO_MARCOS||[]).map(function(item){return fechamentoEffectiveConsultant(item);}))
       .concat((BONUS_INDICATION_STATE.items||[]).map(function(item){return item.consultant_name;}))
       .concat(Object.keys(CONSULTANT_COMP_STATE.items||{}).map(function(key){return CONSULTANT_COMP_STATE.items[key].consultant_name;}))
   );
@@ -8733,7 +8756,7 @@ function dashMilestoneClosingRows2026() {
 }
 function dashOpenMilestoneProductivityAudit(consultant) {
   var rows = dashMilestoneClosingRows2026().filter(function(item) {
-    return String(item.consultor || 'Sem consultor') === String(consultant || 'Sem consultor');
+    return bonusNamesMatch(fechamentoEffectiveConsultant(item), consultant || 'Sem consultor');
   });
   var body = rows.length ? rows.map(function(item) {
     var situation = item.situacao === 'aprovado' ? 'Aprovado' : item.situacao === 'reprovado' ? 'Reprovado' : 'Aguardando validação';
@@ -8750,7 +8773,7 @@ function dashRenderMilestoneProductivity2026() {
   var list = dashMilestoneClosingRows2026();
   var byConsultant = {};
   list.forEach(function(item) {
-    var name = item.consultor || 'Sem consultor';
+    var name = fechamentoEffectiveConsultant(item);
     if (!byConsultant[name]) byConsultant[name] = {nome:name, aguardando:0, aprovado:0, reprovado:0, total:0};
     var row = byConsultant[name];
     if (item.situacao === 'aprovado') row.aprovado += 1;
