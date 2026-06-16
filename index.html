@@ -11921,6 +11921,7 @@ var CONSULTANT_COMP_STATE={loaded:false,loading:false,items:{},rates:{junior:60,
 var CMAX_DAILY_STATE = {events:[], loading:false, loaded:false, error:'', month:cmaxCurrentMonth(), consultant:'', activity:'', search:'', syncedAt:'', months:[], loadedMonths:[], trainingTeam:[], trainingTeamCutoff:'', activities:[], historySync:null, expanded:{}, requestSeq:0, monthResponses:{}};
 var CMAX_HISTORY_POLL_TIMER=null;
 var CMAX_PREFETCH_RUNNING=false;
+var CMAX_DAILY_SYNCING=false;
 var CMAX_BROWSER_CACHE_PREFIX='gestcsi_cmax_view_v5_';
 
 function consultantCanonicalName(name) {
@@ -12445,7 +12446,7 @@ function renderDiariasCmax() {
     return '<button type="button" class="cmax-modality clickable '+(cmaxActivityCountsDaily(name)?'eligible':'')+'" onclick="return cmaxOpenModality(\''+encodeURIComponent(name)+'\')"><span>'+escapeHtml(name)+'</span><strong>'+modalities[name]+'</strong></button>';
   }).join('');
   var syncButton=AUTH_STATE.user&&AUTH_STATE.user.role==='admin'
-    ? '<button class="btn-syncall" onclick="sincronizarDiariasCmax(this)">Atualizar hist&oacute;rico CMAX</button>'
+    ? '<button class="btn-syncall" '+(CMAX_DAILY_SYNCING?'disabled':'')+' onclick="sincronizarDiariasCmax(this)">'+(CMAX_DAILY_SYNCING?'Atualizando...':'Atualizar hist&oacute;rico CMAX')+'</button>'
     : '';
   var monthsByYear={};
   months.forEach(function(month){var year=month.slice(0,4);if(!monthsByYear[year])monthsByYear[year]=[];monthsByYear[year].push(month);});
@@ -12512,16 +12513,40 @@ function carregarDiariasCmax(force) {
   });
 }
 function sincronizarDiariasCmax(btn) {
+  if(CMAX_DAILY_SYNCING)return false;
+  CMAX_DAILY_SYNCING=true;
+  var month=CMAX_DAILY_STATE.month||cmaxCurrentMonth();
   if(btn){btn.disabled=true;btn.textContent='Atualizando...';}
-  CMAX_DAILY_STATE.error='';renderDiariasCmax();
-  chamarAppsScriptJsonp('startCmaxDailyHistoryBackground',{auth_token:authTokenParam()},15000).then(function(resp){
+  CMAX_DAILY_STATE.error='Atualizando CMAX de '+cmaxMonthLabel(month)+'...';renderDiariasCmax();
+  CMAX_DAILY_STATE.loaded=false;
+  delete CMAX_DAILY_STATE.monthResponses[month||'all'];
+  try{localStorage.removeItem(CMAX_BROWSER_CACHE_PREFIX+(month||'all'));}catch(e){}
+  chamarAppsScriptJsonp('syncCmaxDailyEvents',{auth_token:authTokenParam(),month:month},45000).then(function(resp){
+    if(!resp||resp.ok===false)throw new Error((resp&&(resp.error||resp.raw_error))||'Falha ao atualizar o mês CMAX');
+    CMAX_DAILY_STATE.monthResponses[month||'all']=resp;
+    cmaxWriteBrowserCache(month,resp);
+    cmaxApplyResponse(resp);
+    CMAX_DAILY_STATE.loaded=true;
+    CMAX_DAILY_STATE.loading=false;
+    CMAX_DAILY_STATE.error='';
+    renderDiariasCmax();
+    initBonus();
+    return chamarAppsScriptJsonp('startCmaxDailyHistoryBackground',{auth_token:authTokenParam(),start_month:month},15000);
+  }).then(function(resp){
     if(!resp||resp.ok===false)throw new Error((resp&&(resp.error||resp.raw_error))||'Falha ao sincronizar agenda CMAX');
     CMAX_DAILY_STATE.historySync=resp.history_sync||null;
-    if(btn){btn.disabled=false;btn.textContent='Atualizar histórico CMAX';}
-    showToast('Atualização CMAX agendada. A tela será atualizada automaticamente.','ok');
+    showToast('CMAX atualizado para '+cmaxMonthLabel(month)+'. Histórico segue em segundo plano.','ok');
+    CMAX_DAILY_SYNCING=false;
     renderDiariasCmax();
     cmaxScheduleHistoryPoll();
-  }).catch(function(error){if(btn){btn.disabled=false;btn.textContent='Atualizar histórico CMAX';}CMAX_DAILY_STATE.error=error.message||String(error);renderDiariasCmax();showToast(CMAX_DAILY_STATE.error,'err');});
+  }).catch(function(error){
+    CMAX_DAILY_SYNCING=false;
+    if(btn){btn.disabled=false;btn.textContent='Atualizar histórico CMAX';}
+    CMAX_DAILY_STATE.error=error.message||String(error);
+    renderDiariasCmax();
+    showToast(CMAX_DAILY_STATE.error,'err');
+  });
+  return false;
 }
 function cmaxScheduleHistoryPoll() {
   if(CMAX_HISTORY_POLL_TIMER){clearTimeout(CMAX_HISTORY_POLL_TIMER);CMAX_HISTORY_POLL_TIMER=null;}
