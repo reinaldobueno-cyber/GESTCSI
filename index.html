@@ -7220,7 +7220,7 @@ function buildGerencialBase(p) {
   var vk = diffD(dV, dK), vt = diffD(dV, dT);
   if (!dK) riscos.push('Kickoff não registrado');
   if (vk !== null && vk > 7) riscos.push('Kickoff acima do limite (7d)');
-  if (vt !== null && vt > 15) riscos.push('1º treinamento acima do limite (15d)');
+  if (vt !== null && vt > 15) riscos.push('1º agendamento acima do limite (15d)');
   if ((p && p.diarias_rest) !== null && Number(p.diarias_rest) < 0) riscos.push('Diárias excedidas');
   if ((p && p.dias_sem_atualizacao) !== null && Number(p.dias_sem_atualizacao) > 7) riscos.push('Projeto sem atualização recente');
   if (
@@ -7897,15 +7897,15 @@ function dashOpenCohortAudit(mes, etapa) {
     if (etapa === 'ativacao') return s.stage !== 'ativacao';
     return false;
   });
-  var labels = { kickoff:'sem Kickoff', treinamento:'sem 1º treinamento', ativacao:'sem ativação' };
+  var labels = { kickoff:'sem Kickoff', treinamento:'sem 1º agendamento', ativacao:'sem 1º treinamento' };
   var rows = list.length ? list.map(function(p){
     var s = dashProjectStageInfo(p);
     var etapaAtual = dashStageLabel(s.stage);
     var datas = [];
     if (s.kickDate) datas.push('Kickoff: '+fd(s.kickDate.toISOString()));
-    if (s.trainDate) datas.push('1º treino: '+fd(s.trainDate.toISOString()));
-    if (s.activationDate) datas.push('Ativação: '+fd(s.activationDate.toISOString()));
-    if (s.activationEstimated) datas.push('Ativação estimada');
+    if (s.trainDate) datas.push('1º agendamento: '+fd(s.trainDate.toISOString()));
+    if (s.activationDate) datas.push('1º treinamento: '+fd(s.activationDate.toISOString()));
+    if (s.activationEstimated) datas.push('1º treinamento estimado');
     return '<tr><td><strong>'+String(p.cliente || '-')+'</strong></td><td>'+(p.consultor || '-')+'</td><td>'+sl(String(p.status || '-'))+'</td><td>'+etapaAtual+'</td><td>'+(datas.length ? datas.join(' • ') : 'Sem data registrada')+'</td><td>'+dashProjectActionCell(p)+'</td></tr>';
   }).join('') : '<tr class="empty-row"><td colspan="6">Nenhum projeto pendente nesta etapa.</td></tr>';
   var html = '<div class="dashx-focus-note"><div><strong>Cohort '+mes+':</strong> projetos '+(labels[etapa] || 'pendentes')+'.</div><div class="dashx-focus-hint">'+list.length+' projeto(s)</div></div><div class="dashx-table-wrap" style="margin-top:12px"><table class="dashx-table"><thead><tr><th>Projeto</th><th>Consultor</th><th>Status</th><th>Etapa atual</th><th>Datas</th><th>Ação</th></tr></thead><tbody>'+rows+'</tbody></table></div>';
@@ -8530,8 +8530,8 @@ function dashAlertPill(texto, classe) {
   return '<span class="dashx-card-alert '+(classe || 'neutral')+'">'+texto+'</span>';
 }
 function dashStageLabel(stage) {
-  if (stage === 'ativacao') return 'Ativação';
-  if (stage === 'treinamento') return '1º Treinamento';
+  if (stage === 'ativacao') return '1º Treinamento';
+  if (stage === 'treinamento') return '1º Agendamento';
   if (stage === 'kickoff') return 'Kickoff';
   if (stage === 'venda') return 'Venda';
   return 'Sem etapa';
@@ -9024,7 +9024,7 @@ function dashOpenTopKpiAudit(mode) {
       return dashStatusKey(p&&p.status)!=='cancelado'&&dashProjectHasClickUpTrace(p)&&days!==null&&days>15;
     });
   }else if(mode==='activation'){
-    title='Projetos que chegaram &agrave; ativa&ccedil;&atilde;o';
+    title='Projetos que chegaram ao 1&ordm; treinamento';
     list=list.filter(function(p){return dashProjectStageInfo(p).stage==='ativacao';});
   }else if(mode==='delivery'){
     title='Projetos com marcador Entrega aguardando fechamento';
@@ -9205,8 +9205,8 @@ function dashOpenFunnelAudit(mode, index) {
       ['Dias na etapa', stage.daysInStage === null ? '-' : String(stage.daysInStage)],
       ['Data da venda', stage.vendaDate ? fd(stage.vendaDate.toISOString()) : '-'],
       ['Kickoff', stage.kickDate ? fd(stage.kickDate.toISOString()) : '-'],
-      ['1º treinamento', stage.trainDate ? fd(stage.trainDate.toISOString()) : '-'],
-      ['Ativação', stage.activationDate ? fd(stage.activationDate.toISOString()) : (stage.activationEstimated ? 'Estimada pela regra do funil' : '-')],
+      ['1º agendamento', stage.trainDate ? fd(stage.trainDate.toISOString()) : '-'],
+      ['1º treinamento', stage.activationDate ? fd(stage.activationDate.toISOString()) : (stage.activationEstimated ? 'Estimado pela regra do funil' : '-')],
       ['Próxima ação detectada?', action.found ? 'Sim' : 'Não'],
       ['Fonte da ação', action.source],
       ['Conteúdo', action.value]
@@ -9229,15 +9229,15 @@ function dashRenderFunnel(funnel, list) {
   var required = dashMissingFields(list, [
     {label:'data de venda', aliases:['data_venda']},
     {label:'kickoff', aliases:['data_kick','kickoff']},
-    {label:'1º treinamento', aliases:['data_inicio']},
-    {label:'status / ativação', aliases:['status','data_ativacao','ativado_em','data_ativado','data_ativacao_implantacao']}
+    {label:'1º agendamento', aliases:['data_inicio']},
+    {label:'status / 1º treinamento', aliases:['status','data_ativacao','ativado_em','data_ativado','data_ativacao_implantacao']}
   ]);
   if (required.length) return dashUnavailableCard('Funil de implantação', required);
   var steps = [
     {label:'Venda', value:funnel.totalVendas, sub:'Base inicial de vendas no recorte.'},
     {label:'Kickoff', value:funnel.totalKick, conv:funnel.convVK, sub:'Conversão Venda → Kickoff'},
-    {label:'1º Treinamento', value:funnel.totalTrein, conv:funnel.convKT, sub:'Conversão Kickoff → Treinamento'},
-    {label:'Ativação', value:funnel.totalAtiv, conv:funnel.convTA, sub:'Conversão Treinamento → Ativação'}
+    {label:'1º Agendamento', value:funnel.totalTrein, conv:funnel.convKT, sub:'Conversão Kickoff → Agendamento'},
+    {label:'1º Treinamento', value:funnel.totalAtiv, conv:funnel.convTA, sub:'Conversão Agendamento → Treinamento'}
   ];
   DASH_FUNNEL_PROJECTS = list.slice();
   var stepModes = ['venda','kickoff','treinamento','ativacao'];
@@ -9256,8 +9256,8 @@ function dashRenderCohort(cohort, list) {
     {label:'mês', aliases:['mes']},
     {label:'data de venda', aliases:['data_venda']},
     {label:'kickoff', aliases:['data_kick','kickoff']},
-    {label:'1º treinamento', aliases:['data_inicio']},
-    {label:'status / ativação', aliases:['status','data_ativacao','ativado_em','data_ativado','data_ativacao_implantacao']}
+    {label:'1º agendamento', aliases:['data_inicio']},
+    {label:'status / 1º treinamento', aliases:['status','data_ativacao','ativado_em','data_ativado','data_ativacao_implantacao']}
   ]);
   if (required.length) return dashUnavailableCard('Cohort mensal', required);
   var rows = cohort.length ? cohort.map(function(item){
@@ -9268,7 +9268,7 @@ function dashRenderCohort(cohort, list) {
     }
     return '<tr><td><strong>'+item.mes+'</strong></td><td class="center">'+item.vendidos+'</td><td class="center">'+cohortBtn('kickoff', item.kickoffPct, item.semKickoff)+'</td><td class="center">'+cohortBtn('treinamento', item.treinoPct, item.semTreino)+'</td><td class="center">'+cohortBtn('ativacao', item.ativPct, item.semAtivacao)+'</td><td class="tempo">'+(item.tempoAtiv === null ? '-' : item.tempoAtiv+' dias')+'</td></tr>';
   }).join('') : '<tr class="empty-row"><td colspan="6">Sem cohort disponível para o recorte atual.</td></tr>';
-  return '<div class="dashx-matrix"><table><colgroup><col style="width:16%"><col style="width:12%"><col style="width:18%"><col style="width:18%"><col style="width:18%"><col style="width:18%"></colgroup><thead><tr><th>Mês da venda</th><th class="center">Vendidos</th><th class="center">Kickoff %</th><th class="center">1º Treinamento %</th><th class="center">Ativação %</th><th class="tempo">Tempo médio até ativação</th></tr></thead><tbody>'+rows+'</tbody></table></div><div class="dashx-cohort-note"><strong>Ativação:</strong> usa a data explícita de ativação quando ela existe. Quando não existe, o painel estima como ativado se o projeto já tem 1º treinamento e sinal operacional de andamento/conclusão ou diárias realizadas. Clique nos percentuais para auditar os projetos pendentes de cada mês.</div>';
+  return '<div class="dashx-matrix"><table><colgroup><col style="width:16%"><col style="width:12%"><col style="width:18%"><col style="width:18%"><col style="width:18%"><col style="width:18%"></colgroup><thead><tr><th>Mês da venda</th><th class="center">Vendidos</th><th class="center">Kickoff %</th><th class="center">1º Agendamento %</th><th class="center">1º Treinamento %</th><th class="tempo">Tempo médio até 1º treinamento</th></tr></thead><tbody>'+rows+'</tbody></table></div><div class="dashx-cohort-note"><strong>1º Treinamento:</strong> usa a data explícita de realização/ativação quando ela existe. Quando não existe, o painel estima como realizado se o projeto já tem 1º agendamento e sinal operacional de andamento/conclusão ou diárias realizadas. Clique nos percentuais para auditar os projetos pendentes de cada mês.</div>';
 }
 function dashRenderIdleSignal(list) {
   var month=cmaxCurrentMonth();
@@ -9377,7 +9377,7 @@ function dashRenderTrainingRealizationTest(list) {
   }).slice(0,20).map(function(row){
     return '<tr><td><strong>'+escapeHtml(row.project.cliente||'-')+'</strong></td><td>'+escapeHtml(row.project.consultor||'-')+'</td><td>'+escapeHtml(fd(row.scheduled.toISOString()))+'</td><td>'+(row.realized?escapeHtml(cmaxDate(row.realized.data))+'<div class="dashx-list-sub">'+escapeHtml(row.realized.cliente||'-')+'</div>':'Não encontrado')+'</td><td>'+(row.realized?'<span class="dashx-score-pill good">Conciliado '+row.score+'</span><div class="dashx-list-sub">'+escapeHtml(row.why)+'</div>':'<span class="dashx-score-pill warn">Sem correspondência confiável</span><div class="dashx-list-sub">busca por nome, consultor e janela de data</div>')+'</td></tr>';
   }).join('')||'<tr><td colspan="5">Nenhum projeto com treinamento agendado no recorte.</td></tr>';
-  return '<div class="dashx-chart-card"><div class="dashx-chart-head"><div><div class="dashx-chart-title">Teste experimental: treinamento agendado x realizado</div><div class="dashx-chart-sub">Compara projetos com <strong>data_inicio</strong> contra treinamentos realizados no CMAX em 2026, usando pontuação por nome, consultor e proximidade de data. Ainda não substitui a taxa de ativação.</div></div><div class="dashx-chart-meta"><span class="dashx-chart-note">'+cached2026.length+' meses analisados</span><span class="dashx-chart-note">'+(rate===null?'-':rate+'%')+' conciliado</span></div></div><div class="dashx-top-grid"><div class="dashx-card neutral"><div class="dashx-card-label">Treinamentos agendados</div><div class="dashx-card-value">'+scheduled.length+'</div><div class="dashx-card-note">projetos com data_inicio</div></div><div class="dashx-card good"><div class="dashx-card-label">Realizados encontrados</div><div class="dashx-card-value">'+realized.length+'</div><div class="dashx-card-note">score mínimo 60/135</div></div><div class="dashx-card warn"><div class="dashx-card-label">Sem realização encontrada</div><div class="dashx-card-value">'+pending.length+'</div><div class="dashx-card-note">sem correspondência confiável</div></div></div><div class="dashx-inline-note"><strong>Como avaliar:</strong> o vínculo agora usa similaridade do nome, mesmo consultor e janela de data. O score e os termos encontrados aparecem na coluna Resultado para revisão.</div><div class="dashx-table-wrap"><table class="dashx-table"><thead><tr><th>Projeto</th><th>Consultor</th><th>Agendado</th><th>Primeiro realizado CMAX</th><th>Resultado</th></tr></thead><tbody>'+sample+'</tbody></table></div></div>';
+  return '<div class="dashx-chart-card"><div class="dashx-chart-head"><div><div class="dashx-chart-title">Teste experimental: treinamento agendado x realizado</div><div class="dashx-chart-sub">Compara projetos com <strong>data_inicio</strong> contra treinamentos realizados no CMAX em 2026, usando pontuação por nome, consultor e proximidade de data. Ainda não substitui a taxa de 1º treinamento.</div></div><div class="dashx-chart-meta"><span class="dashx-chart-note">'+cached2026.length+' meses analisados</span><span class="dashx-chart-note">'+(rate===null?'-':rate+'%')+' conciliado</span></div></div><div class="dashx-top-grid"><div class="dashx-card neutral"><div class="dashx-card-label">Treinamentos agendados</div><div class="dashx-card-value">'+scheduled.length+'</div><div class="dashx-card-note">projetos com data_inicio</div></div><div class="dashx-card good"><div class="dashx-card-label">Realizados encontrados</div><div class="dashx-card-value">'+realized.length+'</div><div class="dashx-card-note">score mínimo 60/135</div></div><div class="dashx-card warn"><div class="dashx-card-label">Sem realização encontrada</div><div class="dashx-card-value">'+pending.length+'</div><div class="dashx-card-note">sem correspondência confiável</div></div></div><div class="dashx-inline-note"><strong>Como avaliar:</strong> o vínculo agora usa similaridade do nome, mesmo consultor e janela de data. O score e os termos encontrados aparecem na coluna Resultado para revisão.</div><div class="dashx-table-wrap"><table class="dashx-table"><thead><tr><th>Projeto</th><th>Consultor</th><th>Agendado</th><th>Primeiro realizado CMAX</th><th>Resultado</th></tr></thead><tbody>'+sample+'</tbody></table></div></div>';
 }
 
 function initDash() {
@@ -9418,7 +9418,7 @@ function initDash() {
     dashKpiCard('Com rastreio ClickUp', trackedPct === null ? '-' : dashPct(trackedPct), tracked+' de '+auditable+' projeto(s) auditáveis possuem rastreio técnico. Clique para listar.', dashMetricClass(trackedPct, 70, 90, false), 'aging', '<span class="dashx-kpi-delta neutral">'+untracked+' sem ClickUp</span>', "return dashOpenTopKpiAudit('tracked')")+
     dashKpiCard('ClickUp 15+ dias', stale15, 'Projetos rastreados sem atualização recente no ClickUp. Clique para listar.', stale15 ? 'bad' : 'good', 'aging', '<span class="dashx-kpi-delta neutral">Regra: atualização ClickUp</span>', "return dashOpenTopKpiAudit('stale')")+
     dashKpiCard('Aguardando entrega', awaitingDelivery, 'Projetos com item marcado como Entrega aguardando validação do fechamento.', awaitingDelivery ? 'warn' : 'good', 'projectRisk', '<span class="dashx-kpi-delta neutral">Fechamento aprovado: R$ 80</span>', "return dashOpenTopKpiAudit('delivery')")+
-    dashKpiCard('Taxa de ativação', activeRate === null ? '-' : dashPct(activeRate), activeRate === null ? 'Conversão indisponível.' : 'Conversão da jornada venda → ativação. Clique para listar.', dashMetricClass(activeRate, 40, 70, false), 'funnel', '<span class="dashx-kpi-delta neutral">Base 2026</span>', "return dashOpenTopKpiAudit('activation')")+
+    dashKpiCard('Taxa de 1º treinamento', activeRate === null ? '-' : dashPct(activeRate), activeRate === null ? 'Conversão indisponível.' : 'Conversão da jornada venda → 1º treinamento. Clique para listar.', dashMetricClass(activeRate, 40, 70, false), 'funnel', '<span class="dashx-kpi-delta neutral">Base 2026</span>', "return dashOpenTopKpiAudit('activation')")+
     dashKpiCard('Saúde dos dados', health.completude === null ? '-' : dashPct(health.completude), health.completude === null ? 'Não há base suficiente.' : (health.inconsistencias.length+' projeto(s) com campo essencial ausente. Clique para listar.'), dashMetricClass(health.completude, 70, 90, false), 'dataHealthSummary', '<span class="dashx-kpi-delta neutral">'+health.syncErrors+' falha(s) de sync</span>', "return dashOpenTopKpiAudit('health')")+
   '</div>';
   var hero = '<div class="dashx-hero"><div class="dashx-hero-top"><div class="dashx-title-wrap"><div class="dashx-eyebrow">Dashboard Executivo CSI</div><div class="dashx-title">Visão operacional explicável</div><div class="dashx-sub">Indicadores de 2026 com fontes e regras auditáveis para apoiar as decisões operacionais.</div></div><div class="dashx-meta"><span class="dashx-meta-chip"><b>Escopo</b> '+rotuloEscopoUsuario()+'</span><span class="dashx-meta-chip"><b>Ano</b> 2026</span><span class="dashx-meta-chip"><b>Projetos</b> '+total+'</span><span class="dashx-meta-chip"><b>Última base</b> '+(TOWER_INFO_CONTEXT.ultima || '-')+'</span></div></div>'+dashRenderFilters(base)+'</div>';
@@ -9427,7 +9427,7 @@ function initDash() {
   var idleSection = '<div class="dashx-section"><div class="dashx-section-head"><div><div class="dashx-section-kicker">Capacidade</div><div class="dashx-section-title">Sinais de ociosidade</div><div class="dashx-section-sub">Cruza agenda CMAX, carteira ativa e movimentações recentes do ClickUp para indicar onde a liderança deve investigar disponibilidade.</div></div></div><div class="dashx-section-body">'+dashRenderIdleSignal(list)+'</div></div>';
   var trainingTestSection = '<div class="dashx-section"><div class="dashx-section-head"><div><div class="dashx-section-kicker">Experimento auditável</div><div class="dashx-section-title">Validação da nova métrica de treinamento</div><div class="dashx-section-sub">Testa se data_inicio funciona melhor como agendamento e se o CMAX consegue comprovar a realização.</div></div></div><div class="dashx-section-body">'+dashRenderTrainingRealizationTest(list)+'</div></div>';
   var healthSection = '<div class="dashx-section"><div class="dashx-section-head"><div><div class="dashx-section-kicker">Qualidade</div><div class="dashx-section-title">Saúde dos dados</div><div class="dashx-section-sub">Somente verificações objetivas de cadastro, sync e atualização.</div></div></div><div class="dashx-section-body">'+dashRenderReliableHealthSection(health)+'</div></div>';
-  var funnelSection = '<div class="dashx-section"><div class="dashx-section-head"><div><div class="dashx-section-kicker">Evolução</div><div class="dashx-section-title">Funil de Implantação</div><div class="dashx-section-sub">Acompanha venda, kickoff, primeiro treinamento e ativação com as datas disponíveis.</div></div><div class="dashx-section-answer"><span class="dashx-answer-chip">'+(activeRate === null ? 'Conversão indisponível' : (activeRate+'% de ativação'))+'</span></div></div><div class="dashx-section-body">'+dashRenderFunnel(funnel, list)+'</div></div>';
+  var funnelSection = '<div class="dashx-section"><div class="dashx-section-head"><div><div class="dashx-section-kicker">Evolução</div><div class="dashx-section-title">Funil de Implantação</div><div class="dashx-section-sub">Acompanha venda, kickoff, primeiro agendamento e primeiro treinamento com as datas disponíveis.</div></div><div class="dashx-section-answer"><span class="dashx-answer-chip">'+(activeRate === null ? 'Conversão indisponível' : (activeRate+'% com 1º treinamento'))+'</span></div></div><div class="dashx-section-body">'+dashRenderFunnel(funnel, list)+'</div></div>';
   var cohortSection = '<div class="dashx-section"><div class="dashx-section-head"><div><div class="dashx-section-kicker">Evolução</div><div class="dashx-section-title">Cohort Mensal</div><div class="dashx-section-sub">Mostra se os projetos vendidos em cada mês avançaram nas etapas de implantação.</div></div></div><div class="dashx-section-body">'+dashRenderCohort(cohort, list)+'</div></div>';
   dc.innerHTML = '<div class="dashx-shell">'+hero+topCards+prioritySection+trainingTestSection+idleSection+clickUpTrackingSection+cohortSection+funnelSection+healthSection+'</div>';
   dashBindDashboardInteractions(dc);
@@ -10769,25 +10769,25 @@ var DASH_TOWER_INFO = {
     confidence:'Alta'
   },
     activationRate: {
-      title:'Taxa de ativação',
-      sub:'Conversão geral da venda até a ativação.',
-      calc:['Fórmula: total_ativados / total_vendas * 100.','Depende de data_venda, data_kick e data_inicio, com ativação real ou estimada.'],
+      title:'Taxa de 1º treinamento',
+      sub:'Conversão geral da venda até o primeiro treinamento.',
+      calc:['Fórmula: total com 1º treinamento / total_vendas * 100.','Depende de data_venda, data_kick e data_inicio, com realização real ou estimada.'],
       fields:['data_venda','data_kick','data_inicio','data_ativacao','status','diarias_real'],
-      real:'Real quando existe data de ativação; estimado quando a base só indica treinamento/status.',
+      real:'Real quando existe data de realização/ativação; estimado quando a base só indica agendamento/status.',
       confidence:'Média'
     },
   funnel: {
     title:'Funil de implantação',
-    sub:'Evolução da venda até ativação.',
-    calc:['Conta Venda, Kickoff, 1º Treinamento e Ativação.','Conversões: Kickoff/Venda, Treinamento/Kickoff, Ativação/Treinamento e Ativação/Venda.','Quando faltar campo-chave, o painel marca o KPI como indisponível.'],
+    sub:'Evolução da venda até o primeiro treinamento.',
+    calc:['Conta Venda, Kickoff, 1º Agendamento e 1º Treinamento.','Conversões: Kickoff/Venda, Agendamento/Kickoff, Treinamento/Agendamento e Treinamento/Venda.','Quando faltar campo-chave, o painel marca o KPI como indisponível.'],
     fields:['data_venda','data_kick','data_inicio','data_ativacao','status'],
-    real:'Parcialmente real; pode usar ativação estimada quando a base não possui data explícita.',
+    real:'Parcialmente real; pode usar 1º treinamento estimado quando a base não possui data explícita.',
     confidence:'Média'
   },
   cohort: {
     title:'Cohort mensal',
     sub:'Evolução dos clientes vendidos em cada mês.',
-    calc:['Cohort = clientes vendidos no mesmo mês.','Mostra Vendidos, Kickoff %, 1º Treinamento %, Ativação % e tempo médio até ativação.'],
+    calc:['Cohort = clientes vendidos no mesmo mês.','Mostra Vendidos, Kickoff %, 1º Agendamento %, 1º Treinamento % e tempo médio até 1º treinamento.'],
     fields:['mes','data_venda','data_kick','data_inicio','data_ativacao','status'],
     real:'Parcialmente real; fica indisponível quando faltam os campos-chave da jornada.',
     confidence:'Média'
