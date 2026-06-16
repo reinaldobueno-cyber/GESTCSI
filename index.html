@@ -9270,6 +9270,41 @@ function dashOpenIdleAudit(name) {
   return false;
 }
 window.dashOpenIdleAudit=dashOpenIdleAudit;
+function dashTrainingTokens(value) {
+  var stop={DE:true,DA:true,DO:true,DAS:true,DOS:true,E:true,A:true,O:true,AS:true,OS:true,FAZ:true,FAZENDA:true,GRUPO:true,LTDA:true,ME:true,EPP:true};
+  return normalizeClienteKey(value).split(' ').filter(function(token){
+    return token.length>2&&!stop[token];
+  });
+}
+function dashTrainingMatchScore(project,event) {
+  var projectTokens=dashTrainingTokens(project&&project.cliente);
+  var eventTokens=dashTrainingTokens(event&&event.cliente);
+  if(!projectTokens.length||!eventTokens.length)return {score:0,why:'sem nome comparável'};
+  var overlap=projectTokens.filter(function(token){return eventTokens.indexOf(token)>=0;});
+  var tokenScore=overlap.length/Math.max(1,Math.min(projectTokens.length,eventTokens.length));
+  var exact=normalizeClienteKey(project&&project.cliente)===normalizeClienteKey(event&&event.cliente);
+  var consultant=bonusNamesMatch(project&&project.consultor,event&&event.consultor);
+  var scheduled=dashParseDate(project&&project.data_inicio);
+  var realized=dashParseDate(event&&event.data);
+  var days=scheduled&&realized?Math.abs(diffD(scheduled,realized)):9999;
+  var dateScore=days<=45?1:days<=90?.65:days<=150?.35:0;
+  var score=(exact?60:Math.round(tokenScore*45))+(consultant?25:0)+Math.round(dateScore*30);
+  var why=[];
+  if(exact)why.push('nome exato');
+  else if(overlap.length)why.push(overlap.slice(0,4).join(', '));
+  if(consultant)why.push('mesmo consultor');
+  if(days!==9999)why.push(days+'d da data');
+  return {score:score,why:why.join(' · ')||'baixa semelhança',days:days,overlap:overlap.length};
+}
+function dashFindTrainingMatch(project,events) {
+  var candidates=(events||[]).map(function(event){
+    var match=dashTrainingMatchScore(project,event);
+    return {event:event,score:match.score,why:match.why,days:match.days};
+  }).filter(function(item){return item.score>=60;}).sort(function(a,b){
+    return b.score-a.score||a.days-b.days||String(a.event.data||'').localeCompare(String(b.event.data||''));
+  });
+  return candidates[0]||null;
+}
 function dashRenderTrainingRealizationTest(list) {
   var scheduled=(list||[]).filter(function(p){return !!dashParseDate(p&&p.data_inicio);});
   var available2026=cmaxNormalizeMonths(CMAX_DAILY_STATE.loadedMonths).filter(function(month){return month.slice(0,4)==='2026';});
@@ -9280,17 +9315,9 @@ function dashRenderTrainingRealizationTest(list) {
     return '<div class="dashx-unavailable"><strong>Carregando histórico CMAX para validar a métrica</strong><span>'+escapeHtml(coverage)+'. O resultado ainda não é conclusivo e será atualizado automaticamente. Mantenha esta página aberta ou clique abaixo para continuar o carregamento.</span><button class="btn-syncall" style="margin-top:10px" onclick="carregarDiariasCmax(false);cmaxPrefetchMonths();return false">Carregar histórico CMAX</button></div>';
   }
   var events=cmaxAllLoadedEvents().filter(function(item){return cmaxCountsDaily(item)&&String(item.data||'').slice(0,4)==='2026';});
-  var byClient={};
-  events.forEach(function(item){
-    var key=normalizeClienteKey(item.cliente);
-    if(!key)return;
-    if(!byClient[key])byClient[key]=[];
-    byClient[key].push(item);
-  });
   var rows=scheduled.map(function(p){
-    var matches=byClient[normalizeClienteKey(p.cliente)]||[];
-    var first=matches.slice().sort(function(a,b){return String(a.data||'').localeCompare(String(b.data||''));})[0]||null;
-    return {project:p,scheduled:dashParseDate(p.data_inicio),realized:first,matches:matches.length};
+    var match=dashFindTrainingMatch(p,events);
+    return {project:p,scheduled:dashParseDate(p.data_inicio),realized:match&&match.event||null,score:match&&match.score||0,why:match&&match.why||'',matches:match?1:0};
   });
   var realized=rows.filter(function(row){return !!row.realized;});
   var pending=rows.filter(function(row){return !row.realized;});
@@ -9298,9 +9325,9 @@ function dashRenderTrainingRealizationTest(list) {
   var sample=rows.sort(function(a,b){
     return Number(!!a.realized)-Number(!!b.realized)||String(a.project.cliente||'').localeCompare(String(b.project.cliente||''));
   }).slice(0,20).map(function(row){
-    return '<tr><td><strong>'+escapeHtml(row.project.cliente||'-')+'</strong></td><td>'+escapeHtml(row.project.consultor||'-')+'</td><td>'+escapeHtml(fd(row.scheduled.toISOString()))+'</td><td>'+(row.realized?escapeHtml(cmaxDate(row.realized.data)):'Não encontrado')+'</td><td>'+(row.realized?'<span class="dashx-score-pill good">Conciliado</span>':'<span class="dashx-score-pill warn">Revisar nome / realização</span>')+'</td></tr>';
+    return '<tr><td><strong>'+escapeHtml(row.project.cliente||'-')+'</strong></td><td>'+escapeHtml(row.project.consultor||'-')+'</td><td>'+escapeHtml(fd(row.scheduled.toISOString()))+'</td><td>'+(row.realized?escapeHtml(cmaxDate(row.realized.data))+'<div class="dashx-list-sub">'+escapeHtml(row.realized.cliente||'-')+'</div>':'Não encontrado')+'</td><td>'+(row.realized?'<span class="dashx-score-pill good">Conciliado '+row.score+'</span><div class="dashx-list-sub">'+escapeHtml(row.why)+'</div>':'<span class="dashx-score-pill warn">Sem correspondência confiável</span><div class="dashx-list-sub">busca por nome, consultor e janela de data</div>')+'</td></tr>';
   }).join('')||'<tr><td colspan="5">Nenhum projeto com treinamento agendado no recorte.</td></tr>';
-  return '<div class="dashx-chart-card"><div class="dashx-chart-head"><div><div class="dashx-chart-title">Teste experimental: treinamento agendado x realizado</div><div class="dashx-chart-sub">Compara projetos com <strong>data_inicio</strong> contra treinamentos realizados no CMAX em 2026, usando correspondência exata do nome normalizado do cliente. Ainda não substitui a taxa de ativação.</div></div><div class="dashx-chart-meta"><span class="dashx-chart-note">'+cached2026.length+' meses analisados</span><span class="dashx-chart-note">'+(rate===null?'-':rate+'%')+' conciliado</span></div></div><div class="dashx-top-grid"><div class="dashx-card neutral"><div class="dashx-card-label">Treinamentos agendados</div><div class="dashx-card-value">'+scheduled.length+'</div><div class="dashx-card-note">projetos com data_inicio</div></div><div class="dashx-card good"><div class="dashx-card-label">Realizados encontrados</div><div class="dashx-card-value">'+realized.length+'</div><div class="dashx-card-note">cliente conciliado com treinamento CMAX</div></div><div class="dashx-card warn"><div class="dashx-card-label">Sem realização encontrada</div><div class="dashx-card-value">'+pending.length+'</div><div class="dashx-card-note">pode ser pendência ou diferença no nome</div></div></div><div class="dashx-inline-note"><strong>Como avaliar:</strong> confira primeiro os realizados encontrados. Depois revise os casos não encontrados para distinguir treinamento ainda não realizado de diferença no nome do cliente. Só adote esta métrica quando a conciliação estiver confiável.</div><div class="dashx-table-wrap"><table class="dashx-table"><thead><tr><th>Projeto</th><th>Consultor</th><th>Agendado</th><th>Primeiro realizado CMAX</th><th>Resultado</th></tr></thead><tbody>'+sample+'</tbody></table></div></div>';
+  return '<div class="dashx-chart-card"><div class="dashx-chart-head"><div><div class="dashx-chart-title">Teste experimental: treinamento agendado x realizado</div><div class="dashx-chart-sub">Compara projetos com <strong>data_inicio</strong> contra treinamentos realizados no CMAX em 2026, usando pontuação por nome, consultor e proximidade de data. Ainda não substitui a taxa de ativação.</div></div><div class="dashx-chart-meta"><span class="dashx-chart-note">'+cached2026.length+' meses analisados</span><span class="dashx-chart-note">'+(rate===null?'-':rate+'%')+' conciliado</span></div></div><div class="dashx-top-grid"><div class="dashx-card neutral"><div class="dashx-card-label">Treinamentos agendados</div><div class="dashx-card-value">'+scheduled.length+'</div><div class="dashx-card-note">projetos com data_inicio</div></div><div class="dashx-card good"><div class="dashx-card-label">Realizados encontrados</div><div class="dashx-card-value">'+realized.length+'</div><div class="dashx-card-note">score mínimo 60/135</div></div><div class="dashx-card warn"><div class="dashx-card-label">Sem realização encontrada</div><div class="dashx-card-value">'+pending.length+'</div><div class="dashx-card-note">sem correspondência confiável</div></div></div><div class="dashx-inline-note"><strong>Como avaliar:</strong> o vínculo agora usa similaridade do nome, mesmo consultor e janela de data. O score e os termos encontrados aparecem na coluna Resultado para revisão.</div><div class="dashx-table-wrap"><table class="dashx-table"><thead><tr><th>Projeto</th><th>Consultor</th><th>Agendado</th><th>Primeiro realizado CMAX</th><th>Resultado</th></tr></thead><tbody>'+sample+'</tbody></table></div></div>';
 }
 
 function initDash() {
