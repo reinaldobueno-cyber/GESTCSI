@@ -12361,7 +12361,8 @@ function cmaxToggleConsultant(encodedName) {
 function cmaxCalendarEventsForConsultant(name) {
   var s=CMAX_DAILY_STATE;
   return (s.events||[]).filter(function(item){
-    if(String(item.consultor||'')!==name)return false;
+    if(!cmaxOfficialTrainingConsultant(item.consultor))return false;
+    if(name&&name!=='__ALL__'&&String(item.consultor||'')!==name)return false;
     if(s.month&&String(item.mes||'')!==s.month)return false;
     if(s.activity&&cmaxModeLabel(item)!==s.activity)return false;
     if(s.search){
@@ -12389,6 +12390,8 @@ function abrirCalendarioCmax(encodedName) {
   var name=decodeURIComponent(encodedName||'');
   var events=cmaxCalendarEventsForConsultant(name);
   var month=cmaxCalendarMonth(events);
+  var isAll=name==='__ALL__';
+  var title=isAll?'Calendário geral':name;
   var parts=month.split('-'),year=Number(parts[0]),monthIndex=Number(parts[1])-1;
   var first=new Date(year,monthIndex,1),lastDay=new Date(year,monthIndex+1,0).getDate();
   var offset=(first.getDay()+6)%7;
@@ -12399,19 +12402,21 @@ function abrirCalendarioCmax(encodedName) {
   for(var blank=0;blank<offset;blank++)cells+='<button class="cmax-calendar-day empty"></button>';
   for(var day=1;day<=lastDay;day++){
     var dayEvents=byDay[day]||[],daily=cmaxDailyEquivalentTotal(dayEvents),dow=new Date(year,monthIndex,day).getDay(),special=cmaxSpecialDayInfo(month+'-'+String(day).padStart(2,'0'));
-    cells+='<button class="cmax-calendar-day '+(dayEvents.length?'has-events ':'')+((dow===0||dow===6)?'weekend ':'')+(special.special?'special':'')+'" style="background:'+cmaxCalendarColor(dayEvents.length,max)+'" onclick="cmaxCalendarShowDay('+day+',decodeURIComponent(\''+encodeURIComponent(name)+'\'),this)"><span class="cmax-calendar-day-num">'+day+(special.special?'<span class="cmax-special-label">1,5x</span>':'')+'</span><span class="cmax-calendar-day-count">'+cmaxEquivalentLabel(daily)+' di&aacute;ria(s)<small>'+dayEvents.length+' atividade(s)</small></span></button>';
+    var consultants=new Set(dayEvents.map(function(item){return String(item.consultor||'');}).filter(Boolean)).size;
+    cells+='<button class="cmax-calendar-day '+(dayEvents.length?'has-events ':'')+((dow===0||dow===6)?'weekend ':'')+(special.special?'special':'')+'" style="background:'+cmaxCalendarColor(dayEvents.length,max)+'" onclick="cmaxCalendarShowDay('+day+',decodeURIComponent(\''+encodeURIComponent(name)+'\'),this)"><span class="cmax-calendar-day-num">'+day+(special.special?'<span class="cmax-special-label">1,5x</span>':'')+'</span><span class="cmax-calendar-day-count">'+cmaxEquivalentLabel(daily)+' di&aacute;ria(s)<small>'+dayEvents.length+' atividade(s)'+(isAll?' · '+consultants+' consultor(es)':'')+'</small></span></button>';
   }
   var wrap=document.createElement('div');
   wrap.id='cmax-calendar-modal';
   wrap.className='cmax-calendar-backdrop';
   wrap.onclick=function(event){if(event.target===wrap)fecharCalendarioCmax();};
-  wrap.innerHTML='<div class="cmax-calendar-modal"><div class="cmax-calendar-head"><div><div class="cmax-calendar-title">'+escapeHtml(name)+'</div><div class="cmax-calendar-sub">Vis&atilde;o calend&aacute;rio de '+escapeHtml(cmaxMonthLabel(month))+'/'+escapeHtml(String(year))+' &middot; '+cmaxEquivalentLabel(cmaxDailyEquivalentTotal(events))+' di&aacute;ria(s) &middot; '+events.length+' atividade(s)</div></div><button class="cmax-calendar-close" onclick="fecharCalendarioCmax()">X</button></div><div class="cmax-calendar-weekdays"><div>Seg</div><div>Ter</div><div>Qua</div><div>Qui</div><div>Sex</div><div>S&aacute;b</div><div>Dom</div></div><div class="cmax-calendar-grid">'+cells+'</div><div class="cmax-calendar-detail" id="cmax-calendar-detail"><div class="cmax-empty">Clique em um dia para ver os registros.</div></div></div>';
+  wrap.innerHTML='<div class="cmax-calendar-modal"><div class="cmax-calendar-head"><div><div class="cmax-calendar-title">'+escapeHtml(title)+'</div><div class="cmax-calendar-sub">Vis&atilde;o calend&aacute;rio de '+escapeHtml(cmaxMonthLabel(month))+'/'+escapeHtml(String(year))+' &middot; '+cmaxEquivalentLabel(cmaxDailyEquivalentTotal(events))+' di&aacute;ria(s) &middot; '+events.length+' atividade(s)'+(isAll?' &middot; todos os consultores':'')+'</div></div><button class="cmax-calendar-close" onclick="fecharCalendarioCmax()">X</button></div><div class="cmax-calendar-weekdays"><div>Seg</div><div>Ter</div><div>Qua</div><div>Qui</div><div>Sex</div><div>S&aacute;b</div><div>Dom</div></div><div class="cmax-calendar-grid">'+cells+'</div><div class="cmax-calendar-detail" id="cmax-calendar-detail"><div class="cmax-empty">Clique em um dia para ver os registros.</div></div></div>';
   document.body.appendChild(wrap);
 }
 function cmaxCalendarShowDay(day,encodedName,button) {
   var name=decodeURIComponent(encodedName||''),month=cmaxCalendarMonth(cmaxCalendarEventsForConsultant(name));
   var date=month+'-'+String(day).padStart(2,'0');
-  var events=cmaxCalendarEventsForConsultant(name).filter(function(item){return String(item.data||'').slice(0,10)===date;}).sort(function(a,b){return String(a.hora_inicio||'').localeCompare(String(b.hora_inicio||''));});
+  var isAll=name==='__ALL__';
+  var events=cmaxCalendarEventsForConsultant(name).filter(function(item){return String(item.data||'').slice(0,10)===date;}).sort(function(a,b){return String(a.consultor||'').localeCompare(String(b.consultor||''),'pt-BR')||String(a.hora_inicio||'').localeCompare(String(b.hora_inicio||''));});
   document.querySelectorAll('.cmax-calendar-day').forEach(function(cell){cell.classList.remove('on');});
   if(button)button.classList.add('on');
   var detail=document.getElementById('cmax-calendar-detail');
@@ -12421,9 +12426,10 @@ function cmaxCalendarShowDay(day,encodedName,button) {
   var rows=events.map(function(item,index){
     var start=cmaxTime(item.hora_inicio)||'-',end=cmaxTime(item.hora_fim);
     var equivalent=allocated[index]||0;
-    return '<tr><td><strong>'+escapeHtml(item.cliente||'-')+'</strong></td><td>'+cmaxActivityLabel(item)+'</td><td>'+escapeHtml(start+(end?' - '+end:''))+'</td><td class="'+(equivalent?'cmax-daily-yes':'cmax-daily-no')+'">'+(equivalent?cmaxEquivalentLabel(equivalent)+cmaxSpecialLabel(item.data):'Não')+'</td></tr>';
+    return '<tr>'+(isAll?'<td>'+escapeHtml(item.consultor||'-')+'</td>':'')+'<td><strong>'+escapeHtml(item.cliente||'-')+'</strong></td><td>'+cmaxActivityLabel(item)+'</td><td>'+escapeHtml(start+(end?' - '+end:''))+'</td><td class="'+(equivalent?'cmax-daily-yes':'cmax-daily-no')+'">'+(equivalent?cmaxEquivalentLabel(equivalent)+cmaxSpecialLabel(item.data):'Não')+'</td></tr>';
   }).join('');
-  detail.innerHTML='<div class="cmax-calendar-detail-title">'+escapeHtml(info.weekday)+' &middot; '+escapeHtml(info.date)+' &middot; '+cmaxEquivalentLabel(cmaxDailyEquivalentTotal(events))+' di&aacute;ria(s) &middot; '+events.length+' atividade(s)</div>'+(rows?'<div class="dashx-table-wrap"><table class="dashx-table"><thead><tr><th>Cliente</th><th>Atividade</th><th>Hor&aacute;rio</th><th>Equiv. di&aacute;ria</th></tr></thead><tbody>'+rows+'</tbody></table></div>':'<div class="cmax-empty">Nenhum registro neste dia.</div>');
+  var consultantCount=new Set(events.map(function(item){return String(item.consultor||'');}).filter(Boolean)).size;
+  detail.innerHTML='<div class="cmax-calendar-detail-title">'+escapeHtml(info.weekday)+' &middot; '+escapeHtml(info.date)+' &middot; '+cmaxEquivalentLabel(cmaxDailyEquivalentTotal(events))+' di&aacute;ria(s) &middot; '+events.length+' atividade(s)'+(isAll?' &middot; '+consultantCount+' consultor(es)':'')+'</div>'+(rows?'<div class="dashx-table-wrap"><table class="dashx-table"><thead><tr>'+(isAll?'<th>Consultor</th>':'')+'<th>Cliente</th><th>Atividade</th><th>Hor&aacute;rio</th><th>Equiv. di&aacute;ria</th></tr></thead><tbody>'+rows+'</tbody></table></div>':'<div class="cmax-empty">Nenhum registro neste dia.</div>');
 }
 function cmaxSelectOptions(values, selected, allLabel) {
   return '<option value="">'+allLabel+'</option>'+values.map(function(value){
@@ -12457,6 +12463,7 @@ function renderDiariasCmax() {
   var syncButton=AUTH_STATE.user&&AUTH_STATE.user.role==='admin'
     ? '<button class="btn-syncall" '+(CMAX_DAILY_SYNCING?'disabled':'')+' onclick="sincronizarDiariasCmax(this)">'+(CMAX_DAILY_SYNCING?'Atualizando...':'Atualizar hist&oacute;rico CMAX')+'</button>'
     : '';
+  var calendarButton='<button class="cmax-calendar-btn" onclick="return abrirCalendarioCmax(\'__ALL__\')">Calend&aacute;rio geral</button>';
   var monthsByYear={};
   months.forEach(function(month){var year=month.slice(0,4);if(!monthsByYear[year])monthsByYear[year]=[];monthsByYear[year].push(month);});
   var monthChips='<div class="cmax-year-groups">'+Object.keys(monthsByYear).sort().reverse().map(function(year){
@@ -12484,7 +12491,7 @@ function renderDiariasCmax() {
   }).join('');
   var history=s.historySync||{};
   var status=s.loading?'Consultando a base salva...':s.error?escapeHtml(s.error):history.error?('Carga hist&oacute;rica interrompida: '+escapeHtml(history.error)):history.active?('Hist&oacute;rico CMAX em andamento: '+(s.loadedMonths||[]).length+' de '+months.length+' m&ecirc;s(es) dispon&iacute;veis. &Uacute;ltimo processado: '+escapeHtml(history.last_month||'-')+'; pr&oacute;ximo: '+escapeHtml(history.next_month||'-')+'.'):(s.syncedAt?'Hist&oacute;rico carregado: '+(s.loadedMonths||[]).length+' de '+months.length+' m&ecirc;s(es). &Uacute;ltima sincroniza&ccedil;&atilde;o: '+escapeHtml(s.syncedAt):'Ainda sem sincroniza&ccedil;&atilde;o CMAX.');
-  box.innerHTML='<div class="cmax-shell"><div class="cmax-hero"><div><div class="cmax-title">Di&aacute;rias e atividades realizadas no CMAX</div><div class="cmax-sub">Meio per&iacute;odo de treinamento (at&eacute; 4 horas) vale <strong>0,5 di&aacute;ria</strong>; acima disso vale <strong>1 di&aacute;ria</strong>. Fins de semana e feriados nacionais/oficiais de Goi&acirc;nia recebem destaque e multiplicador financeiro de <strong>1,5x</strong>.</div></div></div><div class="cmax-status">'+status+'</div><div class="cmax-filter-block"><div class="cmax-filter-label">Ano e m&ecirc;s realizado <span style="text-transform:none;letter-spacing:0">(clique novamente no m&ecirc;s para ver o geral)</span></div>'+monthChips+'<div class="cmax-filter-label" style="margin-top:14px">Consultores do time de treinamento</div><div class="cmax-filter-chips">'+consultantChips+'</div><div class="cmax-filter-label" style="margin-top:14px">Atividades que contam como di&aacute;ria <span style="text-transform:none;letter-spacing:0">(outras atividades permanecem nos cards, detalhes e calend&aacute;rio)</span></div><div class="cmax-filter-chips">'+activityChips+'</div><input class="cmax-filter-search" type="search" placeholder="Filtrar cliente..." value="'+escapeHtml(s.search)+'" oninput="CMAX_DAILY_STATE.search=this.value;renderDiariasCmax()">'+(syncButton?'<div class="cmax-filter-footer">'+syncButton+'</div>':'')+'</div><div class="cmax-summary"><div class="cmax-card"><span>Di&aacute;rias equivalentes</span><strong>'+cmaxEquivalentLabel(dailyEquivalent)+'</strong></div><div class="cmax-card"><span>Di&aacute;rias especiais 1,5x</span><strong>'+cmaxEquivalentLabel(specialEquivalent)+'</strong></div><div class="cmax-card"><span>Registros positivos</span><strong>'+list.length+'</strong></div><div class="cmax-card"><span>Consultores com atividade</span><strong>'+Object.keys(byConsultant).length+'</strong></div><div class="cmax-card"><span>Clientes atendidos</span><strong>'+clients+'</strong></div></div><div><div class="sh"><div class="sh-title">Quantitativo por modalidade <span style="font-weight:700;text-transform:none;letter-spacing:0;color:var(--muted)">Clique em um card para ver os registros</span></div></div><div class="cmax-modalities">'+modalityCards+'</div></div>'+(groups||'<div class="cmax-empty">Nenhuma atividade positiva encontrada neste recorte.</div>')+'</div>';
+  box.innerHTML='<div class="cmax-shell"><div class="cmax-hero"><div><div class="cmax-title">Di&aacute;rias e atividades realizadas no CMAX</div><div class="cmax-sub">Meio per&iacute;odo de treinamento (at&eacute; 4 horas) vale <strong>0,5 di&aacute;ria</strong>; acima disso vale <strong>1 di&aacute;ria</strong>. Fins de semana e feriados nacionais/oficiais de Goi&acirc;nia recebem destaque e multiplicador financeiro de <strong>1,5x</strong>.</div></div></div><div class="cmax-status">'+status+'</div><div class="cmax-filter-block"><div class="cmax-filter-label">Ano e m&ecirc;s realizado <span style="text-transform:none;letter-spacing:0">(clique novamente no m&ecirc;s para ver o geral)</span></div>'+monthChips+'<div class="cmax-filter-label" style="margin-top:14px">Consultores do time de treinamento</div><div class="cmax-filter-chips">'+consultantChips+'</div><div class="cmax-filter-label" style="margin-top:14px">Atividades que contam como di&aacute;ria <span style="text-transform:none;letter-spacing:0">(outras atividades permanecem nos cards, detalhes e calend&aacute;rio)</span></div><div class="cmax-filter-chips">'+activityChips+'</div><input class="cmax-filter-search" type="search" placeholder="Filtrar cliente..." value="'+escapeHtml(s.search)+'" oninput="CMAX_DAILY_STATE.search=this.value;renderDiariasCmax()"><div class="closing-filter-footer" style="gap:8px;flex-wrap:wrap">'+calendarButton+(syncButton||'')+'</div></div><div class="cmax-summary"><div class="cmax-card"><span>Di&aacute;rias equivalentes</span><strong>'+cmaxEquivalentLabel(dailyEquivalent)+'</strong></div><div class="cmax-card"><span>Di&aacute;rias especiais 1,5x</span><strong>'+cmaxEquivalentLabel(specialEquivalent)+'</strong></div><div class="cmax-card"><span>Registros positivos</span><strong>'+list.length+'</strong></div><div class="cmax-card"><span>Consultores com atividade</span><strong>'+Object.keys(byConsultant).length+'</strong></div><div class="cmax-card"><span>Clientes atendidos</span><strong>'+clients+'</strong></div></div><div><div class="sh"><div class="sh-title">Quantitativo por modalidade <span style="font-weight:700;text-transform:none;letter-spacing:0;color:var(--muted)">Clique em um card para ver os registros</span></div></div><div class="cmax-modalities">'+modalityCards+'</div></div>'+(groups||'<div class="cmax-empty">Nenhuma atividade positiva encontrada neste recorte.</div>')+'</div>';
 }
 function carregarDiariasCmax(force) {
   if(!force&&CMAX_DAILY_STATE.loaded){renderDiariasCmax();return;}
