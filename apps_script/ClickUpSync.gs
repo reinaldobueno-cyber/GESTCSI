@@ -4703,6 +4703,8 @@ function getConsultantCompensationData_() {
       var user = rowToObject_(userHeader, row);
       var seniority = normalizeConsultantSeniority_(user.seniority);
       var name = sanitizeText_(user.name || user.username);
+      var enabled = String(user.enabled || '').toLowerCase();
+      if (enabled === 'false' || enabled === '0' || enabled === 'nao' || enabled === 'não') return;
       if (!seniority || !name) return;
       var key = normalizeKey_(name);
       byKey[key] = {
