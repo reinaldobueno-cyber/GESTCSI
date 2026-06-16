@@ -9343,10 +9343,11 @@ function dashRenderTrainingRealizationTest(list) {
   var scheduled=(list||[]).filter(function(p){return !!dashParseDate(p&&p.data_inicio);});
   var available2026=cmaxNormalizeMonths(CMAX_DAILY_STATE.loadedMonths).filter(function(month){return month.slice(0,4)==='2026';});
   var cached2026=available2026.filter(function(month){return !!cmaxCachedResponse(month);});
-  var loading=CMAX_PREFETCH_RUNNING||!available2026.length||cached2026.length<available2026.length;
+  var loading=CMAX_PREFETCH_RUNNING||CMAX_TRAINING_HISTORY_LOADING||!available2026.length||cached2026.length<available2026.length;
   if(loading){
     var coverage=available2026.length?cached2026.length+' de '+available2026.length+' meses de 2026':'aguardando lista de meses';
-    return '<div class="dashx-unavailable"><strong>Carregando histórico CMAX para validar a métrica</strong><span>'+escapeHtml(coverage)+'. O resultado ainda não é conclusivo e será atualizado automaticamente. Mantenha esta página aberta ou clique abaixo para continuar o carregamento.</span><button class="btn-syncall" style="margin-top:10px" onclick="carregarDiariasCmax(false);cmaxPrefetchMonths();return false">Carregar histórico CMAX</button></div>';
+    var buttonLabel=CMAX_PREFETCH_RUNNING||CMAX_TRAINING_HISTORY_LOADING?'Carregando...':'Carregar histórico CMAX';
+    return '<div class="dashx-unavailable"><strong>Carregando histórico CMAX para validar a métrica</strong><span>'+escapeHtml(coverage)+'. O resultado ainda não é conclusivo e será atualizado automaticamente. Mantenha esta página aberta ou clique abaixo para continuar o carregamento.</span><button class="btn-syncall" style="margin-top:10px" '+(CMAX_PREFETCH_RUNNING||CMAX_TRAINING_HISTORY_LOADING?'disabled':'')+' onclick="return dashLoadTrainingHistoryCmax(this)">'+buttonLabel+'</button></div>';
   }
   var events=cmaxAllLoadedEvents().filter(function(item){return cmaxCountsDaily(item)&&String(item.data||'').slice(0,4)==='2026';});
   var rows=scheduled.map(function(p){
@@ -11955,6 +11956,7 @@ var CONSULTANT_COMP_STATE={loaded:false,loading:false,items:{},rates:{junior:60,
 var CMAX_DAILY_STATE = {events:[], loading:false, loaded:false, error:'', month:cmaxCurrentMonth(), consultant:'', activity:'', search:'', syncedAt:'', months:[], loadedMonths:[], trainingTeam:[], trainingTeamCutoff:'', activities:[], historySync:null, expanded:{}, requestSeq:0, monthResponses:{}};
 var CMAX_HISTORY_POLL_TIMER=null;
 var CMAX_PREFETCH_RUNNING=false;
+var CMAX_TRAINING_HISTORY_LOADING=false;
 var CMAX_DAILY_SYNCING=false;
 var CMAX_BROWSER_CACHE_PREFIX='gestcsi_cmax_view_v5_';
 
@@ -12134,6 +12136,7 @@ function cmaxPrefetchMonths() {
   if(CMAX_PREFETCH_RUNNING)return;
   var pending=cmaxNormalizeMonths(CMAX_DAILY_STATE.loadedMonths).filter(function(month){return !cmaxCachedResponse(month);});
   if(!pending.length){
+    CMAX_TRAINING_HISTORY_LOADING=false;
     if(document.getElementById('page-dash')&&document.getElementById('page-dash').classList.contains('on'))initDash();
     return;
   }
@@ -12142,6 +12145,7 @@ function cmaxPrefetchMonths() {
     var month=pending.shift();
     if(!month){
       CMAX_PREFETCH_RUNNING=false;
+      CMAX_TRAINING_HISTORY_LOADING=false;
       if(document.getElementById('page-dash')&&document.getElementById('page-dash').classList.contains('on'))initDash();
       return;
     }
@@ -12156,6 +12160,16 @@ function cmaxPrefetchMonths() {
   }
   setTimeout(next,100);
 }
+function dashLoadTrainingHistoryCmax(btn) {
+  if(CMAX_PREFETCH_RUNNING||CMAX_TRAINING_HISTORY_LOADING)return false;
+  CMAX_TRAINING_HISTORY_LOADING=true;
+  if(btn){btn.disabled=true;btn.textContent='Carregando...';}
+  carregarDiariasCmax(false);
+  initDash();
+  setTimeout(cmaxPrefetchMonths,250);
+  return false;
+}
+window.dashLoadTrainingHistoryCmax=dashLoadTrainingHistoryCmax;
 function cmaxNormalizeMonth(value) {
   var match=String(value||'').match(/^(\d{4})-(0[1-9]|1[0-2])/);
   return match&&match[1]>='2024' ? match[1]+'-'+match[2] : '';
