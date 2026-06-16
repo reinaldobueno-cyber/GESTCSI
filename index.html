@@ -3432,6 +3432,7 @@ var DASH_HEALTH_VIEW = 'issues';
 var DASH_HEALTH_DATA = null;
 var DASH_FUNNEL_PROJECTS = [];
 var DASH_CLICKUP_CONSULTOR = '';
+var DASH_IDLE_ROWS = [];
 
 function setSidebarAlertBadge(id, value, title) {
   var badge = document.getElementById(id);
@@ -9226,22 +9227,49 @@ function dashRenderIdleSignal(list) {
   var loaded=(CMAX_DAILY_STATE.loadedMonths||[]).indexOf(month)>=0||monthEvents.length>0;
   if(!loaded)return '<div class="dashx-unavailable"><strong>Sinal de ociosidade aguardando agenda CMAX</strong><span>Carregue ou atualize o mês atual na guia Diárias CMAX para combinar agenda e movimentações ClickUp.</span></div>';
   var activeProjects=(list||[]).filter(function(p){var status=dashStatusKey(p&&p.status);return status!=='cancelado'&&status!=='concluido';});
-  var names=bonusCanonicalNames((CMAX_DAILY_STATE.trainingTeam||[]).concat(activeProjects.map(function(p){return p.consultor;}))).filter(function(name){return name&&name!=='Sem consultor';});
+  var officialNames=Object.keys(CONSULTANT_COMP_STATE.items||{}).map(function(key){
+    var item=CONSULTANT_COMP_STATE.items[key]||{};
+    return item.daily_value>0&&item.seniority ? (item.consultant_name||item.consultant_key||'') : '';
+  }).filter(Boolean);
+  var names=bonusCanonicalNames(officialNames.length?officialNames:activeProjects.map(function(p){return p.consultor;})).filter(function(name){return name&&name!=='Sem consultor';});
   var rows=names.map(function(name){
-    var cmax=monthEvents.filter(function(item){return bonusNamesMatch(item.consultor,name);}).length;
+    var cmaxRows=monthEvents.filter(function(item){return bonusNamesMatch(item.consultor,name);});
     var projects=activeProjects.filter(function(p){return bonusNamesMatch(p.consultor,name);});
-    var recent=projects.filter(function(p){var date=dashLastClickUpUpdateDate(p);return date&&diffD(date,new Date())<=7;}).length;
+    var recentProjectRows=projects.filter(function(p){var date=dashLastClickUpUpdateDate(p);return date&&diffD(date,new Date())<=7;});
+    var cmax=cmaxRows.length,recent=recentProjectRows.length;
     var signal=cmax+recent;
-    return {name:name,cmax:cmax,projects:projects.length,recent:recent,possibleIdle:cmax===0&&recent===0,signal:signal};
-  }).sort(function(a,b){return Number(b.possibleIdle)-Number(a.possibleIdle)||a.signal-b.signal||a.name.localeCompare(b.name);});
+    return {name:name,cmax:cmax,projects:projects.length,recent:recent,possibleIdle:cmax===0&&recent===0,signal:signal,cmaxRows:cmaxRows,projectRows:projects,recentProjectRows:recentProjectRows};
+  }).sort(function(a,b){return b.signal-a.signal||b.cmax-a.cmax||b.recent-a.recent||b.projects-a.projects||a.name.localeCompare(b.name);});
+  DASH_IDLE_ROWS=rows;
   var possible=rows.filter(function(row){return row.possibleIdle;}).length;
   var max=Math.max(1,rows.reduce(function(value,row){return Math.max(value,row.signal);},0));
   var content=rows.map(function(row){
     var width=Math.max(row.signal?5:0,Math.round(row.signal/max*100));
-    return '<div class="dashx-bar-row"><div class="dashx-bar-label"><strong>'+escapeHtml(row.name)+'</strong><div class="dashx-list-sub">'+row.projects+' projeto(s) ativo(s) &middot; '+row.recent+' atualizado(s) no ClickUp em 7 dias &middot; '+row.cmax+' atividade(s) CMAX no m&ecirc;s</div></div><div class="dashx-bar-track"><div class="dashx-bar-fill" style="width:'+width+'%;background:'+(row.possibleIdle?'#c96c5f':'#6d8e72')+'"></div></div><div class="dashx-bar-value">'+(row.possibleIdle?'Possível ociosidade':row.signal+' sinais')+'</div></div>';
+    return '<div class="dashx-bar-row clickable" onclick="return dashOpenIdleAudit(\''+jsQuote(row.name)+'\')" title="Clique para ver o que foi verificado"><div class="dashx-bar-label"><strong>'+escapeHtml(row.name)+'</strong><div class="dashx-list-sub">'+row.projects+' projeto(s) ativo(s) &middot; '+row.recent+' atualizado(s) no ClickUp em 7 dias &middot; '+row.cmax+' atividade(s) CMAX no m&ecirc;s</div></div><div class="dashx-bar-track"><div class="dashx-bar-fill" style="width:'+width+'%;background:'+(row.possibleIdle?'#c96c5f':'#6d8e72')+'"></div></div><div class="dashx-bar-value">'+(row.possibleIdle?'Possível ociosidade':row.signal+' sinais')+'</div></div>';
   }).join('')||'<div class="empty">Sem consultores para analisar.</div>';
-  return '<div class="dashx-chart-card"><div class="dashx-chart-head"><div><div class="dashx-chart-title">Sinal combinado de ociosidade</div><div class="dashx-chart-sub">Possível ociosidade significa ausência simultânea de atividades na agenda CMAX do mês e de atualizações ClickUp nos projetos ativos nos últimos 7 dias. É um sinal para investigação, não uma conclusão sobre produtividade.</div></div><div class="dashx-chart-meta"><span class="dashx-chart-note">'+possible+' possível(is)</span></div></div><div class="dashx-bars">'+content+'</div></div>';
+  return '<div class="dashx-chart-card"><div class="dashx-chart-head"><div><div class="dashx-chart-title">Sinal combinado de ociosidade</div><div class="dashx-chart-sub">Somente consultores oficiais com senioridade/diária configurada. Ordenado do mais ativo para o menos ativo. Clique em uma linha para auditar agenda CMAX, carteira ativa e updates ClickUp.</div></div><div class="dashx-chart-meta"><span class="dashx-chart-note">'+possible+' possível(is)</span></div></div><div class="dashx-bars">'+content+'</div></div>';
 }
+function dashOpenIdleAudit(name) {
+  var row=(DASH_IDLE_ROWS||[]).filter(function(item){return item.name===name;})[0];
+  if(!row)return false;
+  function projectLine(p){
+    var d=dashLastClickUpUpdateDate(p),days=d?diffD(d,new Date()):null;
+    return '<tr><td><strong>'+escapeHtml(p.cliente||'-')+'</strong></td><td>'+escapeHtml(sl(p.status||'-'))+'</td><td>'+(days===null?'-':days+'d')+'</td><td>'+dashProjectActionCell(p)+'</td></tr>';
+  }
+  var cmaxRows=(row.cmaxRows||[]).slice().sort(function(a,b){return String(b.data||'').localeCompare(String(a.data||''));}).map(function(item){
+    return '<tr><td>'+escapeHtml(cmaxDate(item.data))+'</td><td><strong>'+escapeHtml(item.cliente||'-')+'</strong></td><td>'+escapeHtml(cmaxModeLabel(item))+'</td><td>'+escapeHtml((cmaxTime(item.hora_inicio)||'-')+(cmaxTime(item.hora_fim)?' - '+cmaxTime(item.hora_fim):''))+'</td></tr>';
+  }).join('')||'<tr><td colspan="4">Nenhuma atividade CMAX no mês atual.</td></tr>';
+  var projectRows=(row.projectRows||[]).slice().sort(function(a,b){
+    var ad=dashLastClickUpUpdateDate(a),bd=dashLastClickUpUpdateDate(b);
+    return (ad?diffD(ad,new Date()):9999)-(bd?diffD(bd,new Date()):9999)||String(a.cliente||'').localeCompare(String(b.cliente||''));
+  }).map(projectLine).join('')||'<tr><td colspan="4">Nenhum projeto ativo na carteira.</td></tr>';
+  var html='<div class="dashx-focus-note"><div><strong>Como foi medido:</strong> '+row.cmax+' atividade(s) na agenda CMAX do mês, '+row.projects+' projeto(s) ativo(s) na carteira e '+row.recent+' projeto(s) com update ClickUp nos últimos 7 dias.</div><div class="dashx-focus-hint">'+(row.possibleIdle?'possível ociosidade':'com sinal de atividade')+'</div></div>'+
+    '<div class="dashx-table-wrap" style="margin-top:12px"><table class="dashx-table"><thead><tr><th>Data CMAX</th><th>Cliente</th><th>Atividade</th><th>Horário</th></tr></thead><tbody>'+cmaxRows+'</tbody></table></div>'+
+    '<div class="dashx-table-wrap" style="margin-top:12px"><table class="dashx-table"><thead><tr><th>Projeto ativo</th><th>Status</th><th>Dias ClickUp</th><th>Ação</th></tr></thead><tbody>'+projectRows+'</tbody></table></div>';
+  dashOpenAuditModal('Ociosidade: '+name,html);
+  return false;
+}
+window.dashOpenIdleAudit=dashOpenIdleAudit;
 function dashRenderTrainingRealizationTest(list) {
   var scheduled=(list||[]).filter(function(p){return !!dashParseDate(p&&p.data_inicio);});
   var available2026=cmaxNormalizeMonths(CMAX_DAILY_STATE.loadedMonths).filter(function(month){return month.slice(0,4)==='2026';});
@@ -11923,6 +11951,7 @@ function consultantCompensationLoad(force) {
     initCons();
     renderDiariasCmax();
     initBonus();
+    if(document.getElementById('page-dash')&&document.getElementById('page-dash').classList.contains('on'))initDash();
     return resp;
   }).catch(function(){
     CONSULTANT_COMP_STATE.loading=false;
