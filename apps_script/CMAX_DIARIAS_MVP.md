@@ -37,8 +37,8 @@ Quando o token CMAX expira, o Apps Script autentica novamente em
 - O menu da planilha oferece **Sincronizar historico de diarias CMAX**.
 - O MVP apresenta somente quantidades. Valores de remuneracao serao tratados
   posteriormente conforme a senioridade de cada tecnico.
-- `TREINAMENTO ON LINE`, `TREINAMENTO IN LOCO`, `TREINAMENTO ON LINE AVULSO`
-  e `TREINAMENTO IN LOCO AVULSO` positivos contam como diaria. Essas modalidades
+- `TREINAMENTO ON LINE`, `TREINAMENTO IN LOCO`, `TREINAMENTO INTERNO`,
+  `TREINAMENTO ON LINE AVULSO` e `TREINAMENTO IN LOCO AVULSO` positivos contam como diaria. Essas modalidades
   aparecem primeiro e destacadas. As demais continuam visiveis como atividades.
 - A tela apresenta quantitativo por modalidade e detalhamento por consultor,
   cliente, dia da semana, data e horario.
