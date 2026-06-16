@@ -5345,7 +5345,7 @@ function fechamentoFilteredRows() {
   return (FECHAMENTO_MARCOS || []).filter(function(item) {
     var month = String(FECHAMENTO_FILTER.month || '');
     if (month && month !== 'todos' && String(item.mes_fechamento || '') !== month) return false;
-    if (FECHAMENTO_FILTER.consultor !== 'todos' && String(item.consultor || '') !== FECHAMENTO_FILTER.consultor) return false;
+    if (FECHAMENTO_FILTER.consultor !== 'todos' && !bonusNamesMatch(item.consultor, FECHAMENTO_FILTER.consultor)) return false;
     if (FECHAMENTO_FILTER.projetoBusca && fechamentoSearchKey(item.projeto).indexOf(fechamentoSearchKey(FECHAMENTO_FILTER.projetoBusca)) < 0) return false;
     if (FECHAMENTO_FILTER.situacao !== 'todos' && String(item.situacao || '') !== FECHAMENTO_FILTER.situacao) return false;
     return true;
@@ -5443,8 +5443,9 @@ function initFechamento() {
       }).join('');
       return '<div class="closing-year-group"><div class="closing-year-label">'+escapeHtml(year)+'</div><div class="closing-filter-chips">'+chips+'</div></div>';
     }).join('')+'</div>';
-  var consultantChips = Object.keys(consultants).sort().map(function(name) {
-    return '<button class="closing-filter-chip '+(name === FECHAMENTO_FILTER.consultor ? 'on' : '')+'" onclick="return fechamentoSetFilter(\'consultor\',decodeURIComponent(\''+encodeURIComponent(name)+'\'))">'+escapeHtml(name)+'</button>';
+  var consultantNames = bonusCanonicalNames(Object.keys(consultants)).sort();
+  var consultantChips = consultantNames.map(function(name) {
+    return '<button class="closing-filter-chip '+(bonusNamesMatch(name, FECHAMENTO_FILTER.consultor) ? 'on' : '')+'" onclick="return fechamentoSetFilter(\'consultor\',decodeURIComponent(\''+encodeURIComponent(name)+'\'))">'+escapeHtml(name)+'</button>';
   }).join('');
   var statusChips = [
     {key:'todos', label:'Todos os status'},
@@ -5456,7 +5457,7 @@ function initFechamento() {
   }).join('');
   var byConsultant = {};
   list.forEach(function(item) {
-    var name = String(item.consultor || 'Sem consultor');
+    var name = consultantCanonicalName(item.consultor || 'Sem consultor');
     (byConsultant[name] || (byConsultant[name] = [])).push(item);
   });
   var consultantCards = Object.keys(byConsultant).sort().map(function(consultant) {
