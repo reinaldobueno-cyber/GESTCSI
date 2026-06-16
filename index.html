@@ -3235,8 +3235,9 @@ body.theme-dark *{
 .closing-sub{font-size:12px;color:var(--muted);margin-top:4px;max-width:760px;line-height:1.5}
 .closing-actions{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
 .closing-select{border:1px solid var(--border);background:var(--surf);border-radius:8px;padding:8px 10px;font:800 11px 'Inter',sans-serif;color:var(--text)}
-.closing-kpis{display:grid;grid-template-columns:repeat(4,minmax(150px,1fr));gap:10px;margin-bottom:16px}
+.closing-kpis{display:grid;grid-template-columns:repeat(5,minmax(150px,1fr));gap:10px;margin-bottom:16px}
 .closing-kpi{background:var(--surf);border:1px solid var(--border);border-radius:10px;padding:14px}
+.closing-kpi.warn{border-color:#e7c982;background:#fff8e8}
 .closing-kpi span{display:block;font-size:9px;font-weight:900;text-transform:uppercase;letter-spacing:.08em;color:var(--muted)}
 .closing-kpi strong{display:block;font-size:25px;margin-top:5px;color:var(--text)}
 .closing-status{display:inline-flex;border-radius:999px;padding:4px 8px;font-size:9px;font-weight:900;text-transform:uppercase}
@@ -3267,10 +3268,12 @@ body.theme-dark *{
 .closing-consultant-metric{text-align:right}.closing-consultant-metric strong{display:block;font-size:18px;color:var(--text)}.closing-consultant-metric span{font-size:8px;font-weight:900;color:var(--muted);text-transform:uppercase}
 .closing-project-list{padding:12px}
 .closing-project-card{display:grid;grid-template-columns:minmax(240px,1.4fr) minmax(220px,2fr) auto;gap:14px;align-items:center;border:1px solid var(--border);border-radius:12px;padding:12px 14px;margin-bottom:9px;background:var(--surf)}
+.closing-project-card.attention{border-color:#e3bc63;background:linear-gradient(90deg,#fff8e7 0%,#fffdfa 55%,#fff 100%);box-shadow:inset 5px 0 0 #d9a93c}
 .closing-project-card:last-child{margin-bottom:0}
 .closing-project-title{font-size:12px;font-weight:900;color:var(--text)}.closing-project-marco{font-size:11px;font-weight:800;color:var(--text2);margin-top:3px}
 .closing-project-meta{font-size:9px;color:var(--muted);margin-top:4px;line-height:1.5}
 .closing-project-comment{font-size:10px;color:var(--text2);line-height:1.45}
+.closing-attention-note{display:inline-flex;align-items:center;gap:6px;margin-top:8px;padding:5px 8px;border-radius:999px;background:#f7e7be;color:#8a5b13;border:1px solid #e3c57f;font-size:9px;font-weight:900;text-transform:uppercase;letter-spacing:.05em}
 @media(max-width:1100px){.closing-summary-grid{grid-template-columns:1fr}}
 @media(max-width:900px){.closing-kpis{grid-template-columns:repeat(2,1fr)}.closing-head{flex-direction:column}.closing-project-card{grid-template-columns:1fr}.closing-consultant-head{align-items:flex-start;flex-direction:column}.closing-consultant-metric{text-align:left}}
 </style>
@@ -5267,6 +5270,15 @@ function fechamentoProjectFromItem(item) {
 function fechamentoEffectiveConsultant(item) {
   return consultantCanonicalName((item && (item.consultor || item.responsaveis)) || 'Sem consultor');
 }
+function fechamentoPortfolioConsultant(item) {
+  var project = fechamentoProjectFromItem(item);
+  return consultantCanonicalName((project && project.consultor) || '');
+}
+function fechamentoHasPortfolioMismatch(item) {
+  var projectConsultant = fechamentoPortfolioConsultant(item);
+  var effectiveConsultant = fechamentoEffectiveConsultant(item);
+  return !!projectConsultant && !!effectiveConsultant && !bonusNamesMatch(projectConsultant, effectiveConsultant);
+}
 function fechamentoApplySyncRows(rows, syncMonth) {
   var normalized = fechamentoNormalizeRows(rows);
   var month = fechamentoMonthKey(syncMonth);
@@ -5442,6 +5454,7 @@ function initFechamento() {
   var waiting = list.filter(function(x){ return x.situacao === 'aguardando'; }).length;
   var approved = list.filter(function(x){ return x.situacao === 'aprovado'; }).length;
   var rejected = list.filter(function(x){ return x.situacao === 'reprovado'; }).length;
+  var portfolioMismatch = list.filter(fechamentoHasPortfolioMismatch).length;
   var bonus = list.reduce(function(sum, x){ return sum + Number(x.valor_bonus || 0); }, 0);
   var badge = document.getElementById('n-fech');
   if (badge) { badge.hidden = waiting === 0; badge.textContent = waiting; }
@@ -5487,13 +5500,11 @@ function initFechamento() {
       var comment = item.justificativa
         ? escapeHtml(item.justificativa)+(item.justificativa_por ? '<div class="closing-project-meta">por '+escapeHtml(item.justificativa_por)+'</div>' : '')
         : '<span style="color:var(--muted)">Nenhum comentário textual ou anexo encontrado.</span>';
-      var effectiveConsultant = fechamentoEffectiveConsultant(item);
-      var project = fechamentoProjectFromItem(item);
-      var projectConsultant = consultantCanonicalName((project && project.consultor) || '');
-      var ownerNote = projectConsultant && !bonusNamesMatch(projectConsultant, effectiveConsultant)
-        ? '<br>Consultor da carteira: '+escapeHtml(projectConsultant)
-        : '';
-      return '<div class="closing-project-card"><div><div class="closing-project-title">'+escapeHtml(item.projeto || 'Projeto não mapeado')+'</div><div class="closing-project-marco">'+escapeHtml(item.marco || '-')+'</div><div class="closing-project-meta">'+escapeHtml(item.item_tipo || 'Marco')+' · '+escapeHtml(item.fase || '-')+'<br>Closed: '+(item.closed_at ? formatarDataHoraProjeto(item.closed_at) : '-')+(item.validation_at ? ' · Validado: '+formatarDataHoraProjeto(item.validation_at) : '')+'</div></div>'+
+      var projectConsultant = fechamentoPortfolioConsultant(item);
+      var mismatch = fechamentoHasPortfolioMismatch(item);
+      var ownerNote = mismatch ? '<br>Consultor da carteira: '+escapeHtml(projectConsultant) : '';
+      var attention = mismatch ? '<div class="closing-attention-note">Conferir respons&aacute;vel do marco</div>' : '';
+      return '<div class="closing-project-card '+(mismatch?'attention':'')+'"><div><div class="closing-project-title">'+escapeHtml(item.projeto || 'Projeto não mapeado')+'</div><div class="closing-project-marco">'+escapeHtml(item.marco || '-')+'</div><div class="closing-project-meta">'+escapeHtml(item.item_tipo || 'Marco')+' · '+escapeHtml(item.fase || '-')+'<br>Closed: '+(item.closed_at ? formatarDataHoraProjeto(item.closed_at) : '-')+(item.validation_at ? ' · Validado: '+formatarDataHoraProjeto(item.validation_at) : '')+attention+'</div></div>'+
         '<div><span class="closing-status '+escapeHtml(status)+'">'+escapeHtml(item.status_atual || status)+'</span><div class="closing-project-comment" style="margin-top:7px">'+comment+'<div class="closing-project-meta">'+ownerNote+'</div></div></div>'+
         '<div><strong>'+fechamentoMoney(item.valor_bonus)+'</strong><div style="margin-top:8px"><a class="project-link-btn" href="'+escapeHtml(item.link || '#')+'" target="_blank" rel="noopener">Abrir marco</a></div></div></div>';
     }).join('');
@@ -5512,7 +5523,7 @@ function initFechamento() {
     '<div class="closing-filter-label" style="margin-top:14px">Filtrar cliente</div><input id="fechamento-client-search" class="closing-client-search" type="search" value="'+escapeHtml(FECHAMENTO_FILTER.projetoBusca || '')+'" placeholder="Digite o nome do cliente..." oninput="fechamentoSetProjectSearch(this.value)">'+
     (AUTH_STATE.user && AUTH_STATE.user.role === 'admin' ? '<div class="closing-project-meta" style="margin-top:12px">Closed atualiza a fila geral compartilhada. Reprovados e Aprovados consultam somente a validação e os comentários do mês selecionado.</div><div class="closing-filter-footer" style="gap:8px;flex-wrap:wrap"><button class="btn-syncall" onclick="return fechamentoStartSync(this)">Atualizar Closed</button><button class="btn-syncall" onclick="return fechamentoSyncRejected(this)">Buscar Reprovados</button><button class="btn-syncall" onclick="return fechamentoSyncApproved(this)">Buscar Aprovados</button></div>' : '')+
     '</div>'+
-    '<div class="closing-kpis"><div class="closing-kpi"><span>Entregas no recorte</span><strong>'+list.length+'</strong></div><div class="closing-kpi"><span>Aguardando validação</span><strong>'+waiting+'</strong></div><div class="closing-kpi"><span>Aprovados / Reprovados</span><strong>'+approved+' / '+rejected+'</strong></div><div class="closing-kpi"><span>Bonificação aprovada</span><strong>'+fechamentoMoney(bonus)+'</strong></div></div>'+
+    '<div class="closing-kpis"><div class="closing-kpi"><span>Entregas no recorte</span><strong>'+list.length+'</strong></div><div class="closing-kpi"><span>Aguardando validação</span><strong>'+waiting+'</strong></div><div class="closing-kpi"><span>Aprovados / Reprovados</span><strong>'+approved+' / '+rejected+'</strong></div><div class="closing-kpi warn"><span>Conferir responsável</span><strong>'+portfolioMismatch+'</strong></div><div class="closing-kpi"><span>Bonificação aprovada</span><strong>'+fechamentoMoney(bonus)+'</strong></div></div>'+
     consultantCards;
 }
 window.fechamentoLoad = fechamentoLoad;
