@@ -12057,11 +12057,20 @@ function cmaxReadBrowserCache(month) {
   try{return JSON.parse(localStorage.getItem(cmaxBrowserCacheKey(month))||'null');}catch(e){return null;}
 }
 function cmaxWriteBrowserCache(month,resp) {
+  if(!resp||!Array.isArray(resp.events)||!resp.events.length)return;
   try{localStorage.setItem(cmaxBrowserCacheKey(month),JSON.stringify({savedAt:Date.now(),response:resp}));}catch(e){}
 }
 function cmaxCachedResponse(month) {
   var memory=CMAX_DAILY_STATE.monthResponses[month||'all'];
+  if(memory&&(!Array.isArray(memory.events)||!memory.events.length)){
+    delete CMAX_DAILY_STATE.monthResponses[month||'all'];
+    memory=null;
+  }
   var stored=cmaxReadBrowserCache(month);
+  if(stored&&stored.response&&(!Array.isArray(stored.response.events)||!stored.response.events.length)){
+    try{localStorage.removeItem(cmaxBrowserCacheKey(month));}catch(e){}
+    stored=null;
+  }
   return memory||(stored&&stored.response)||null;
 }
 function cmaxCombinedCachedResponse() {
@@ -12491,8 +12500,6 @@ function carregarDiariasCmax(force) {
   CMAX_DAILY_STATE.loading=!cachedResponse;CMAX_DAILY_STATE.error='';renderDiariasCmax();
   chamarAppsScriptJsonp('getCmaxDailyEvents',{month:requestedMonth},30000).then(function(resp){
     if(!resp||resp.ok===false)throw new Error((resp&&(resp.error||resp.raw_error))||'Falha ao carregar diárias CMAX');
-    CMAX_DAILY_STATE.monthResponses[requestedMonth||'all']=resp;
-    cmaxWriteBrowserCache(requestedMonth,resp);
     if(requestSeq!==CMAX_DAILY_STATE.requestSeq||requestedMonth!==CMAX_DAILY_STATE.month)return;
     if(resp.building_view){
       CMAX_DAILY_STATE.loading=false;
@@ -12501,6 +12508,14 @@ function carregarDiariasCmax(force) {
       setTimeout(function(){CMAX_DAILY_STATE.loaded=false;carregarDiariasCmax(true);},20000);
       return;
     }
+    if(!Array.isArray(resp.events)||!resp.events.length){
+      CMAX_DAILY_STATE.loading=false;
+      CMAX_DAILY_STATE.error=(CMAX_DAILY_STATE.events||[]).length?'A leitura retornou vazia; mantendo os dados já exibidos.':'CMAX retornou zero registro para este mês. Tente atualizar novamente em alguns instantes.';
+      renderDiariasCmax();
+      return;
+    }
+    CMAX_DAILY_STATE.monthResponses[requestedMonth||'all']=resp;
+    cmaxWriteBrowserCache(requestedMonth,resp);
     cmaxApplyResponse(resp);
     CMAX_DAILY_STATE.loaded=true;CMAX_DAILY_STATE.loading=false;renderDiariasCmax();initBonus();
     cmaxScheduleHistoryPoll();
@@ -12518,19 +12533,34 @@ function sincronizarDiariasCmax(btn) {
   var month=CMAX_DAILY_STATE.month||cmaxCurrentMonth();
   if(btn){btn.disabled=true;btn.textContent='Atualizando...';}
   CMAX_DAILY_STATE.error='Atualizando CMAX de '+cmaxMonthLabel(month)+'...';renderDiariasCmax();
+  var previousResponse=cmaxCachedResponse(month);
   CMAX_DAILY_STATE.loaded=false;
-  delete CMAX_DAILY_STATE.monthResponses[month||'all'];
-  try{localStorage.removeItem(CMAX_BROWSER_CACHE_PREFIX+(month||'all'));}catch(e){}
   chamarAppsScriptJsonp('syncCmaxDailyEvents',{auth_token:authTokenParam(),month:month},45000).then(function(resp){
     if(!resp||resp.ok===false)throw new Error((resp&&(resp.error||resp.raw_error))||'Falha ao atualizar o mês CMAX');
-    CMAX_DAILY_STATE.monthResponses[month||'all']=resp;
-    cmaxWriteBrowserCache(month,resp);
-    cmaxApplyResponse(resp);
-    CMAX_DAILY_STATE.loaded=true;
-    CMAX_DAILY_STATE.loading=false;
-    CMAX_DAILY_STATE.error='';
+    CMAX_DAILY_STATE.error='CMAX sincronizado. Recarregando visão salva...';
     renderDiariasCmax();
-    initBonus();
+    return chamarAppsScriptJsonp('getCmaxDailyEvents',{month:month},30000);
+  }).then(function(resp){
+    if(!resp||resp.ok===false)throw new Error((resp&&(resp.error||resp.raw_error))||'Falha ao recarregar a visão CMAX');
+    if(!Array.isArray(resp.events)||!resp.events.length){
+      if(previousResponse&&Array.isArray(previousResponse.events)&&previousResponse.events.length){
+        cmaxApplyResponse(previousResponse);
+        CMAX_DAILY_STATE.error='A atualização retornou vazia; mantendo a última leitura válida enquanto o CMAX processa '+cmaxMonthLabel(month)+'.';
+        renderDiariasCmax();
+        initBonus();
+      }else{
+        throw new Error('A atualização de '+cmaxMonthLabel(month)+' retornou vazia. Nenhum dado local anterior para manter.');
+      }
+    }else{
+      CMAX_DAILY_STATE.monthResponses[month||'all']=resp;
+      cmaxWriteBrowserCache(month,resp);
+      cmaxApplyResponse(resp);
+      CMAX_DAILY_STATE.loaded=true;
+      CMAX_DAILY_STATE.loading=false;
+      CMAX_DAILY_STATE.error='';
+      renderDiariasCmax();
+      initBonus();
+    }
     return chamarAppsScriptJsonp('startCmaxDailyHistoryBackground',{auth_token:authTokenParam(),start_month:month},15000);
   }).then(function(resp){
     if(!resp||resp.ok===false)throw new Error((resp&&(resp.error||resp.raw_error))||'Falha ao sincronizar agenda CMAX');
