@@ -2365,12 +2365,14 @@ button.dashx-mini-chip:hover{background:#f3f8f3;border-color:#b9c9b8;}
 .dashx-chart-legend{display:flex;gap:10px;flex-wrap:wrap;margin-top:10px;}
 .dashx-legend-item{display:inline-flex;align-items:center;gap:6px;font-size:11px;font-weight:800;color:#607066;}
 .dashx-legend-swatch{width:10px;height:10px;border-radius:999px;display:inline-block;}
-.dashx-status-stack{display:flex;flex-direction:column;gap:12px;}
-.dashx-status-row{display:grid;grid-template-columns:130px 1fr 44px;gap:10px;align-items:center;}
-.dashx-status-name{font-size:11px;font-weight:800;color:#304036;}
-.dashx-status-track{height:16px;border-radius:999px;background:#eef3ee;overflow:hidden;display:flex;}
-.dashx-status-seg{height:100%;}
-.dashx-status-total{font-size:11px;font-weight:900;color:#2a3930;text-align:right;}
+.dashx-status-columns{display:grid;grid-template-columns:repeat(auto-fit,minmax(86px,1fr));gap:14px;align-items:end;min-height:246px;padding-top:8px;}
+.dashx-status-col{display:grid;grid-template-rows:auto 190px auto;gap:8px;align-items:end;min-width:0;}
+.dashx-status-total{font-size:12px;font-weight:900;color:#2a3930;text-align:center;}
+.dashx-status-bar-wrap{height:190px;display:flex;align-items:flex-end;justify-content:center;}
+.dashx-status-bar{width:min(54px,100%);height:var(--bar-height,0%);min-height:10px;border-radius:10px;background:#eef3ee;overflow:hidden;display:flex;flex-direction:column-reverse;box-shadow:inset 0 0 0 1px rgba(58,75,63,.08);}
+.dashx-status-seg{appearance:none;border:0;border-radius:0;width:100%;min-height:16px;padding:0;display:flex;flex-basis:0;align-items:center;justify-content:center;color:#17231c;font-size:10px;font-weight:900;cursor:pointer;transition:filter .16s ease,transform .16s ease;}
+.dashx-status-seg:hover{filter:brightness(.96);transform:scaleX(1.04);}
+.dashx-status-name{font-size:11px;font-weight:900;color:#304036;text-align:center;}
 .dashx-delivery-panel{display:grid;gap:12px;}
 .dashx-delivery-tabs{display:flex;gap:8px;flex-wrap:wrap;}
 .dashx-delivery-tab{border:1px solid #d5dfd4;background:#fff;border-radius:999px;padding:6px 12px;font-size:10px;font-weight:900;color:#536154;}
@@ -2427,7 +2429,10 @@ button.dashx-mini-chip:hover{background:#f3f8f3;border-color:#b9c9b8;}
   .dashx-filter-label{min-width:100%;padding-top:0;}
   .dashx-section-head,.dashx-section-body{padding-left:14px;padding-right:14px;}
   .dashx-heatmap-header,.dashx-heatmap-row{grid-template-columns:100px repeat(12,minmax(28px,1fr));gap:6px;}
-  .dashx-status-row{grid-template-columns:1fr;}
+  .dashx-status-columns{grid-template-columns:repeat(auto-fit,minmax(68px,1fr));gap:10px;}
+  .dashx-status-col{grid-template-rows:auto 160px auto;}
+  .dashx-status-bar-wrap{height:160px;}
+  .dashx-status-bar{width:min(46px,100%);}
   .dashx-action-item{grid-template-columns:1fr;}
 }
 body.theme-dark{
@@ -8671,7 +8676,7 @@ function dashBuildWeeklyTrend(list) {
 function dashBuildStatusByMonth(list) {
   return dashMonthsInList(list).map(function(mes){
     var items = (list || []).filter(function(p){ return String((p && p.mes) || '').toUpperCase() === mes; });
-    var counts = { andamento:0, aguardando:0, parado:0, concluido:0, cancelado:0, outro:0 };
+    var counts = { andamento:0, aguardando:0, aguardando_entrega:0, parado:0, atrasado:0, concluido:0, cancelado:0, outro:0 };
     items.forEach(function(p){
       var key = dashStatusKey(p && p.status);
       if (counts.hasOwnProperty(key)) counts[key] += 1;
@@ -8867,6 +8872,35 @@ function dashRenderBacklogThroughput(series) {
   }).join('');
   return '<div class="dashx-chart-card"><div class="dashx-chart-head"><div><div class="dashx-chart-title">Backlog x throughput por semana '+towerInfoButton('dailyBurn')+'</div><div class="dashx-chart-sub">Backlog mostra projetos com pendências abertas. Throughput mostra quantos projetos receberam atualização na semana.</div></div></div><svg viewBox="0 0 '+width+' '+height+'" class="dashx-line-svg" role="img" aria-label="Backlog e throughput por semana"><line x1="'+padX+'" y1="'+(height - padY)+'" x2="'+(width - padX)+'" y2="'+(height - padY)+'" stroke="#dfe7de" stroke-width="1"></line>'+bars+'</svg><div class="dashx-chart-legend"><span class="dashx-legend-item"><span class="dashx-legend-swatch" style="background:#d9b57e"></span>Backlog</span><span class="dashx-legend-item"><span class="dashx-legend-swatch" style="background:#6d8e72"></span>Throughput</span></div></div>';
 }
+function dashOpenStatusMonthAudit(mes, statusKey) {
+  mes = String(mes || '').toUpperCase();
+  statusKey = String(statusKey || '');
+  var labels = {
+    andamento:'Em andamento',
+    aguardando:'Aguardando início',
+    aguardando_entrega:'Aguardando entrega',
+    parado:'Parado',
+    atrasado:'Atrasado',
+    concluido:'Concluído',
+    cancelado:'Cancelado',
+    outro:'Outros'
+  };
+  var list = ordenarProjetosPainel(projetosVisiveisParaUsuario(Array.isArray(DATA.projetos) ? DATA.projetos.slice() : [])).filter(function(p) {
+    if (gestaoClickupProjectYear(p) !== 2026) return false;
+    if (String((p && p.mes) || '').toUpperCase() !== mes) return false;
+    var key = dashStatusKey(p && p.status);
+    if (!labels.hasOwnProperty(key)) key = 'outro';
+    return key === statusKey;
+  });
+  var rows = list.length ? list.map(function(p) {
+    return '<tr><td><strong>'+escapeHtml(p.cliente || '-')+'</strong></td><td>'+escapeHtml(p.consultor || '-')+'</td><td>'+escapeHtml(p.status || '-')+'</td><td>'+dashProjectActionCell(p)+'</td></tr>';
+  }).join('') : '<tr class="empty-row"><td colspan="4">Nenhum projeto nesta cor.</td></tr>';
+  var title = 'Status '+mes+' — '+(labels[statusKey] || 'Projetos');
+  var html = '<div class="dashx-focus-note"><div><strong>'+escapeHtml(labels[statusKey] || 'Projetos')+' em '+escapeHtml(mes)+'</strong></div><div class="dashx-focus-hint">'+list.length+' projeto(s)</div></div><div class="dashx-table-wrap" style="margin-top:12px"><table class="dashx-table"><thead><tr><th>Projeto</th><th>Consultor</th><th>Status</th><th>Ação</th></tr></thead><tbody>'+rows+'</tbody></table></div>';
+  dashOpenAuditModal(title, html);
+  return false;
+}
+window.dashOpenStatusMonthAudit = dashOpenStatusMonthAudit;
 function dashRenderStatusStack(items) {
   if (!(items || []).length) return dashUnavailableCard('Status por período', ['mes']);
   var labels = {
@@ -8874,6 +8908,7 @@ function dashRenderStatusStack(items) {
     aguardando:'Aguardando início',
     aguardando_entrega:'Aguardando entrega',
     parado:'Parado',
+    atrasado:'Atrasado',
     concluido:'Concluído',
     cancelado:'Cancelado',
     outro:'Outros'
@@ -8883,21 +8918,24 @@ function dashRenderStatusStack(items) {
     aguardando:'#6f95c0',
     aguardando_entrega:'#9b7fc4',
     parado:'#9aa59d',
+    atrasado:'#b45445',
     concluido:'#6d8e72',
     cancelado:'#c96c5f',
     outro:'#dfe7de'
   };
+  var maxTotal = Math.max.apply(null, (items || []).map(function(item){ return Number(item.total || 0); }).concat([1]));
+  var order = ['andamento','aguardando','aguardando_entrega','parado','atrasado','concluido','cancelado','outro'];
   var rows = items.map(function(item){
-    var total = item.total || 1;
-    var order = ['andamento','aguardando','aguardando_entrega','parado','concluido','cancelado','outro'];
+    var total = Number(item.total || 0);
+    var barHeight = total ? Math.max(8, Math.round((total / maxTotal) * 100)) : 0;
     var segs = order.map(function(key){
       var count = Number((item.counts && item.counts[key]) || 0);
       if (!count) return '';
-      return '<span class="dashx-status-seg" style="width:'+((count / total) * 100)+'%;background:'+colors[key]+'" title="'+labels[key]+': '+count+'"></span>';
+      return '<button type="button" class="dashx-status-seg" style="flex-grow:'+count+';background:'+colors[key]+'" title="'+labels[key]+': '+count+' projeto(s)" onclick="return dashOpenStatusMonthAudit(\''+jsQuote(item.mes)+'\',\''+key+'\')"><span>'+count+'</span></button>';
     }).join('');
-    return '<div class="dashx-status-row"><div class="dashx-status-name">'+item.mes+'</div><div class="dashx-status-track">'+segs+'</div><div class="dashx-status-total">'+item.total+'</div></div>';
+    return '<div class="dashx-status-col"><div class="dashx-status-total">'+total+'</div><div class="dashx-status-bar-wrap"><div class="dashx-status-bar" style="--bar-height:'+barHeight+'%">'+segs+'</div></div><div class="dashx-status-name">'+item.mes+'</div></div>';
   }).join('');
-  return '<div class="dashx-chart-card"><div class="dashx-chart-head"><div><div class="dashx-chart-title">Status dos projetos por período '+towerInfoButton('projectRisk')+'</div><div class="dashx-chart-sub">Distribuição mensal do portfólio para entender concentração de projetos em andamento, aguardando entrega, parados e concluídos.</div></div></div><div class="dashx-status-stack">'+rows+'</div><div class="dashx-chart-legend"><span class="dashx-legend-item"><span class="dashx-legend-swatch" style="background:#d9b57e"></span>Em andamento</span><span class="dashx-legend-item"><span class="dashx-legend-swatch" style="background:#6f95c0"></span>Aguardando início</span><span class="dashx-legend-item"><span class="dashx-legend-swatch" style="background:#9b7fc4"></span>Aguardando entrega</span><span class="dashx-legend-item"><span class="dashx-legend-swatch" style="background:#9aa59d"></span>Parado</span><span class="dashx-legend-item"><span class="dashx-legend-swatch" style="background:#6d8e72"></span>Concluído</span><span class="dashx-legend-item"><span class="dashx-legend-swatch" style="background:#c96c5f"></span>Cancelado</span></div></div>';
+  return '<div class="dashx-chart-card"><div class="dashx-chart-head"><div><div class="dashx-chart-title">Status dos projetos por período '+towerInfoButton('projectRisk')+'</div><div class="dashx-chart-sub">Distribuição mensal em colunas empilhadas. Clique em uma cor para ver os projetos daquele mês e status.</div></div></div><div class="dashx-status-columns">'+rows+'</div><div class="dashx-chart-legend"><span class="dashx-legend-item"><span class="dashx-legend-swatch" style="background:#d9b57e"></span>Em andamento</span><span class="dashx-legend-item"><span class="dashx-legend-swatch" style="background:#6f95c0"></span>Aguardando início</span><span class="dashx-legend-item"><span class="dashx-legend-swatch" style="background:#9b7fc4"></span>Aguardando entrega</span><span class="dashx-legend-item"><span class="dashx-legend-swatch" style="background:#9aa59d"></span>Parado</span><span class="dashx-legend-item"><span class="dashx-legend-swatch" style="background:#b45445"></span>Atrasado</span><span class="dashx-legend-item"><span class="dashx-legend-swatch" style="background:#6d8e72"></span>Concluído</span><span class="dashx-legend-item"><span class="dashx-legend-swatch" style="background:#c96c5f"></span>Cancelado</span><span class="dashx-legend-item"><span class="dashx-legend-swatch" style="background:#dfe7de"></span>Outros</span></div></div>';
 }
 function dashRenderActionNow(analyses, operation) {
   var criticos = (analyses || []).filter(function(a){ return a.actionToday || a.risco; }).sort(function(a, b){
