@@ -1599,7 +1599,7 @@ function upsertClickUpMilestoneClosing_(mapping, normalized, options) {
       item_tipo: isProjectClosing ? 'Fechamento de projeto' : 'Marco',
       project_key: mapping.project_key || '',
       projeto: mapping.cliente || normalized.cliente || '',
-      consultor: clickUpMilestoneConsultant_(milestone.responsaveis || normalized.consultor || mapping.consultor),
+      consultor: clickUpMilestoneConsultant_(mapping.consultor || normalized.consultor || milestone.responsaveis),
       marco: milestone.nome || '',
       fase: milestone.fase_nome || '',
       status_atual: status,
