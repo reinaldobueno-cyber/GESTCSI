@@ -12265,7 +12265,7 @@ function cmaxModality(value) {
 function cmaxCountsDaily(item) {
   if(item&&item.consultor&&!cmaxOfficialTrainingConsultant(item.consultor))return false;
   var mode=cmaxModality(item.modalidade||item.descricao||item.tipo);
-  return mode==='TREINAMENTO ON LINE'||mode==='TREINAMENTO IN LOCO'||mode==='TREINAMENTO ON LINE AVULSO'||mode==='TREINAMENTO IN LOCO AVULSO';
+  return mode==='TREINAMENTO ON LINE'||mode==='TREINAMENTO IN LOCO'||mode==='TREINAMENTO INTERNO'||mode==='TREINAMENTO ON LINE AVULSO'||mode==='TREINAMENTO IN LOCO AVULSO';
 }
 function cmaxOfficialTrainingConsultant(name) {
   var key=consultantCompKey(name);

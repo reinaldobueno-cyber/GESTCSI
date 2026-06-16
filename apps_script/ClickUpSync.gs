@@ -6919,6 +6919,7 @@ function isCmaxDailyModality_(value) {
   var modality = normalizeCmaxModality_(value);
   return modality === 'TREINAMENTO ON LINE' ||
     modality === 'TREINAMENTO IN LOCO' ||
+    modality === 'TREINAMENTO INTERNO' ||
     modality === 'TREINAMENTO ON LINE AVULSO' ||
     modality === 'TREINAMENTO IN LOCO AVULSO';
 }
