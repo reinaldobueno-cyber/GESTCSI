@@ -5265,9 +5265,7 @@ function fechamentoProjectFromItem(item) {
   })[0] || null;
 }
 function fechamentoEffectiveConsultant(item) {
-  var project = fechamentoProjectFromItem(item);
-  var carteira = project && project.consultor;
-  return consultantCanonicalName(carteira || (item && item.consultor) || 'Sem consultor');
+  return consultantCanonicalName((item && (item.consultor || item.responsaveis)) || 'Sem consultor');
 }
 function fechamentoApplySyncRows(rows, syncMonth) {
   var normalized = fechamentoNormalizeRows(rows);
@@ -5490,9 +5488,10 @@ function initFechamento() {
         ? escapeHtml(item.justificativa)+(item.justificativa_por ? '<div class="closing-project-meta">por '+escapeHtml(item.justificativa_por)+'</div>' : '')
         : '<span style="color:var(--muted)">Nenhum comentário textual ou anexo encontrado.</span>';
       var effectiveConsultant = fechamentoEffectiveConsultant(item);
-      var clickupOwner = consultantCanonicalName(item.consultor || item.responsaveis || '');
-      var ownerNote = clickupOwner && !bonusNamesMatch(clickupOwner, effectiveConsultant)
-        ? '<br>Respons&aacute;vel no marco: '+escapeHtml(clickupOwner)
+      var project = fechamentoProjectFromItem(item);
+      var projectConsultant = consultantCanonicalName((project && project.consultor) || '');
+      var ownerNote = projectConsultant && !bonusNamesMatch(projectConsultant, effectiveConsultant)
+        ? '<br>Consultor da carteira: '+escapeHtml(projectConsultant)
         : '';
       return '<div class="closing-project-card"><div><div class="closing-project-title">'+escapeHtml(item.projeto || 'Projeto não mapeado')+'</div><div class="closing-project-marco">'+escapeHtml(item.marco || '-')+'</div><div class="closing-project-meta">'+escapeHtml(item.item_tipo || 'Marco')+' · '+escapeHtml(item.fase || '-')+'<br>Closed: '+(item.closed_at ? formatarDataHoraProjeto(item.closed_at) : '-')+(item.validation_at ? ' · Validado: '+formatarDataHoraProjeto(item.validation_at) : '')+'</div></div>'+
         '<div><span class="closing-status '+escapeHtml(status)+'">'+escapeHtml(item.status_atual || status)+'</span><div class="closing-project-comment" style="margin-top:7px">'+comment+'<div class="closing-project-meta">'+ownerNote+'</div></div></div>'+
