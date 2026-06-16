@@ -5492,12 +5492,14 @@ function extractLeadingNumber_(value) {
 }
 
 function normalizeKey_(value) {
-  return sanitizeText_(value)
+  var key = sanitizeText_(value)
     .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
     .toUpperCase()
     .replace(/[^A-Z0-9 ]/g, ' ')
     .replace(/\s+/g, ' ')
     .trim();
+  if (key === 'WAND' || key.indexOf('WANDERLEY') >= 0 || key.indexOf('WANDERLEI') >= 0) return 'WANDERLEY CABRAL';
+  return key;
 }
 
 function buildProjectKey_(month, cliente) {
