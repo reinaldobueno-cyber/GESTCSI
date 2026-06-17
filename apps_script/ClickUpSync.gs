@@ -4157,7 +4157,7 @@ function findProjectMappingByTaskId_(taskId) {
 function writeProjectSummaryToMonthlySheet_(mapping, normalized) {
   var sheet = getMonthSheet_(mapping.mes);
   var headerInfo = ensureMonthlyOutputColumns_(sheet);
-  var clientRow = findClientRow_(sheet, mapping.cliente);
+  var clientRow = findProjectRowForMapping_(sheet, mapping);
   if (!clientRow) throw new Error('Client row not found in month sheet: ' + mapping.cliente + ' (' + mapping.mes + ')');
 
   var values = {};
@@ -4187,7 +4187,7 @@ function writeSyncStatus_(mapping, status, errorMessage) {
   try {
     var sheet = getMonthSheet_(mapping.mes);
     var headerInfo = ensureMonthlyOutputColumns_(sheet);
-    var clientRow = findClientRow_(sheet, mapping.cliente);
+    var clientRow = findProjectRowForMapping_(sheet, mapping);
     if (!clientRow) return;
     sheet.getRange(clientRow, headerInfo.sync_status_clickup).setValue(String(status || ''));
     sheet.getRange(clientRow, headerInfo.sync_error_clickup).setValue(String(errorMessage || ''));
@@ -4219,6 +4219,33 @@ function findClientRow_(sheet, cliente) {
   var target = normalizeKey_(cliente);
   for (var i = 0; i < names.length; i++) {
     if (normalizeKey_(names[i][0]) === target) return i + 2;
+  }
+  return null;
+}
+
+function findProjectRowForMapping_(sheet, mapping) {
+  var byClient = findClientRow_(sheet, mapping && mapping.cliente);
+  if (byClient) return byClient;
+
+  var lastRow = sheet.getLastRow();
+  var lastCol = sheet.getLastColumn();
+  if (lastRow < 2 || lastCol < 1) return null;
+
+  var values = sheet.getRange(1, 1, lastRow, lastCol).getValues();
+  var header = normalizeMonthlyHeader_(values[0]);
+  var targetListId = normalizeClickUpId_(mapping && mapping.list_id);
+  var targetViewId = normalizeClickUpId_(mapping && mapping.view_id);
+  var targetProjectUrl = sanitizeText_(mapping && mapping.project_url);
+
+  for (var i = 1; i < values.length; i++) {
+    var item = rowToMonthlyProject_(header, values[i], sanitizeMonth_(mapping && mapping.mes), i + 1);
+    var rowUrl = sanitizeText_(item.link_projeto || item.projeto_link);
+    var rowListId = normalizeClickUpId_(item.list_id) || extractClickUpIdFromUrl_(rowUrl, 'list');
+    var rowViewId = normalizeClickUpId_(item.view_id) || extractClickUpIdFromUrl_(rowUrl, 'view');
+
+    if (targetListId && rowListId && targetListId === rowListId) return i + 1;
+    if (targetViewId && rowViewId && targetViewId === rowViewId) return i + 1;
+    if (targetProjectUrl && rowUrl && sanitizeText_(targetProjectUrl) === rowUrl) return i + 1;
   }
   return null;
 }
