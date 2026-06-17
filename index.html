@@ -2367,6 +2367,7 @@ button.dashx-mini-chip:hover{background:#f3f8f3;border-color:#b9c9b8;}
 .dashx-legend-swatch{width:10px;height:10px;border-radius:999px;display:inline-block;}
 .dashx-status-card{background:linear-gradient(180deg,#fff 0%,#fbfdfb 100%);box-shadow:0 14px 32px rgba(37,51,42,.08);}
 .dashx-status-card .dashx-chart-head{padding-bottom:8px;}
+.dashx-status-total-caption{display:flex;align-items:center;justify-content:flex-start;margin:10px 10px -8px;color:#607066;font-size:11px;font-weight:900;letter-spacing:.08em;text-transform:uppercase;}
 .dashx-status-columns{display:grid;grid-template-columns:repeat(6,minmax(140px,1fr));gap:20px;align-items:end;min-height:386px;padding:18px 10px 4px;}
 .dashx-status-col{display:grid;grid-template-rows:42px 300px 26px;gap:9px;align-items:end;justify-items:center;min-width:0;}
 .dashx-status-total{display:flex;align-items:center;justify-content:center;height:38px;color:#17231c;font-size:24px;font-weight:950;line-height:1;text-align:center;letter-spacing:0;}
@@ -2380,6 +2381,15 @@ button.dashx-mini-chip:hover{background:#f3f8f3;border-color:#b9c9b8;}
 .dashx-status-card .dashx-chart-legend{justify-content:center;gap:14px 18px;margin-top:18px;padding-top:14px;border-top:1px solid #edf2ed;}
 .dashx-status-card .dashx-legend-item{font-size:12px;color:#516158;}
 .dashx-status-card .dashx-legend-swatch{width:11px;height:11px;border-radius:4px;}
+.dashx-status-overall{display:grid;grid-template-columns:minmax(130px,180px) 1fr minmax(74px,auto);gap:14px;align-items:center;margin:18px 10px 0;padding:14px 16px;border:1px solid #e4ece4;border-radius:14px;background:#f8fbf8;box-shadow:inset 0 1px 0 rgba(255,255,255,.72);}
+.dashx-status-overall-label{display:grid;gap:2px;color:#516158;font-size:11px;font-weight:900;letter-spacing:.08em;text-transform:uppercase;}
+.dashx-status-overall-label strong{color:#18251d;font-size:15px;letter-spacing:0;text-transform:none;}
+.dashx-status-overall-track{height:34px;border-radius:999px;background:#eef3ee;overflow:hidden;display:flex;box-shadow:inset 0 0 0 1px rgba(30,43,35,.08);}
+.dashx-status-overall-seg{appearance:none;border:0;border-left:1px solid rgba(255,255,255,.42);display:flex;flex-basis:0;align-items:center;justify-content:center;color:#fff;font-size:12px;font-weight:950;text-shadow:0 1px 1px rgba(0,0,0,.18);cursor:pointer;transition:filter .16s ease;}
+.dashx-status-overall-seg:first-child{border-left:0;}
+.dashx-status-overall-seg:hover{filter:saturate(1.08) brightness(1.02);}
+.dashx-status-overall-seg.tone-andamento,.dashx-status-overall-seg.tone-parado{color:#15231c;text-shadow:none;}
+.dashx-status-overall-total{color:#17231c;font-size:22px;font-weight:950;text-align:right;}
 .dashx-delivery-panel{display:grid;gap:12px;}
 .dashx-delivery-tabs{display:flex;gap:8px;flex-wrap:wrap;}
 .dashx-delivery-tab{border:1px solid #d5dfd4;background:#fff;border-radius:999px;padding:6px 12px;font-size:10px;font-weight:900;color:#536154;}
@@ -2442,6 +2452,8 @@ button.dashx-mini-chip:hover{background:#f3f8f3;border-color:#b9c9b8;}
   .dashx-status-bar-wrap{height:220px;}
   .dashx-status-bar{width:min(92px,94%);}
   .dashx-status-seg{font-size:11px;min-height:20px;}
+  .dashx-status-overall{grid-template-columns:1fr;gap:8px;margin-left:0;margin-right:0;}
+  .dashx-status-overall-total{text-align:left;font-size:20px;}
   .dashx-action-item{grid-template-columns:1fr;}
 }
 body.theme-dark{
@@ -8884,6 +8896,7 @@ function dashRenderBacklogThroughput(series) {
 function dashOpenStatusMonthAudit(mes, statusKey) {
   mes = String(mes || '').toUpperCase();
   statusKey = String(statusKey || '');
+  var isTotal = mes === 'TOTAL';
   var labels = {
     andamento:'Em andamento',
     aguardando:'Aguardando início',
@@ -8896,7 +8909,7 @@ function dashOpenStatusMonthAudit(mes, statusKey) {
   };
   var list = ordenarProjetosPainel(projetosVisiveisParaUsuario(Array.isArray(DATA.projetos) ? DATA.projetos.slice() : [])).filter(function(p) {
     if (gestaoClickupProjectYear(p) !== 2026) return false;
-    if (String((p && p.mes) || '').toUpperCase() !== mes) return false;
+    if (!isTotal && String((p && p.mes) || '').toUpperCase() !== mes) return false;
     var key = dashStatusKey(p && p.status);
     if (!labels.hasOwnProperty(key)) key = 'outro';
     return key === statusKey;
@@ -8904,8 +8917,9 @@ function dashOpenStatusMonthAudit(mes, statusKey) {
   var rows = list.length ? list.map(function(p) {
     return '<tr><td><strong>'+escapeHtml(p.cliente || '-')+'</strong></td><td>'+escapeHtml(p.consultor || '-')+'</td><td>'+escapeHtml(p.status || '-')+'</td><td>'+dashProjectActionCell(p)+'</td></tr>';
   }).join('') : '<tr class="empty-row"><td colspan="4">Nenhum projeto nesta cor.</td></tr>';
-  var title = 'Status '+mes+' — '+(labels[statusKey] || 'Projetos');
-  var html = '<div class="dashx-focus-note"><div><strong>'+escapeHtml(labels[statusKey] || 'Projetos')+' em '+escapeHtml(mes)+'</strong></div><div class="dashx-focus-hint">'+list.length+' projeto(s)</div></div><div class="dashx-table-wrap" style="margin-top:12px"><table class="dashx-table"><thead><tr><th>Projeto</th><th>Consultor</th><th>Status</th><th>Ação</th></tr></thead><tbody>'+rows+'</tbody></table></div>';
+  var title = (isTotal ? 'Total geral' : ('Status '+mes))+' — '+(labels[statusKey] || 'Projetos');
+  var scope = isTotal ? 'no período completo' : ('em '+escapeHtml(mes));
+  var html = '<div class="dashx-focus-note"><div><strong>'+escapeHtml(labels[statusKey] || 'Projetos')+' '+scope+'</strong></div><div class="dashx-focus-hint">'+list.length+' projeto(s)</div></div><div class="dashx-table-wrap" style="margin-top:12px"><table class="dashx-table"><thead><tr><th>Projeto</th><th>Consultor</th><th>Status</th><th>Ação</th></tr></thead><tbody>'+rows+'</tbody></table></div>';
   dashOpenAuditModal(title, html);
   return false;
 }
@@ -8934,8 +8948,13 @@ function dashRenderStatusStack(items) {
   };
   var maxTotal = Math.max.apply(null, (items || []).map(function(item){ return Number(item.total || 0); }).concat([1]));
   var order = ['andamento','aguardando','aguardando_entrega','parado','concluido','atrasado'];
+  var overallCounts = {};
+  order.forEach(function(key){ overallCounts[key] = 0; });
+  var overallTotal = 0;
   var rows = items.map(function(item){
     var total = Number(item.total || 0);
+    overallTotal += total;
+    order.forEach(function(key){ overallCounts[key] += Number((item.counts && item.counts[key]) || 0); });
     var barHeight = total ? Math.max(28, Math.round((total / maxTotal) * 100)) : 0;
     var segs = order.map(function(key){
       var count = Number((item.counts && item.counts[key]) || 0);
@@ -8944,7 +8963,13 @@ function dashRenderStatusStack(items) {
     }).join('');
     return '<div class="dashx-status-col"><div class="dashx-status-total">'+total+'</div><div class="dashx-status-bar-wrap"><div class="dashx-status-bar" style="--bar-height:'+barHeight+'%">'+segs+'</div></div><div class="dashx-status-name">'+item.mes+'</div></div>';
   }).join('');
-  return '<div class="dashx-chart-card dashx-status-card"><div class="dashx-chart-head"><div><div class="dashx-chart-title">Status dos projetos por período '+towerInfoButton('projectRisk')+'</div><div class="dashx-chart-sub">Distribuição mensal de janeiro a junho por status operacional. Clique em um bloco colorido para auditar a lista.</div></div></div><div class="dashx-status-columns">'+rows+'</div><div class="dashx-chart-legend"><span class="dashx-legend-item"><span class="dashx-legend-swatch" style="background:#F2B86B"></span>Em andamento</span><span class="dashx-legend-item"><span class="dashx-legend-swatch" style="background:#4F83C4"></span>Aguardando início</span><span class="dashx-legend-item"><span class="dashx-legend-swatch" style="background:#8B6BC8"></span>Aguardando entrega</span><span class="dashx-legend-item"><span class="dashx-legend-swatch" style="background:#AEB8B1"></span>Parado</span><span class="dashx-legend-item"><span class="dashx-legend-swatch" style="background:#2F6F4F"></span>Concluído</span><span class="dashx-legend-item"><span class="dashx-legend-swatch" style="background:#D86158"></span>Atrasado</span></div></div>';
+  var overallSegs = order.map(function(key) {
+    var count = Number(overallCounts[key] || 0);
+    if (!count) return '';
+    return '<button type="button" class="dashx-status-overall-seg tone-'+key+'" style="flex-grow:'+count+';background:'+colors[key]+'" title="'+labels[key]+': '+count+' projeto(s)" onclick="return dashOpenStatusMonthAudit(\'TOTAL\',\''+key+'\')">'+count+'</button>';
+  }).join('');
+  var overall = '<div class="dashx-status-overall"><div class="dashx-status-overall-label"><span>Total geral</span><strong>Projetos no período</strong></div><div class="dashx-status-overall-track">'+overallSegs+'</div><div class="dashx-status-overall-total">'+overallTotal+'</div></div>';
+  return '<div class="dashx-chart-card dashx-status-card"><div class="dashx-chart-head"><div><div class="dashx-chart-title">Status dos projetos por período '+towerInfoButton('projectRisk')+'</div><div class="dashx-chart-sub">Distribuição mensal de janeiro a junho por status operacional. Clique em um bloco colorido para auditar a lista.</div></div></div><div class="dashx-status-total-caption">Total de projetos por mês</div><div class="dashx-status-columns">'+rows+'</div>'+overall+'<div class="dashx-chart-legend"><span class="dashx-legend-item"><span class="dashx-legend-swatch" style="background:#F2B86B"></span>Em andamento</span><span class="dashx-legend-item"><span class="dashx-legend-swatch" style="background:#4F83C4"></span>Aguardando início</span><span class="dashx-legend-item"><span class="dashx-legend-swatch" style="background:#8B6BC8"></span>Aguardando entrega</span><span class="dashx-legend-item"><span class="dashx-legend-swatch" style="background:#AEB8B1"></span>Parado</span><span class="dashx-legend-item"><span class="dashx-legend-swatch" style="background:#2F6F4F"></span>Concluído</span><span class="dashx-legend-item"><span class="dashx-legend-swatch" style="background:#D86158"></span>Atrasado</span></div></div>';
 }
 function dashRenderActionNow(analyses, operation) {
   var criticos = (analyses || []).filter(function(a){ return a.actionToday || a.risco; }).sort(function(a, b){
