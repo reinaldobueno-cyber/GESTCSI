@@ -2365,15 +2365,21 @@ button.dashx-mini-chip:hover{background:#f3f8f3;border-color:#b9c9b8;}
 .dashx-chart-legend{display:flex;gap:10px;flex-wrap:wrap;margin-top:10px;}
 .dashx-legend-item{display:inline-flex;align-items:center;gap:6px;font-size:11px;font-weight:800;color:#607066;}
 .dashx-legend-swatch{width:10px;height:10px;border-radius:999px;display:inline-block;}
-.dashx-status-columns{display:grid;grid-template-columns:repeat(auto-fit,minmax(126px,1fr));gap:18px;align-items:end;min-height:336px;padding:16px 4px 2px;}
-.dashx-status-col{display:grid;grid-template-rows:32px 260px 22px;gap:8px;align-items:end;justify-items:center;min-width:0;}
-.dashx-status-total{display:inline-flex;align-items:center;justify-content:center;min-width:42px;height:28px;border-radius:999px;background:#eef3ed;color:#213128;font-size:13px;font-weight:950;text-align:center;box-shadow:inset 0 0 0 1px rgba(58,75,63,.08);}
-.dashx-status-bar-wrap{height:260px;width:100%;display:flex;align-items:flex-end;justify-content:center;}
-.dashx-status-bar{width:min(84px,86%);height:var(--bar-height,0%);min-height:18px;border-radius:9px;background:#eef3ee;overflow:hidden;display:flex;flex-direction:column-reverse;box-shadow:inset 0 0 0 1px rgba(58,75,63,.10),0 10px 22px rgba(31,48,38,.08);}
-.dashx-status-seg{appearance:none;border:0;border-top:1px solid rgba(255,255,255,.36);width:100%;min-height:20px;padding:0;display:flex;flex-basis:0;align-items:center;justify-content:center;color:#17231c;font-size:12px;font-weight:950;cursor:pointer;transition:filter .16s ease,transform .16s ease;}
+.dashx-status-card{background:linear-gradient(180deg,#fff 0%,#fbfdfb 100%);box-shadow:0 14px 32px rgba(37,51,42,.08);}
+.dashx-status-card .dashx-chart-head{padding-bottom:8px;}
+.dashx-status-columns{display:grid;grid-template-columns:repeat(6,minmax(120px,1fr));gap:26px;align-items:end;min-height:386px;padding:18px 10px 4px;}
+.dashx-status-col{display:grid;grid-template-rows:42px 300px 26px;gap:9px;align-items:end;justify-items:center;min-width:0;}
+.dashx-status-total{display:flex;align-items:center;justify-content:center;height:38px;color:#17231c;font-size:24px;font-weight:950;line-height:1;text-align:center;letter-spacing:0;}
+.dashx-status-bar-wrap{height:300px;width:100%;display:flex;align-items:flex-end;justify-content:center;}
+.dashx-status-bar{width:min(96px,88%);height:var(--bar-height,0%);min-height:20px;border-radius:12px;background:#f2f5f2;overflow:hidden;display:flex;flex-direction:column-reverse;box-shadow:0 18px 32px rgba(30,43,35,.12),inset 0 0 0 1px rgba(30,43,35,.08);}
+.dashx-status-seg{appearance:none;border:0;border-top:1px solid rgba(255,255,255,.40);width:100%;min-height:22px;padding:0;display:flex;flex-basis:0;align-items:center;justify-content:center;color:#fff;font-size:13px;font-weight:950;cursor:pointer;text-shadow:0 1px 1px rgba(0,0,0,.18);transition:filter .16s ease,transform .16s ease,box-shadow .16s ease;}
 .dashx-status-seg:first-child{border-top:0;}
-.dashx-status-seg:hover{filter:brightness(.96);transform:scaleX(1.05);}
-.dashx-status-name{font-size:12px;font-weight:950;color:#304036;text-align:center;}
+.dashx-status-seg:hover{filter:saturate(1.08) brightness(1.02);transform:scaleX(1.04);box-shadow:inset 0 0 0 999px rgba(255,255,255,.08);}
+.dashx-status-seg.tone-andamento,.dashx-status-seg.tone-parado{color:#15231c;text-shadow:none;}
+.dashx-status-name{font-size:13px;font-weight:950;color:#2d3c33;text-align:center;letter-spacing:.02em;}
+.dashx-status-card .dashx-chart-legend{justify-content:center;gap:14px 18px;margin-top:18px;padding-top:14px;border-top:1px solid #edf2ed;}
+.dashx-status-card .dashx-legend-item{font-size:12px;color:#516158;}
+.dashx-status-card .dashx-legend-swatch{width:11px;height:11px;border-radius:4px;}
 .dashx-delivery-panel{display:grid;gap:12px;}
 .dashx-delivery-tabs{display:flex;gap:8px;flex-wrap:wrap;}
 .dashx-delivery-tab{border:1px solid #d5dfd4;background:#fff;border-radius:999px;padding:6px 12px;font-size:10px;font-weight:900;color:#536154;}
@@ -2430,11 +2436,12 @@ button.dashx-mini-chip:hover{background:#f3f8f3;border-color:#b9c9b8;}
   .dashx-filter-label{min-width:100%;padding-top:0;}
   .dashx-section-head,.dashx-section-body{padding-left:14px;padding-right:14px;}
   .dashx-heatmap-header,.dashx-heatmap-row{grid-template-columns:100px repeat(12,minmax(28px,1fr));gap:6px;}
-  .dashx-status-columns{grid-template-columns:repeat(auto-fit,minmax(92px,1fr));gap:12px;min-height:276px;padding-top:12px;}
-  .dashx-status-col{grid-template-rows:30px 210px 22px;}
-  .dashx-status-bar-wrap{height:210px;}
-  .dashx-status-bar{width:min(64px,88%);}
-  .dashx-status-seg{font-size:11px;}
+  .dashx-status-columns{grid-template-columns:repeat(3,minmax(86px,1fr));gap:16px 12px;min-height:auto;padding:12px 0 2px;}
+  .dashx-status-col{grid-template-rows:34px 220px 22px;}
+  .dashx-status-total{height:32px;font-size:20px;}
+  .dashx-status-bar-wrap{height:220px;}
+  .dashx-status-bar{width:min(70px,88%);}
+  .dashx-status-seg{font-size:11px;min-height:20px;}
   .dashx-action-item{grid-template-columns:1fr;}
 }
 body.theme-dark{
@@ -8916,28 +8923,28 @@ function dashRenderStatusStack(items) {
     outro:'Outros'
   };
   var colors = {
-    andamento:'#d9b57e',
-    aguardando:'#6f95c0',
-    aguardando_entrega:'#9b7fc4',
-    parado:'#9aa59d',
-    atrasado:'#b45445',
-    concluido:'#6d8e72',
-    cancelado:'#c96c5f',
+    andamento:'#F2B86B',
+    aguardando:'#4F83C4',
+    aguardando_entrega:'#8B6BC8',
+    parado:'#AEB8B1',
+    concluido:'#2F6F4F',
+    atrasado:'#D86158',
+    cancelado:'#C96C5F',
     outro:'#dfe7de'
   };
   var maxTotal = Math.max.apply(null, (items || []).map(function(item){ return Number(item.total || 0); }).concat([1]));
-  var order = ['andamento','aguardando','aguardando_entrega','parado','atrasado','concluido','cancelado','outro'];
+  var order = ['andamento','aguardando','aguardando_entrega','parado','concluido','atrasado'];
   var rows = items.map(function(item){
     var total = Number(item.total || 0);
     var barHeight = total ? Math.max(28, Math.round((total / maxTotal) * 100)) : 0;
     var segs = order.map(function(key){
       var count = Number((item.counts && item.counts[key]) || 0);
       if (!count) return '';
-      return '<button type="button" class="dashx-status-seg" style="flex-grow:'+count+';background:'+colors[key]+'" title="'+labels[key]+': '+count+' projeto(s)" onclick="return dashOpenStatusMonthAudit(\''+jsQuote(item.mes)+'\',\''+key+'\')"><span>'+count+'</span></button>';
+      return '<button type="button" class="dashx-status-seg tone-'+key+'" style="flex-grow:'+count+';background:'+colors[key]+'" title="'+labels[key]+': '+count+' projeto(s)" onclick="return dashOpenStatusMonthAudit(\''+jsQuote(item.mes)+'\',\''+key+'\')"><span>'+count+'</span></button>';
     }).join('');
     return '<div class="dashx-status-col"><div class="dashx-status-total">'+total+'</div><div class="dashx-status-bar-wrap"><div class="dashx-status-bar" style="--bar-height:'+barHeight+'%">'+segs+'</div></div><div class="dashx-status-name">'+item.mes+'</div></div>';
   }).join('');
-  return '<div class="dashx-chart-card"><div class="dashx-chart-head"><div><div class="dashx-chart-title">Status dos projetos por período '+towerInfoButton('projectRisk')+'</div><div class="dashx-chart-sub">Cada coluna mostra o total do mês e a divisão por status. Clique em um bloco colorido para auditar a lista.</div></div></div><div class="dashx-status-columns">'+rows+'</div><div class="dashx-chart-legend"><span class="dashx-legend-item"><span class="dashx-legend-swatch" style="background:#d9b57e"></span>Em andamento</span><span class="dashx-legend-item"><span class="dashx-legend-swatch" style="background:#6f95c0"></span>Aguardando início</span><span class="dashx-legend-item"><span class="dashx-legend-swatch" style="background:#9b7fc4"></span>Aguardando entrega</span><span class="dashx-legend-item"><span class="dashx-legend-swatch" style="background:#9aa59d"></span>Parado</span><span class="dashx-legend-item"><span class="dashx-legend-swatch" style="background:#b45445"></span>Atrasado</span><span class="dashx-legend-item"><span class="dashx-legend-swatch" style="background:#6d8e72"></span>Concluído</span><span class="dashx-legend-item"><span class="dashx-legend-swatch" style="background:#c96c5f"></span>Cancelado</span><span class="dashx-legend-item"><span class="dashx-legend-swatch" style="background:#dfe7de"></span>Outros</span></div></div>';
+  return '<div class="dashx-chart-card dashx-status-card"><div class="dashx-chart-head"><div><div class="dashx-chart-title">Status dos projetos por período '+towerInfoButton('projectRisk')+'</div><div class="dashx-chart-sub">Distribuição mensal de janeiro a junho por status operacional. Clique em um bloco colorido para auditar a lista.</div></div></div><div class="dashx-status-columns">'+rows+'</div><div class="dashx-chart-legend"><span class="dashx-legend-item"><span class="dashx-legend-swatch" style="background:#F2B86B"></span>Em andamento</span><span class="dashx-legend-item"><span class="dashx-legend-swatch" style="background:#4F83C4"></span>Aguardando início</span><span class="dashx-legend-item"><span class="dashx-legend-swatch" style="background:#8B6BC8"></span>Aguardando entrega</span><span class="dashx-legend-item"><span class="dashx-legend-swatch" style="background:#AEB8B1"></span>Parado</span><span class="dashx-legend-item"><span class="dashx-legend-swatch" style="background:#2F6F4F"></span>Concluído</span><span class="dashx-legend-item"><span class="dashx-legend-swatch" style="background:#D86158"></span>Atrasado</span></div></div>';
 }
 function dashRenderActionNow(analyses, operation) {
   var criticos = (analyses || []).filter(function(a){ return a.actionToday || a.risco; }).sort(function(a, b){
