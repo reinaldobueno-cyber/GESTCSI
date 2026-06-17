@@ -1576,7 +1576,7 @@ function inventoryRowFromNormalized_(mapping, normalized, status, errorMessage) 
     progresso: resumo.progresso || 0,
     data_ultima_atualizacao: resumo.data_ultima_atualizacao || '',
     dias_sem_atualizacao: diffDaysFromIso_(resumo.data_ultima_atualizacao),
-    clickup_json: normalized ? JSON.stringify(normalized) : '',
+    clickup_json: normalized ? buildSheetSafeClickUpJson_(normalized) : '',
     ultima_sync_clickup: new Date(),
     sync_status_clickup: status || '',
     sync_error_clickup: errorMessage || ''
@@ -4172,7 +4172,7 @@ function writeProjectSummaryToMonthlySheet_(mapping, normalized) {
   values.link_projeto = normalized.project_url || '';
   values.view_id = normalized.view_id || '';
   values.list_id = normalized.list_id || '';
-  values.clickup_json = JSON.stringify(normalized);
+  values.clickup_json = buildSheetSafeClickUpJson_(normalized);
   values.ultima_sync_clickup = new Date();
   values.sync_status_clickup = 'OK';
   values.sync_error_clickup = '';
@@ -4703,6 +4703,83 @@ function setUserEnabled_(params) {
   var col = found.header.indexOf('enabled') + 1;
   found.sheet.getRange(found.row, col).setValue(enabled ? 'TRUE' : 'FALSE');
   return { ok: true, username: username, enabled: enabled };
+}
+
+function buildSheetSafeClickUpJson_(normalized) {
+  var full = JSON.stringify(normalized || {});
+  if (full.length <= 45000) return full;
+
+  function compactItem_(item) {
+    item = item || {};
+    var out = {
+      id: String(item.id || ''),
+      tipo: sanitizeText_(item.tipo || ''),
+      nome: sanitizeText_(item.nome || ''),
+      fase_nome: sanitizeText_(item.fase_nome || ''),
+      status_original: sanitizeText_(item.status_original || ''),
+      custom_item_id: String(item.custom_item_id || ''),
+      custom_item_name: sanitizeText_(item.custom_item_name || ''),
+      task_url: sanitizeText_(item.task_url || ''),
+      date_closed: sanitizeText_(item.date_closed || ''),
+      updated_at: sanitizeText_(item.updated_at || ''),
+      due_date: sanitizeText_(item.due_date || '')
+    };
+    if (item.concluido !== undefined) out.concluido = !!item.concluido;
+    if (item.concluida !== undefined) out.concluida = !!item.concluida;
+    return out;
+  }
+
+  var compact = {
+    project_key: normalized && normalized.project_key || '',
+    cliente: normalized && normalized.cliente || '',
+    mes: normalized && normalized.mes || '',
+    consultor: normalized && normalized.consultor || '',
+    project_url: normalized && normalized.project_url || '',
+    view_id: normalized && normalized.view_id || '',
+    list_id: normalized && normalized.list_id || '',
+    synced_at: normalized && normalized.synced_at || new Date().toISOString(),
+    compactado: true,
+    compactado_motivo: 'JSON completo excedeu o limite de caracteres por celula da planilha.',
+    fases: (normalized && normalized.fases || []).map(function(phase) {
+      return {
+        tipo: 'fase',
+        id: String(phase && phase.id || ''),
+        nome: sanitizeText_(phase && phase.nome || ''),
+        ordem: phase && phase.ordem || 0,
+        status_original: sanitizeText_(phase && phase.status_original || ''),
+        tasks_concluidas: phase && phase.tasks_concluidas || 0,
+        tasks_pendentes: phase && phase.tasks_pendentes || 0,
+        marcos_concluidos: phase && phase.marcos_concluidos || 0,
+        marcos_pendentes: phase && phase.marcos_pendentes || 0,
+        tasks_total: phase && phase.tasks_total || 0,
+        marcos_total: phase && phase.marcos_total || 0,
+        total_itens: phase && phase.total_itens || 0,
+        progresso: phase && phase.progresso || 0
+      };
+    }),
+    tasks: (normalized && normalized.tasks || []).map(compactItem_),
+    marcos: (normalized && normalized.marcos || []).map(compactItem_),
+    resumo: normalized && normalized.resumo || {},
+    clickup_payload: normalized && normalized.clickup_payload || {}
+  };
+
+  var compactJson = JSON.stringify(compact);
+  if (compactJson.length <= 45000) return compactJson;
+
+  delete compact.tasks;
+  compact.tasks_omitidas = normalized && normalized.tasks ? normalized.tasks.length : 0;
+  compactJson = JSON.stringify(compact);
+  if (compactJson.length <= 45000) return compactJson;
+
+  delete compact.marcos;
+  compact.marcos_omitidos = normalized && normalized.marcos ? normalized.marcos.length : 0;
+  compactJson = JSON.stringify(compact);
+  if (compactJson.length <= 45000) return compactJson;
+
+  compact.fases = [];
+  compact.fases_omitidas = normalized && normalized.fases ? normalized.fases.length : 0;
+  compactJson = JSON.stringify(compact);
+  return compactJson.length <= 45000 ? compactJson : compactJson.slice(0, 44900);
 }
 
 function setUserSeniority_(params) {
