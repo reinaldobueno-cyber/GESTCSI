@@ -7834,8 +7834,8 @@ function dashSetHealthView(view) {
 }
 function dashSyncErrorResolution(detail,project) {
   var text=normalizarTextoProjeto(detail||'');
-  if(text.indexOf('limite maximo')>=0&&text.indexOf('50000')>=0)return '1. Abra o projeto. 2. Reduza textos/listas muito extensos no ClickUp. 3. Clique em Sync ClickUp novamente.';
-  if(text.indexOf('folder id invalid')>=0||text.indexOf('input 011')>=0)return '1. Abra o projeto. 2. Confirme a pasta/lista correta no ClickUp. 3. Corrija o link ou ID no cadastro. 4. Execute Sync ClickUp.';
+  if(text.indexOf('limite maximo')>=0&&text.indexOf('50000')>=0)return '1. Não é um erro de texto do ClickUp. 2. Atualize o Apps Script para salvar o resumo compacto. 3. Execute Sync ClickUp novamente.';
+  if(text.indexOf('folder id invalid')>=0||text.indexOf('input 011')>=0)return '1. Abra o cadastro/controle do projeto. 2. Confirme se o link ou ID aponta para a lista/pasta correta no ClickUp. 3. Corrija o link ou ID no controle. 4. Execute Sync ClickUp.';
   if(text.indexOf('list id')>=0&&text.indexOf('invalid')>=0)return '1. Abra o projeto. 2. Copie o link da lista correta no ClickUp. 3. Atualize o cadastro. 4. Execute Sync ClickUp.';
   if(text.indexOf('unauthorized')>=0||text.indexOf('401')>=0||text.indexOf('token')>=0)return '1. Renove o token do ClickUp no Apps Script. 2. Execute Sync ClickUp novamente.';
   if(text.indexOf('rate limit')>=0||text.indexOf('429')>=0)return '1. Aguarde 10 minutos. 2. Execute Sync ClickUp novamente.';
