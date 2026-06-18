@@ -5376,6 +5376,15 @@ function fechamentoLoad(force) {
     if (!resp || resp.ok === false || !Array.isArray(resp.marcos)) {
       throw new Error('Fechamento ainda não está disponível no Apps Script publicado.');
     }
+    if (!resp.marcos.length && FECHAMENTO_MARCOS.length) {
+      FECHAMENTO_META = Object.assign({}, resp, {
+        error: 'Leitura retornou vazia. Mantendo a última base válida para não zerar o fechamento.'
+      });
+      FECHAMENTO_LOADING = false;
+      initFechamento();
+      initBonus();
+      return resp;
+    }
     FECHAMENTO_MARCOS = fechamentoNormalizeRows(resp.marcos);
     FECHAMENTO_META = resp;
     FECHAMENTO_LOADED = true;
