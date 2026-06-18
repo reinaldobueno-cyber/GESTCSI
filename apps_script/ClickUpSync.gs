@@ -1991,6 +1991,16 @@ function parseJsonArray_(value) {
   }
 }
 
+function parseJsonObject_(value) {
+  if (value && typeof value === 'object' && !Array.isArray(value)) return value;
+  try {
+    var parsed = JSON.parse(String(value || '{}'));
+    return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed : null;
+  } catch (error) {
+    return null;
+  }
+}
+
 function parseLatestClickUpTaskComment_(response) {
     var comments = response && response.comments || [];
     if (!comments.length) return { text: '', user: '' };
@@ -2077,7 +2087,7 @@ function startClickUpMilestoneClosingBackground_(params) {
     props.deleteProperty('CLICKUP_CLOSED_INCREMENTAL_SINCE');
   }
   if (props.getProperty('CLICKUP_MILESTONE_CLOSING_ACTIVE') === '1') {
-    props.setProperty('CLICKUP_MILESTONE_CLOSING_PHASE', forceHistory ? 'projects' : 'recent');
+    props.setProperty('CLICKUP_MILESTONE_CLOSING_PHASE', forceHistory ? 'monthly' : 'recent');
     if (forceHistory) {
       props.setProperty('CLICKUP_MILESTONE_CLOSING_OFFSET', '0');
       props.setProperty('CLICKUP_MILESTONE_CLOSING_PROCESSED', '0');
@@ -2097,7 +2107,7 @@ function startClickUpMilestoneClosingBackground_(params) {
   props.setProperty('CLICKUP_MILESTONE_CLOSING_PROCESSED', '0');
   props.setProperty('CLICKUP_MILESTONE_CLOSING_ERRORS', '0');
   props.setProperty('CLICKUP_MILESTONE_CLOSING_DETECTED', '0');
-  props.setProperty('CLICKUP_MILESTONE_CLOSING_PHASE', forceHistory ? 'projects' : 'recent');
+  props.setProperty('CLICKUP_MILESTONE_CLOSING_PHASE', forceHistory ? 'monthly' : 'recent');
   props.setProperty('CLICKUP_MILESTONE_CLOSING_STARTED_AT', new Date().toISOString());
   props.deleteProperty('CLICKUP_MILESTONE_CLOSING_ERROR');
   if (forceHistory || clickUpMilestoneClosingDistinctMonths_().length <= 1) {
@@ -2198,6 +2208,20 @@ function continueClickUpMilestoneClosingBackgroundWorker_() {
     scheduleClickUpMilestoneClosingBackground_(5000);
     return;
   }
+  if (phase === 'monthly') {
+    var monthly = syncClickUpMilestoneClosingFromMonthlySheets_();
+    props.setProperty('CLICKUP_MILESTONE_CLOSING_DETECTED', String(
+      toInt_(props.getProperty('CLICKUP_MILESTONE_CLOSING_DETECTED'), 0) + Number(monthly.detected || 0)
+    ));
+    props.setProperty('CLICKUP_MILESTONE_CLOSING_ERRORS', String(
+      toInt_(props.getProperty('CLICKUP_MILESTONE_CLOSING_ERRORS'), 0) + Number(monthly.errors || 0)
+    ));
+    props.setProperty('CLICKUP_MILESTONE_CLOSING_PHASE', 'projects');
+    props.setProperty('CLICKUP_MILESTONE_CLOSING_UPDATED_AT', new Date().toISOString());
+    if (monthly.last_error) props.setProperty('CLICKUP_MILESTONE_CLOSING_ERROR', monthly.last_error);
+    scheduleClickUpMilestoneClosingBackground_(5000);
+    return;
+  }
   var offset = toInt_(props.getProperty('CLICKUP_MILESTONE_CLOSING_OFFSET'), 0);
   var result = syncClickUpMilestoneClosingBatch_(offset, 10);
   var processed = toInt_(props.getProperty('CLICKUP_MILESTONE_CLOSING_PROCESSED'), 0) + result.processed;
@@ -2279,6 +2303,54 @@ function syncClickUpMilestoneClosingBatch_(offset, limit) {
     next_offset: offset + batch.length,
     done: reachedEnd
   };
+}
+
+function syncClickUpMilestoneClosingFromMonthlySheets_() {
+  var sheet = getClickUpMilestoneClosingSheet_();
+  var headers = getClickUpMilestoneClosingHeaders_();
+  var current = loadClickUpMilestoneClosingCurrent_(sheet);
+  var detected = 0;
+  var projects = 0;
+  var errors = 0;
+  var lastError = '';
+
+  MONTHS.forEach(function(month) {
+    try {
+      getMonthlyProjectsFromSheet_(month).forEach(function(project) {
+        var payload = parseJsonObject_(project.clickup_json);
+        if (!payload || !Array.isArray(payload.marcos) || !payload.marcos.length) return;
+        var normalized = payload;
+        normalized.cliente = sanitizeText_(normalized.cliente) || project.cliente;
+        normalized.consultor = sanitizeText_(normalized.consultor) || project.consultor;
+        var mapping = {
+          enabled: true,
+          mes: month,
+          cliente: project.cliente,
+          project_key: sanitizeText_(payload.project_key) || buildProjectKey_(month, project.cliente),
+          project_url: sanitizeText_(payload.project_url) || sanitizeText_(project.projeto_link || project.link_projeto),
+          view_id: sanitizeText_(payload.view_id) || normalizeClickUpId_(project.view_id),
+          list_id: sanitizeText_(payload.list_id) || normalizeClickUpId_(project.list_id),
+          folder_id: sanitizeText_(payload.folder_id || ''),
+          space_id: sanitizeText_(payload.space_id || ''),
+          consultor: project.consultor
+        };
+        upsertClickUpMilestoneClosing_(mapping, normalized, {
+          current: current,
+          defer_write: true,
+          fetch_comments: false,
+          authoritative: false,
+          validation_comments_only: true
+        });
+        detected += payload.marcos.length;
+        projects += 1;
+      });
+    } catch (error) {
+      errors += 1;
+      lastError = 'Recuperacao mensal ' + month + ': ' + simplifyErrorMessage_(error);
+    }
+  });
+  writeClickUpMilestoneClosingCurrent_(sheet, headers, current);
+  return { detected: detected, projects: projects, errors: errors, last_error: lastError };
 }
 
 function loadClickUpMilestoneClosingMappings_() {
