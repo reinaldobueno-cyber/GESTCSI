@@ -5277,8 +5277,17 @@ function fechamentoNormalizeRows(rows) {
   });
 }
 function fechamentoIsProjectClosing(item) {
+  if (String(item && item.fechamento_projeto || '').toLowerCase() === 'sim') return true;
   var type = fechamentoSearchKey(item && item.item_tipo);
-  return type === 'entrega de projeto' || type === 'fechamento de projeto';
+  var delivery = String(item && item.marcador_entrega || '').toLowerCase() === 'sim' ||
+    type === 'entrega de projeto' || type === 'fechamento de projeto';
+  return delivery && item && item.situacao === 'aprovado';
+}
+function fechamentoJsonItemAprovaProjeto(item) {
+  var marker = fechamentoSearchKey(item && (item.custom_item_name || item.item_tipo_clickup || item.item_tipo || item.tipo_custom));
+  var status = fechamentoSearchKey(item && (item.status_original || item.status || item.status_atual));
+  return (marker === 'entrega' || marker === 'entrega de projeto') &&
+    (status.indexOf('aprovar') >= 0 || status.indexOf('aprovad') >= 0);
 }
 function projetoTemMarcadorEntregaFechamento(p) {
   var projectKey = String((p && p.project_key) || '').trim();
@@ -5291,8 +5300,7 @@ function projetoTemMarcadorEntregaFechamento(p) {
   if (hasClosingRow) return true;
   var payload = parseJsonSeguro((p && p.clickup_json) || '') || {};
   return (Array.isArray(payload.marcos) ? payload.marcos : []).some(function(item) {
-    var marker = fechamentoSearchKey(item && (item.custom_item_name || item.item_tipo_clickup || item.item_tipo || item.tipo_custom));
-    return marker === 'entrega' || marker === 'entrega de projeto';
+    return fechamentoJsonItemAprovaProjeto(item);
   });
 }
 function fechamentoApplyProjectStatuses() {
@@ -5603,15 +5611,15 @@ function initFechamento() {
   var syncNote = bg.active && bg.phase !== 'disabled'
     ? '<div class="dashx-focus-note" style="margin-bottom:12px"><strong>Leitura ClickUp em andamento:</strong> '+syncPhaseLabel+', '+Number(bg.detected || 0)+' marcos detectados e '+Number(bg.errors || 0)+' erro(s).</div>'
     : '';
-  box.innerHTML = '<div class="closing-head"><div><div class="closing-title">Fechamento de entregas</div><div class="closing-sub">Marcos aprovados geram R$ 30. O item marcado como “Entrega” no ClickUp, quando aprovado a partir de 15/06/2026, gera R$ 80 e formaliza a conclusão da implantação.</div></div>'+
-    '</div><div class="dashx-inline-note" style="margin-bottom:12px"><strong>Fluxo recomendado:</strong> 1. Finalize a implantação. 2. O projeto entra em Aguardando entrega. 3. Localize no ClickUp o item com marcador “Entrega”. 4. Após entregar e validar com o cliente, mova esse item para Aprovado Gestão. 5. O projeto passa para Concluído e o bônus de R$ 80 entra no fechamento. Para projetos antigos, valide um por um; não há pagamento retroativo automático.</div>'+error+syncNote+
+  box.innerHTML = '<div class="closing-head"><div><div class="closing-title">Fechamento de marcos</div><div class="closing-sub">Marcos aprovados geram R$ 30. O fechamento de projeto é tratado separadamente: só considera item com marcador “Entrega” e status APROVAR/APROVADO.</div></div>'+
+    '</div><div class="dashx-inline-note" style="margin-bottom:12px"><strong>Fluxo recomendado:</strong> 1. Finalize a implantação. 2. O projeto entra em Aguardando entrega. 3. Localize no ClickUp o item com marcador “Entrega”. 4. Após entregar e validar com o cliente, mova esse item para APROVAR/APROVADO. 5. O projeto passa para Concluído e o bônus de R$ 80 entra no fechamento de projeto. Para projetos antigos, valide um por um; não há pagamento retroativo automático.</div>'+error+syncNote+
     '<div class="closing-filter-block"><div class="closing-filter-label">Mês em que entrou em Closed <span style="text-transform:none;letter-spacing:0;font-weight:700">(clique novamente no mês selecionado para ver o geral)</span></div>'+monthChips+
     '<div class="closing-filter-label" style="margin-top:14px">Consultores</div><div class="closing-filter-chips">'+consultantChips+'</div>'+
     '<div class="closing-filter-label" style="margin-top:14px">Validação técnica</div><div class="closing-filter-chips">'+statusChips+'</div>'+
     '<div class="closing-filter-label" style="margin-top:14px">Filtrar cliente</div><input id="fechamento-client-search" class="closing-client-search" type="search" value="'+escapeHtml(FECHAMENTO_FILTER.projetoBusca || '')+'" placeholder="Digite o nome do cliente..." oninput="fechamentoSetProjectSearch(this.value)">'+
     (AUTH_STATE.user && AUTH_STATE.user.role === 'admin' ? '<div class="closing-project-meta" style="margin-top:12px">Closed atualiza a fila geral compartilhada. Reprovados e Aprovados consultam somente a validação e os comentários do mês selecionado.</div><div class="closing-filter-footer" style="gap:8px;flex-wrap:wrap"><button class="btn-syncall" onclick="return fechamentoStartSync(this)">Atualizar Closed</button><button class="btn-syncall" onclick="return fechamentoSyncRejected(this)">Buscar Reprovados</button><button class="btn-syncall" onclick="return fechamentoSyncApproved(this)">Buscar Aprovados</button></div>' : '')+
     '</div>'+
-    '<div class="closing-kpis"><div class="closing-kpi"><span>Entregas no recorte</span><strong>'+list.length+'</strong></div><div class="closing-kpi"><span>Aguardando validação</span><strong>'+waiting+'</strong></div><div class="closing-kpi"><span>Aprovados / Reprovados</span><strong>'+approved+' / '+rejected+'</strong></div><div class="closing-kpi warn"><span>Conferir responsável</span><strong>'+portfolioMismatch+'</strong></div><div class="closing-kpi"><span>Bonificação aprovada</span><strong>'+fechamentoMoney(bonus)+'</strong></div></div>'+
+    '<div class="closing-kpis"><div class="closing-kpi"><span>Marcos no recorte</span><strong>'+list.length+'</strong></div><div class="closing-kpi"><span>Aguardando validação</span><strong>'+waiting+'</strong></div><div class="closing-kpi"><span>Aprovados / Reprovados</span><strong>'+approved+' / '+rejected+'</strong></div><div class="closing-kpi warn"><span>Conferir responsável</span><strong>'+portfolioMismatch+'</strong></div><div class="closing-kpi"><span>Bonificação aprovada</span><strong>'+fechamentoMoney(bonus)+'</strong></div></div>'+
     consultantCards;
 }
 window.fechamentoLoad = fechamentoLoad;
@@ -5803,7 +5811,7 @@ function bonusMilestoneDetails(person) {
   var rows=person.milestoneRows.map(function(item){
     return '<tr><td>'+(item.validation_at?escapeHtml(formatarDataHoraProjeto(item.validation_at)):'-')+'</td><td><strong>'+escapeHtml(item.projeto||'-')+'</strong></td><td>'+escapeHtml(item.item_tipo||'Marco')+'</td><td>'+escapeHtml(item.marco||'-')+'</td><td>'+escapeHtml(item.justificativa||'-')+'</td><td><strong>'+fechamentoMoney(item.valor_bonus||30)+'</strong></td></tr>';
   }).join('');
-  return rows?'<div class="dashx-table-wrap"><table class="dashx-table"><thead><tr><th>Aprovado em</th><th>Projeto</th><th>Tipo</th><th>Entrega</th><th>Coment&aacute;rio</th><th>Valor</th></tr></thead><tbody>'+rows+'</tbody></table></div>':'<div class="bonus-empty">Nenhuma entrega aprovada neste m&ecirc;s.</div>';
+  return rows?'<div class="dashx-table-wrap"><table class="dashx-table"><thead><tr><th>Aprovado em</th><th>Projeto</th><th>Tipo</th><th>Marco</th><th>Coment&aacute;rio</th><th>Valor</th></tr></thead><tbody>'+rows+'</tbody></table></div>':'<div class="bonus-empty">Nenhum marco aprovado neste m&ecirc;s.</div>';
 }
 function bonusRejectedDetails(person) {
   var rows=person.rejectedRows.map(function(item){

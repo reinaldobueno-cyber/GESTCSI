@@ -1843,6 +1843,9 @@ function upsertClickUpMilestoneClosing_(mapping, normalized, options) {
     var status = sanitizeText_(milestone.status_original);
     var hasClosedDate = !!sanitizeText_(milestone.date_closed);
     var situation = clickUpMilestoneSituation_(status);
+    var hasDeliveryMarker = isProjectClosingMilestone_(milestone);
+    var isProjectClosing = hasDeliveryMarker && isProjectClosingApprovalStatus_(status);
+    if (isProjectClosing) situation = 'aprovado';
     var recoveredClosedHistory = false;
     if (situation === 'outro' && hasClosedDate && options.preserve_closed_history) {
       situation = 'aguardando';
@@ -1865,7 +1868,6 @@ function upsertClickUpMilestoneClosing_(mapping, normalized, options) {
       validationAt = sanitizeText_(milestone.updated_at) || now;
     }
     var isValidation = situation === 'aprovado' || situation === 'reprovado';
-    var isProjectClosing = isProjectClosingMilestone_(milestone);
     var clearComment = options.fetch_comments !== false &&
       options.authoritative &&
       (!options.validation_comments_only || isValidation);
@@ -1886,7 +1888,7 @@ function upsertClickUpMilestoneClosing_(mapping, normalized, options) {
     }
     current[taskId] = {
       task_id: taskId,
-      item_tipo: isProjectClosing ? 'Entrega de projeto' : 'Marco',
+      item_tipo: 'Marco',
       project_key: mapping.project_key || '',
       projeto: mapping.cliente || normalized.cliente || '',
       consultor: clickUpMilestoneConsultant_(milestone.responsaveis || normalized.consultor || mapping.consultor),
@@ -1903,13 +1905,15 @@ function upsertClickUpMilestoneClosing_(mapping, normalized, options) {
       valor_bonus: situation === 'aprovado'
         ? (isProjectClosing && String(validationAt || '').slice(0, 10) >= CLICKUP_PROJECT_CLOSING_BONUS_START
           ? CLICKUP_PROJECT_CLOSING_BONUS_VALUE
-          : (isProjectClosing ? 0 : CLICKUP_MILESTONE_BONUS_VALUE))
+          : (hasDeliveryMarker ? 0 : CLICKUP_MILESTONE_BONUS_VALUE))
         : 0,
       link: milestone.task_url || ('https://app.clickup.com/t/' + taskId),
       responsaveis: milestone.responsaveis || '',
       updated_at: milestone.updated_at || now,
       sincronizado_em: now,
-      status_history_json: JSON.stringify(history)
+      status_history_json: JSON.stringify(history),
+      marcador_entrega: hasDeliveryMarker ? 'sim' : '',
+      fechamento_projeto: isProjectClosing ? 'sim' : ''
     };
   });
   if (!options.defer_write) writeClickUpMilestoneClosingCurrent_(sheet, headers, current);
@@ -2038,6 +2042,11 @@ function parseLatestClickUpTaskComment_(response) {
 
 function isProjectClosingMilestone_(milestone) {
   return isProjectDeliveryTask_(milestone);
+}
+
+function isProjectClosingApprovalStatus_(status) {
+  var key = normalizeKey_(status);
+  return key.indexOf('APROVAR') >= 0 || (key.indexOf('APROVAD') >= 0 && key.indexOf('GESTAO') >= 0);
 }
 
 function fetchLatestClickUpTaskComment_(taskId) {
@@ -4010,7 +4019,7 @@ function getClickUpMilestoneClosingHeaders_() {
     'status_atual', 'situacao', 'closed_at', 'mes_fechamento',
     'validation_at', 'mes_validacao', 'justificativa', 'justificativa_por',
     'valor_bonus', 'link', 'responsaveis', 'updated_at', 'sincronizado_em',
-    'status_history_json', 'item_tipo'
+    'status_history_json', 'item_tipo', 'marcador_entrega', 'fechamento_projeto'
   ];
 }
 
