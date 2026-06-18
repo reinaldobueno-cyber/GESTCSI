@@ -5593,6 +5593,8 @@ function initFechamento() {
   var bg = FECHAMENTO_META.background_sync || {};
   var syncPhaseLabel = bg.phase === 'recent'
     ? 'lendo alterações recentes'
+    : bg.phase === 'monthly'
+      ? 'recuperando histórico salvo nas abas mensais'
     : bg.phase === 'history'
       ? 'conferindo histórico geral de Closed'
       : bg.phase === 'projects'
