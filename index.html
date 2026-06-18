@@ -5594,7 +5594,7 @@ function initFechamento() {
   var syncPhaseLabel = bg.phase === 'recent'
     ? 'lendo alterações recentes'
     : bg.phase === 'history'
-      ? 'reconstruindo histórico de Closed'
+      ? 'conferindo histórico geral de Closed'
       : bg.phase === 'projects'
         ? (Number(bg.processed || 0)+' de '+Number(bg.total || 0)+' projetos processados')
         : 'preparando leitura';
