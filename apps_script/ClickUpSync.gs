@@ -69,6 +69,7 @@ function onOpen() {
     .addItem('Sincronizar diárias CMAX do mês atual', 'sincronizarDiariasCmaxMesAtual')
     .addItem('Sincronizar histórico de diárias CMAX', 'sincronizarHistoricoDiariasCmax')
     .addItem('Reconstruir visão rápida de diárias CMAX', 'reconstruirVisaoDiariasCmax')
+    .addItem('Diagnosticar falhas de sync ClickUp', 'diagnosticarFalhasSyncClickUp')
     .addItem('Sincronizar todos habilitados', 'syncAllProjectsTrigger')
     .addItem('Sincronizar primeiro configurado', 'syncPrimeiroProjetoConfigurado')
     .addToUi();
@@ -304,6 +305,177 @@ function syncProjectByKey(projectKey) {
   var mapping = findProjectMapping_(projectKey);
   if (!mapping) throw new Error('Project mapping not found: ' + projectKey);
   return syncProjectMapping_(mapping, { force: true });
+}
+
+function diagnosticarFalhasSyncClickUp() {
+  var mappings = loadProjectMappings_();
+  var rows = [];
+  MONTHS.forEach(function(month) {
+    var sheet;
+    try {
+      sheet = getMonthSheet_(month);
+    } catch (e) {
+      return;
+    }
+    var values = sheet.getDataRange().getValues();
+    if (values.length <= 1) return;
+    var header = normalizeMonthlyHeader_(values[0]);
+    values.slice(1).forEach(function(row, index) {
+      var project = monthlyProjectFromRow_(month, header, row, index + 2);
+      if (!project) return;
+      var syncStatus = sanitizeText_(project.sync_status_clickup);
+      var syncError = sanitizeText_(project.sync_error_clickup);
+      var hasExplicitError = /error|erro|falha/i.test(syncStatus) || !!syncError;
+      var expectsClickUp = /sim/i.test(sanitizeText_(project.clickup)) || !!sanitizeText_(project.link_projeto || project.projeto_link);
+      var hasSummary = String(project.tasks_concluidas || project.tasks_pendentes || project.marcos_concluidos || project.marcos_pendentes || project.fases_total || project.progresso || '').trim() !== '';
+      if (!hasExplicitError && (!expectsClickUp || hasSummary)) return;
+      rows.push(buildClickUpSyncDiagnosticRow_(project, mappings, hasExplicitError ? 'Falha explicita' : 'Sem resumo apos sync'));
+    });
+  });
+
+  var headers = [
+    'mes', 'linha', 'cliente', 'consultor', 'status_projeto', 'tipo',
+    'situacao', 'categoria', 'acao_recomendada',
+    'sync_status', 'sync_error',
+    'clickup', 'link_linha', 'list_id_linha', 'view_id_linha',
+    'config_encontrada', 'config_enabled', 'config_project_key', 'config_cliente',
+    'config_list_id', 'config_view_id', 'config_folder_id', 'config_space_id', 'config_url'
+  ];
+  var sheet = getOrCreateSheet_('CLICKUP_SYNC_DIAGNOSTICO');
+  writeObjectsToSheet_(sheet, rows, headers);
+  return { ok: true, total: rows.length, sheet: sheet.getName() };
+}
+
+function buildClickUpSyncDiagnosticRow_(project, mappings, situacao) {
+  var rowUrl = sanitizeText_(project.link_projeto || project.projeto_link);
+  var rowListId = normalizeClickUpId_(project.list_id) || extractClickUpIdFromUrl_(rowUrl, 'list');
+  var rowViewId = normalizeClickUpId_(project.view_id) || extractClickUpIdFromUrl_(rowUrl, 'view');
+  var match = findDiagnosticMappingForProject_(project, mappings);
+  var detail = sanitizeText_(project.sync_error_clickup || project.sync_status_clickup);
+  var categoryAction = classifyClickUpSyncProblem_(project, match && match.mapping, detail);
+  var mapping = match && match.mapping || null;
+  return {
+    mes: project.mes,
+    linha: project._sheet_row,
+    cliente: project.cliente,
+    consultor: project.consultor,
+    status_projeto: project.status,
+    tipo: project.tipo,
+    situacao: situacao,
+    categoria: categoryAction.categoria,
+    acao_recomendada: categoryAction.acao,
+    sync_status: project.sync_status_clickup,
+    sync_error: project.sync_error_clickup,
+    clickup: project.clickup,
+    link_linha: rowUrl,
+    list_id_linha: rowListId,
+    view_id_linha: rowViewId,
+    config_encontrada: mapping ? (match && match.by || 'sim') : 'nao',
+    config_enabled: mapping ? (mapping.enabled ? 'sim' : 'nao') : '',
+    config_project_key: mapping && mapping.project_key || '',
+    config_cliente: mapping && mapping.cliente || '',
+    config_list_id: mapping && mapping.list_id || '',
+    config_view_id: mapping && mapping.view_id || '',
+    config_folder_id: mapping && mapping.folder_id || '',
+    config_space_id: mapping && mapping.space_id || '',
+    config_url: mapping && mapping.project_url || ''
+  };
+}
+
+function findDiagnosticMappingForProject_(project, mappings) {
+  var rowUrl = sanitizeText_(project && (project.link_projeto || project.projeto_link));
+  var rowListId = normalizeClickUpId_(project && project.list_id) || extractClickUpIdFromUrl_(rowUrl, 'list');
+  var rowViewId = normalizeClickUpId_(project && project.view_id) || extractClickUpIdFromUrl_(rowUrl, 'view');
+  var projectClient = normalizeKey_(project && project.cliente);
+  var projectMonth = sanitizeMonth_(project && project.mes);
+  var exactClient = null;
+  var best = null;
+
+  (mappings || []).some(function(mapping) {
+    if (sanitizeMonth_(mapping && mapping.mes) !== projectMonth) return false;
+    if (projectClient && normalizeKey_(mapping && mapping.cliente) === projectClient) {
+      exactClient = { mapping: mapping, by: 'cliente' };
+      return true;
+    }
+    return false;
+  });
+  if (exactClient) return exactClient;
+
+  (mappings || []).some(function(mapping) {
+    var mapUrl = sanitizeText_(mapping && mapping.project_url);
+    var mapListId = normalizeClickUpId_(mapping && mapping.list_id) || extractClickUpIdFromUrl_(mapUrl, 'list');
+    var mapViewId = normalizeClickUpId_(mapping && mapping.view_id) || extractClickUpIdFromUrl_(mapUrl, 'view');
+    if (rowListId && mapListId && rowListId === mapListId) {
+      best = { mapping: mapping, by: 'list_id' };
+      return true;
+    }
+    if (rowViewId && mapViewId && rowViewId === mapViewId) {
+      best = { mapping: mapping, by: 'view_id' };
+      return true;
+    }
+    if (rowUrl && mapUrl && rowUrl === mapUrl) {
+      best = { mapping: mapping, by: 'link' };
+      return true;
+    }
+    return false;
+  });
+  return best;
+}
+
+function classifyClickUpSyncProblem_(project, mapping, detail) {
+  var text = normalizeKey_(detail);
+  if (!mapping) {
+    return {
+      categoria: 'Sem configuracao no CLICKUP_CONFIG',
+      acao: 'Incluir ou corrigir o projeto no CLICKUP_CONFIG com mes, cliente, enabled=TRUE e link/list_id/view_id correto.'
+    };
+  }
+  if (!mapping.enabled) {
+    return {
+      categoria: 'Configuracao desabilitada',
+      acao: 'Alterar enabled para TRUE no CLICKUP_CONFIG e rodar o Sync ClickUp novamente.'
+    };
+  }
+  if (!(mapping.list_id || mapping.view_id || mapping.folder_id || mapping.space_id || mapping.project_url)) {
+    return {
+      categoria: 'Configuracao sem ID/link',
+      acao: 'Preencher project_url, list_id ou view_id no CLICKUP_CONFIG.'
+    };
+  }
+  if (text.indexOf('50000') >= 0 || text.indexOf('LIMITE MAXIMO') >= 0) {
+    return {
+      categoria: 'Limite de celula da planilha',
+      acao: 'Publicar o Apps Script atualizado com JSON compacto e rodar o Sync ClickUp novamente.'
+    };
+  }
+  if (text.indexOf('FOLDER ID INVALID') >= 0 || text.indexOf('INPUT 011') >= 0) {
+    return {
+      categoria: 'Folder/lista invalido no cadastro',
+      acao: 'Trocar folder_id/list_id/view_id ou project_url por um link valido da lista/view do projeto no ClickUp.'
+    };
+  }
+  if (text.indexOf('LIST ID INVALID') >= 0 || text.indexOf('VIEW ID INVALID') >= 0) {
+    return {
+      categoria: 'ID ClickUp invalido',
+      acao: 'Copiar novamente o link da lista/view correta e atualizar o CLICKUP_CONFIG.'
+    };
+  }
+  if (text.indexOf('CLIENT ROW NOT FOUND') >= 0) {
+    return {
+      categoria: 'Linha mensal nao localizada',
+      acao: 'Publicar o Apps Script atualizado com busca por link/list_id/view_id e rodar o Sync novamente.'
+    };
+  }
+  if (text.indexOf('TOKEN') >= 0 || text.indexOf('401') >= 0) {
+    return {
+      categoria: 'Token ClickUp',
+      acao: 'Renovar CLICKUP_TOKEN nas propriedades do Apps Script.'
+    };
+  }
+  return {
+    categoria: detail ? 'Erro ClickUp/sync nao classificado' : 'Sem resumo gravado',
+    acao: 'Conferir CLICKUP_CONFIG, publicar o Apps Script atualizado e rodar Sync ClickUp novamente. Se persistir, abrir o erro bruto.'
+  };
 }
 
 function processDirtyQueue(options) {
