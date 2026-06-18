@@ -1910,6 +1910,7 @@ function upsertClickUpMilestoneClosing_(mapping, normalized, options) {
 }
 
 function loadClickUpMilestoneClosingCurrent_(sheet) {
+  ensureHeaders_(sheet, getClickUpMilestoneClosingHeaders_());
   var values = sheet.getDataRange().getValues();
   var current = {};
   if (values.length > 1) {
@@ -1922,6 +1923,7 @@ function loadClickUpMilestoneClosingCurrent_(sheet) {
 }
 
 function writeClickUpMilestoneClosingCurrent_(sheet, headers, current) {
+  headers = headers && headers.length ? headers : getClickUpMilestoneClosingHeaders_();
   writeObjectsToSheet_(sheet, Object.keys(current).map(function(id) { return current[id]; }), headers);
   sheet.setFrozenRows(1);
 }
@@ -5639,6 +5641,8 @@ function deleteProjectFollowup_(params) {
 }
 
 function ensureHeaders_(sheet, headers) {
+  headers = Array.isArray(headers) ? headers.filter(function(header) { return sanitizeText_(header); }) : [];
+  if (!headers.length) throw new Error('Cabecalho da planilha nao informado.');
   if (!sheet.getLastRow()) {
     sheet.getRange(1, 1, 1, headers.length).setValues([headers]);
     return;
@@ -5650,6 +5654,8 @@ function ensureHeaders_(sheet, headers) {
 }
 
 function writeObjectsToSheet_(sheet, objects, headers) {
+  headers = Array.isArray(headers) ? headers.filter(function(header) { return sanitizeText_(header); }) : [];
+  if (!headers.length) throw new Error('Cabecalho da planilha nao informado.');
   sheet.clearContents();
   ensureHeaders_(sheet, headers);
   if (!objects.length) return;
