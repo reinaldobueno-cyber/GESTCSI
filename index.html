@@ -7765,6 +7765,16 @@ function dashProjectSyncStatus(p) {
 function dashProjectSyncError(p) {
   return String(dashValue(p, ['sync_error_clickup','sync_error']) || '').trim();
 }
+function dashProjectExpectsClickUpMonitoring(p) {
+  var clickup = normalizarTextoProjeto(dashValue(p, ['clickup','projeto_clickup','clickup_criado']) || '');
+  if (clickup === 'nao' || dashStatusKey(p && p.status) === 'cancelado') return false;
+  return clickup === 'sim' ||
+    !!dashProjectLink(p) ||
+    dashFieldPresent(p, ['list_id','view_id']) ||
+    dashHasRawValue((p && p.clickup_json) || '') ||
+    dashHasRawValue(dashProjectSyncStatus(p)) ||
+    dashHasRawValue(dashProjectSyncError(p));
+}
 function dashProjectStageInfo(p) {
   var vendaDate = dashParseDate(p && p.data_venda);
   var kickDate = dashParseDate(p && p.data_kick);
@@ -8239,9 +8249,7 @@ function dashDataHealth(list) {
   var completude = expected ? Math.round((filled / expected) * 100) : null;
   var updates = list.map(dashLastUpdateDate).filter(function(d){ return !!d; });
   var syncDates = list.map(dashLastSyncDate).filter(function(d){ return !!d; });
-  var syncCandidates = list.filter(function(p){
-    return dashFieldPresent(p, ['list_id','view_id']) || dashHasRawValue((p && p.clickup_json) || '') || dashHasRawValue(dashProjectSyncStatus(p)) || dashHasRawValue(dashProjectSyncError(p));
-  });
+  var syncCandidates = list.filter(dashProjectExpectsClickUpMonitoring);
   var syncOk = syncCandidates.filter(function(p){
     var d = dashLastSyncDate(p);
     var h = dashHoursSince(d);
