@@ -2077,7 +2077,12 @@ function startClickUpMilestoneClosingBackground_(params) {
     props.deleteProperty('CLICKUP_CLOSED_INCREMENTAL_SINCE');
   }
   if (props.getProperty('CLICKUP_MILESTONE_CLOSING_ACTIVE') === '1') {
-    props.setProperty('CLICKUP_MILESTONE_CLOSING_PHASE', 'recent');
+    props.setProperty('CLICKUP_MILESTONE_CLOSING_PHASE', forceHistory ? 'projects' : 'recent');
+    if (forceHistory) {
+      props.setProperty('CLICKUP_MILESTONE_CLOSING_OFFSET', '0');
+      props.setProperty('CLICKUP_MILESTONE_CLOSING_PROCESSED', '0');
+      props.setProperty('CLICKUP_MILESTONE_CLOSING_TOTAL', String(loadClickUpMilestoneClosingMappings_().length));
+    }
     props.setProperty('CLICKUP_MILESTONE_CLOSING_UPDATED_AT', new Date().toISOString());
     scheduleClickUpMilestoneClosingBackground_(1000);
     return {
@@ -2092,13 +2097,13 @@ function startClickUpMilestoneClosingBackground_(params) {
   props.setProperty('CLICKUP_MILESTONE_CLOSING_PROCESSED', '0');
   props.setProperty('CLICKUP_MILESTONE_CLOSING_ERRORS', '0');
   props.setProperty('CLICKUP_MILESTONE_CLOSING_DETECTED', '0');
-  props.setProperty('CLICKUP_MILESTONE_CLOSING_PHASE', 'recent');
+  props.setProperty('CLICKUP_MILESTONE_CLOSING_PHASE', forceHistory ? 'projects' : 'recent');
   props.setProperty('CLICKUP_MILESTONE_CLOSING_STARTED_AT', new Date().toISOString());
   props.deleteProperty('CLICKUP_MILESTONE_CLOSING_ERROR');
   if (forceHistory || clickUpMilestoneClosingDistinctMonths_().length <= 1) {
     props.deleteProperty('CLICKUP_MILESTONE_HISTORY_REBUILT');
   }
-  props.setProperty('CLICKUP_MILESTONE_CLOSING_TOTAL', '0');
+  props.setProperty('CLICKUP_MILESTONE_CLOSING_TOTAL', forceHistory ? String(loadClickUpMilestoneClosingMappings_().length) : '0');
   props.setProperty('CLICKUP_MILESTONE_CLOSING_UPDATED_AT', new Date().toISOString());
   scheduleClickUpMilestoneClosingBackground_(1000);
   return {
