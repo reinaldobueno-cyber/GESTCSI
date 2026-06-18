@@ -5289,13 +5289,37 @@ function fechamentoJsonItemAprovaProjeto(item) {
   return (marker === 'entrega' || marker === 'entrega de projeto') &&
     (status.indexOf('aprovar') >= 0 || status.indexOf('aprovad') >= 0);
 }
+function fechamentoItemTemMarcadorEntrega(item) {
+  var marker = fechamentoSearchKey(item && (item.custom_item_name || item.item_tipo_clickup || item.item_tipo || item.tipo_custom || item.item_tipo));
+  var flag = String(item && item.marcador_entrega || '').toLowerCase() === 'sim';
+  return flag || marker === 'entrega' || marker === 'entrega de projeto';
+}
+function fechamentoItemPertenceAoProjeto(item, projectKey, projectName) {
+  if (projectKey && String(item && item.project_key || '').trim() === projectKey) return true;
+  return projectName && normalizeClienteKey(item && item.projeto || '') === projectName;
+}
+function projetoTemMarcadorEntregaPendenteFechamento(p) {
+  if (projetoTemMarcadorEntregaFechamento(p)) return false;
+  var projectKey = String((p && p.project_key) || '').trim();
+  var projectName = normalizeClienteKey((p && p.cliente) || '');
+  var hasPendingClosingRow = (FECHAMENTO_MARCOS || []).some(function(item) {
+    return fechamentoItemTemMarcadorEntrega(item) &&
+      item && item.situacao !== 'aprovado' &&
+      item.situacao !== 'reprovado' &&
+      fechamentoItemPertenceAoProjeto(item, projectKey, projectName);
+  });
+  if (hasPendingClosingRow) return true;
+  var payload = parseJsonSeguro((p && p.clickup_json) || '') || {};
+  return (Array.isArray(payload.marcos) ? payload.marcos : []).some(function(item) {
+    return fechamentoItemTemMarcadorEntrega(item) && !fechamentoJsonItemAprovaProjeto(item);
+  });
+}
 function projetoTemMarcadorEntregaFechamento(p) {
   var projectKey = String((p && p.project_key) || '').trim();
   var projectName = normalizeClienteKey((p && p.cliente) || '');
   var hasClosingRow = (FECHAMENTO_MARCOS || []).some(function(item) {
     if (!fechamentoIsProjectClosing(item)) return false;
-    if (projectKey && String(item.project_key || '').trim() === projectKey) return true;
-    return projectName && normalizeClienteKey(item.projeto || '') === projectName;
+    return fechamentoItemPertenceAoProjeto(item, projectKey, projectName);
   });
   if (hasClosingRow) return true;
   var payload = parseJsonSeguro((p && p.clickup_json) || '') || {};
@@ -9170,7 +9194,7 @@ function dashOpenTopKpiAudit(mode) {
   }else if(mode==='delivery'){
     title='Projetos com marcador Entrega aguardando fechamento';
     list=list.filter(function(p){
-      return dashStatusKey(p&&p.status)==='aguardando_entrega' && projetoTemMarcadorEntregaFechamento(p);
+      return dashStatusKey(p&&p.status)==='aguardando_entrega' && projetoTemMarcadorEntregaPendenteFechamento(p);
     });
   }
   var rows=list.map(function(p){
@@ -9492,13 +9516,13 @@ function initDash() {
   var trackedPct = auditable ? Math.round((tracked / auditable) * 100) : null;
   var stale15 = Number(operation.bins['16–30'] || 0) + Number(operation.bins['31–45'] || 0) + Number(operation.bins['45+'] || 0);
   var awaitingDelivery = list.filter(function(p){
-    return dashStatusKey(p && p.status) === 'aguardando_entrega' && projetoTemMarcadorEntregaFechamento(p);
+    return dashStatusKey(p && p.status) === 'aguardando_entrega' && projetoTemMarcadorEntregaPendenteFechamento(p);
   }).length;
   var topCards = '<div class="dashx-top-grid">'+
     dashKpiCard('Projetos 2026', total, 'Somente a carteira identificada como 2026. Clique para listar.', 'good', 'activeProjects', '<span class="dashx-kpi-delta neutral">Recorte fixo 2026</span>', "return dashOpenTopKpiAudit('projects')")+
     dashKpiCard('Com rastreio ClickUp', trackedPct === null ? '-' : dashPct(trackedPct), tracked+' de '+auditable+' projeto(s) auditáveis possuem rastreio técnico. Clique para listar.', dashMetricClass(trackedPct, 70, 90, false), 'aging', '<span class="dashx-kpi-delta neutral">'+untracked+' sem ClickUp</span>', "return dashOpenTopKpiAudit('tracked')")+
     dashKpiCard('ClickUp 15+ dias', stale15, 'Projetos rastreados sem atualização recente no ClickUp. Clique para listar.', stale15 ? 'bad' : 'good', 'aging', '<span class="dashx-kpi-delta neutral">Regra: atualização ClickUp</span>', "return dashOpenTopKpiAudit('stale')")+
-    dashKpiCard('Aguardando entrega', awaitingDelivery, 'Projetos com item marcado como Entrega aguardando validação do fechamento.', awaitingDelivery ? 'warn' : 'good', 'projectRisk', '<span class="dashx-kpi-delta neutral">Fechamento aprovado: R$ 80</span>', "return dashOpenTopKpiAudit('delivery')")+
+    dashKpiCard('Aguardando entrega', awaitingDelivery, 'Projetos com item marcado como Entrega, ainda sem APROVAR/APROVADO.', awaitingDelivery ? 'warn' : 'good', 'projectRisk', '<span class="dashx-kpi-delta neutral">Pendente de aprovação</span>', "return dashOpenTopKpiAudit('delivery')")+
     dashKpiCard('Taxa de 1º treinamento realizado', activeRate === null ? '-' : dashPct(activeRate), activeRate === null ? 'Conversão indisponível.' : 'Conversão da jornada venda → 1º treinamento realizado. Clique para listar.', dashMetricClass(activeRate, 40, 70, false), 'funnel', '<span class="dashx-kpi-delta neutral">Base 2026</span>', "return dashOpenTopKpiAudit('activation')")+
     dashKpiCard('Saúde dos dados', health.completude === null ? '-' : dashPct(health.completude), health.completude === null ? 'Não há base suficiente.' : (health.inconsistencias.length+' projeto(s) com campo essencial ausente. Clique para listar.'), dashMetricClass(health.completude, 70, 90, false), 'dataHealthSummary', '<span class="dashx-kpi-delta neutral">'+health.syncErrors+' falha(s) de sync</span>', "return dashOpenTopKpiAudit('health')")+
   '</div>';
