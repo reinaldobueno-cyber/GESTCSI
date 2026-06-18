@@ -3370,6 +3370,7 @@ body.theme-dark *{
 <button class="snb" onclick="return abrirAcompanhamentosPendentes(this)" title="Abrir acompanhamentos pendentes"><span class="snb-icon">&#128276;</span><span class="snb-label">Acompanhamento</span><span class="snb-badge" id="n-acom" hidden>0</span></button>
 <button class="snb" onclick="goTab('cmax',this)"><span class="snb-icon">&#128197;</span><span class="snb-label">Di&aacute;rias CMAX</span></button>
 <button class="snb" id="nav-fech" onclick="goTab('fech',this)"><span class="snb-icon">&#9989;</span><span class="snb-label">Fechamento</span><span class="snb-badge" id="n-fech" hidden>0</span></button>
+<button class="snb" id="nav-projfech" onclick="goTab('projfech',this)"><span class="snb-icon">&#128221;</span><span class="snb-label">Fech. Projeto</span><span class="snb-badge" id="n-projfech" hidden>0</span></button>
 <button class="snb" onclick="goTab('all',this)"><span class="snb-icon">&#128203;</span><span class="snb-label">Projetos</span><span class="snb-badge" id="n-all" hidden>0</span></button>
 <button class="snb" onclick="goTab('cons',this)"><span class="snb-icon">&#128100;</span><span class="snb-label">Consultores</span></button>
 <button class="snb" onclick="goTab('vend',this)"><span class="snb-icon">&#129309;</span><span class="snb-label">Vendedores</span></button>
@@ -3385,6 +3386,7 @@ body.theme-dark *{
 <div class="page" id="page-acom"><div id="acom-content"></div></div>
 <div class="page" id="page-cmax"><div id="cmax-content"></div></div>
 <div class="page" id="page-fech"><div id="fech-content"></div></div>
+<div class="page" id="page-projfech"><div id="projfech-content"></div></div>
 <div class="page" id="page-bonus"><div id="bonus-content"></div></div>
 <div class="page" id="page-admin"><div id="admin-content"></div></div>
 <div class="page" id="page-all">
@@ -4199,6 +4201,10 @@ function goTab(id, btn) {
   }
   if (id === 'fech') {
     fechamentoLoad(false);
+  }
+  if (id === 'projfech') {
+    fechamentoLoad(false);
+    initProjectClosing();
   }
   if (id === 'bonus') {
     bonusLoad();
@@ -5339,6 +5345,76 @@ function fechamentoApplyProjectStatuses() {
     if (match) project.status = 'Concluído';
   });
 }
+function projectClosingDeliveryItemsFromJson(p) {
+  var payload = parseJsonSeguro((p && p.clickup_json) || '') || {};
+  return (Array.isArray(payload.marcos) ? payload.marcos : []).filter(fechamentoItemTemMarcadorEntrega);
+}
+function projectClosingInfo(p) {
+  var projectKey = String((p && p.project_key) || '').trim();
+  var projectName = normalizeClienteKey((p && p.cliente) || '');
+  var rows = (FECHAMENTO_MARCOS || []).filter(function(item) {
+    return fechamentoItemTemMarcadorEntrega(item) && fechamentoItemPertenceAoProjeto(item, projectKey, projectName);
+  });
+  var jsonItems = projectClosingDeliveryItemsFromJson(p);
+  var approved = rows.some(fechamentoIsProjectClosing) || jsonItems.some(fechamentoJsonItemAprovaProjeto);
+  var pending = !approved && (rows.length || jsonItems.length);
+  var firstRow = rows[0] || null;
+  var firstJson = jsonItems[0] || null;
+  var status = firstRow
+    ? (firstRow.status_atual || firstRow.situacao || '-')
+    : (firstJson ? (firstJson.status_original || firstJson.status || firstJson.status_atual || '-') : '-');
+  return {
+    hasMarker: !!(rows.length || jsonItems.length),
+    approved: !!approved,
+    pending: !!pending,
+    rows: rows,
+    jsonItems: jsonItems,
+    status: status,
+    link: (firstRow && firstRow.link) || (p && p.link) || '',
+    source: rows.length ? 'Fechamento ClickUp' : (jsonItems.length ? 'JSON mensal' : 'Projeto')
+  };
+}
+function projectClosingList() {
+  return ordenarProjetosPainel(projetosVisiveisParaUsuario(Array.isArray(DATA.projetos) ? DATA.projetos.slice() : []).filter(function(p) {
+    return gestaoClickupProjectYear(p) === 2026;
+  })).map(function(p) {
+    var info = projectClosingInfo(p);
+    var statusKey = dashStatusKey(p && p.status);
+    var category = 'fora';
+    if (statusKey === 'aguardando_entrega' && info.pending) category = 'pendente';
+    else if (statusKey === 'aguardando_entrega' && info.approved) category = 'aprovado';
+    else if (statusKey === 'aguardando_entrega' && !info.hasMarker) category = 'sem_marcador';
+    else if (statusKey === 'concluido' && info.approved) category = 'concluido';
+    return {project:p, info:info, category:category};
+  });
+}
+function initProjectClosing() {
+  var box = document.getElementById('projfech-content');
+  var entries = projectClosingList();
+  var pending = entries.filter(function(x){return x.category === 'pendente';});
+  var approved = entries.filter(function(x){return x.category === 'aprovado';});
+  var missing = entries.filter(function(x){return x.category === 'sem_marcador';});
+  var concluded = entries.filter(function(x){return x.category === 'concluido';});
+  var badge = document.getElementById('n-projfech');
+  if (badge) { badge.hidden = pending.length === 0; badge.textContent = pending.length; }
+  if (!box) return;
+  function rows(list) {
+    return list.map(function(entry) {
+      var p = entry.project || {};
+      var info = entry.info || {};
+      var state = entry.category === 'pendente' ? 'Aguardando APROVAR/APROVADO' :
+        entry.category === 'aprovado' ? 'Aprovado para concluir' :
+        entry.category === 'concluido' ? 'Concluído' :
+        'Sem marcador Entrega';
+      return '<tr><td><strong>'+escapeHtml(p.cliente || '-')+'</strong></td><td>'+escapeHtml(p.consultor || '-')+'</td><td>'+escapeHtml(p.status || '-')+'</td><td>'+escapeHtml(info.status || '-')+'</td><td>'+escapeHtml(state)+'</td><td>'+escapeHtml(info.source || '-')+'</td><td>'+dashProjectActionCell(p)+'</td></tr>';
+    }).join('') || '<tr class="empty-row"><td colspan="7">Nenhum projeto nesta regra.</td></tr>';
+  }
+  var table = '<div class="dashx-table-wrap"><table class="dashx-table"><thead><tr><th>Projeto</th><th>Consultor</th><th>Status projeto</th><th>Status item Entrega</th><th>Situação</th><th>Fonte</th><th>Ação</th></tr></thead><tbody>'+rows(pending.concat(approved).concat(missing))+'</tbody></table></div>';
+  box.innerHTML = '<div class="closing-head"><div><div class="closing-title">Fechamento de projeto</div><div class="closing-sub">Controle separado dos marcos. Aqui entram apenas projetos em Aguardando entrega e o item do ClickUp marcado como Entrega.</div></div></div>'+
+    '<div class="dashx-inline-note" style="margin-bottom:12px"><strong>Regra:</strong> pendente quando existe marcador Entrega sem APROVAR/APROVADO. Aprovado para concluir quando o mesmo item está em APROVAR/APROVADO. Isso não altera a validação técnica dos marcos.</div>'+
+    '<div class="closing-kpis"><div class="closing-kpi warn"><span>Pendentes</span><strong>'+pending.length+'</strong></div><div class="closing-kpi"><span>Aprovados para concluir</span><strong>'+approved.length+'</strong></div><div class="closing-kpi"><span>Sem marcador Entrega</span><strong>'+missing.length+'</strong></div><div class="closing-kpi"><span>Concluídos com entrega</span><strong>'+concluded.length+'</strong></div><div class="closing-kpi"><span>Bônus por projeto</span><strong>R$ 80</strong></div></div>'+
+    '<div class="bonus-section"><div class="bonus-section-title">Gerenciador de fechamento de projeto</div>'+table+'</div>';
+}
 function fechamentoProjectFromItem(item) {
   item = item || {};
   var projectKey = String(item.project_key || '').trim();
@@ -5378,6 +5454,7 @@ function fechamentoLoad(force) {
   if (!authTokenParam()) return Promise.resolve(null);
   if (FECHAMENTO_LOADING) {
     initFechamento();
+    initProjectClosing();
     if (force) {
       return new Promise(function(resolve) {
         var attempts = 0;
@@ -5400,10 +5477,12 @@ function fechamentoLoad(force) {
   }
   if (FECHAMENTO_LOADED && !force) {
     initFechamento();
+    initProjectClosing();
     return Promise.resolve(null);
   }
   FECHAMENTO_LOADING = true;
   initFechamento();
+  initProjectClosing();
   return chamarAppsScriptJsonp('getClickUpMilestoneClosing', {
     auth_token: authTokenParam()
   }, 30000).then(function(resp) {
@@ -5416,6 +5495,7 @@ function fechamentoLoad(force) {
       });
       FECHAMENTO_LOADING = false;
       initFechamento();
+      initProjectClosing();
       initBonus();
       return resp;
     }
@@ -5428,6 +5508,7 @@ function fechamentoLoad(force) {
     fechamentoApplyProjectStatuses();
     if (!FECHAMENTO_FILTER.month) FECHAMENTO_FILTER.month = fechamentoCurrentMonth();
     initFechamento();
+    initProjectClosing();
     initBonus();
     initDash();
     return resp;
@@ -5437,6 +5518,7 @@ function fechamentoLoad(force) {
       ? 'Não foi possível atualizar agora. Mantendo a última leitura válida.'
       : 'Não foi possível carregar o fechamento agora. Tente recarregar em alguns instantes.';
     initFechamento();
+    initProjectClosing();
     initBonus();
     return null;
   });
@@ -5635,8 +5717,8 @@ function initFechamento() {
   var syncNote = bg.active && bg.phase !== 'disabled'
     ? '<div class="dashx-focus-note" style="margin-bottom:12px"><strong>Leitura ClickUp em andamento:</strong> '+syncPhaseLabel+', '+Number(bg.detected || 0)+' marcos detectados e '+Number(bg.errors || 0)+' erro(s).</div>'
     : '';
-  box.innerHTML = '<div class="closing-head"><div><div class="closing-title">Fechamento de marcos</div><div class="closing-sub">Marcos aprovados geram R$ 30. O fechamento de projeto é tratado separadamente: só considera item com marcador “Entrega” e status APROVAR/APROVADO.</div></div>'+
-    '</div><div class="dashx-inline-note" style="margin-bottom:12px"><strong>Fluxo recomendado:</strong> 1. Finalize a implantação. 2. O projeto entra em Aguardando entrega. 3. Localize no ClickUp o item com marcador “Entrega”. 4. Após entregar e validar com o cliente, mova esse item para APROVAR/APROVADO. 5. O projeto passa para Concluído e o bônus de R$ 80 entra no fechamento de projeto. Para projetos antigos, valide um por um; não há pagamento retroativo automático.</div>'+error+syncNote+
+  box.innerHTML = '<div class="closing-head"><div><div class="closing-title">Fechamento de marcos</div><div class="closing-sub">Valida&ccedil;&atilde;o t&eacute;cnica dos marcos que entraram em Closed. Marcos aprovados geram R$ 30; fechamento de projeto fica em guia separada.</div></div>'+
+    '</div>'+error+syncNote+
     '<div class="closing-filter-block"><div class="closing-filter-label">Mês em que entrou em Closed <span style="text-transform:none;letter-spacing:0;font-weight:700">(clique novamente no mês selecionado para ver o geral)</span></div>'+monthChips+
     '<div class="closing-filter-label" style="margin-top:14px">Consultores</div><div class="closing-filter-chips">'+consultantChips+'</div>'+
     '<div class="closing-filter-label" style="margin-top:14px">Validação técnica</div><div class="closing-filter-chips">'+statusChips+'</div>'+
@@ -6019,7 +6101,7 @@ window.criarUsuarioPainel = criarUsuarioPainel;
 window.alternarUsuarioPainel = alternarUsuarioPainel;
 
 function renderAll() {
-  buildPeriodBar(); initDash(); initControlTower(); initAcomp(); initFechamento(); initBonus(); initAdmin(); initAll(); initCons(); initVend(); initAvul(); initLog(); initPraz(); initAlert(); initExec();
+  buildPeriodBar(); initDash(); initControlTower(); initAcomp(); initFechamento(); initProjectClosing(); initBonus(); initAdmin(); initAll(); initCons(); initVend(); initAvul(); initLog(); initPraz(); initAlert(); initExec();
   consultantCompensationLoad(false);
   if (authTokenParam() && !FECHAMENTO_SESSION_REFRESHED) {
     FECHAMENTO_SESSION_REFRESHED = true;
@@ -9515,14 +9597,13 @@ function initDash() {
   var auditable = Math.max(0, total - cancelled);
   var trackedPct = auditable ? Math.round((tracked / auditable) * 100) : null;
   var stale15 = Number(operation.bins['16–30'] || 0) + Number(operation.bins['31–45'] || 0) + Number(operation.bins['45+'] || 0);
-  var awaitingDelivery = list.filter(function(p){
-    return dashStatusKey(p && p.status) === 'aguardando_entrega' && projetoTemMarcadorEntregaPendenteFechamento(p);
-  }).length;
+  var projectClosingRows = projectClosingList();
+  var awaitingDelivery = projectClosingRows.filter(function(entry){ return entry.category === 'pendente'; }).length;
   var topCards = '<div class="dashx-top-grid">'+
     dashKpiCard('Projetos 2026', total, 'Somente a carteira identificada como 2026. Clique para listar.', 'good', 'activeProjects', '<span class="dashx-kpi-delta neutral">Recorte fixo 2026</span>', "return dashOpenTopKpiAudit('projects')")+
     dashKpiCard('Com rastreio ClickUp', trackedPct === null ? '-' : dashPct(trackedPct), tracked+' de '+auditable+' projeto(s) auditáveis possuem rastreio técnico. Clique para listar.', dashMetricClass(trackedPct, 70, 90, false), 'aging', '<span class="dashx-kpi-delta neutral">'+untracked+' sem ClickUp</span>', "return dashOpenTopKpiAudit('tracked')")+
     dashKpiCard('ClickUp 15+ dias', stale15, 'Projetos rastreados sem atualização recente no ClickUp. Clique para listar.', stale15 ? 'bad' : 'good', 'aging', '<span class="dashx-kpi-delta neutral">Regra: atualização ClickUp</span>', "return dashOpenTopKpiAudit('stale')")+
-    dashKpiCard('Aguardando entrega', awaitingDelivery, 'Projetos com item marcado como Entrega, ainda sem APROVAR/APROVADO.', awaitingDelivery ? 'warn' : 'good', 'projectRisk', '<span class="dashx-kpi-delta neutral">Pendente de aprovação</span>', "return dashOpenTopKpiAudit('delivery')")+
+    dashKpiCard('Fechamento de projeto', awaitingDelivery, 'Projetos com item Entrega ainda sem APROVAR/APROVADO. Clique para gerenciar.', awaitingDelivery ? 'warn' : 'good', 'projectRisk', '<span class="dashx-kpi-delta neutral">Pendente de aprovação</span>', "goTab('projfech');return false")+
     dashKpiCard('Taxa de 1º treinamento realizado', activeRate === null ? '-' : dashPct(activeRate), activeRate === null ? 'Conversão indisponível.' : 'Conversão da jornada venda → 1º treinamento realizado. Clique para listar.', dashMetricClass(activeRate, 40, 70, false), 'funnel', '<span class="dashx-kpi-delta neutral">Base 2026</span>', "return dashOpenTopKpiAudit('activation')")+
     dashKpiCard('Saúde dos dados', health.completude === null ? '-' : dashPct(health.completude), health.completude === null ? 'Não há base suficiente.' : (health.inconsistencias.length+' projeto(s) com campo essencial ausente. Clique para listar.'), dashMetricClass(health.completude, 70, 90, false), 'dataHealthSummary', '<span class="dashx-kpi-delta neutral">'+health.syncErrors+' falha(s) de sync</span>', "return dashOpenTopKpiAudit('health')")+
   '</div>';
