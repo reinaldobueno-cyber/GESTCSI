@@ -326,8 +326,8 @@ function diagnosticarFalhasSyncClickUp() {
       var syncStatus = sanitizeText_(project.sync_status_clickup);
       var syncError = sanitizeText_(project.sync_error_clickup);
       var hasExplicitError = /error|erro|falha/i.test(syncStatus) || !!syncError;
-      var expectsClickUp = /sim/i.test(sanitizeText_(project.clickup)) || !!sanitizeText_(project.link_projeto || project.projeto_link);
-      var hasSummary = String(project.tasks_concluidas || project.tasks_pendentes || project.marcos_concluidos || project.marcos_pendentes || project.fases_total || project.progresso || '').trim() !== '';
+      var expectsClickUp = monthlyProjectExpectsClickUpSummary_(project);
+      var hasSummary = monthlyProjectHasClickUpSummary_(project);
       if (!hasExplicitError && (!expectsClickUp || hasSummary)) return;
       rows.push(buildClickUpSyncDiagnosticRow_(project, mappings, hasExplicitError ? 'Falha explicita' : 'Sem resumo apos sync'));
     });
@@ -344,6 +344,29 @@ function diagnosticarFalhasSyncClickUp() {
   var sheet = getOrCreateSheet_('CLICKUP_SYNC_DIAGNOSTICO');
   writeObjectsToSheet_(sheet, rows, headers);
   return { ok: true, total: rows.length, sheet: sheet.getName() };
+}
+
+function monthlyProjectExpectsClickUpSummary_(project) {
+  var clickup = normalizeKey_(project && project.clickup);
+  var status = normalizeKey_(project && project.status);
+  if (clickup === 'NAO' || status.indexOf('CANCEL') >= 0) return false;
+  return clickup === 'SIM' || !!sanitizeText_(project && (project.link_projeto || project.projeto_link));
+}
+
+function monthlyProjectHasClickUpSummary_(project) {
+  return [
+    'tasks_concluidas',
+    'tasks_pendentes',
+    'marcos_concluidos',
+    'marcos_pendentes',
+    'fases_total',
+    'progresso',
+    'data_ultima_atualizacao',
+    'clickup_json',
+    'ultima_sync_clickup'
+  ].some(function(field) {
+    return String(project && project[field] !== null && project[field] !== undefined ? project[field] : '').trim() !== '';
+  });
 }
 
 function buildClickUpSyncDiagnosticRow_(project, mappings, situacao) {
@@ -4221,8 +4244,8 @@ function projectMappingFromConfigItem_(item) {
   var projectUrl = sanitizeText_(item.project_url || item.link_projeto || item.link_do_projeto || item.link_clickup);
   var viewId = normalizeClickUpId_(item.view_id) || extractClickUpIdFromUrl_(projectUrl, 'view');
   var listId = normalizeClickUpId_(item.list_id) || extractClickUpIdFromUrl_(projectUrl, 'list');
-  var folderId = normalizeClickUpId_(item.folder_id) || extractClickUpIdFromUrl_(projectUrl, 'folder');
-  var spaceId = normalizeClickUpId_(item.space_id) || extractClickUpIdFromUrl_(projectUrl, 'space');
+  var folderId = normalizeClickUpNumericId_(item.folder_id) || extractClickUpIdFromUrl_(projectUrl, 'folder');
+  var spaceId = normalizeClickUpNumericId_(item.space_id) || extractClickUpIdFromUrl_(projectUrl, 'space');
   if (!mes && !cliente && !projectUrl && !viewId && !listId && !folderId && !spaceId) return null;
   return {
     enabled: normalizeBoolean_(item.enabled, true),
@@ -5813,6 +5836,11 @@ function normalizeClickUpId_(value) {
   return text;
 }
 
+function normalizeClickUpNumericId_(value) {
+  var id = normalizeClickUpId_(value);
+  return /^\d+$/.test(id) ? id : '';
+}
+
 function extractClickUpIdFromUrl_(url, kind) {
   var text = sanitizeText_(url);
   if (!text) return '';
@@ -5820,6 +5848,7 @@ function extractClickUpIdFromUrl_(url, kind) {
   if (kind === 'list') return listMatch ? normalizeClickUpId_(listMatch[1]) : '';
   var folderMatch =
     text.match(/\/v\/o\/f\/(\d+)/i) ||
+    text.match(/\/v\/l\/f\/(\d+)/i) ||
     text.match(/\/v\/f\/(\d+)/i) ||
     text.match(/\/folder\/(\d+)/i) ||
     text.match(/[?&]folder_id=(\d+)/i);
@@ -5830,7 +5859,7 @@ function extractClickUpIdFromUrl_(url, kind) {
     text.match(/[?&]space_id=(\d+)/i);
   if (kind === 'space') return spaceMatch ? normalizeClickUpId_(spaceMatch[1]) : '';
   var viewMatch =
-    text.match(/\/v\/l\/([^/?#]+)/i) ||
+    text.match(/\/v\/l\/(?!f\/)([^/?#]+)/i) ||
     text.match(/\/v\/o\/(?!f\/)([^/?#]+)/i) ||
     text.match(/[?&]view_id=([^&#]+)/i);
   if (kind === 'view') return viewMatch ? normalizeClickUpId_(decodeURIComponent(viewMatch[1])) : '';
