@@ -1841,13 +1841,20 @@ function upsertClickUpMilestoneClosing_(mapping, normalized, options) {
     if (!taskId) return;
     var previous = current[taskId] || null;
     var status = sanitizeText_(milestone.status_original);
+    var hasClosedDate = !!sanitizeText_(milestone.date_closed);
     var situation = clickUpMilestoneSituation_(status);
+    var recoveredClosedHistory = false;
+    if (situation === 'outro' && hasClosedDate && options.preserve_closed_history) {
+      situation = 'aguardando';
+      recoveredClosedHistory = true;
+    }
     if (!previous && situation === 'outro') return;
     if (previous && situation === 'outro' && options.authoritative) {
       delete current[taskId];
       return;
     }
-    var statusChanged = !previous || sanitizeText_(previous.status_atual) !== status;
+    var rowStatus = recoveredClosedHistory ? 'Closed historico' : status;
+    var statusChanged = !previous || sanitizeText_(previous.status_atual) !== rowStatus;
     var closedAt = sanitizeText_(previous && previous.closed_at) ||
       sanitizeText_(milestone.date_closed) ||
       (situation !== 'outro' ? sanitizeText_(milestone.updated_at) || now : '');
@@ -1885,7 +1892,7 @@ function upsertClickUpMilestoneClosing_(mapping, normalized, options) {
       consultor: clickUpMilestoneConsultant_(milestone.responsaveis || normalized.consultor || mapping.consultor),
       marco: milestone.nome || '',
       fase: milestone.fase_nome || '',
-      status_atual: status,
+      status_atual: rowStatus,
       situacao: situation,
       closed_at: closedAt,
       mes_fechamento: clickUpMonthReference_(closedAt),
@@ -2339,7 +2346,8 @@ function syncClickUpMilestoneClosingFromMonthlySheets_() {
           defer_write: true,
           fetch_comments: false,
           authoritative: false,
-          validation_comments_only: true
+          validation_comments_only: true,
+          preserve_closed_history: true
         });
         detected += payload.marcos.length;
         projects += 1;
