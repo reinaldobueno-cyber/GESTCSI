@@ -5591,8 +5591,15 @@ function initFechamento() {
   }).join('') || '<div class="empty">Nenhum marco encontrado neste recorte. Atualize os Closed ou consulte as validações.</div>';
   var error = FECHAMENTO_META.error ? '<div class="dashx-focus-note" style="margin-bottom:12px"><strong>'+escapeHtml(FECHAMENTO_META.error)+'</strong></div>' : '';
   var bg = FECHAMENTO_META.background_sync || {};
+  var syncPhaseLabel = bg.phase === 'recent'
+    ? 'lendo alterações recentes'
+    : bg.phase === 'history'
+      ? 'reconstruindo histórico de Closed'
+      : bg.phase === 'projects'
+        ? (Number(bg.processed || 0)+' de '+Number(bg.total || 0)+' projetos processados')
+        : 'preparando leitura';
   var syncNote = bg.active && bg.phase !== 'disabled'
-    ? '<div class="dashx-focus-note" style="margin-bottom:12px"><strong>Leitura ClickUp em andamento:</strong> '+Number(bg.processed || 0)+' de '+Number(bg.total || 0)+' projetos processados, '+Number(bg.detected || 0)+' marcos detectados e '+Number(bg.errors || 0)+' erro(s).</div>'
+    ? '<div class="dashx-focus-note" style="margin-bottom:12px"><strong>Leitura ClickUp em andamento:</strong> '+syncPhaseLabel+', '+Number(bg.detected || 0)+' marcos detectados e '+Number(bg.errors || 0)+' erro(s).</div>'
     : '';
   box.innerHTML = '<div class="closing-head"><div><div class="closing-title">Fechamento de entregas</div><div class="closing-sub">Marcos aprovados geram R$ 30. O item marcado como “Entrega” no ClickUp, quando aprovado a partir de 15/06/2026, gera R$ 80 e formaliza a conclusão da implantação.</div></div>'+
     '</div><div class="dashx-inline-note" style="margin-bottom:12px"><strong>Fluxo recomendado:</strong> 1. Finalize a implantação. 2. O projeto entra em Aguardando entrega. 3. Localize no ClickUp o item com marcador “Entrega”. 4. Após entregar e validar com o cliente, mova esse item para Aprovado Gestão. 5. O projeto passa para Concluído e o bônus de R$ 80 entra no fechamento. Para projetos antigos, valide um por um; não há pagamento retroativo automático.</div>'+error+syncNote+
