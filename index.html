@@ -5441,7 +5441,7 @@ function fechamentoFilteredRows() {
     return true;
   });
 }
-function fechamentoRunSync(action, label, btn) {
+function fechamentoRunSync(action, label, btn, extraParams) {
   if (!AUTH_STATE.user || AUTH_STATE.user.role !== 'admin') {
     showToast('Somente admin pode atualizar o fechamento', 'err');
     return false;
@@ -5450,10 +5450,23 @@ function fechamentoRunSync(action, label, btn) {
   var month = String(FECHAMENTO_FILTER.month || fechamentoCurrentMonth());
   var syncMonth = action === 'syncClickUpClosedMilestones' ? '' : (month === 'todos' ? '' : month);
   if (btn) { btn.disabled = true; btn.textContent = 'Buscando...'; }
-  chamarAppsScriptJsonp(action, {
+  var requestParams = Object.assign({
     auth_token: authTokenParam(),
     month: syncMonth
-  }, 45000).then(function(recent) {
+  }, extraParams || {});
+  chamarAppsScriptJsonp(action, requestParams, 45000).then(function(recent) {
+    if (recent && recent.ok !== false && recent.background_sync && !Array.isArray(recent.marcos)) {
+      FECHAMENTO_META = recent;
+      FECHAMENTO_LOADED = true;
+      FECHAMENTO_LOADING = false;
+      fechamentoSaveCache();
+      initFechamento();
+      initBonus();
+      fechamentoSchedulePoll(3000);
+      if (btn) { btn.disabled = false; btn.textContent = original || label; }
+      showToast(label+' iniciado em segundo plano. A lista será atualizada automaticamente.', 'ok');
+      return;
+    }
     if (!recent || recent.ok === false || !Array.isArray(recent.marcos)) {
       throw new Error((recent && (recent.error || recent.message)) || 'Não foi possível atualizar as alterações recentes');
     }
@@ -5477,7 +5490,7 @@ function fechamentoRunSync(action, label, btn) {
   return false;
 }
 function fechamentoStartSync(btn) {
-  return fechamentoRunSync('syncClickUpClosedMilestones', 'Atualizar Closed', btn);
+  return fechamentoRunSync('startClickUpMilestoneClosingBackground', 'Atualizar Closed', btn, { force_history: '1' });
 }
 function fechamentoSyncRejected(btn) {
   return fechamentoRunSync('syncClickUpRejectedMilestones', 'Buscar Reprovados', btn);
