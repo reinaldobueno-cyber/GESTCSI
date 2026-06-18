@@ -3292,6 +3292,8 @@ body.theme-dark *{
 .closing-filter-chips{display:flex;gap:7px;flex-wrap:wrap}
 .closing-filter-chip{border:1px solid var(--border);background:var(--surf2);border-radius:999px;padding:7px 12px;font:900 10px 'Inter',sans-serif;color:var(--text2);cursor:pointer}
 .closing-filter-chip.on{background:var(--green);border-color:var(--green);color:#fff}
+.closing-filter-chip.is-empty{opacity:.42;background:#f7faf7;border-style:dashed}
+.closing-filter-chip.is-empty.on{opacity:1;border-style:solid}
 .closing-year-groups{display:grid;gap:9px}
 .closing-year-group{display:grid;grid-template-columns:52px 1fr;gap:10px;align-items:start}
 .closing-year-label{font-size:11px;font-weight:900;color:var(--text);padding-top:7px}
@@ -5524,11 +5526,15 @@ function initFechamento() {
     (monthsByYear[year] || (monthsByYear[year] = [])).push(month);
   });
   var monthNames = ['JAN','FEV','MAR','ABR','MAI','JUN','JUL','AGO','SET','OUT','NOV','DEZ'];
-  var monthChips = '<div class="closing-year-groups">'+Object.keys(monthsByYear).sort().reverse().map(function(year) {
-      var chips = monthsByYear[year].slice().sort().map(function(month) {
-        var monthIndex = Number(String(month).slice(5,7)) - 1;
-        var label = monthNames[monthIndex] || month;
-        return '<button class="closing-filter-chip '+(month === FECHAMENTO_FILTER.month ? 'on' : '')+'" onclick="return fechamentoSetFilter(\'month\',\''+escapeHtml(month)+'\')">'+escapeHtml(label)+'</button>';
+  var years = Object.keys(monthsByYear).sort().reverse();
+  if (!years.length) years = [String(new Date().getFullYear())];
+  var monthChips = '<div class="closing-year-groups">'+years.map(function(year) {
+      var chips = monthNames.map(function(monthLabel, monthIndex) {
+        var month = year + '-' + String(monthIndex + 1).padStart(2, '0');
+        var hasData = !!months[month];
+        var cls = 'closing-filter-chip '+(month === FECHAMENTO_FILTER.month ? 'on ' : '')+(hasData ? '' : 'is-empty');
+        var title = hasData ? 'Mês com Closed registrado' : 'Sem Closed registrado neste mês';
+        return '<button class="'+cls+'" title="'+escapeHtml(title)+'" onclick="return fechamentoSetFilter(\'month\',\''+escapeHtml(month)+'\')">'+escapeHtml(monthLabel)+'</button>';
       }).join('');
       return '<div class="closing-year-group"><div class="closing-year-label">'+escapeHtml(year)+'</div><div class="closing-filter-chips">'+chips+'</div></div>';
     }).join('')+'</div>';
