@@ -5278,6 +5278,9 @@ function fechamentoIsProjectClosing(item) {
   var type = fechamentoSearchKey(item && item.item_tipo);
   return type === 'entrega de projeto' || type === 'fechamento de projeto';
 }
+function fechamentoDeliveryRowsBase() {
+  return (FECHAMENTO_MARCOS || []).filter(fechamentoIsProjectClosing);
+}
 function projetoTemMarcadorEntregaFechamento(p) {
   var projectKey = String((p && p.project_key) || '').trim();
   var projectName = normalizeClienteKey((p && p.cliente) || '');
@@ -5421,7 +5424,7 @@ function fechamentoSearchKey(value) {
   return String(value || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim();
 }
 function fechamentoFilteredRows() {
-  return (FECHAMENTO_MARCOS || []).filter(function(item) {
+  return fechamentoDeliveryRowsBase().filter(function(item) {
     var month = String(FECHAMENTO_FILTER.month || '');
     if (month && month !== 'todos' && String(item.mes_fechamento || '') !== month) return false;
     if (FECHAMENTO_FILTER.consultor !== 'todos' && !bonusNamesMatch(fechamentoEffectiveConsultant(item), FECHAMENTO_FILTER.consultor)) return false;
@@ -5491,7 +5494,7 @@ function initFechamento() {
   }
   var months = {};
   var consultants = {};
-  (FECHAMENTO_MARCOS || []).forEach(function(item) {
+  fechamentoDeliveryRowsBase().forEach(function(item) {
     if (item.mes_fechamento) months[item.mes_fechamento] = true;
     if (item.consultor) consultants[fechamentoEffectiveConsultant(item)] = true;
   });
