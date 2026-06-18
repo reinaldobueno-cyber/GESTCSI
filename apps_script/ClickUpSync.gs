@@ -2068,8 +2068,14 @@ function fetchLatestClickUpTaskCommentsByIds_(taskIds) {
 }
 
 function startClickUpMilestoneClosingBackground_(params) {
+  params = params || {};
   var props = PropertiesService.getScriptProperties();
+  var forceHistory = String(params.force_history || params.force_full || '') === '1';
   migrateClickUpMilestoneClosingSchema_();
+  if (forceHistory) {
+    props.deleteProperty('CLICKUP_MILESTONE_HISTORY_REBUILT');
+    props.deleteProperty('CLICKUP_CLOSED_INCREMENTAL_SINCE');
+  }
   if (props.getProperty('CLICKUP_MILESTONE_CLOSING_ACTIVE') === '1') {
     props.setProperty('CLICKUP_MILESTONE_CLOSING_PHASE', 'recent');
     props.setProperty('CLICKUP_MILESTONE_CLOSING_UPDATED_AT', new Date().toISOString());
@@ -2089,7 +2095,7 @@ function startClickUpMilestoneClosingBackground_(params) {
   props.setProperty('CLICKUP_MILESTONE_CLOSING_PHASE', 'recent');
   props.setProperty('CLICKUP_MILESTONE_CLOSING_STARTED_AT', new Date().toISOString());
   props.deleteProperty('CLICKUP_MILESTONE_CLOSING_ERROR');
-  if (clickUpMilestoneClosingDistinctMonths_().length <= 1) {
+  if (forceHistory || clickUpMilestoneClosingDistinctMonths_().length <= 1) {
     props.deleteProperty('CLICKUP_MILESTONE_HISTORY_REBUILT');
   }
   props.setProperty('CLICKUP_MILESTONE_CLOSING_TOTAL', '0');
