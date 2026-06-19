@@ -5312,14 +5312,7 @@ function fechamentoJsonItemAprovaProjeto(item) {
 function fechamentoItemTemMarcadorEntrega(item) {
   var marker = fechamentoSearchKey(item && (item.custom_item_name || item.item_tipo_clickup || item.item_tipo || item.tipo_custom || item.item_tipo));
   var flag = String(item && item.marcador_entrega || '').toLowerCase() === 'sim';
-  var name = fechamentoSearchKey(item && (item.nome || item.marco || item.name));
-  var phase = fechamentoSearchKey(item && (item.fase_nome || item.fase || item.phase));
-  var deliveryByName = name.indexOf('entrega') >= 0 &&
-    (name.indexOf('projeto para o cliente') >= 0 ||
-      name.indexOf('entrega do projeto') >= 0 ||
-      phase.indexOf('break off') >= 0 ||
-      phase.indexOf('entrega do projeto') >= 0);
-  return flag || marker === 'entrega' || marker === 'entrega de projeto' || deliveryByName;
+  return flag || marker === 'entrega' || marker === 'entrega de projeto';
 }
 function fechamentoItemPertenceAoProjeto(item, projectKey, projectName) {
   if (projectKey && String(item && item.project_key || '').trim() === projectKey) return true;
