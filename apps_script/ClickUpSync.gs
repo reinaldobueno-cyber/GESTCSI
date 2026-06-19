@@ -935,7 +935,8 @@ function buildNormalizedProjectFromClickUp_(mapping) {
     var phaseInfo = resolvePhaseForTask_(task, byId, phaseMap);
     var phase = phaseInfo.phase;
     var countInSummary = shouldCountTaskInSummary_(task, phaseInfo, byId);
-    var milestoneTask = isClosingTrackedTask_(task);
+    var projectClosingTask = isProjectClosingDeliveryItem_(task, phase ? phase.nome : '');
+    var milestoneTask = isMilestoneTask_(task) || projectClosingTask;
 
     // Marcos podem ter subtarefas de evidencia/validacao. Eles ainda precisam
     // entrar no fechamento, mesmo quando nao contam como task folha no resumo.
@@ -2046,7 +2047,7 @@ function parseLatestClickUpTaskComment_(response) {
 }
 
 function isProjectClosingMilestone_(milestone) {
-  return isProjectDeliveryTask_(milestone);
+  return isProjectClosingDeliveryItem_(milestone, milestone && milestone.fase_nome);
 }
 
 function isProjectClosingApprovalStatus_(status) {
@@ -6088,6 +6089,19 @@ function isProjectDeliveryTask_(task) {
     clickUpTaskCustomItemName_(task)
   );
   return key === 'ENTREGA';
+}
+
+function isProjectBreakOffText_(value) {
+  var key = normalizeKey_(value);
+  return key.indexOf('FASE 8') >= 0 || key.indexOf('BREAK OFF') >= 0;
+}
+
+function isProjectClosingDeliveryItem_(item, phaseName) {
+  return isProjectDeliveryTask_(item) && (
+    isProjectBreakOffText_(phaseName) ||
+    isProjectBreakOffText_(item && (item.fase_nome || item.fase || item.phase)) ||
+    isProjectBreakOffText_(item && (item.name || item.nome))
+  );
 }
 
 function isClosingTrackedTask_(task) {
