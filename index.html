@@ -68,6 +68,9 @@ nav{background:var(--nav);height:58px;display:flex;align-items:center;justify-co
 .flabel{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--muted);padding:10px 14px;min-width:85px;border-right:1px solid var(--border);background:var(--surf2);flex-shrink:0;}
 .fbts{display:flex;gap:5px;padding:8px 12px;flex-wrap:wrap;}
 .fb{background:none;border:1px solid var(--border);color:var(--text2);font-family:'Inter',sans-serif;font-size:11px;font-weight:600;padding:3px 10px;border-radius:4px;cursor:pointer;}
+.fb.has-cons-alert{position:relative;display:inline-flex;align-items:center;gap:7px;padding-left:7px}
+.project-cons-alert{position:relative;flex:0 0 auto;width:22px;height:22px;border:1px solid rgba(217,169,60,.65);border-radius:999px;background:#fff8e7;color:#8a5b13;display:inline-flex;align-items:center;justify-content:center;font-size:11px;cursor:pointer}
+.project-cons-alert-badge{position:absolute;top:-7px;right:-8px;min-width:17px;height:17px;border-radius:999px;background:#d94857;color:#fff;font:900 9px 'Inter',sans-serif;display:flex;align-items:center;justify-content:center;padding:0 5px}
 .fb:hover{background:var(--surf2);}
 .fb.on{background:var(--nav);border-color:var(--nav);color:#fff;}
 .fb.on.r{background:var(--red);border-color:var(--red);}
@@ -4641,6 +4644,7 @@ function acompPendenciasDoConsultor(consultor) {
 }
 function abrirPendenciasConsultor(consultor, ev) {
   if (ev && ev.stopPropagation) ev.stopPropagation();
+  if (ev && ev.preventDefault) ev.preventDefault();
   var list = acompPendenciasDoConsultor(consultor);
   var rows = list.map(function(item) {
     var action = '<button type="button" class="project-link-btn" onclick="return acompProjectInfoPopup(\''+jsQuote(item.projectKey)+'\')">Abrir acompanhamento</button>';
@@ -9959,7 +9963,12 @@ function initAll() {
   var meses=[],mm={};
   p.forEach(function(x){if(x.mes&&!mm[x.mes]){mm[x.mes]=1;meses.push(x.mes);}});
   meses = ordenarMesesPainel(meses);
-  document.getElementById('f-co').innerHTML=['all'].concat(cons).map(function(v){return '<button class="fb '+(fC===v?'on':'')+'" onclick="setF(\'c\',\''+v+'\',this)">'+(v==='all'?'Todos':v)+'</button>';}).join('');
+  document.getElementById('f-co').innerHTML=['all'].concat(cons).map(function(v){
+    if (v === 'all') return '<button class="fb '+(fC===v?'on':'')+'" onclick="setF(\'c\',\''+v+'\',this)">Todos</button>';
+    var pending = acompPendenciasDoConsultor(v);
+    var bell = pending.length ? '<span class="project-cons-alert" title="'+pending.length+' pendência(s) de acompanhamento" onclick="return abrirPendenciasConsultor(decodeURIComponent(\''+encodeURIComponent(v)+'\'),event)">&#128276;<span class="project-cons-alert-badge">'+pending.length+'</span></span>' : '';
+    return '<button class="fb '+(pending.length?'has-cons-alert ':'')+(fC===v?'on':'')+'" onclick="setF(\'c\',\''+v+'\',this)">'+bell+escapeHtml(v)+'</button>';
+  }).join('');
   var filtroMes = document.getElementById('f-me');
   if (filtroMes) filtroMes.innerHTML=['all'].concat(meses).map(function(v){return '<button class="fb '+(fM===v?'on':'')+'" onclick="setF(\'m\',\''+v+'\',this)">'+(v==='all'?'Todos':v)+'</button>';}).join('');
   var search = document.getElementById('project-search');
