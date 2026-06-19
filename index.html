@@ -5381,22 +5381,34 @@ function projectClosingList() {
     var info = projectClosingInfo(p);
     var statusKey = dashStatusKey(p && p.status);
     var category = 'fora';
-    if (statusKey === 'concluido' && info.approved) category = 'concluido';
+    if (info.approved && statusKey === 'concluido') category = 'concluido';
     else if (info.approved) category = 'aprovado';
-    else if (statusKey === 'aguardando_entrega' && info.pending) category = 'pendente';
-    else if (statusKey === 'aguardando_entrega' && !info.hasMarker) category = 'sem_marcador';
+    else if (info.pending) category = 'pendente';
     return {project:p, info:info, category:category};
   });
+}
+function projectClosingControlAlert(entry) {
+  var p = entry && entry.project || {};
+  var category = entry && entry.category;
+  var statusKey = dashStatusKey(p.status);
+  var statusLabel = p.status || '-';
+  if (category === 'aprovado' && statusKey !== 'concluido') {
+    return 'Controle Lais ainda em '+statusLabel+'; ClickUp já aprovou entrega.';
+  }
+  if (category === 'pendente' && statusKey !== 'aguardando_entrega') {
+    return 'Controle Lais está em '+statusLabel+'; ClickUp tem Entrega pendente.';
+  }
+  return 'Sem divergência';
 }
 function initProjectClosing() {
   var box = document.getElementById('projfech-content');
   var entries = projectClosingList();
   var pending = entries.filter(function(x){return x.category === 'pendente';});
   var approved = entries.filter(function(x){return x.category === 'aprovado';});
-  var missing = entries.filter(function(x){return x.category === 'sem_marcador';});
   var concluded = entries.filter(function(x){return x.category === 'concluido';});
+  var divergences = entries.filter(function(x){return ['pendente','aprovado'].indexOf(x.category) >= 0 && projectClosingControlAlert(x) !== 'Sem divergência';});
   var badge = document.getElementById('n-projfech');
-  if (badge) { badge.hidden = pending.length === 0; badge.textContent = pending.length; }
+  if (badge) { badge.hidden = (pending.length + approved.length) === 0; badge.textContent = pending.length + approved.length; }
   if (!box) return;
   function rows(list) {
     return list.map(function(entry) {
@@ -5406,13 +5418,15 @@ function initProjectClosing() {
         entry.category === 'aprovado' ? 'Aprovado para concluir' :
         entry.category === 'concluido' ? 'Concluído' :
         'Sem marcador Entrega';
-      return '<tr><td><strong>'+escapeHtml(p.cliente || '-')+'</strong></td><td>'+escapeHtml(p.consultor || '-')+'</td><td>'+escapeHtml(p.status || '-')+'</td><td>'+escapeHtml(info.status || '-')+'</td><td>'+escapeHtml(state)+'</td><td>'+escapeHtml(info.source || '-')+'</td><td>'+dashProjectActionCell(p)+'</td></tr>';
-    }).join('') || '<tr class="empty-row"><td colspan="7">Nenhum projeto nesta regra.</td></tr>';
+      var alert = projectClosingControlAlert(entry);
+      var alertHtml = alert === 'Sem divergência' ? '<span class="dashx-table-chip">Sem divergência</span>' : '<span class="dashx-score-pill warn">'+escapeHtml(alert)+'</span>';
+      return '<tr><td><strong>'+escapeHtml(p.cliente || '-')+'</strong></td><td>'+escapeHtml(p.consultor || '-')+'</td><td>'+escapeHtml(p.status || '-')+'</td><td>'+escapeHtml(info.status || '-')+'</td><td>'+escapeHtml(state)+'</td><td>'+alertHtml+'</td><td>'+escapeHtml(info.source || '-')+'</td><td>'+dashProjectActionCell(p)+'</td></tr>';
+    }).join('') || '<tr class="empty-row"><td colspan="8">Nenhum projeto nesta regra.</td></tr>';
   }
-  var table = '<div class="dashx-table-wrap"><table class="dashx-table"><thead><tr><th>Projeto</th><th>Consultor</th><th>Status projeto</th><th>Status item Entrega</th><th>Situação</th><th>Fonte</th><th>Ação</th></tr></thead><tbody>'+rows(pending.concat(approved).concat(missing))+'</tbody></table></div>';
+  var table = '<div class="dashx-table-wrap"><table class="dashx-table"><thead><tr><th>Projeto</th><th>Consultor</th><th>Controle Lais</th><th>Status item Entrega</th><th>Situação ClickUp</th><th>Divergência controle</th><th>Fonte</th><th>Ação</th></tr></thead><tbody>'+rows(approved.concat(pending).concat(concluded))+'</tbody></table></div>';
   box.innerHTML = '<div class="closing-head"><div><div class="closing-title">Fechamento de projeto</div><div class="closing-sub">Controle separado dos marcos. Aqui entram apenas projetos com rastreio ClickUp e item marcado como Entrega.</div></div></div>'+
-    '<div class="dashx-inline-note" style="margin-bottom:12px"><strong>Regra:</strong> pendente quando o projeto est&aacute; em Aguardando entrega e existe marcador Entrega sem APROVAR/APROVADO. Aprovado para concluir quando o item Entrega est&aacute; em APROVAR/APROVADO, mesmo que a carteira ainda esteja como Em andamento. Projeto sem link/JSON do ClickUp fica fora desta gest&atilde;o, porque n&atilde;o h&aacute; item Entrega audit&aacute;vel. Isso n&atilde;o altera a valida&ccedil;&atilde;o t&eacute;cnica dos marcos.</div>'+
-    '<div class="closing-kpis"><div class="closing-kpi warn"><span>Pendentes</span><strong>'+pending.length+'</strong></div><div class="closing-kpi"><span>Aprovados para concluir</span><strong>'+approved.length+'</strong></div><div class="closing-kpi"><span>Sem marcador Entrega</span><strong>'+missing.length+'</strong></div><div class="closing-kpi"><span>Concluídos com entrega</span><strong>'+concluded.length+'</strong></div><div class="closing-kpi"><span>Bônus por projeto</span><strong>R$ 80</strong></div></div>'+
+    '<div class="dashx-inline-note" style="margin-bottom:12px"><strong>Regra principal:</strong> fechamento de projeto considera somente o ClickUp: item com marcador Entrega pendente ou em APROVAR/APROVADO. O status do controle da Lais aparece apenas como alerta de diverg&ecirc;ncia, sem tirar o projeto da gest&atilde;o.</div>'+
+    '<div class="closing-kpis"><div class="closing-kpi warn"><span>Pendentes ClickUp</span><strong>'+pending.length+'</strong></div><div class="closing-kpi"><span>Aprovados para concluir</span><strong>'+approved.length+'</strong></div><div class="closing-kpi warn"><span>Divergências controle</span><strong>'+divergences.length+'</strong></div><div class="closing-kpi"><span>Concluídos com entrega</span><strong>'+concluded.length+'</strong></div><div class="closing-kpi"><span>Bônus por projeto</span><strong>R$ 80</strong></div></div>'+
     '<div class="bonus-section"><div class="bonus-section-title">Gerenciador de fechamento de projeto</div>'+table+'</div>';
 }
 function fechamentoProjectFromItem(item) {
@@ -9598,12 +9612,12 @@ function initDash() {
   var trackedPct = auditable ? Math.round((tracked / auditable) * 100) : null;
   var stale15 = Number(operation.bins['16–30'] || 0) + Number(operation.bins['31–45'] || 0) + Number(operation.bins['45+'] || 0);
   var projectClosingRows = projectClosingList();
-  var awaitingDelivery = projectClosingRows.filter(function(entry){ return entry.category === 'pendente'; }).length;
+  var awaitingDelivery = projectClosingRows.filter(function(entry){ return entry.category === 'pendente' || entry.category === 'aprovado'; }).length;
   var topCards = '<div class="dashx-top-grid">'+
     dashKpiCard('Projetos 2026', total, 'Somente a carteira identificada como 2026. Clique para listar.', 'good', 'activeProjects', '<span class="dashx-kpi-delta neutral">Recorte fixo 2026</span>', "return dashOpenTopKpiAudit('projects')")+
     dashKpiCard('Com rastreio ClickUp', trackedPct === null ? '-' : dashPct(trackedPct), tracked+' de '+auditable+' projeto(s) auditáveis possuem rastreio técnico. Clique para listar.', dashMetricClass(trackedPct, 70, 90, false), 'aging', '<span class="dashx-kpi-delta neutral">'+untracked+' sem ClickUp</span>', "return dashOpenTopKpiAudit('tracked')")+
     dashKpiCard('ClickUp 15+ dias', stale15, 'Projetos rastreados sem atualização recente no ClickUp. Clique para listar.', stale15 ? 'bad' : 'good', 'aging', '<span class="dashx-kpi-delta neutral">Regra: atualização ClickUp</span>', "return dashOpenTopKpiAudit('stale')")+
-    dashKpiCard('Fechamento de projeto', awaitingDelivery, 'Projetos com item Entrega ainda sem APROVAR/APROVADO. Clique para gerenciar.', awaitingDelivery ? 'warn' : 'good', 'projectRisk', '<span class="dashx-kpi-delta neutral">Pendente de aprovação</span>', "goTab('projfech');return false")+
+    dashKpiCard('Fechamento de projeto', awaitingDelivery, 'Projetos com item Entrega no ClickUp pendente ou aprovado para concluir. Clique para gerenciar.', awaitingDelivery ? 'warn' : 'good', 'projectRisk', '<span class="dashx-kpi-delta neutral">Regra ClickUp</span>', "goTab('projfech');return false")+
     dashKpiCard('Taxa de 1º treinamento realizado', activeRate === null ? '-' : dashPct(activeRate), activeRate === null ? 'Conversão indisponível.' : 'Conversão da jornada venda → 1º treinamento realizado. Clique para listar.', dashMetricClass(activeRate, 40, 70, false), 'funnel', '<span class="dashx-kpi-delta neutral">Base 2026</span>', "return dashOpenTopKpiAudit('activation')")+
     dashKpiCard('Saúde dos dados', health.completude === null ? '-' : dashPct(health.completude), health.completude === null ? 'Não há base suficiente.' : (health.inconsistencias.length+' projeto(s) com campo essencial ausente. Clique para listar.'), dashMetricClass(health.completude, 70, 90, false), 'dataHealthSummary', '<span class="dashx-kpi-delta neutral">'+health.syncErrors+' falha(s) de sync</span>', "return dashOpenTopKpiAudit('health')")+
   '</div>';
