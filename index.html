@@ -5309,6 +5309,10 @@ function fechamentoJsonItemAprovaProjeto(item) {
   return (marker === 'entrega' || marker === 'entrega de projeto') &&
     (status.indexOf('aprovar') >= 0 || status.indexOf('aprovad') >= 0);
 }
+function fechamentoItemStatusAprovarProjeto(item) {
+  var status = fechamentoSearchKey(item && (item.status_original || item.status || item.status_atual));
+  return status.indexOf('aprovar') >= 0 || status.indexOf('aprovad') >= 0;
+}
 function fechamentoItemTemMarcadorEntrega(item) {
   var marker = fechamentoSearchKey(item && (item.custom_item_name || item.item_tipo_clickup || item.item_tipo || item.tipo_custom || item.item_tipo));
   var flag = String(item && item.marcador_entrega || '').toLowerCase() === 'sim';
@@ -5323,7 +5327,8 @@ function fechamentoItemEhBreakOff(item) {
     name.indexOf('break off') >= 0;
 }
 function fechamentoItemEhFechamentoProjeto(item) {
-  return fechamentoItemTemMarcadorEntrega(item) && fechamentoItemEhBreakOff(item);
+  return fechamentoItemEhBreakOff(item) &&
+    (fechamentoItemTemMarcadorEntrega(item) || fechamentoJsonItemAprovaProjeto(item));
 }
 function fechamentoItemPertenceAoProjeto(item, projectKey, projectName) {
   if (projectKey && String(item && item.project_key || '').trim() === projectKey) return true;
@@ -5375,17 +5380,17 @@ function projectClosingDeliveryItemsFromJson(p) {
   return []
     .concat(Array.isArray(payload.marcos) ? payload.marcos : [])
     .concat(Array.isArray(payload.tasks) ? payload.tasks : [])
-    .filter(fechamentoItemEhFechamentoProjeto);
+    .filter(function(item){ return fechamentoItemEhBreakOff(item) && fechamentoItemStatusAprovarProjeto(item); });
 }
 function projectClosingInfo(p) {
   var projectKey = String((p && p.project_key) || '').trim();
   var projectName = normalizeClienteKey((p && p.cliente) || '');
   var rows = (FECHAMENTO_MARCOS || []).filter(function(item) {
-    return fechamentoItemEhFechamentoProjeto(item) && fechamentoItemPertenceAoProjeto(item, projectKey, projectName);
+    return fechamentoItemEhBreakOff(item) && fechamentoIsProjectClosing(item) && fechamentoItemPertenceAoProjeto(item, projectKey, projectName);
   });
   var jsonItems = projectClosingDeliveryItemsFromJson(p);
-  var approved = rows.some(fechamentoIsProjectClosing) || jsonItems.some(fechamentoJsonItemAprovaProjeto);
-  var pending = !approved && (rows.length || jsonItems.length);
+  var approved = rows.some(fechamentoIsProjectClosing) || jsonItems.some(fechamentoItemStatusAprovarProjeto);
+  var pending = false;
   var firstRow = rows[0] || null;
   var firstJson = jsonItems[0] || null;
   var status = firstRow
@@ -5494,6 +5499,36 @@ function fechamentoApplySyncRows(rows, syncMonth) {
     return String(item.mes_fechamento || '') === month;
   }));
 }
+function fechamentoLoadSheetFallback() {
+  var url = 'https://docs.google.com/spreadsheets/d/' + SHEET_ID + '/gviz/tq?gid=756684793&_ts=' + Date.now();
+  return loadGvizTableJsonp(url, 15000).then(function(table) {
+    if (!table) throw new Error('Fallback de fechamento indisponível.');
+    var normalizada = normalizarTabelaGviz(table);
+    var rows = (normalizada.rows || []).map(function(row) {
+      return mapearGvizRow(normalizada.cols, row);
+    }).filter(function(item) {
+      return item && item.task_id;
+    });
+    if (!rows.length) throw new Error('Fallback de fechamento vazio.');
+    FECHAMENTO_MARCOS = fechamentoNormalizeRows(rows);
+    FECHAMENTO_META = {
+      ok: true,
+      total: FECHAMENTO_MARCOS.length,
+      fallback_sheet: true,
+      warning: 'Leitura via planilha publicada porque o Apps Script não respondeu.'
+    };
+    FECHAMENTO_LOADED = true;
+    FECHAMENTO_LOADING = false;
+    fechamentoSaveCache();
+    fechamentoApplyProjectStatuses();
+    if (!FECHAMENTO_FILTER.month) FECHAMENTO_FILTER.month = fechamentoCurrentMonth();
+    initFechamento();
+    initProjectClosing();
+    initBonus();
+    initDash();
+    return FECHAMENTO_META;
+  });
+}
 function fechamentoLoad(force) {
   if (!authTokenParam()) return Promise.resolve(null);
   if (FECHAMENTO_LOADING) {
@@ -5561,6 +5596,14 @@ function fechamentoLoad(force) {
     FECHAMENTO_META.error = FECHAMENTO_LOADED
       ? 'Não foi possível atualizar agora. Mantendo a última leitura válida.'
       : 'Não foi possível carregar o fechamento agora. Tente recarregar em alguns instantes.';
+    if (!FECHAMENTO_LOADED || !(FECHAMENTO_MARCOS || []).length) {
+      return fechamentoLoadSheetFallback().catch(function() {
+        initFechamento();
+        initProjectClosing();
+        initBonus();
+        return null;
+      });
+    }
     initFechamento();
     initProjectClosing();
     initBonus();
