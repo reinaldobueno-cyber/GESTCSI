@@ -3302,7 +3302,12 @@ body.theme-dark *{
 .closing-client-search:focus{outline:none;border-color:rgba(45,110,78,.38);box-shadow:0 0 0 3px rgba(45,110,78,.08)}
 .closing-filter-footer{display:flex;justify-content:flex-end;align-items:center;margin-top:13px;padding-top:12px;border-top:1px solid var(--border)}
 .closing-consultant-card{background:var(--surf);border:1px solid var(--border);border-radius:14px;margin-bottom:16px;overflow:hidden}
+.closing-consultant-card.is-collapsed .closing-project-list{display:none}
+.closing-consultant-card.is-collapsed .closing-consultant-head{border-bottom:0}
 .closing-consultant-head{display:flex;justify-content:space-between;gap:12px;align-items:center;padding:15px 17px;border-bottom:1px solid var(--border);background:var(--surf2)}
+.closing-consultant-toggle{display:flex;align-items:center;gap:10px;border:0;background:transparent;padding:0;text-align:left;cursor:pointer;color:inherit}
+.closing-consultant-arrow{width:24px;height:24px;border:1px solid var(--border);border-radius:999px;background:var(--surf);display:inline-flex;align-items:center;justify-content:center;font-size:12px;font-weight:900;color:var(--green);transition:transform .16s ease}
+.closing-consultant-card.is-collapsed .closing-consultant-arrow{transform:rotate(-90deg)}
 .closing-consultant-name{font-size:15px;font-weight:900;color:var(--text);text-transform:uppercase;letter-spacing:.04em}
 .closing-consultant-metrics{display:flex;gap:18px;flex-wrap:wrap}
 .closing-consultant-metric{text-align:right}.closing-consultant-metric strong{display:block;font-size:18px;color:var(--text)}.closing-consultant-metric span{font-size:8px;font-weight:900;color:var(--muted);text-transform:uppercase}
@@ -5232,6 +5237,15 @@ var FECHAMENTO_LOADING = false;
 var FECHAMENTO_SESSION_REFRESHED = false;
 var FECHAMENTO_POLL_TIMER = null;
 var FECHAMENTO_FILTER = { month:'', consultor:'todos', projetoBusca:'', situacao:'todos' };
+var FECHAMENTO_COLLAPSED = {};
+try { FECHAMENTO_COLLAPSED = JSON.parse(storageGet('gestcsi_fechamento_collapsed_v1', '{}')) || {}; } catch(e) { FECHAMENTO_COLLAPSED = {}; }
+function fechamentoToggleConsultant(name) {
+  var key = consultantCompKey(name) || normalizeClienteKey(name);
+  FECHAMENTO_COLLAPSED[key] = !FECHAMENTO_COLLAPSED[key];
+  storageSet('gestcsi_fechamento_collapsed_v1', JSON.stringify(FECHAMENTO_COLLAPSED));
+  initFechamento();
+  return false;
+}
 function fechamentoRestoreCache() {
   try {
     var cached = JSON.parse(localStorage.getItem('gestcsi_fechamento_cache') || 'null');
@@ -5298,7 +5312,14 @@ function fechamentoJsonItemAprovaProjeto(item) {
 function fechamentoItemTemMarcadorEntrega(item) {
   var marker = fechamentoSearchKey(item && (item.custom_item_name || item.item_tipo_clickup || item.item_tipo || item.tipo_custom || item.item_tipo));
   var flag = String(item && item.marcador_entrega || '').toLowerCase() === 'sim';
-  return flag || marker === 'entrega' || marker === 'entrega de projeto';
+  var name = fechamentoSearchKey(item && (item.nome || item.marco || item.name));
+  var phase = fechamentoSearchKey(item && (item.fase_nome || item.fase || item.phase));
+  var deliveryByName = name.indexOf('entrega') >= 0 &&
+    (name.indexOf('projeto para o cliente') >= 0 ||
+      name.indexOf('entrega do projeto') >= 0 ||
+      phase.indexOf('break off') >= 0 ||
+      phase.indexOf('entrega do projeto') >= 0);
+  return flag || marker === 'entrega' || marker === 'entrega de projeto' || deliveryByName;
 }
 function fechamentoItemPertenceAoProjeto(item, projectKey, projectName) {
   if (projectKey && String(item && item.project_key || '').trim() === projectKey) return true;
@@ -5347,7 +5368,10 @@ function fechamentoApplyProjectStatuses() {
 }
 function projectClosingDeliveryItemsFromJson(p) {
   var payload = parseJsonSeguro((p && p.clickup_json) || '') || {};
-  return (Array.isArray(payload.marcos) ? payload.marcos : []).filter(fechamentoItemTemMarcadorEntrega);
+  return []
+    .concat(Array.isArray(payload.marcos) ? payload.marcos : [])
+    .concat(Array.isArray(payload.tasks) ? payload.tasks : [])
+    .filter(fechamentoItemTemMarcadorEntrega);
 }
 function projectClosingInfo(p) {
   var projectKey = String((p && p.project_key) || '').trim();
@@ -5443,7 +5467,9 @@ function fechamentoProjectFromItem(item) {
   })[0] || null;
 }
 function fechamentoEffectiveConsultant(item) {
-  return consultantCanonicalName((item && (item.consultor || item.responsaveis)) || 'Sem consultor');
+  var own = consultantCanonicalName((item && (item.consultor || item.responsaveis)) || '');
+  if (own && fechamentoSearchKey(own).search(/administrativo|administrador|multsoft|suporte/) < 0) return own;
+  return fechamentoPortfolioConsultant(item) || own || 'Sem consultor';
 }
 function fechamentoPortfolioConsultant(item) {
   var project = fechamentoProjectFromItem(item);
@@ -5698,6 +5724,8 @@ function initFechamento() {
   });
   var consultantCards = Object.keys(byConsultant).sort().map(function(consultant) {
     var consultantRows = byConsultant[consultant];
+    var collapsedKey = consultantCompKey(consultant) || normalizeClienteKey(consultant);
+    var collapsed = !!FECHAMENTO_COLLAPSED[collapsedKey];
     var consultantApproved = consultantRows.filter(function(item){ return item.situacao === 'aprovado'; }).length;
     var consultantRejected = consultantRows.filter(function(item){ return item.situacao === 'reprovado'; }).length;
     var consultantWaiting = consultantRows.filter(function(item){ return item.situacao === 'aguardando'; }).length;
@@ -5715,7 +5743,7 @@ function initFechamento() {
         '<div><span class="closing-status '+escapeHtml(status)+'">'+escapeHtml(item.status_atual || status)+'</span><div class="closing-project-comment" style="margin-top:7px">'+comment+'<div class="closing-project-meta">'+ownerNote+'</div></div></div>'+
         '<div><strong>'+fechamentoMoney(item.valor_bonus)+'</strong><div style="margin-top:8px"><a class="project-link-btn" href="'+escapeHtml(item.link || '#')+'" target="_blank" rel="noopener">Abrir marco</a></div></div></div>';
     }).join('');
-    return '<section class="closing-consultant-card"><div class="closing-consultant-head"><div><div class="closing-consultant-name">'+escapeHtml(consultant)+'</div><div class="closing-project-meta">Entregas que entraram em Closed no período selecionado</div></div><div class="closing-consultant-metrics"><div class="closing-consultant-metric"><strong>'+consultantRows.length+'</strong><span>Entregas</span></div><div class="closing-consultant-metric"><strong>'+consultantWaiting+'</strong><span>Aguardando</span></div><div class="closing-consultant-metric"><strong>'+consultantApproved+' / '+consultantRejected+'</strong><span>Aprov. / Reprov.</span></div><div class="closing-consultant-metric"><strong>'+fechamentoMoney(consultantBonus)+'</strong><span>Bônus</span></div></div></div><div class="closing-project-list">'+projectCards+'</div></section>';
+    return '<section class="closing-consultant-card '+(collapsed?'is-collapsed':'')+'"><div class="closing-consultant-head"><button class="closing-consultant-toggle" onclick="return fechamentoToggleConsultant(decodeURIComponent(\''+encodeURIComponent(consultant)+'\'))"><span class="closing-consultant-arrow">&#9662;</span><span><span class="closing-consultant-name">'+escapeHtml(consultant)+'</span><span class="closing-project-meta">Entregas que entraram em Closed no período selecionado</span></span></button><div class="closing-consultant-metrics"><div class="closing-consultant-metric"><strong>'+consultantRows.length+'</strong><span>Entregas</span></div><div class="closing-consultant-metric"><strong>'+consultantWaiting+'</strong><span>Aguardando</span></div><div class="closing-consultant-metric"><strong>'+consultantApproved+' / '+consultantRejected+'</strong><span>Aprov. / Reprov.</span></div><div class="closing-consultant-metric"><strong>'+fechamentoMoney(consultantBonus)+'</strong><span>Bônus</span></div></div></div><div class="closing-project-list">'+projectCards+'</div></section>';
   }).join('') || '<div class="empty">Nenhum marco encontrado neste recorte. Atualize os Closed ou consulte as validações.</div>';
   var error = FECHAMENTO_META.error ? '<div class="dashx-focus-note" style="margin-bottom:12px"><strong>'+escapeHtml(FECHAMENTO_META.error)+'</strong></div>' : '';
   var bg = FECHAMENTO_META.background_sync || {};
@@ -5745,6 +5773,7 @@ function initFechamento() {
 window.fechamentoLoad = fechamentoLoad;
 window.fechamentoSetFilter = fechamentoSetFilter;
 window.fechamentoSetProjectSearch = fechamentoSetProjectSearch;
+window.fechamentoToggleConsultant = fechamentoToggleConsultant;
 window.fechamentoStartSync = fechamentoStartSync;
 window.fechamentoSyncRejected = fechamentoSyncRejected;
 window.fechamentoSyncApproved = fechamentoSyncApproved;
