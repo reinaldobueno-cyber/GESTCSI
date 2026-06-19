@@ -6087,14 +6087,7 @@ function isProjectDeliveryTask_(task) {
     (task && (task.custom_item_name || task.item_tipo_clickup)) ||
     clickUpTaskCustomItemName_(task)
   );
-  if (key === 'ENTREGA') return true;
-  var name = normalizeKey_(task && (task.name || task.nome));
-  var phase = normalizeKey_(task && (task.fase_nome || task.phase || task.fase));
-  return name.indexOf('ENTREGA') >= 0 &&
-    (name.indexOf('PROJETO PARA O CLIENTE') >= 0 ||
-      name.indexOf('ENTREGA DO PROJETO') >= 0 ||
-      phase.indexOf('BREAK OFF') >= 0 ||
-      phase.indexOf('ENTREGA DO PROJETO') >= 0);
+  return key === 'ENTREGA';
 }
 
 function isClosingTrackedTask_(task) {
