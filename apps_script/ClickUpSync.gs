@@ -114,6 +114,9 @@ function doGet(e) {
     if (action === 'getClickUpMilestoneClosing') {
       return jsonOutput_(getClickUpMilestoneClosing_(params), params.callback);
     }
+    if (action === 'diagnoseProjectClosing') {
+      return jsonOutput_(diagnoseProjectClosing_(params), params.callback);
+    }
     if (action === 'startClickUpMilestoneClosingBackground') {
       requireAdmin_(params);
       return jsonOutput_(startClickUpMilestoneClosingBackground_(params), params.callback);
@@ -1828,6 +1831,57 @@ function getClickUpMilestoneClosing_(params) {
     total: rows.length,
     bonus_por_marco: CLICKUP_MILESTONE_BONUS_VALUE,
     background_sync: getClickUpMilestoneClosingBackgroundStatus_()
+  };
+}
+
+function diagnoseProjectClosing_(params) {
+  requireUser_(params || {});
+  var raw = sanitizeText_(params.list_id || params.query || params.link || params.url);
+  var ids = raw.match(/\d{6,}/g) || [];
+  var listId = normalizeClickUpId_(params.list_id || ids[ids.length - 1] || raw);
+  if (!listId) throw new Error('Informe um list_id ou link do ClickUp.');
+  var tasks = fetchAllListTasks_(listId, { deadline: new Date().getTime() + 25000 });
+  var phaseMap = {};
+  var byId = {};
+  tasks.forEach(function(task) { byId[String(task.id)] = task; });
+  tasks.forEach(function(task) {
+    if (isPhaseTask_(task, byId)) {
+      phaseMap[String(task.id)] = {
+        tipo: 'fase',
+        id: String(task.id),
+        nome: sanitizeText_(task.name),
+        ordem: extractLeadingNumber_(task.name)
+      };
+    }
+  });
+  var breakOffItems = [];
+  tasks.forEach(function(task) {
+    if (isPhaseTask_(task, byId)) return;
+    var phaseInfo = resolvePhaseForTask_(task, byId, phaseMap);
+    var phaseName = phaseInfo.phase ? phaseInfo.phase.nome : '';
+    if (!isProjectBreakOffText_(phaseName) && !isProjectBreakOffText_(task && task.name)) return;
+    var status = sanitizeText_(task.status && (task.status.status || task.status.type || task.status.label));
+    var marker = clickUpTaskCustomItemName_(task);
+    breakOffItems.push({
+      id: String(task.id || ''),
+      nome: sanitizeText_(task.name),
+      fase_nome: phaseName,
+      status_original: status,
+      custom_item_id: String(task.custom_item_id || ''),
+      custom_item_name: marker,
+      marcador_entrega: isProjectDeliveryTask_(task) ? 'sim' : '',
+      aprovar: isProjectClosingApprovalStatus_(status),
+      entra_regra: isProjectClosingDeliveryItem_(task, phaseName) && isProjectClosingApprovalStatus_(status),
+      link: sanitizeText_(task.url || task.permalink || task.link || task.html_url) || ('https://app.clickup.com/t/' + String(task.id || ''))
+    });
+  });
+  return {
+    ok: true,
+    list_id: listId,
+    tasks_total: tasks.length,
+    breakoff_total: breakOffItems.length,
+    aprovados_total: breakOffItems.filter(function(item) { return item.entra_regra; }).length,
+    items: breakOffItems
   };
 }
 
