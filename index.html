@@ -293,11 +293,7 @@ nav{background:var(--nav);height:58px;display:flex;align-items:center;justify-co
 .acom-mini-fill{height:100%;background:var(--green);border-radius:999px;}
 .acom-cons-row{display:grid;grid-template-columns:130px 1fr 52px;gap:10px;align-items:center;padding:9px 0;border-bottom:1px solid var(--border);}
 .acom-cons-row:last-child{border-bottom:none;}
-.acom-cons-left{display:flex;align-items:center;gap:8px;min-width:0;}
 .acom-cons-name{font-size:12px;font-weight:800;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
-.acom-cons-alert{position:relative;flex:0 0 auto;width:28px;height:28px;border:1px solid var(--border);border-radius:999px;background:var(--surf);color:var(--text2);display:inline-flex;align-items:center;justify-content:center;font-size:13px;cursor:pointer}
-.acom-cons-alert.has-pending{border-color:#d9a93c;background:#fff8e7;color:#8a5b13;box-shadow:0 8px 18px rgba(217,169,60,.16)}
-.acom-cons-alert-badge{position:absolute;top:-7px;right:-7px;min-width:18px;height:18px;border-radius:999px;background:#d94857;color:#fff;font:900 10px 'Inter',sans-serif;display:flex;align-items:center;justify-content:center;padding:0 5px}
 .acom-stack{height:12px;border-radius:999px;background:var(--border);overflow:hidden;display:flex;}
 .acom-stack span{height:100%;}
 .acom-table-wrap{overflow:auto;border:1px solid var(--border);border-radius:8px;}
@@ -5013,7 +5009,8 @@ function acompRenderMonths(list) {
 function acompRenderConsultores(list) {
   var map = {};
   list.forEach(function(x){
-    var key = x.consultor || 'Sem consultor';
+    var key = x.consultor || '';
+    if (!key || key === 'Sem consultor') return;
     if (!map[key]) map[key] = {nome:key, total:0};
     map[key].total += 1;
     ACOMP_BUCKETS.forEach(function(b){ if (map[key][b.key] == null) map[key][b.key] = 0; });
@@ -5021,13 +5018,11 @@ function acompRenderConsultores(list) {
   });
   return Object.keys(map).sort().map(function(k){
     var c = map[k];
-    var pending = acompPendenciasDoConsultor(c.nome);
-    var bell = '<button type="button" class="acom-cons-alert '+(pending.length ? 'has-pending' : '')+'" title="'+(pending.length ? pending.length+' pendência(s) direcionada(s)' : 'Sem pendências direcionadas')+'" onclick="return abrirPendenciasConsultor(decodeURIComponent(\''+encodeURIComponent(c.nome)+'\'),event)">&#128276;'+(pending.length ? '<span class="acom-cons-alert-badge">'+pending.length+'</span>' : '')+'</button>';
     var segs = ACOMP_BUCKETS.map(function(b){
       var pct = acompPercent(c[b.key] || 0, c.total || 1);
       return pct ? '<span style="width:'+pct+'%;background:'+b.color+'"></span>' : '';
     }).join('');
-    return '<div class="acom-cons-row"><div class="acom-cons-left">'+bell+'<div class="acom-cons-name">'+escapeHtml(c.nome)+'</div></div><div class="acom-stack">'+segs+'</div><strong>'+c.total+'</strong></div>';
+    return '<div class="acom-cons-row"><div class="acom-cons-name">'+escapeHtml(c.nome)+'</div><div class="acom-stack">'+segs+'</div><strong>'+c.total+'</strong></div>';
   }).join('') || '<div class="empty">Sem consultores no recorte.</div>';
 }
 function acompRenderRows(list) {
