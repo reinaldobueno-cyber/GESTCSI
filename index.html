@@ -3308,7 +3308,11 @@ body.theme-dark *{
 .closing-consultant-toggle{display:flex;align-items:center;gap:10px;border:0;background:transparent;padding:0;text-align:left;cursor:pointer;color:inherit}
 .closing-consultant-arrow{width:24px;height:24px;border:1px solid var(--border);border-radius:999px;background:var(--surf);display:inline-flex;align-items:center;justify-content:center;font-size:12px;font-weight:900;color:var(--green);transition:transform .16s ease}
 .closing-consultant-card.is-collapsed .closing-consultant-arrow{transform:rotate(-90deg)}
-.closing-consultant-name{font-size:15px;font-weight:900;color:var(--text);text-transform:uppercase;letter-spacing:.04em}
+.closing-consultant-name{display:block;font-size:15px;font-weight:900;color:var(--text);text-transform:uppercase;letter-spacing:.04em;margin-bottom:8px}
+.closing-consultant-title-row{display:flex;align-items:center;gap:9px;flex-wrap:wrap}
+.closing-consultant-alert{position:relative;width:29px;height:29px;border:1px solid var(--border);border-radius:999px;background:var(--surf);color:var(--text2);display:inline-flex;align-items:center;justify-content:center;font-size:14px;cursor:pointer}
+.closing-consultant-alert.has-pending{border-color:#d9a93c;background:#fff8e7;color:#8a5b13;box-shadow:0 8px 18px rgba(217,169,60,.16)}
+.closing-consultant-alert-badge{position:absolute;top:-7px;right:-7px;min-width:18px;height:18px;border-radius:999px;background:#d94857;color:#fff;font:900 10px 'Inter',sans-serif;display:flex;align-items:center;justify-content:center;padding:0 5px}
 .closing-consultant-metrics{display:flex;gap:18px;flex-wrap:wrap}
 .closing-consultant-metric{text-align:right}.closing-consultant-metric strong{display:block;font-size:18px;color:var(--text)}.closing-consultant-metric span{font-size:8px;font-weight:900;color:var(--muted);text-transform:uppercase}
 .closing-project-list{padding:12px}
@@ -4618,6 +4622,29 @@ function abrirAcompanhamentosPendentes(btn) {
   return false;
 }
 window.abrirAcompanhamentosPendentes = abrirAcompanhamentosPendentes;
+function acompPendenciasDoConsultor(consultor) {
+  var key = consultantCompKey(consultor) || normalizeClienteKey(consultor);
+  if (!key || typeof acompBase !== 'function') return [];
+  return acompBase().filter(function(item) {
+    if ((consultantCompKey(item.consultor) || normalizeClienteKey(item.consultor)) !== key) return false;
+    return acompNormalizeFollowupStatus(item.followupStatus) === 'pendente';
+  }).sort(function(a,b) {
+    return String(a.mes || '').localeCompare(String(b.mes || '')) ||
+      String(a.cliente || '').localeCompare(String(b.cliente || ''));
+  });
+}
+function abrirPendenciasConsultor(consultor, ev) {
+  if (ev && ev.stopPropagation) ev.stopPropagation();
+  var list = acompPendenciasDoConsultor(consultor);
+  var rows = list.map(function(item) {
+    var action = '<button type="button" class="project-link-btn" onclick="return acompProjectInfoPopup(\''+jsQuote(item.projectKey)+'\')">Abrir acompanhamento</button>';
+    return '<tr><td><strong>'+escapeHtml(item.cliente || '-')+'</strong><div class="dashx-list-sub">'+escapeHtml(item.mes || '-')+' &bull; '+escapeHtml(item.status || '-')+'</div></td><td>'+escapeHtml(item.proximaAcao || item.texto || 'Pendência direcionada')+'</td><td>'+action+'</td></tr>';
+  }).join('') || '<tr class="empty-row"><td colspan="3">Nenhuma pendência direcionada para este consultor.</td></tr>';
+  var html = '<div class="dashx-table-wrap"><table class="dashx-table"><thead><tr><th>Projeto</th><th>Pendência</th><th>Ação</th></tr></thead><tbody>'+rows+'</tbody></table></div>';
+  dashOpenAuditModal('Pendências de acompanhamento - '+consultor, html);
+  return false;
+}
+window.abrirPendenciasConsultor = abrirPendenciasConsultor;
 function acompTodayIso() {
   var d = new Date();
   return d.getFullYear() + '-' + ('0' + (d.getMonth()+1)).slice(-2) + '-' + ('0' + d.getDate()).slice(-2);
@@ -5238,12 +5265,12 @@ var FECHAMENTO_SESSION_REFRESHED = false;
 var FECHAMENTO_POLL_TIMER = null;
 var FECHAMENTO_FILTER = { month:'', consultor:'todos', projetoBusca:'', situacao:'todos' };
 var PROJECT_CLOSING_LOOKUP = {term:'', loading:false, result:null, error:''};
-var FECHAMENTO_COLLAPSED = {};
-try { FECHAMENTO_COLLAPSED = JSON.parse(storageGet('gestcsi_fechamento_collapsed_v1', '{}')) || {}; } catch(e) { FECHAMENTO_COLLAPSED = {}; }
+var FECHAMENTO_EXPANDED = {};
+try { FECHAMENTO_EXPANDED = JSON.parse(storageGet('gestcsi_fechamento_expanded_v1', '{}')) || {}; } catch(e) { FECHAMENTO_EXPANDED = {}; }
 function fechamentoToggleConsultant(name) {
   var key = consultantCompKey(name) || normalizeClienteKey(name);
-  FECHAMENTO_COLLAPSED[key] = !FECHAMENTO_COLLAPSED[key];
-  storageSet('gestcsi_fechamento_collapsed_v1', JSON.stringify(FECHAMENTO_COLLAPSED));
+  FECHAMENTO_EXPANDED[key] = !FECHAMENTO_EXPANDED[key];
+  storageSet('gestcsi_fechamento_expanded_v1', JSON.stringify(FECHAMENTO_EXPANDED));
   initFechamento();
   return false;
 }
@@ -5901,7 +5928,9 @@ function initFechamento() {
   var consultantCards = Object.keys(byConsultant).sort().map(function(consultant) {
     var consultantRows = byConsultant[consultant];
     var collapsedKey = consultantCompKey(consultant) || normalizeClienteKey(consultant);
-    var collapsed = !!FECHAMENTO_COLLAPSED[collapsedKey];
+    var collapsed = !FECHAMENTO_EXPANDED[collapsedKey];
+    var pendingFollowups = acompPendenciasDoConsultor(consultant);
+    var pendingBell = '<button type="button" class="closing-consultant-alert '+(pendingFollowups.length ? 'has-pending' : '')+'" title="'+(pendingFollowups.length ? pendingFollowups.length+' pendência(s) direcionada(s)' : 'Sem pendências direcionadas')+'" onclick="return abrirPendenciasConsultor(decodeURIComponent(\''+encodeURIComponent(consultant)+'\'),event)">&#128276;'+(pendingFollowups.length ? '<span class="closing-consultant-alert-badge">'+pendingFollowups.length+'</span>' : '')+'</button>';
     var consultantApproved = consultantRows.filter(function(item){ return item.situacao === 'aprovado'; }).length;
     var consultantRejected = consultantRows.filter(function(item){ return item.situacao === 'reprovado'; }).length;
     var consultantWaiting = consultantRows.filter(function(item){ return item.situacao === 'aguardando'; }).length;
@@ -5919,7 +5948,7 @@ function initFechamento() {
         '<div><span class="closing-status '+escapeHtml(status)+'">'+escapeHtml(item.status_atual || status)+'</span><div class="closing-project-comment" style="margin-top:7px">'+comment+'<div class="closing-project-meta">'+ownerNote+'</div></div></div>'+
         '<div><strong>'+fechamentoMoney(item.valor_bonus)+'</strong><div style="margin-top:8px"><a class="project-link-btn" href="'+escapeHtml(item.link || '#')+'" target="_blank" rel="noopener">Abrir marco</a></div></div></div>';
     }).join('');
-    return '<section class="closing-consultant-card '+(collapsed?'is-collapsed':'')+'"><div class="closing-consultant-head"><button class="closing-consultant-toggle" onclick="return fechamentoToggleConsultant(decodeURIComponent(\''+encodeURIComponent(consultant)+'\'))"><span class="closing-consultant-arrow">&#9662;</span><span><span class="closing-consultant-name">'+escapeHtml(consultant)+'</span><span class="closing-project-meta">Entregas que entraram em Closed no período selecionado</span></span></button><div class="closing-consultant-metrics"><div class="closing-consultant-metric"><strong>'+consultantRows.length+'</strong><span>Entregas</span></div><div class="closing-consultant-metric"><strong>'+consultantWaiting+'</strong><span>Aguardando</span></div><div class="closing-consultant-metric"><strong>'+consultantApproved+' / '+consultantRejected+'</strong><span>Aprov. / Reprov.</span></div><div class="closing-consultant-metric"><strong>'+fechamentoMoney(consultantBonus)+'</strong><span>Bônus</span></div></div></div><div class="closing-project-list">'+projectCards+'</div></section>';
+    return '<section class="closing-consultant-card '+(collapsed?'is-collapsed':'')+'"><div class="closing-consultant-head"><div class="closing-consultant-title-row"><button class="closing-consultant-toggle" onclick="return fechamentoToggleConsultant(decodeURIComponent(\''+encodeURIComponent(consultant)+'\'))"><span class="closing-consultant-arrow">&#9662;</span><span><span class="closing-consultant-name">'+escapeHtml(consultant)+'</span><span class="closing-project-meta">Marcos que entraram em Closed no período selecionado</span></span></button>'+pendingBell+'</div><div class="closing-consultant-metrics"><div class="closing-consultant-metric"><strong>'+consultantRows.length+'</strong><span>Marcos</span></div><div class="closing-consultant-metric"><strong>'+consultantWaiting+'</strong><span>Aguardando</span></div><div class="closing-consultant-metric"><strong>'+consultantApproved+' / '+consultantRejected+'</strong><span>Aprov. / Reprov.</span></div><div class="closing-consultant-metric"><strong>'+fechamentoMoney(consultantBonus)+'</strong><span>Bônus</span></div></div></div><div class="closing-project-list">'+projectCards+'</div></section>';
   }).join('') || '<div class="empty">Nenhum marco encontrado neste recorte. Atualize os Closed ou consulte as validações.</div>';
   var error = FECHAMENTO_META.error ? '<div class="dashx-focus-note" style="margin-bottom:12px"><strong>'+escapeHtml(FECHAMENTO_META.error)+'</strong></div>' : '';
   var bg = FECHAMENTO_META.background_sync || {};
@@ -12041,7 +12070,7 @@ function gestaoRenderClickUpUserActivity(users, meta) {
   var cards =
     '<div class="dashx-top-grid" style="grid-template-columns:repeat(4,minmax(0,1fr));margin-bottom:14px">'+
       '<div class="dashx-card good"><div class="dashx-card-label">Ativos em 7 dias</div><div class="dashx-card-value">'+active7+'</div><div class="dashx-card-note">'+(estimatedMode ? 'com tarefa atualizada recentemente' : 'com login, ação ou last active recente')+'</div></div>'+
-      '<div class="dashx-card warn"><div class="dashx-card-label">15+ dias sem sinal</div><div class="dashx-card-value">'+stale15+'</div><div class="dashx-card-note">sem atividade recente no controle</div></div>'+
+      '<div class="dashx-card warn"><div class="dashx-card-label">15+ dias sem atividade</div><div class="dashx-card-value">'+stale15+'</div><div class="dashx-card-note">sem last active ou tarefa recente</div></div>'+
       '<div class="dashx-card neutral"><div class="dashx-card-label">Com movimento hoje</div><div class="dashx-card-value">'+movedToday+'</div><div class="dashx-card-note">última ação no dia da sync</div></div>'+
       '<div class="dashx-card neutral"><div class="dashx-card-label">Sem movimento hoje</div><div class="dashx-card-value">'+notMovedToday+'</div><div class="dashx-card-note">última ação antes de hoje</div></div>'+
     '</div>';
@@ -12053,7 +12082,7 @@ function gestaoRenderClickUpUserActivity(users, meta) {
     var last = gestaoActivityLastSignal(u);
     var days = gestaoActivityDays(last);
     var cls = gestaoActivityRiskClass(days);
-    var label = days === null ? 'sem sinal' : (days+'d');
+    var label = days === null ? 'sem dado' : (days === 0 ? 'Hoje' : (days+'d'));
     var fallbackLast = u.ultima_acao || u.ultimo_evento || u.primeira_acao || u.clickup_last_active;
     var dayActions = gestaoUserDayActivitiesForDay(u, todayKey);
     var sevenDayActions = gestaoUserSevenDayActivities(u);
@@ -12071,7 +12100,7 @@ function gestaoRenderClickUpUserActivity(users, meta) {
       '</tr>';
   }).join('');
   var modeNote = estimatedMode ? 'Modo estimado: usa tarefas, responsáveis, criadores, status fechado e datas de atualização. Não mede login real.' : 'Modo Audit Log: usa eventos reais liberados pelo ClickUp.';
-  var numbersNote = estimatedMode ? 'Sem sinal usa o melhor sinal disponível entre last active e tarefas. Projetos e movimentos usam a carteira oficial do consultor; a API informa que o projeto mudou, mas não identifica com certeza quem fez a alteração.' : 'Eventos e Ações vêm do período do Audit Log.';
+  var numbersNote = estimatedMode ? 'Dias sem atividade usa o melhor sinal disponível entre last active e tarefas. Projetos e movimentos usam a carteira oficial do consultor; a API informa que o projeto mudou, mas não identifica com certeza quem fez a alteração.' : 'Eventos e Ações vêm do período do Audit Log.';
   var projectsMissingId = Math.max(0, projectsConfigured - projectsEligible);
   var coverageState = projectsConfigured && !syncComplete && projectsNextOffset < projectsSelected
     ? ' Sincronização incompleta; Gerar estimativa continuará do projeto '+projectsNextOffset+'.'
@@ -12085,7 +12114,7 @@ function gestaoRenderClickUpUserActivity(users, meta) {
     ? ' <button type="button" class="project-link-btn warn" onclick="return gestaoOpenClickUpErrors()">'+projectErrorDetails.length+' com erro</button>'
     : (projectsWithError ? ' '+projectsWithError+' erro(s) antigos; gere novamente para detalhar.' : '');
   var coverageNote = projectsConfigured ? ' Cobertura: '+projectsRead+' de '+projectsSelected+' projetos elegíveis tentados'+(projectsWithError ? ', '+projectsWithError+' com erro' : '')+(projectsMissingId ? ', '+projectsMissingId+' habilitados sem ID ClickUp' : '')+'.'+coverageState : '';
-  return '<div class="dashx-focus-note" style="margin-bottom:14px"><div><strong>Controle de adoção.</strong> '+modeNote+' '+numbersNote+coverageNote+errorAction+'</div><div class="dashx-focus-hint">última sync '+escapeHtml(gestaoActivityDateLabel(synced))+'</div></div>'+cards+'<div class="dashx-table-wrap"><table class="dashx-table"><thead><tr><th>Usuário</th><th>Last active</th><th>Última ação</th><th>Sem sinal</th><th>Mov. hoje</th><th>Mov. últ. 7 dias</th><th class="num">Projetos carteira</th></tr></thead><tbody>'+rows+'</tbody></table></div>';
+  return '<div class="dashx-focus-note" style="margin-bottom:14px"><div><strong>Controle de adoção.</strong> '+modeNote+' '+numbersNote+coverageNote+errorAction+'</div><div class="dashx-focus-hint">última sync '+escapeHtml(gestaoActivityDateLabel(synced))+'</div></div>'+cards+'<div class="dashx-table-wrap"><table class="dashx-table"><thead><tr><th>Usuário</th><th>Last active</th><th>Última ação</th><th>Dias sem atividade</th><th>Mov. hoje</th><th>Mov. últ. 7 dias</th><th class="num">Projetos carteira</th></tr></thead><tbody>'+rows+'</tbody></table></div>';
 }
 function gestaoReloadClickUpUserActivity(force) {
   var box = document.getElementById('clickup-user-activity-content');
