@@ -5397,8 +5397,25 @@ function projectClosingRenderSearchResults(term) {
   term = String(term || '').trim();
   if (!term) return '';
   var q = fechamentoSearchKey(term);
-  var list = ordenarProjetosPainel(projetosVisiveisParaUsuario(Array.isArray(DATA.projetos) ? DATA.projetos.slice() : []).filter(function(p) {
-    return fechamentoSearchKey(p && p.cliente).indexOf(q) >= 0;
+  var rawTerm = term.toLowerCase();
+  var numeric = (term.match(/\d{6,}/g) || []);
+  var list = ordenarProjetosPainel((Array.isArray(DATA.projetos) ? DATA.projetos.slice() : []).filter(function(p) {
+    var hay = [
+      p && p.cliente,
+      p && p.consultor,
+      p && p.mes,
+      p && p.projeto_link,
+      p && p.link_projeto,
+      p && p.project_url,
+      p && p.list_id,
+      p && p.view_id,
+      p && p.clickup_json
+    ].map(function(value){ return String(value || ''); }).join(' ');
+    var keyHay = fechamentoSearchKey(hay);
+    var lowerHay = hay.toLowerCase();
+    return keyHay.indexOf(q) >= 0 ||
+      lowerHay.indexOf(rawTerm) >= 0 ||
+      numeric.some(function(id){ return lowerHay.indexOf(id) >= 0; });
   })).slice(0, 12);
   var rows = list.map(function(p) {
     var info = projectClosingInfo(p);
@@ -5500,7 +5517,7 @@ function initProjectClosing() {
   }
   var table = '<div class="dashx-table-wrap"><table class="dashx-table"><thead><tr><th>Projeto</th><th>Consultor</th><th>Controle Lais</th><th>Status item Entrega</th><th>Situação ClickUp</th><th>Divergência controle</th><th>Fonte</th><th>Ação</th></tr></thead><tbody>'+rows(approved.concat(pending).concat(concluded))+'</tbody></table></div>';
   var searchTerm = projectClosingSearchTerm();
-  var searchBox = '<div class="closing-filter-block"><div class="closing-filter-label">Procurar projeto no fechamento</div><div style="display:flex;gap:8px;align-items:center"><input id="project-closing-search" class="closing-client-search" type="search" value="'+escapeHtml(searchTerm)+'" placeholder="Digite Roberto, cliente ou fazenda..." onkeydown="if(event.key===\'Enter\'){return projectClosingSearch()}"><button class="btn-syncall" onclick="return projectClosingSearch()">Procurar</button></div></div>';
+  var searchBox = '<div class="closing-filter-block"><div class="closing-filter-label">Procurar projeto no fechamento</div><div style="display:flex;gap:8px;align-items:center"><input id="project-closing-search" class="closing-client-search" type="search" value="'+escapeHtml(searchTerm)+'" placeholder="Digite Roberto ou cole link/list_id do ClickUp..." onkeydown="if(event.key===\'Enter\'){return projectClosingSearch()}"><button class="btn-syncall" onclick="return projectClosingSearch()">Procurar</button></div></div>';
   box.innerHTML = '<div class="closing-head"><div><div class="closing-title">Fechamento de projeto</div><div class="closing-sub">Controle separado dos marcos. Aqui entram apenas projetos com rastreio ClickUp e item marcado como Entrega.</div></div></div>'+
     '<div class="dashx-inline-note" style="margin-bottom:12px"><strong>Regra principal:</strong> fechamento de projeto considera somente o ClickUp: item com marcador Entrega pendente ou em APROVAR/APROVADO. O status do controle da Lais aparece apenas como alerta de diverg&ecirc;ncia, sem tirar o projeto da gest&atilde;o.</div>'+
     searchBox+projectClosingRenderSearchResults(searchTerm)+
