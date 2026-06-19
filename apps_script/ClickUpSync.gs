@@ -1874,10 +1874,12 @@ function diagnoseProjectClosing_(params) {
       status_original: status,
       custom_item_id: String(task.custom_item_id || ''),
       custom_item_name: marker,
+      item_tipo_clickup: marker,
       marcador_entrega: isProjectDeliveryTask_(task) ? 'sim' : '',
       aprovar: approvalSignal,
       entra_regra: isProjectClosingDeliveryItem_(task, phaseName) && approvalSignal,
       sinal_aprovacao_bruto: approvalSignal && !isProjectClosingApprovalStatus_(status) ? 'sim' : '',
+      debug_tipo: summarizeClickUpProjectClosingDebug_(task),
       link: sanitizeText_(task.url || task.permalink || task.link || task.html_url) || ('https://app.clickup.com/t/' + String(task.id || ''))
     });
   });
@@ -1889,6 +1891,32 @@ function diagnoseProjectClosing_(params) {
     aprovados_total: breakOffItems.filter(function(item) { return item.entra_regra; }).length,
     items: breakOffItems
   };
+}
+
+function summarizeClickUpProjectClosingDebug_(task) {
+  var parts = [];
+  function push(label, value) {
+    var text = sanitizeText_(value);
+    if (text) parts.push(label + ': ' + text);
+  }
+  push('custom_item_id', task && task.custom_item_id);
+  push('custom_item', task && task.custom_item && (task.custom_item.name || task.custom_item.label || task.custom_item.type || JSON.stringify(task.custom_item)));
+  push('custom_item_type', task && task.custom_item_type && (task.custom_item_type.name || task.custom_item_type.label || JSON.stringify(task.custom_item_type)));
+  push('custom_type', task && task.custom_type && (task.custom_type.name || task.custom_type.label || JSON.stringify(task.custom_type)));
+  push('custom_task_type', task && task.custom_task_type && (task.custom_task_type.name || task.custom_task_type.label || JSON.stringify(task.custom_task_type)));
+  if (task && Array.isArray(task.tags) && task.tags.length) {
+    push('tags', task.tags.map(function(tag) { return sanitizeText_(tag && (tag.name || tag.tag || tag.label)); }).filter(Boolean).join(', '));
+  }
+  if (task && Array.isArray(task.custom_fields) && task.custom_fields.length) {
+    var fields = task.custom_fields.map(function(field) {
+      var name = sanitizeText_(field && field.name);
+      var value = sanitizeText_(field && (field.value || field.display_value || field.text || field.type_config && JSON.stringify(field.type_config)));
+      return name && value ? name + '=' + value : '';
+    }).filter(Boolean).slice(0, 6).join(' | ');
+    push('campos', fields);
+  }
+  var result = parts.join(' · ');
+  return result.length > 600 ? result.slice(0, 600) + '...' : result;
 }
 
 function upsertClickUpMilestoneClosing_(mapping, normalized, options) {
@@ -6147,6 +6175,10 @@ function clickUpTaskCustomItemName_(task) {
       task.custom_item_name ||
       task.item_tipo_clickup ||
       task.custom_item && task.custom_item.name ||
+      task.custom_item && task.custom_item.label ||
+      task.custom_item && task.custom_item.type ||
+      task.custom_item_type && task.custom_item_type.name ||
+      task.custom_type && task.custom_type.name ||
       task.custom_task_type && task.custom_task_type.name ||
       task.task_type ||
       task.type
@@ -6159,7 +6191,7 @@ function isProjectDeliveryTask_(task) {
     (task && (task.custom_item_name || task.item_tipo_clickup)) ||
     clickUpTaskCustomItemName_(task)
   );
-  return key === 'ENTREGA';
+  return key === 'ENTREGA' || key.indexOf('ENTREGA') >= 0;
 }
 
 function isProjectBreakOffText_(value) {
