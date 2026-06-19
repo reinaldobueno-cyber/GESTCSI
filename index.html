@@ -5426,7 +5426,7 @@ function projectClosingRenderApiLookup() {
   var rows = (result.items || []).map(function(item) {
     var status = item.status_original || '-';
     var marker = item.marcador_entrega === 'sim' ? 'Entrega' : 'sem flag Entrega';
-    var state = item.entra_regra ? 'ENTRA' : 'não entra';
+    var state = item.entra_regra ? ('ENTRA'+(item.sinal_aprovacao_bruto === 'sim' ? ' · APROVAR no payload' : '')) : 'não entra';
     return '<tr><td><strong>'+escapeHtml(item.nome || '-')+'</strong><div class="closing-project-meta">'+escapeHtml(item.fase_nome || '-')+'</div></td><td>'+escapeHtml(status)+'</td><td>'+escapeHtml(marker)+'</td><td>'+escapeHtml(state)+'</td><td><a class="project-link-btn" href="'+escapeHtml(item.link || '#')+'" target="_blank" rel="noopener">Abrir item</a></td></tr>';
   }).join('') || '<tr class="empty-row"><td colspan="5">A API não retornou item de Fase 8 / Break Off nessa lista.</td></tr>';
   return '<div class="bonus-section" style="margin-bottom:14px"><div class="bonus-section-title">Busca direta na API ClickUp</div><div class="dashx-inline-note" style="margin-bottom:10px"><strong>List ID:</strong> '+escapeHtml(result.list_id || '-')+' · '+Number(result.tasks_total || 0)+' tarefa(s) lidas · '+Number(result.aprovados_total || 0)+' aprovado(s) na regra</div><div class="dashx-table-wrap"><table class="dashx-table"><thead><tr><th>Item</th><th>Status</th><th>Flag</th><th>Regra</th><th>Ação</th></tr></thead><tbody>'+rows+'</tbody></table></div></div>';
