@@ -1886,12 +1886,17 @@ function upsertClickUpMilestoneClosing_(mapping, normalized, options) {
     if (statusChanged) {
       history.push({ status: status, situacao: situation, at: sanitizeText_(milestone.updated_at) || now });
     }
+    var milestoneConsultant = clickUpMilestoneConsultant_(milestone.responsaveis);
+    var portfolioConsultant = clickUpMilestoneConsultant_(normalized.consultor || mapping.consultor);
+    if (!milestoneConsultant || /ADMINISTRATIVO|ADMINISTRADOR|MULTSOFT|SUPORTE/.test(normalizeKey_(milestoneConsultant))) {
+      milestoneConsultant = portfolioConsultant || milestoneConsultant;
+    }
     current[taskId] = {
       task_id: taskId,
       item_tipo: 'Marco',
       project_key: mapping.project_key || '',
       projeto: mapping.cliente || normalized.cliente || '',
-      consultor: clickUpMilestoneConsultant_(milestone.responsaveis || normalized.consultor || mapping.consultor),
+      consultor: milestoneConsultant || 'Sem consultor',
       marco: milestone.nome || '',
       fase: milestone.fase_nome || '',
       status_atual: rowStatus,
@@ -6082,7 +6087,14 @@ function isProjectDeliveryTask_(task) {
     (task && (task.custom_item_name || task.item_tipo_clickup)) ||
     clickUpTaskCustomItemName_(task)
   );
-  return key === 'ENTREGA';
+  if (key === 'ENTREGA') return true;
+  var name = normalizeKey_(task && (task.name || task.nome));
+  var phase = normalizeKey_(task && (task.fase_nome || task.phase || task.fase));
+  return name.indexOf('ENTREGA') >= 0 &&
+    (name.indexOf('PROJETO PARA O CLIENTE') >= 0 ||
+      name.indexOf('ENTREGA DO PROJETO') >= 0 ||
+      phase.indexOf('BREAK OFF') >= 0 ||
+      phase.indexOf('ENTREGA DO PROJETO') >= 0);
 }
 
 function isClosingTrackedTask_(task) {
