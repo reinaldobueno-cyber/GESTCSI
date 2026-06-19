@@ -6097,11 +6097,11 @@ function isProjectBreakOffText_(value) {
 }
 
 function isProjectClosingDeliveryItem_(item, phaseName) {
-  return isProjectDeliveryTask_(item) && (
-    isProjectBreakOffText_(phaseName) ||
+  var isBreakOff = isProjectBreakOffText_(phaseName) ||
     isProjectBreakOffText_(item && (item.fase_nome || item.fase || item.phase)) ||
-    isProjectBreakOffText_(item && (item.name || item.nome))
-  );
+    isProjectBreakOffText_(item && (item.name || item.nome));
+  var status = sanitizeText_(item && (item.status_original || item.status && (item.status.status || item.status.type || item.status.label)));
+  return isBreakOff && (isProjectDeliveryTask_(item) || isProjectClosingApprovalStatus_(status));
 }
 
 function isClosingTrackedTask_(task) {
