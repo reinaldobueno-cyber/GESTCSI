@@ -5113,7 +5113,7 @@ function acompProjectInfoPopup(projectKey) {
     '<div class="acom-popup-section"><div class="acom-popup-title">&Uacute;ltimos acompanhamentos</div><div class="acom-popup-history">'+historico+'</div>'+(followups.length && !isAdmin ? '<div class="acom-popup-text" style="margin-top:10px">Somente usu&aacute;rio admin pode excluir acompanhamentos.</div>' : '')+'</div>'+
     '<div class="acom-popup-section"><div class="acom-popup-title">ClickUp</div><div class="acom-popup-text">'+clickup+(link ? '<div style="margin-top:8px"><a class="project-link-btn alt" href="'+escapeHtml(link)+'" target="_blank" rel="noopener noreferrer">Abrir projeto</a></div>' : '')+'</div></div>';
   abrirModalHistorico(item.cliente, item.mes+' • '+item.consultor, [html], '');
-  var modal = document.querySelector('.history-body');
+  var modal = document.querySelector('#history-modal .history-body');
   if (modal) {
     modal.style.whiteSpace = 'normal';
     modal.innerHTML = html;
