@@ -5314,6 +5314,17 @@ function fechamentoItemTemMarcadorEntrega(item) {
   var flag = String(item && item.marcador_entrega || '').toLowerCase() === 'sim';
   return flag || marker === 'entrega' || marker === 'entrega de projeto';
 }
+function fechamentoItemEhBreakOff(item) {
+  var name = fechamentoSearchKey(item && (item.nome || item.marco || item.name));
+  var phase = fechamentoSearchKey(item && (item.fase_nome || item.fase || item.phase));
+  return phase.indexOf('fase 8') >= 0 ||
+    phase.indexOf('break off') >= 0 ||
+    name.indexOf('fase 8') >= 0 ||
+    name.indexOf('break off') >= 0;
+}
+function fechamentoItemEhFechamentoProjeto(item) {
+  return fechamentoItemTemMarcadorEntrega(item) && fechamentoItemEhBreakOff(item);
+}
 function fechamentoItemPertenceAoProjeto(item, projectKey, projectName) {
   if (projectKey && String(item && item.project_key || '').trim() === projectKey) return true;
   return projectName && normalizeClienteKey(item && item.projeto || '') === projectName;
@@ -5364,13 +5375,13 @@ function projectClosingDeliveryItemsFromJson(p) {
   return []
     .concat(Array.isArray(payload.marcos) ? payload.marcos : [])
     .concat(Array.isArray(payload.tasks) ? payload.tasks : [])
-    .filter(fechamentoItemTemMarcadorEntrega);
+    .filter(fechamentoItemEhFechamentoProjeto);
 }
 function projectClosingInfo(p) {
   var projectKey = String((p && p.project_key) || '').trim();
   var projectName = normalizeClienteKey((p && p.cliente) || '');
   var rows = (FECHAMENTO_MARCOS || []).filter(function(item) {
-    return fechamentoItemTemMarcadorEntrega(item) && fechamentoItemPertenceAoProjeto(item, projectKey, projectName);
+    return fechamentoItemEhFechamentoProjeto(item) && fechamentoItemPertenceAoProjeto(item, projectKey, projectName);
   });
   var jsonItems = projectClosingDeliveryItemsFromJson(p);
   var approved = rows.some(fechamentoIsProjectClosing) || jsonItems.some(fechamentoJsonItemAprovaProjeto);
@@ -5580,6 +5591,7 @@ function fechamentoSearchKey(value) {
 }
 function fechamentoFilteredRows() {
   return (FECHAMENTO_MARCOS || []).filter(function(item) {
+    if (fechamentoItemEhFechamentoProjeto(item)) return false;
     var month = String(FECHAMENTO_FILTER.month || '');
     if (month && month !== 'todos' && String(item.mes_fechamento || '') !== month) return false;
     if (FECHAMENTO_FILTER.consultor !== 'todos' && !bonusNamesMatch(fechamentoEffectiveConsultant(item), FECHAMENTO_FILTER.consultor)) return false;
