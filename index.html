@@ -5382,6 +5382,48 @@ function projectClosingDeliveryItemsFromJson(p) {
     .concat(Array.isArray(payload.tasks) ? payload.tasks : [])
     .filter(function(item){ return fechamentoItemEhBreakOff(item) && fechamentoItemStatusAprovarProjeto(item); });
 }
+function projectClosingBreakOffItemsFromJson(p) {
+  var payload = parseJsonSeguro((p && p.clickup_json) || '') || {};
+  return []
+    .concat(Array.isArray(payload.marcos) ? payload.marcos : [])
+    .concat(Array.isArray(payload.tasks) ? payload.tasks : [])
+    .filter(fechamentoItemEhBreakOff);
+}
+function projectClosingSearchTerm() {
+  var input = document.getElementById('project-closing-search');
+  return input ? String(input.value || '').trim() : '';
+}
+function projectClosingRenderSearchResults(term) {
+  term = String(term || '').trim();
+  if (!term) return '';
+  var q = fechamentoSearchKey(term);
+  var list = ordenarProjetosPainel(projetosVisiveisParaUsuario(Array.isArray(DATA.projetos) ? DATA.projetos.slice() : []).filter(function(p) {
+    return fechamentoSearchKey(p && p.cliente).indexOf(q) >= 0;
+  })).slice(0, 12);
+  var rows = list.map(function(p) {
+    var info = projectClosingInfo(p);
+    var items = projectClosingBreakOffItemsFromJson(p);
+    var detail = items.length ? items.map(function(item) {
+      var status = item.status_original || item.status || item.status_atual || '-';
+      var marker = fechamentoItemTemMarcadorEntrega(item) ? 'Entrega' : 'sem flag Entrega no dado salvo';
+      var ok = fechamentoItemStatusAprovarProjeto(item);
+      return escapeHtml(item.nome || item.marco || '-')+'<div class="closing-project-meta">'+escapeHtml(item.fase_nome || item.fase || '-')+' · '+escapeHtml(status)+' · '+marker+(ok ? ' · entra na regra' : ' · não entra: status salvo não é APROVAR/APROVADO')+'</div>';
+    }).join('<hr style="border:0;border-top:1px solid var(--border);margin:7px 0">') : '<span class="dashx-score-pill warn">Nenhuma Fase 8 / Break Off encontrada no JSON salvo</span>';
+    return '<tr><td><strong>'+escapeHtml(p.cliente || '-')+'</strong><div class="closing-project-meta">'+escapeHtml(p.mes || '-')+' · '+escapeHtml(p.consultor || '-')+'</div></td><td>'+escapeHtml(p.status || '-')+'</td><td>'+detail+'</td><td>'+escapeHtml(info.source || '-')+'</td><td>'+dashProjectActionCell(p)+'</td></tr>';
+  }).join('') || '<tr class="empty-row"><td colspan="5">Nenhum projeto encontrado com esse texto.</td></tr>';
+  return '<div class="bonus-section" style="margin-bottom:14px"><div class="bonus-section-title">Diagnóstico de busca</div><div class="dashx-inline-note" style="margin-bottom:10px"><strong>O que esta busca mostra:</strong> o dado que o painel recebeu da planilha/JSON. Se o ClickUp mostra APROVAR mas aqui aparece “a fazer”, precisa rodar Sync ClickUp atualizado.</div><div class="dashx-table-wrap"><table class="dashx-table"><thead><tr><th>Projeto</th><th>Controle Lais</th><th>Fase 8 / Break Off no dado salvo</th><th>Fonte</th><th>Ação</th></tr></thead><tbody>'+rows+'</tbody></table></div></div>';
+}
+function projectClosingSearch() {
+  initProjectClosing();
+  setTimeout(function(){
+    var input = document.getElementById('project-closing-search');
+    if (input) {
+      input.focus();
+      input.setSelectionRange(input.value.length, input.value.length);
+    }
+  }, 0);
+  return false;
+}
 function projectClosingInfo(p) {
   var projectKey = String((p && p.project_key) || '').trim();
   var projectName = normalizeClienteKey((p && p.cliente) || '');
@@ -5457,8 +5499,11 @@ function initProjectClosing() {
     }).join('') || '<tr class="empty-row"><td colspan="8">Nenhum projeto nesta regra.</td></tr>';
   }
   var table = '<div class="dashx-table-wrap"><table class="dashx-table"><thead><tr><th>Projeto</th><th>Consultor</th><th>Controle Lais</th><th>Status item Entrega</th><th>Situação ClickUp</th><th>Divergência controle</th><th>Fonte</th><th>Ação</th></tr></thead><tbody>'+rows(approved.concat(pending).concat(concluded))+'</tbody></table></div>';
+  var searchTerm = projectClosingSearchTerm();
+  var searchBox = '<div class="closing-filter-block"><div class="closing-filter-label">Procurar projeto no fechamento</div><div style="display:flex;gap:8px;align-items:center"><input id="project-closing-search" class="closing-client-search" type="search" value="'+escapeHtml(searchTerm)+'" placeholder="Digite Roberto, cliente ou fazenda..." onkeydown="if(event.key===\'Enter\'){return projectClosingSearch()}"><button class="btn-syncall" onclick="return projectClosingSearch()">Procurar</button></div></div>';
   box.innerHTML = '<div class="closing-head"><div><div class="closing-title">Fechamento de projeto</div><div class="closing-sub">Controle separado dos marcos. Aqui entram apenas projetos com rastreio ClickUp e item marcado como Entrega.</div></div></div>'+
     '<div class="dashx-inline-note" style="margin-bottom:12px"><strong>Regra principal:</strong> fechamento de projeto considera somente o ClickUp: item com marcador Entrega pendente ou em APROVAR/APROVADO. O status do controle da Lais aparece apenas como alerta de diverg&ecirc;ncia, sem tirar o projeto da gest&atilde;o.</div>'+
+    searchBox+projectClosingRenderSearchResults(searchTerm)+
     '<div class="closing-kpis"><div class="closing-kpi warn"><span>Pendentes ClickUp</span><strong>'+pending.length+'</strong></div><div class="closing-kpi"><span>Aprovados para concluir</span><strong>'+approved.length+'</strong></div><div class="closing-kpi warn"><span>Divergências controle</span><strong>'+divergences.length+'</strong></div><div class="closing-kpi"><span>Concluídos com entrega</span><strong>'+concluded.length+'</strong></div><div class="closing-kpi"><span>Bônus por projeto</span><strong>R$ 80</strong></div></div>'+
     '<div class="bonus-section"><div class="bonus-section-title">Gerenciador de fechamento de projeto</div>'+table+'</div>';
 }
@@ -5822,6 +5867,7 @@ window.fechamentoLoad = fechamentoLoad;
 window.fechamentoSetFilter = fechamentoSetFilter;
 window.fechamentoSetProjectSearch = fechamentoSetProjectSearch;
 window.fechamentoToggleConsultant = fechamentoToggleConsultant;
+window.projectClosingSearch = projectClosingSearch;
 window.fechamentoStartSync = fechamentoStartSync;
 window.fechamentoSyncRejected = fechamentoSyncRejected;
 window.fechamentoSyncApproved = fechamentoSyncApproved;
