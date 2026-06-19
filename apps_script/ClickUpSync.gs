@@ -938,7 +938,7 @@ function buildNormalizedProjectFromClickUp_(mapping) {
     var phaseInfo = resolvePhaseForTask_(task, byId, phaseMap);
     var phase = phaseInfo.phase;
     var countInSummary = shouldCountTaskInSummary_(task, phaseInfo, byId);
-    var projectClosingTask = isProjectClosingDeliveryItem_(task, phase ? phase.nome : '');
+    var projectClosingTask = isProjectClosingDeliveryItem_(task, phase ? phase.nome : '', phase);
     var milestoneTask = isMilestoneTask_(task) || projectClosingTask;
 
     // Marcos podem ter subtarefas de evidencia/validacao. Eles ainda precisam
@@ -966,7 +966,7 @@ function buildNormalizedProjectFromClickUp_(mapping) {
       updated_at: task.date_updated ? fromMillisIso_(task.date_updated) : '',
       due_date: task.due_date ? fromMillisIso_(task.due_date) : ''
     };
-    if (projectClosingTask && hasProjectClosingApprovalSignal_(task, item.status_original)) {
+    if (projectClosingTask && hasProjectClosingApprovalSignalByTaskOrPhase_(task, item.status_original, phase)) {
       item.status_original = 'APROVAR';
     }
 
@@ -1854,7 +1854,9 @@ function diagnoseProjectClosing_(params) {
         tipo: 'fase',
         id: String(task.id),
         nome: sanitizeText_(task.name),
-        ordem: extractLeadingNumber_(task.name)
+        ordem: extractLeadingNumber_(task.name),
+        status_original: task.status && (task.status.status || task.status.type || task.status.label) || '',
+        custom_item_name: clickUpTaskCustomItemName_(task)
       };
     }
   });
@@ -1866,18 +1868,20 @@ function diagnoseProjectClosing_(params) {
     if (!isProjectBreakOffText_(phaseName) && !isProjectBreakOffText_(task && task.name)) return;
     var status = sanitizeText_(task.status && (task.status.status || task.status.type || task.status.label));
     var marker = clickUpTaskCustomItemName_(task);
-    var approvalSignal = hasProjectClosingApprovalSignal_(task, status);
+    var phaseStatus = sanitizeText_(phaseInfo.phase && phaseInfo.phase.status_original);
+    var approvalSignal = hasProjectClosingApprovalSignalByTaskOrPhase_(task, status, phaseInfo.phase);
     breakOffItems.push({
       id: String(task.id || ''),
       nome: sanitizeText_(task.name),
       fase_nome: phaseName,
       status_original: status,
+      fase_status_original: phaseStatus,
       custom_item_id: String(task.custom_item_id || ''),
       custom_item_name: marker,
       item_tipo_clickup: marker,
       marcador_entrega: isProjectDeliveryTask_(task) ? 'sim' : '',
       aprovar: approvalSignal,
-      entra_regra: isProjectClosingDeliveryItem_(task, phaseName) && approvalSignal,
+      entra_regra: isProjectClosingDeliveryItem_(task, phaseName, phaseInfo.phase) && approvalSignal,
       sinal_aprovacao_bruto: approvalSignal && !isProjectClosingApprovalStatus_(status) ? 'sim' : '',
       debug_tipo: summarizeClickUpProjectClosingDebug_(task),
       link: sanitizeText_(task.url || task.permalink || task.link || task.html_url) || ('https://app.clickup.com/t/' + String(task.id || ''))
@@ -2152,6 +2156,13 @@ function hasProjectClosingApprovalSignal_(task, status) {
     raw = '';
   }
   return raw.indexOf('APROVAR') >= 0 || raw.indexOf('APROVAD') >= 0;
+}
+
+function hasProjectClosingApprovalSignalByTaskOrPhase_(task, status, phase) {
+  if (hasProjectClosingApprovalSignal_(task, status)) return true;
+  var phaseStatus = sanitizeText_(phase && phase.status_original);
+  if (isProjectClosingApprovalStatus_(phaseStatus)) return true;
+  return hasProjectClosingApprovalSignal_(phase, phaseStatus);
 }
 
 function fetchLatestClickUpTaskComment_(taskId) {
@@ -6194,17 +6205,26 @@ function isProjectDeliveryTask_(task) {
   return key === 'ENTREGA' || key.indexOf('ENTREGA') >= 0;
 }
 
+function isProjectDeliveryClosingCandidate_(task) {
+  if (isProjectDeliveryTask_(task)) return true;
+  var name = normalizeKey_(task && (task.name || task.nome || task.marco));
+  return name.indexOf('ENTREGA DO PROJETO') >= 0 ||
+    name.indexOf('KICKOFF DE ENTREGA') >= 0 ||
+    name.indexOf('BREAK OFF DE ENTREGA') >= 0;
+}
+
 function isProjectBreakOffText_(value) {
   var key = normalizeKey_(value);
   return key.indexOf('FASE 8') >= 0 || key.indexOf('BREAK OFF') >= 0;
 }
 
-function isProjectClosingDeliveryItem_(item, phaseName) {
+function isProjectClosingDeliveryItem_(item, phaseName, phase) {
   var isBreakOff = isProjectBreakOffText_(phaseName) ||
     isProjectBreakOffText_(item && (item.fase_nome || item.fase || item.phase)) ||
     isProjectBreakOffText_(item && (item.name || item.nome));
   var status = sanitizeText_(item && (item.status_original || item.status && (item.status.status || item.status.type || item.status.label)));
-  return isBreakOff && (isProjectDeliveryTask_(item) || hasProjectClosingApprovalSignal_(item, status));
+  return isBreakOff && isProjectDeliveryClosingCandidate_(item) &&
+    hasProjectClosingApprovalSignalByTaskOrPhase_(item, status, phase);
 }
 
 function isClosingTrackedTask_(task) {
