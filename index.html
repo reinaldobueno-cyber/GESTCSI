@@ -5376,7 +5376,7 @@ function projectClosingInfo(p) {
 }
 function projectClosingList() {
   return ordenarProjetosPainel(projetosVisiveisParaUsuario(Array.isArray(DATA.projetos) ? DATA.projetos.slice() : []).filter(function(p) {
-    return gestaoClickupProjectYear(p) === 2026;
+    return gestaoClickupProjectYear(p) === 2026 && dashProjectHasClickUpTrace(p);
   })).map(function(p) {
     var info = projectClosingInfo(p);
     var statusKey = dashStatusKey(p && p.status);
@@ -5410,8 +5410,8 @@ function initProjectClosing() {
     }).join('') || '<tr class="empty-row"><td colspan="7">Nenhum projeto nesta regra.</td></tr>';
   }
   var table = '<div class="dashx-table-wrap"><table class="dashx-table"><thead><tr><th>Projeto</th><th>Consultor</th><th>Status projeto</th><th>Status item Entrega</th><th>Situação</th><th>Fonte</th><th>Ação</th></tr></thead><tbody>'+rows(pending.concat(approved).concat(missing))+'</tbody></table></div>';
-  box.innerHTML = '<div class="closing-head"><div><div class="closing-title">Fechamento de projeto</div><div class="closing-sub">Controle separado dos marcos. Aqui entram apenas projetos em Aguardando entrega e o item do ClickUp marcado como Entrega.</div></div></div>'+
-    '<div class="dashx-inline-note" style="margin-bottom:12px"><strong>Regra:</strong> pendente quando existe marcador Entrega sem APROVAR/APROVADO. Aprovado para concluir quando o mesmo item está em APROVAR/APROVADO. Isso não altera a validação técnica dos marcos.</div>'+
+  box.innerHTML = '<div class="closing-head"><div><div class="closing-title">Fechamento de projeto</div><div class="closing-sub">Controle separado dos marcos. Aqui entram apenas projetos com rastreio ClickUp e item marcado como Entrega.</div></div></div>'+
+    '<div class="dashx-inline-note" style="margin-bottom:12px"><strong>Regra:</strong> pendente quando existe marcador Entrega sem APROVAR/APROVADO. Aprovado para concluir quando o mesmo item está em APROVAR/APROVADO. Projeto sem link/JSON do ClickUp fica fora desta gestão, porque não há item Entrega auditável. Isso não altera a validação técnica dos marcos.</div>'+
     '<div class="closing-kpis"><div class="closing-kpi warn"><span>Pendentes</span><strong>'+pending.length+'</strong></div><div class="closing-kpi"><span>Aprovados para concluir</span><strong>'+approved.length+'</strong></div><div class="closing-kpi"><span>Sem marcador Entrega</span><strong>'+missing.length+'</strong></div><div class="closing-kpi"><span>Concluídos com entrega</span><strong>'+concluded.length+'</strong></div><div class="closing-kpi"><span>Bônus por projeto</span><strong>R$ 80</strong></div></div>'+
     '<div class="bonus-section"><div class="bonus-section-title">Gerenciador de fechamento de projeto</div>'+table+'</div>';
 }
