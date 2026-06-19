@@ -5013,7 +5013,8 @@ function acompRenderMonths(list) {
 function acompRenderConsultores(list) {
   var map = {};
   list.forEach(function(x){
-    var key = x.consultor || 'Sem consultor';
+    var key = x.consultor || '';
+    if (!key || key === 'Sem consultor') return;
     if (!map[key]) map[key] = {nome:key, total:0};
     map[key].total += 1;
     ACOMP_BUCKETS.forEach(function(b){ if (map[key][b.key] == null) map[key][b.key] = 0; });
