@@ -290,7 +290,11 @@ nav{background:var(--nav);height:58px;display:flex;align-items:center;justify-co
 .acom-mini-fill{height:100%;background:var(--green);border-radius:999px;}
 .acom-cons-row{display:grid;grid-template-columns:130px 1fr 52px;gap:10px;align-items:center;padding:9px 0;border-bottom:1px solid var(--border);}
 .acom-cons-row:last-child{border-bottom:none;}
+.acom-cons-left{display:flex;align-items:center;gap:8px;min-width:0;}
 .acom-cons-name{font-size:12px;font-weight:800;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.acom-cons-alert{position:relative;flex:0 0 auto;width:28px;height:28px;border:1px solid var(--border);border-radius:999px;background:var(--surf);color:var(--text2);display:inline-flex;align-items:center;justify-content:center;font-size:13px;cursor:pointer}
+.acom-cons-alert.has-pending{border-color:#d9a93c;background:#fff8e7;color:#8a5b13;box-shadow:0 8px 18px rgba(217,169,60,.16)}
+.acom-cons-alert-badge{position:absolute;top:-7px;right:-7px;min-width:18px;height:18px;border-radius:999px;background:#d94857;color:#fff;font:900 10px 'Inter',sans-serif;display:flex;align-items:center;justify-content:center;padding:0 5px}
 .acom-stack{height:12px;border-radius:999px;background:var(--border);overflow:hidden;display:flex;}
 .acom-stack span{height:100%;}
 .acom-table-wrap{overflow:auto;border:1px solid var(--border);border-radius:8px;}
@@ -3310,9 +3314,6 @@ body.theme-dark *{
 .closing-consultant-card.is-collapsed .closing-consultant-arrow{transform:rotate(-90deg)}
 .closing-consultant-name{display:block;font-size:15px;font-weight:900;color:var(--text);text-transform:uppercase;letter-spacing:.04em;margin-bottom:8px}
 .closing-consultant-title-row{display:flex;align-items:center;gap:9px;flex-wrap:wrap}
-.closing-consultant-alert{position:relative;width:29px;height:29px;border:1px solid var(--border);border-radius:999px;background:var(--surf);color:var(--text2);display:inline-flex;align-items:center;justify-content:center;font-size:14px;cursor:pointer}
-.closing-consultant-alert.has-pending{border-color:#d9a93c;background:#fff8e7;color:#8a5b13;box-shadow:0 8px 18px rgba(217,169,60,.16)}
-.closing-consultant-alert-badge{position:absolute;top:-7px;right:-7px;min-width:18px;height:18px;border-radius:999px;background:#d94857;color:#fff;font:900 10px 'Inter',sans-serif;display:flex;align-items:center;justify-content:center;padding:0 5px}
 .closing-consultant-metrics{display:flex;gap:18px;flex-wrap:wrap}
 .closing-consultant-metric{text-align:right}.closing-consultant-metric strong{display:block;font-size:18px;color:var(--text)}.closing-consultant-metric span{font-size:8px;font-weight:900;color:var(--muted);text-transform:uppercase}
 .closing-project-list{padding:12px}
@@ -4549,6 +4550,9 @@ function acompFonte(p, followup) {
 function acompProjetoView(p, followupMap) {
   var key = projectMonthKey(p);
   var followup = followupMap && followupMap[key] || null;
+  var cycleInfo = acompCicloAtual();
+  var kanbanStageRaw = (followup && followup.kanban_stage) || acompLatestRemoteKanbanStage(key, cycleInfo);
+  var kanbanStage = kanbanStageRaw ? acompNormalizeKanbanStage(kanbanStageRaw, '') : '';
   var tem = acompTemRegistro(p, followup);
   var dias = acompDiasDesdeRegistro(p, followup);
   var bucket = acompBucketKey(dias, tem);
@@ -4569,6 +4573,7 @@ function acompProjetoView(p, followupMap) {
     responsavel:String((followup && followup.responsavel) || '').trim(),
     dataAcompanhamento:String((followup && followup.data_acompanhamento) || '').trim(),
     followupStatus:String((followup && followup.followup_status) || ''),
+    kanbanStage:kanbanStage,
     statusComment:String((followup && followup.status_comment) || '').trim(),
     obsInicial:String((p && p.obs) || '').trim()
   };
@@ -4627,7 +4632,8 @@ function acompPendenciasDoConsultor(consultor) {
   if (!key || typeof acompBase !== 'function') return [];
   return acompBase().filter(function(item) {
     if ((consultantCompKey(item.consultor) || normalizeClienteKey(item.consultor)) !== key) return false;
-    return acompNormalizeFollowupStatus(item.followupStatus) === 'pendente';
+    return acompNormalizeFollowupStatus(item.followupStatus) === 'pendente' ||
+      (!!item.kanbanStage && acompNormalizeKanbanStage(item.kanbanStage, '') === 'pending');
   }).sort(function(a,b) {
     return String(a.mes || '').localeCompare(String(b.mes || '')) ||
       String(a.cliente || '').localeCompare(String(b.cliente || ''));
@@ -4949,7 +4955,7 @@ function salvarAcompanhamentoProjeto(btn) {
       kanban_stage: stage,
       origem: 'site',
       status: item.status,
-      followup_status: 'pendente',
+      followup_status: stage === 'done' ? 'concluido' : (stage === 'doing' ? 'parcial' : 'pendente'),
       status_updated_at: '',
       status_updated_by: '',
       status_comment: ''
@@ -5011,11 +5017,13 @@ function acompRenderConsultores(list) {
   });
   return Object.keys(map).sort().map(function(k){
     var c = map[k];
+    var pending = acompPendenciasDoConsultor(c.nome);
+    var bell = '<button type="button" class="acom-cons-alert '+(pending.length ? 'has-pending' : '')+'" title="'+(pending.length ? pending.length+' pendência(s) direcionada(s)' : 'Sem pendências direcionadas')+'" onclick="return abrirPendenciasConsultor(decodeURIComponent(\''+encodeURIComponent(c.nome)+'\'),event)">&#128276;'+(pending.length ? '<span class="acom-cons-alert-badge">'+pending.length+'</span>' : '')+'</button>';
     var segs = ACOMP_BUCKETS.map(function(b){
       var pct = acompPercent(c[b.key] || 0, c.total || 1);
       return pct ? '<span style="width:'+pct+'%;background:'+b.color+'"></span>' : '';
     }).join('');
-    return '<div class="acom-cons-row"><div class="acom-cons-name">'+escapeHtml(c.nome)+'</div><div class="acom-stack">'+segs+'</div><strong>'+c.total+'</strong></div>';
+    return '<div class="acom-cons-row"><div class="acom-cons-left">'+bell+'<div class="acom-cons-name">'+escapeHtml(c.nome)+'</div></div><div class="acom-stack">'+segs+'</div><strong>'+c.total+'</strong></div>';
   }).join('') || '<div class="empty">Sem consultores no recorte.</div>';
 }
 function acompRenderRows(list) {
@@ -5929,8 +5937,6 @@ function initFechamento() {
     var consultantRows = byConsultant[consultant];
     var collapsedKey = consultantCompKey(consultant) || normalizeClienteKey(consultant);
     var collapsed = !FECHAMENTO_EXPANDED[collapsedKey];
-    var pendingFollowups = acompPendenciasDoConsultor(consultant);
-    var pendingBell = '<button type="button" class="closing-consultant-alert '+(pendingFollowups.length ? 'has-pending' : '')+'" title="'+(pendingFollowups.length ? pendingFollowups.length+' pendência(s) direcionada(s)' : 'Sem pendências direcionadas')+'" onclick="return abrirPendenciasConsultor(decodeURIComponent(\''+encodeURIComponent(consultant)+'\'),event)">&#128276;'+(pendingFollowups.length ? '<span class="closing-consultant-alert-badge">'+pendingFollowups.length+'</span>' : '')+'</button>';
     var consultantApproved = consultantRows.filter(function(item){ return item.situacao === 'aprovado'; }).length;
     var consultantRejected = consultantRows.filter(function(item){ return item.situacao === 'reprovado'; }).length;
     var consultantWaiting = consultantRows.filter(function(item){ return item.situacao === 'aguardando'; }).length;
@@ -5948,7 +5954,7 @@ function initFechamento() {
         '<div><span class="closing-status '+escapeHtml(status)+'">'+escapeHtml(item.status_atual || status)+'</span><div class="closing-project-comment" style="margin-top:7px">'+comment+'<div class="closing-project-meta">'+ownerNote+'</div></div></div>'+
         '<div><strong>'+fechamentoMoney(item.valor_bonus)+'</strong><div style="margin-top:8px"><a class="project-link-btn" href="'+escapeHtml(item.link || '#')+'" target="_blank" rel="noopener">Abrir marco</a></div></div></div>';
     }).join('');
-    return '<section class="closing-consultant-card '+(collapsed?'is-collapsed':'')+'"><div class="closing-consultant-head"><div class="closing-consultant-title-row"><button class="closing-consultant-toggle" onclick="return fechamentoToggleConsultant(decodeURIComponent(\''+encodeURIComponent(consultant)+'\'))"><span class="closing-consultant-arrow">&#9662;</span><span><span class="closing-consultant-name">'+escapeHtml(consultant)+'</span><span class="closing-project-meta">Marcos que entraram em Closed no período selecionado</span></span></button>'+pendingBell+'</div><div class="closing-consultant-metrics"><div class="closing-consultant-metric"><strong>'+consultantRows.length+'</strong><span>Marcos</span></div><div class="closing-consultant-metric"><strong>'+consultantWaiting+'</strong><span>Aguardando</span></div><div class="closing-consultant-metric"><strong>'+consultantApproved+' / '+consultantRejected+'</strong><span>Aprov. / Reprov.</span></div><div class="closing-consultant-metric"><strong>'+fechamentoMoney(consultantBonus)+'</strong><span>Bônus</span></div></div></div><div class="closing-project-list">'+projectCards+'</div></section>';
+    return '<section class="closing-consultant-card '+(collapsed?'is-collapsed':'')+'"><div class="closing-consultant-head"><div class="closing-consultant-title-row"><button class="closing-consultant-toggle" onclick="return fechamentoToggleConsultant(decodeURIComponent(\''+encodeURIComponent(consultant)+'\'))"><span class="closing-consultant-arrow">&#9662;</span><span><span class="closing-consultant-name">'+escapeHtml(consultant)+'</span><span class="closing-project-meta">Marcos que entraram em Closed no período selecionado</span></span></button></div><div class="closing-consultant-metrics"><div class="closing-consultant-metric"><strong>'+consultantRows.length+'</strong><span>Marcos</span></div><div class="closing-consultant-metric"><strong>'+consultantWaiting+'</strong><span>Aguardando</span></div><div class="closing-consultant-metric"><strong>'+consultantApproved+' / '+consultantRejected+'</strong><span>Aprov. / Reprov.</span></div><div class="closing-consultant-metric"><strong>'+fechamentoMoney(consultantBonus)+'</strong><span>Bônus</span></div></div></div><div class="closing-project-list">'+projectCards+'</div></section>';
   }).join('') || '<div class="empty">Nenhum marco encontrado neste recorte. Atualize os Closed ou consulte as validações.</div>';
   var error = FECHAMENTO_META.error ? '<div class="dashx-focus-note" style="margin-bottom:12px"><strong>'+escapeHtml(FECHAMENTO_META.error)+'</strong></div>' : '';
   var bg = FECHAMENTO_META.background_sync || {};
