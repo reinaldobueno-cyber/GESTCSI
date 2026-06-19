@@ -5307,7 +5307,7 @@ function fechamentoIsProjectClosing(item) {
 function fechamentoJsonItemAprovaProjeto(item) {
   var marker = fechamentoSearchKey(item && (item.custom_item_name || item.item_tipo_clickup || item.item_tipo || item.tipo_custom));
   var status = fechamentoSearchKey(item && (item.status_original || item.status || item.status_atual));
-  return (marker === 'entrega' || marker === 'entrega de projeto') &&
+  return (marker === 'entrega' || marker === 'entrega de projeto' || marker.indexOf('entrega') >= 0) &&
     (status.indexOf('aprovar') >= 0 || status.indexOf('aprovad') >= 0);
 }
 function fechamentoItemStatusAprovarProjeto(item) {
@@ -5317,7 +5317,7 @@ function fechamentoItemStatusAprovarProjeto(item) {
 function fechamentoItemTemMarcadorEntrega(item) {
   var marker = fechamentoSearchKey(item && (item.custom_item_name || item.item_tipo_clickup || item.item_tipo || item.tipo_custom || item.item_tipo));
   var flag = String(item && item.marcador_entrega || '').toLowerCase() === 'sim';
-  return flag || marker === 'entrega' || marker === 'entrega de projeto';
+  return flag || marker === 'entrega' || marker === 'entrega de projeto' || marker.indexOf('entrega') >= 0;
 }
 function fechamentoItemEhBreakOff(item) {
   var name = fechamentoSearchKey(item && (item.nome || item.marco || item.name));
@@ -5425,9 +5425,10 @@ function projectClosingRenderApiLookup() {
   var result = PROJECT_CLOSING_LOOKUP.result || {};
   var rows = (result.items || []).map(function(item) {
     var status = item.status_original || '-';
-    var marker = item.marcador_entrega === 'sim' ? 'Entrega' : 'sem flag Entrega';
+    var marker = item.custom_item_name || item.item_tipo_clickup || (item.marcador_entrega === 'sim' ? 'Entrega' : 'sem flag Entrega');
     var state = item.entra_regra ? ('ENTRA'+(item.sinal_aprovacao_bruto === 'sim' ? ' · APROVAR no payload' : '')) : 'não entra';
-    return '<tr><td><strong>'+escapeHtml(item.nome || '-')+'</strong><div class="closing-project-meta">'+escapeHtml(item.fase_nome || '-')+'</div></td><td>'+escapeHtml(status)+'</td><td>'+escapeHtml(marker)+'</td><td>'+escapeHtml(state)+'</td><td><a class="project-link-btn" href="'+escapeHtml(item.link || '#')+'" target="_blank" rel="noopener">Abrir item</a></td></tr>';
+    var debug = item.debug_tipo ? '<div class="closing-project-meta">'+escapeHtml(item.debug_tipo)+'</div>' : '';
+    return '<tr><td><strong>'+escapeHtml(item.nome || '-')+'</strong><div class="closing-project-meta">'+escapeHtml(item.fase_nome || '-')+'</div>'+debug+'</td><td>'+escapeHtml(status)+'</td><td>'+escapeHtml(marker)+'</td><td>'+escapeHtml(state)+'</td><td><a class="project-link-btn" href="'+escapeHtml(item.link || '#')+'" target="_blank" rel="noopener">Abrir item</a></td></tr>';
   }).join('') || '<tr class="empty-row"><td colspan="5">A API não retornou item de Fase 8 / Break Off nessa lista.</td></tr>';
   return '<div class="bonus-section" style="margin-bottom:14px"><div class="bonus-section-title">Busca direta na API ClickUp</div><div class="dashx-inline-note" style="margin-bottom:10px"><strong>List ID:</strong> '+escapeHtml(result.list_id || '-')+' · '+Number(result.tasks_total || 0)+' tarefa(s) lidas · '+Number(result.aprovados_total || 0)+' aprovado(s) na regra</div><div class="dashx-table-wrap"><table class="dashx-table"><thead><tr><th>Item</th><th>Status</th><th>Flag</th><th>Regra</th><th>Ação</th></tr></thead><tbody>'+rows+'</tbody></table></div></div>';
 }
