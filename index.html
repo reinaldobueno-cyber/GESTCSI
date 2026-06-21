@@ -5342,14 +5342,22 @@ function fechamentoIsProjectClosing(item) {
   return delivery && item && item.situacao === 'aprovado';
 }
 function fechamentoJsonItemAprovaProjeto(item) {
-  var marker = fechamentoSearchKey(item && (item.custom_item_name || item.item_tipo_clickup || item.item_tipo || item.tipo_custom));
-  var status = fechamentoSearchKey(item && (item.status_original || item.status || item.status_atual || item.fase_status_original));
-  return (marker === 'entrega' || marker === 'entrega de projeto' || marker.indexOf('entrega') >= 0) &&
-    (status.indexOf('aprovar') >= 0 || status.indexOf('aprovad') >= 0);
+  return fechamentoItemAtendeRegraProjetoEntrega(item);
 }
 function fechamentoItemStatusAprovarProjeto(item) {
-  var status = fechamentoSearchKey(item && (item.status_original || item.status || item.status_atual || item.fase_status_original));
-  return status.indexOf('aprovar') >= 0 || status.indexOf('aprovad') >= 0;
+  return [
+    item && item.status_original,
+    item && item.status,
+    item && item.status_atual,
+    item && item.fase_status_original
+  ].some(function(status) {
+    return fechamentoSearchKey(status) === 'aprovar';
+  });
+}
+function fechamentoItemTemFlagEntregaProjeto(item) {
+  var marker = fechamentoSearchKey(item && (item.custom_item_name || item.item_tipo_clickup || item.item_tipo || item.tipo_custom));
+  var flag = String(item && item.marcador_entrega || '').toLowerCase() === 'sim';
+  return flag || marker === 'entrega' || marker === 'entrega de projeto';
 }
 function fechamentoItemTemMarcadorEntrega(item) {
   var marker = fechamentoSearchKey(item && (item.custom_item_name || item.item_tipo_clickup || item.item_tipo || item.tipo_custom || item.item_tipo));
@@ -5370,9 +5378,13 @@ function fechamentoItemEhBreakOff(item) {
     name.indexOf('fase 8') >= 0 ||
     name.indexOf('break off') >= 0;
 }
-function fechamentoItemEhFechamentoProjeto(item) {
+function fechamentoItemAtendeRegraProjetoEntrega(item) {
   return fechamentoItemEhBreakOff(item) &&
-    (fechamentoItemTemMarcadorEntrega(item) || fechamentoJsonItemAprovaProjeto(item));
+    fechamentoItemTemFlagEntregaProjeto(item) &&
+    fechamentoItemStatusAprovarProjeto(item);
+}
+function fechamentoItemEhFechamentoProjeto(item) {
+  return fechamentoItemAtendeRegraProjetoEntrega(item);
 }
 function fechamentoItemPertenceAoProjeto(item, projectKey, projectName) {
   if (projectKey && String(item && item.project_key || '').trim() === projectKey) return true;
@@ -5424,7 +5436,7 @@ function projectClosingDeliveryItemsFromJson(p) {
   return []
     .concat(Array.isArray(payload.marcos) ? payload.marcos : [])
     .concat(Array.isArray(payload.tasks) ? payload.tasks : [])
-    .filter(function(item){ return fechamentoItemEhBreakOff(item) && fechamentoItemStatusAprovarProjeto(item); });
+    .filter(fechamentoItemAtendeRegraProjetoEntrega);
 }
 function projectClosingBreakOffItemsFromJson(p) {
   var payload = parseJsonSeguro((p && p.clickup_json) || '') || {};
@@ -5470,7 +5482,7 @@ function projectClosingRenderApiLookup() {
     var status = item.status_original || '-';
     var phaseStatus = item.fase_status_original ? '<div class="closing-project-meta">Fase pai: '+escapeHtml(item.fase_status_original)+'</div>' : '';
     var marker = item.custom_item_name || item.item_tipo_clickup || (item.marcador_entrega === 'sim' ? 'Entrega' : 'sem flag Entrega');
-    var state = item.entra_regra ? ('ENTRA'+(item.sinal_aprovacao_bruto === 'sim' ? ' · APROVAR no payload' : '')) : 'não entra';
+    var state = item.entra_regra ? ('ENTRA'+(item.sinal_aprovacao_bruto === 'sim' ? ' · APROVAR na fase pai' : '')) : 'não entra';
     var debug = item.debug_tipo ? '<div class="closing-project-meta">'+escapeHtml(item.debug_tipo)+'</div>' : '';
     return '<tr><td><strong>'+escapeHtml(item.nome || '-')+'</strong><div class="closing-project-meta">'+escapeHtml(item.fase_nome || '-')+'</div>'+debug+'</td><td>'+escapeHtml(status)+phaseStatus+'</td><td>'+escapeHtml(marker)+'</td><td>'+escapeHtml(state)+'</td><td><a class="project-link-btn" href="'+escapeHtml(item.link || '#')+'" target="_blank" rel="noopener">Abrir item</a></td></tr>';
   }).join('') || '<tr class="empty-row"><td colspan="5">A API não retornou item de Fase 8 / Break Off nessa lista.</td></tr>';
@@ -5505,9 +5517,12 @@ function projectClosingRenderSearchResults(term) {
     var items = projectClosingBreakOffItemsFromJson(p);
     var detail = items.length ? items.map(function(item) {
       var status = item.status_original || item.status || item.status_atual || '-';
-      var marker = fechamentoItemTemMarcadorEntrega(item) ? 'Entrega' : 'sem flag Entrega no dado salvo';
-      var ok = fechamentoItemStatusAprovarProjeto(item);
-      return escapeHtml(item.nome || item.marco || '-')+'<div class="closing-project-meta">'+escapeHtml(item.fase_nome || item.fase || '-')+' · '+escapeHtml(status)+' · '+marker+(ok ? ' · entra na regra' : ' · não entra: status salvo não é APROVAR/APROVADO')+'</div>';
+      var hasFlag = fechamentoItemTemFlagEntregaProjeto(item);
+      var hasApproval = fechamentoItemStatusAprovarProjeto(item);
+      var marker = hasFlag ? 'flag Entrega marcada' : 'sem flag Entrega no dado salvo';
+      var ok = fechamentoItemAtendeRegraProjetoEntrega(item);
+      var reason = ok ? ' · entra na regra' : (!hasFlag ? ' · não entra: flag Entrega ausente' : (!hasApproval ? ' · não entra: status não é APROVAR' : ' · não entra: fora do Break Off'));
+      return escapeHtml(item.nome || item.marco || '-')+'<div class="closing-project-meta">'+escapeHtml(item.fase_nome || item.fase || '-')+' · '+escapeHtml(status)+' · '+marker+reason+'</div>';
     }).join('<hr style="border:0;border-top:1px solid var(--border);margin:7px 0">') : '<span class="dashx-score-pill warn">Nenhuma Fase 8 / Break Off encontrada no JSON salvo</span>';
     return '<tr><td><strong>'+escapeHtml(p.cliente || '-')+'</strong><div class="closing-project-meta">'+escapeHtml(p.mes || '-')+' · '+escapeHtml(p.consultor || '-')+'</div></td><td>'+escapeHtml(p.status || '-')+'</td><td>'+detail+'</td><td>'+escapeHtml(info.source || '-')+'</td><td>'+dashProjectActionCell(p)+'</td></tr>';
   }).join('') || '<tr class="empty-row"><td colspan="5">Nenhum projeto encontrado com esse texto.</td></tr>';
@@ -5548,10 +5563,10 @@ function projectClosingInfo(p) {
   var projectKey = String((p && p.project_key) || '').trim();
   var projectName = normalizeClienteKey((p && p.cliente) || '');
   var rows = (FECHAMENTO_MARCOS || []).filter(function(item) {
-    return fechamentoItemEhBreakOff(item) && fechamentoIsProjectClosing(item) && fechamentoItemPertenceAoProjeto(item, projectKey, projectName);
+    return fechamentoItemAtendeRegraProjetoEntrega(item) && fechamentoItemPertenceAoProjeto(item, projectKey, projectName);
   });
   var jsonItems = projectClosingDeliveryItemsFromJson(p);
-  var approved = rows.some(fechamentoIsProjectClosing) || jsonItems.some(fechamentoItemStatusAprovarProjeto);
+  var approved = rows.length > 0 || jsonItems.length > 0;
   var pending = false;
   var firstRow = rows[0] || null;
   var firstJson = jsonItems[0] || null;
@@ -5609,8 +5624,8 @@ function initProjectClosing() {
     return list.map(function(entry) {
       var p = entry.project || {};
       var info = entry.info || {};
-      var state = entry.category === 'pendente' ? 'Aguardando APROVAR/APROVADO' :
-        entry.category === 'aprovado' ? 'Aprovado para concluir' :
+      var state = entry.category === 'pendente' ? 'Aguardando APROVAR' :
+        entry.category === 'aprovado' ? 'Avaliar entrega do projeto' :
         entry.category === 'concluido' ? 'Concluído' :
         'Sem marcador Entrega';
       var alert = projectClosingControlAlert(entry);
@@ -5621,10 +5636,10 @@ function initProjectClosing() {
   var table = '<div class="dashx-table-wrap"><table class="dashx-table"><thead><tr><th>Projeto</th><th>Consultor</th><th>Controle Lais</th><th>Status item Entrega</th><th>Situação ClickUp</th><th>Divergência controle</th><th>Fonte</th><th>Ação</th></tr></thead><tbody>'+rows(approved.concat(pending).concat(concluded))+'</tbody></table></div>';
   var searchTerm = projectClosingSearchTerm();
   var searchBox = '<div class="closing-filter-block"><div class="closing-filter-label">Procurar projeto no fechamento</div><div style="display:flex;gap:8px;align-items:center"><input id="project-closing-search" class="closing-client-search" type="search" value="'+escapeHtml(searchTerm)+'" placeholder="Digite Roberto ou cole link/list_id do ClickUp..." onkeydown="if(event.key===\'Enter\'){return projectClosingSearch()}"><button class="btn-syncall" onclick="return projectClosingSearch()">Buscar direto</button></div></div>';
-  box.innerHTML = '<div class="closing-head"><div><div class="closing-title">Fechamento de projeto</div><div class="closing-sub">Controle separado dos marcos. Aqui entram apenas projetos com rastreio ClickUp e item marcado como Entrega.</div></div></div>'+
-    '<div class="dashx-inline-note" style="margin-bottom:12px"><strong>Regra principal:</strong> fechamento de projeto considera somente o ClickUp: item com marcador Entrega pendente ou em APROVAR/APROVADO. O status do controle da Lais aparece apenas como alerta de diverg&ecirc;ncia, sem tirar o projeto da gest&atilde;o.</div>'+
+  box.innerHTML = '<div class="closing-head"><div><div class="closing-title">Fechamento de projeto</div><div class="closing-sub">Controle separado dos marcos. Aqui entram somente projetos que atendem às três condições do ClickUp.</div></div></div>'+
+    '<div class="dashx-inline-note" style="margin-bottom:12px"><strong>Regra única:</strong> tarefa na Fase 8 / Break Off + flag vermelha Entrega marcada + status exatamente APROVAR. O controle da Lais aparece apenas como alerta de diverg&ecirc;ncia e não inclui nem exclui projetos.</div>'+
     searchBox+projectClosingRenderSearchResults(searchTerm)+projectClosingRenderApiLookup()+
-    '<div class="closing-kpis"><div class="closing-kpi warn"><span>Pendentes ClickUp</span><strong>'+pending.length+'</strong></div><div class="closing-kpi"><span>Aprovados para concluir</span><strong>'+approved.length+'</strong></div><div class="closing-kpi warn"><span>Divergências controle</span><strong>'+divergences.length+'</strong></div><div class="closing-kpi"><span>Concluídos com entrega</span><strong>'+concluded.length+'</strong></div><div class="closing-kpi"><span>Bônus por projeto</span><strong>R$ 80</strong></div></div>'+
+    '<div class="closing-kpis"><div class="closing-kpi warn"><span>Pendentes ClickUp</span><strong>'+pending.length+'</strong></div><div class="closing-kpi"><span>Avaliar para entrega</span><strong>'+approved.length+'</strong></div><div class="closing-kpi warn"><span>Divergências controle</span><strong>'+divergences.length+'</strong></div><div class="closing-kpi"><span>Concluídos com entrega</span><strong>'+concluded.length+'</strong></div><div class="closing-kpi"><span>Bônus por projeto</span><strong>R$ 80</strong></div></div>'+
     '<div class="bonus-section"><div class="bonus-section-title">Gerenciador de fechamento de projeto</div>'+table+'</div>';
 }
 function fechamentoProjectFromItem(item) {
@@ -9882,7 +9897,7 @@ function initDash() {
     dashKpiCard('Projetos 2026', total, 'Somente a carteira identificada como 2026. Clique para listar.', 'good', 'activeProjects', '<span class="dashx-kpi-delta neutral">Recorte fixo 2026</span>', "return dashOpenTopKpiAudit('projects')")+
     dashKpiCard('Com rastreio ClickUp', trackedPct === null ? '-' : dashPct(trackedPct), tracked+' de '+auditable+' projeto(s) auditáveis possuem rastreio técnico. Clique para listar.', dashMetricClass(trackedPct, 70, 90, false), 'aging', '<span class="dashx-kpi-delta neutral">'+untracked+' sem ClickUp</span>', "return dashOpenTopKpiAudit('tracked')")+
     dashKpiCard('ClickUp 15+ dias', stale15, 'Projetos rastreados sem atualização recente no ClickUp. Clique para listar.', stale15 ? 'bad' : 'good', 'aging', '<span class="dashx-kpi-delta neutral">Regra: atualização ClickUp</span>', "return dashOpenTopKpiAudit('stale')")+
-    dashKpiCard('Fechamento de projeto', awaitingDelivery, 'Projetos com item Entrega no ClickUp pendente ou aprovado para concluir. Clique para gerenciar.', awaitingDelivery ? 'warn' : 'good', 'projectRisk', '<span class="dashx-kpi-delta neutral">Regra ClickUp</span>', "goTab('projfech');return false")+
+    dashKpiCard('Fechamento de projeto', awaitingDelivery, 'Fase 8 / Break Off com flag Entrega e status APROVAR. Clique para avaliar.', awaitingDelivery ? 'warn' : 'good', 'projectRisk', '<span class="dashx-kpi-delta neutral">Regra ClickUp</span>', "goTab('projfech');return false")+
     dashKpiCard('Taxa de 1º treinamento realizado', activeRate === null ? '-' : dashPct(activeRate), activeRate === null ? 'Conversão indisponível.' : 'Conversão da jornada venda → 1º treinamento realizado. Clique para listar.', dashMetricClass(activeRate, 40, 70, false), 'funnel', '<span class="dashx-kpi-delta neutral">Base 2026</span>', "return dashOpenTopKpiAudit('activation')")+
     dashKpiCard('Saúde dos dados', health.completude === null ? '-' : dashPct(health.completude), health.completude === null ? 'Não há base suficiente.' : (health.inconsistencias.length+' projeto(s) com campo essencial ausente. Clique para listar.'), dashMetricClass(health.completude, 70, 90, false), 'dataHealthSummary', '<span class="dashx-kpi-delta neutral">'+health.syncErrors+' falha(s) de sync</span>', "return dashOpenTopKpiAudit('health')")+
   '</div>';

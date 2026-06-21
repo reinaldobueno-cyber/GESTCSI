@@ -955,8 +955,10 @@ function buildNormalizedProjectFromClickUp_(mapping) {
       fase_nome: phase ? phase.nome : '',
       parent_id: String(task.parent || ''),
       status_original: task.status && (task.status.status || task.status.type || task.status.label) || '',
+      fase_status_original: phase && phase.status_original || '',
       custom_item_id: String(task.custom_item_id || ''),
       custom_item_name: clickUpTaskCustomItemName_(task),
+      marcador_entrega: isProjectDeliveryTask_(task) ? 'sim' : '',
       responsaveis: (task.assignees || []).map(function(user) {
         return sanitizeText_(user && (user.username || user.name || user.email));
       }).filter(function(name) { return !!name; }).join(', '),
@@ -1120,22 +1122,28 @@ function fetchAllListTasks_(listId, options) {
   if (!listId) throw new Error('CLICKUP_CONFIG com list_id invalido ou vazio.');
   var page = 0;
   var all = [];
+  var customItemTypes = fetchClickUpCustomItemTypes_();
+  var customItemParams = ['custom_items[]=1'];
+  Object.keys(customItemTypes).forEach(function(id) {
+    if (normalizeKey_(customItemTypes[id]) !== 'ENTREGA') return;
+    var param = 'custom_items[]=' + encodeURIComponent(id);
+    if (customItemParams.indexOf(param) < 0) customItemParams.push(param);
+  });
   while (true) {
     assertClickUpActivityDeadline_(options);
     var query = [
       'include_closed=true',
       'subtasks=true',
-      'custom_items[]=1',
       'include_timl=true',
       'page=' + page
-    ].join('&');
+    ].concat(customItemParams).join('&');
     var response = clickupRequest_('get', '/list/' + listId + '/task?' + query);
     var batch = response.tasks || [];
     all = all.concat(batch);
     if (batch.length < 100) break;
     page += 1;
   }
-  return dedupeTasks_(all);
+  return enrichClickUpCustomItemNames_(dedupeTasks_(all), customItemTypes);
 }
 
 function fetchAllViewTasks_(viewId, options) {
@@ -1881,7 +1889,7 @@ function diagnoseProjectClosing_(params) {
       item_tipo_clickup: marker,
       marcador_entrega: isProjectDeliveryTask_(task) ? 'sim' : '',
       aprovar: approvalSignal,
-      entra_regra: isProjectClosingDeliveryItem_(task, phaseName, phaseInfo.phase) && approvalSignal,
+      entra_regra: isProjectClosingDeliveryItem_(task, phaseName, phaseInfo.phase),
       sinal_aprovacao_bruto: approvalSignal && !isProjectClosingApprovalStatus_(status) ? 'sim' : '',
       debug_tipo: summarizeClickUpProjectClosingDebug_(task),
       link: sanitizeText_(task.url || task.permalink || task.link || task.html_url) || ('https://app.clickup.com/t/' + String(task.id || ''))
@@ -2143,26 +2151,19 @@ function isProjectClosingMilestone_(milestone) {
 }
 
 function isProjectClosingApprovalStatus_(status) {
-  var key = normalizeKey_(status);
-  return key.indexOf('APROVAR') >= 0 || (key.indexOf('APROVAD') >= 0 && key.indexOf('GESTAO') >= 0);
+  return normalizeKey_(status) === 'APROVAR';
 }
 
 function hasProjectClosingApprovalSignal_(task, status) {
   if (isProjectClosingApprovalStatus_(status)) return true;
-  var raw = '';
-  try {
-    raw = normalizeKey_(JSON.stringify(task || {}));
-  } catch (error) {
-    raw = '';
-  }
-  return raw.indexOf('APROVAR') >= 0 || raw.indexOf('APROVAD') >= 0;
+  var taskStatus = sanitizeText_(task && task.status && (task.status.status || task.status.type || task.status.label));
+  return isProjectClosingApprovalStatus_(taskStatus);
 }
 
 function hasProjectClosingApprovalSignalByTaskOrPhase_(task, status, phase) {
   if (hasProjectClosingApprovalSignal_(task, status)) return true;
   var phaseStatus = sanitizeText_(phase && phase.status_original);
-  if (isProjectClosingApprovalStatus_(phaseStatus)) return true;
-  return hasProjectClosingApprovalSignal_(phase, phaseStatus);
+  return isProjectClosingApprovalStatus_(phaseStatus);
 }
 
 function fetchLatestClickUpTaskComment_(taskId) {
@@ -5157,8 +5158,10 @@ function buildSheetSafeClickUpJson_(normalized) {
       nome: sanitizeText_(item.nome || ''),
       fase_nome: sanitizeText_(item.fase_nome || ''),
       status_original: sanitizeText_(item.status_original || ''),
+      fase_status_original: sanitizeText_(item.fase_status_original || ''),
       custom_item_id: String(item.custom_item_id || ''),
       custom_item_name: sanitizeText_(item.custom_item_name || ''),
+      marcador_entrega: sanitizeText_(item.marcador_entrega || ''),
       task_url: sanitizeText_(item.task_url || ''),
       date_closed: sanitizeText_(item.date_closed || ''),
       updated_at: sanitizeText_(item.updated_at || ''),
@@ -6180,6 +6183,38 @@ function isMilestoneTask_(task) {
   return false;
 }
 
+var CLICKUP_CUSTOM_ITEM_TYPES_MEMORY_ = null;
+function fetchClickUpCustomItemTypes_() {
+  if (CLICKUP_CUSTOM_ITEM_TYPES_MEMORY_) return CLICKUP_CUSTOM_ITEM_TYPES_MEMORY_;
+  var types = {};
+  var workspaceId = getClickUpWorkspaceId_();
+  if (!workspaceId) return types;
+  try {
+    var response = clickupRequest_('get', '/team/' + workspaceId + '/custom_item');
+    var items = Array.isArray(response)
+      ? response
+      : (response.custom_items || response.custom_task_types || response.items || []);
+    (items || []).forEach(function(item) {
+      var id = String(item && (item.id || item.custom_item_id) || '').trim();
+      var name = sanitizeText_(item && (item.name || item.label || item.type));
+      if (id && name) types[id] = name;
+    });
+  } catch (error) {
+    // Mantem a sincronizacao atual funcionando quando o workspace nao libera este endpoint.
+  }
+  CLICKUP_CUSTOM_ITEM_TYPES_MEMORY_ = types;
+  return types;
+}
+
+function enrichClickUpCustomItemNames_(tasks, types) {
+  types = types || {};
+  return (tasks || []).map(function(task) {
+    var id = String(task && task.custom_item_id || '').trim();
+    if (task && !task.custom_item_name && id && types[id]) task.custom_item_name = types[id];
+    return task;
+  });
+}
+
 function clickUpTaskCustomItemName_(task) {
   return sanitizeText_(
     task && (
@@ -6202,15 +6237,11 @@ function isProjectDeliveryTask_(task) {
     (task && (task.custom_item_name || task.item_tipo_clickup)) ||
     clickUpTaskCustomItemName_(task)
   );
-  return key === 'ENTREGA' || key.indexOf('ENTREGA') >= 0;
+  return key === 'ENTREGA' || key === 'ENTREGA DE PROJETO';
 }
 
 function isProjectDeliveryClosingCandidate_(task) {
-  if (isProjectDeliveryTask_(task)) return true;
-  var name = normalizeKey_(task && (task.name || task.nome || task.marco));
-  return name.indexOf('ENTREGA DO PROJETO') >= 0 ||
-    name.indexOf('KICKOFF DE ENTREGA') >= 0 ||
-    name.indexOf('BREAK OFF DE ENTREGA') >= 0;
+  return isProjectDeliveryTask_(task);
 }
 
 function isProjectBreakOffText_(value) {
