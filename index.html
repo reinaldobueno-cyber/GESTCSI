@@ -3278,6 +3278,9 @@ body.theme-dark *{
 .closing-select{border:1px solid var(--border);background:var(--surf);border-radius:8px;padding:8px 10px;font:800 11px 'Inter',sans-serif;color:var(--text)}
 .closing-kpis{display:grid;grid-template-columns:repeat(5,minmax(150px,1fr));gap:10px;margin-bottom:16px}
 .closing-kpi{background:var(--surf);border:1px solid var(--border);border-radius:10px;padding:14px}
+.closing-kpi.action{width:100%;font-family:'Inter',sans-serif;text-align:left;cursor:pointer;transition:transform .15s ease,box-shadow .15s ease,border-color .15s ease}
+.closing-kpi.action:hover{transform:translateY(-1px);border-color:#d9a93c;box-shadow:0 10px 24px rgba(20,32,24,.08)}
+.closing-kpi.action:focus-visible{outline:3px solid rgba(217,169,60,.25);outline-offset:2px}
 .closing-kpi.warn{border-color:#e7c982;background:#fff8e8}
 .closing-kpi span{display:block;font-size:9px;font-weight:900;text-transform:uppercase;letter-spacing:.08em;color:var(--muted)}
 .closing-kpi strong{display:block;font-size:25px;margin-top:5px;color:var(--text)}
@@ -5651,6 +5654,27 @@ function fechamentoHasPortfolioMismatch(item) {
   var effectiveConsultant = fechamentoEffectiveConsultant(item);
   return !!projectConsultant && !!effectiveConsultant && !bonusNamesMatch(projectConsultant, effectiveConsultant);
 }
+function fechamentoOpenPortfolioMismatchAudit() {
+  var rows = fechamentoFilteredRows().filter(fechamentoHasPortfolioMismatch);
+  var body = rows.map(function(item) {
+    var responsible = consultantCanonicalName((item && (item.consultor || item.responsaveis)) || '') || 'Não identificado';
+    var portfolio = fechamentoPortfolioConsultant(item) || 'Não identificado';
+    var link = item && item.link
+      ? '<a class="project-link-btn" href="'+escapeHtml(item.link)+'" target="_blank" rel="noopener" onclick="event.stopPropagation()">Abrir marco</a>'
+      : '<span class="dashx-list-sub">Sem link</span>';
+    return '<tr><td><strong>'+escapeHtml(item.projeto || 'Projeto não mapeado')+'</strong></td>'+ 
+      '<td>'+escapeHtml(item.marco || '-')+'</td>'+ 
+      '<td>'+escapeHtml(responsible)+'</td>'+ 
+      '<td>'+escapeHtml(portfolio)+'</td>'+ 
+      '<td>'+escapeHtml(item.status_atual || item.situacao || '-')+'</td>'+ 
+      '<td>'+(item.closed_at ? escapeHtml(formatarDataHoraProjeto(item.closed_at)) : '-')+'</td>'+ 
+      '<td>'+link+'</td></tr>';
+  }).join('') || '<tr class="empty-row"><td colspan="7">Nenhuma divergência de responsável neste recorte.</td></tr>';
+  var html = '<div class="dashx-focus-note"><div><strong>Responsabilidade divergente.</strong><br>O responsável registrado no marco é diferente do consultor da carteira do projeto.</div><div class="dashx-focus-hint">'+rows.length+' marco(s)</div></div>'+ 
+    '<div class="dashx-table-wrap" style="margin-top:12px"><table class="dashx-table"><thead><tr><th>Projeto</th><th>Marco</th><th>Responsável do marco</th><th>Consultor da carteira</th><th>Status</th><th>Closed em</th><th>Ação</th></tr></thead><tbody>'+body+'</tbody></table></div>';
+  dashOpenAuditModal('Conferir responsável - '+rows.length+' marco(s)', html);
+  return false;
+}
 function fechamentoApplySyncRows(rows, syncMonth) {
   var normalized = fechamentoNormalizeRows(rows);
   var month = fechamentoMonthKey(syncMonth);
@@ -5977,13 +6001,14 @@ function initFechamento() {
     '<div class="closing-filter-label" style="margin-top:14px">Filtrar cliente</div><input id="fechamento-client-search" class="closing-client-search" type="search" value="'+escapeHtml(FECHAMENTO_FILTER.projetoBusca || '')+'" placeholder="Digite o nome do cliente..." oninput="fechamentoSetProjectSearch(this.value)">'+
     (AUTH_STATE.user && AUTH_STATE.user.role === 'admin' ? '<div class="closing-project-meta" style="margin-top:12px">Closed atualiza a fila geral compartilhada. Reprovados e Aprovados consultam somente a validação e os comentários do mês selecionado.</div><div class="closing-filter-footer" style="gap:8px;flex-wrap:wrap"><button class="btn-syncall" onclick="return fechamentoStartSync(this)">Atualizar Closed</button><button class="btn-syncall" onclick="return fechamentoSyncRejected(this)">Buscar Reprovados</button><button class="btn-syncall" onclick="return fechamentoSyncApproved(this)">Buscar Aprovados</button></div>' : '')+
     '</div>'+
-    '<div class="closing-kpis"><div class="closing-kpi"><span>Marcos no recorte</span><strong>'+list.length+'</strong></div><div class="closing-kpi"><span>Aguardando validação</span><strong>'+waiting+'</strong></div><div class="closing-kpi"><span>Aprovados / Reprovados</span><strong>'+approved+' / '+rejected+'</strong></div><div class="closing-kpi warn"><span>Conferir responsável</span><strong>'+portfolioMismatch+'</strong></div><div class="closing-kpi"><span>Bonificação aprovada</span><strong>'+fechamentoMoney(bonus)+'</strong></div></div>'+
+    '<div class="closing-kpis"><div class="closing-kpi"><span>Marcos no recorte</span><strong>'+list.length+'</strong></div><div class="closing-kpi"><span>Aguardando validação</span><strong>'+waiting+'</strong></div><div class="closing-kpi"><span>Aprovados / Reprovados</span><strong>'+approved+' / '+rejected+'</strong></div><button type="button" class="closing-kpi warn action" title="Ver marcos com responsável diferente do consultor da carteira" onclick="return fechamentoOpenPortfolioMismatchAudit()"><span>Conferir responsável</span><strong>'+portfolioMismatch+'</strong></button><div class="closing-kpi"><span>Bonificação aprovada</span><strong>'+fechamentoMoney(bonus)+'</strong></div></div>'+ 
     consultantCards;
 }
 window.fechamentoLoad = fechamentoLoad;
 window.fechamentoSetFilter = fechamentoSetFilter;
 window.fechamentoSetProjectSearch = fechamentoSetProjectSearch;
 window.fechamentoToggleConsultant = fechamentoToggleConsultant;
+window.fechamentoOpenPortfolioMismatchAudit = fechamentoOpenPortfolioMismatchAudit;
 window.projectClosingSearch = projectClosingSearch;
 window.fechamentoStartSync = fechamentoStartSync;
 window.fechamentoSyncRejected = fechamentoSyncRejected;
