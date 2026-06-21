@@ -118,6 +118,12 @@ function doGet(e) {
     if (action === 'diagnoseProjectClosing') {
       return jsonOutput_(diagnoseProjectClosing_(params), params.callback);
     }
+    if (action === 'getProjectClosingDecisions') {
+      return jsonOutput_(getProjectClosingDecisions_(params), params.callback);
+    }
+    if (action === 'setProjectClosingDecision') {
+      return jsonOutput_(setProjectClosingDecision_(params), params.callback);
+    }
     if (action === 'startClickUpMilestoneClosingBackground') {
       requireAdmin_(params);
       return jsonOutput_(startClickUpMilestoneClosingBackground_(params), params.callback);
@@ -2170,6 +2176,86 @@ function isProjectClosingMilestone_(milestone) {
 
 function isProjectClosingApprovalStatus_(status) {
   return normalizeKey_(status) === 'APROVAR';
+}
+
+function getProjectClosingDecisionSheet_() {
+  var sheet = getOrCreateSheet_('CLICKUP_PROJECT_CLOSING_DECISIONS');
+  ensureHeaders_(sheet, [
+    'project_key', 'project_name', 'consultant', 'item_id', 'item_name',
+    'decision', 'notes', 'decided_at', 'decided_by', 'month', 'bonus_value'
+  ]);
+  return sheet;
+}
+
+function projectClosingDecisionDateText_(value) {
+  if (value instanceof Date) return value.toISOString();
+  return sanitizeText_(value);
+}
+
+function getProjectClosingDecisions_(params) {
+  requireUser_(params || {});
+  var sheet = getProjectClosingDecisionSheet_();
+  var values = sheet.getDataRange().getValues();
+  var header = values[0] || [];
+  var items = values.slice(1).map(function(row) {
+    var item = rowToObject_(header, row);
+    return {
+      project_key: sanitizeText_(item.project_key),
+      project_name: sanitizeText_(item.project_name),
+      consultant: sanitizeText_(item.consultant),
+      item_id: sanitizeText_(item.item_id),
+      item_name: sanitizeText_(item.item_name),
+      decision: sanitizeText_(item.decision).toLowerCase(),
+      notes: sanitizeText_(item.notes),
+      decided_at: projectClosingDecisionDateText_(item.decided_at),
+      decided_by: sanitizeText_(item.decided_by),
+      month: sanitizeText_(item.month),
+      bonus_value: Number(item.bonus_value || 0)
+    };
+  }).filter(function(item) { return item.project_key && item.decision; });
+  return { ok: true, items: items };
+}
+
+function setProjectClosingDecision_(params) {
+  var admin = requireAdmin_(params || {});
+  var projectKey = sanitizeText_(params.project_key);
+  var decision = sanitizeText_(params.decision).toLowerCase();
+  var notes = sanitizeText_(params.notes || params.observacao);
+  if (!projectKey) throw new Error('Projeto obrigatorio.');
+  if (['approved', 'rejected'].indexOf(decision) < 0) throw new Error('Decisao invalida.');
+  if (decision === 'rejected' && !notes) throw new Error('Informe o motivo da reprovacao.');
+
+  var sheet = getProjectClosingDecisionSheet_();
+  var values = sheet.getDataRange().getValues();
+  var header = values[0] || [];
+  var keyIndex = header.indexOf('project_key');
+  var targetRow = 0;
+  for (var i = 1; i < values.length; i++) {
+    if (sanitizeText_(values[i][keyIndex]) === projectKey) {
+      targetRow = i + 1;
+      break;
+    }
+  }
+  var now = new Date();
+  var month = Utilities.formatDate(now, Session.getScriptTimeZone(), 'yyyy-MM');
+  var item = {
+    project_key: projectKey,
+    project_name: sanitizeText_(params.project_name),
+    consultant: sanitizeText_(params.consultant),
+    item_id: sanitizeText_(params.item_id),
+    item_name: sanitizeText_(params.item_name),
+    decision: decision,
+    notes: notes,
+    decided_at: now,
+    decided_by: admin.name || admin.username,
+    month: month,
+    bonus_value: decision === 'approved' ? CLICKUP_PROJECT_CLOSING_BONUS_VALUE : 0
+  };
+  var row = header.map(function(name) { return item[name] == null ? '' : item[name]; });
+  if (targetRow) sheet.getRange(targetRow, 1, 1, header.length).setValues([row]);
+  else sheet.appendRow(row);
+  item.decided_at = now.toISOString();
+  return { ok: true, item: item };
 }
 
 function hasProjectClosingApprovalSignal_(task, status) {
