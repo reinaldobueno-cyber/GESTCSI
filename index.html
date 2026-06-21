@@ -5274,6 +5274,7 @@ var FECHAMENTO_LOADING = false;
 var FECHAMENTO_SESSION_REFRESHED = false;
 var FECHAMENTO_POLL_TIMER = null;
 var FECHAMENTO_FILTER = { month:'', consultor:'todos', projetoBusca:'', situacao:'todos' };
+var PROJECT_CLOSING_RULE_VERSION = 'breakoff-entrega-aprovar-v3';
 var PROJECT_CLOSING_LOOKUP = {term:'', loading:false, result:null, error:''};
 var FECHAMENTO_EXPANDED = {};
 try { FECHAMENTO_EXPANDED = JSON.parse(storageGet('gestcsi_fechamento_expanded_v1', '{}')) || {}; } catch(e) { FECHAMENTO_EXPANDED = {}; }
@@ -5478,6 +5479,8 @@ function projectClosingRenderApiLookup() {
     return '<div class="dashx-inline-note" style="margin-bottom:14px"><strong>Busca direta falhou:</strong> '+escapeHtml(PROJECT_CLOSING_LOOKUP.error)+'</div>';
   }
   var result = PROJECT_CLOSING_LOOKUP.result || {};
+  var backendVersion = String(result.project_closing_rule_version || '');
+  var versionWarning = backendVersion === PROJECT_CLOSING_RULE_VERSION ? '' : '<div class="dashx-inline-note" style="margin-bottom:10px"><strong>Apps Script desatualizado:</strong> a API publicada ainda não contém a regra atual. É necessário implantar a versão mais recente do ClickUpSync.gs no Apps Script.</div>';
   var rows = (result.items || []).map(function(item) {
     var status = item.status_original || '-';
     var phaseStatus = item.fase_status_original ? '<div class="closing-project-meta">Fase pai: '+escapeHtml(item.fase_status_original)+'</div>' : '';
@@ -5486,7 +5489,7 @@ function projectClosingRenderApiLookup() {
     var debug = item.debug_tipo ? '<div class="closing-project-meta">'+escapeHtml(item.debug_tipo)+'</div>' : '';
     return '<tr><td><strong>'+escapeHtml(item.nome || '-')+'</strong><div class="closing-project-meta">'+escapeHtml(item.fase_nome || '-')+'</div>'+debug+'</td><td>'+escapeHtml(status)+phaseStatus+'</td><td>'+escapeHtml(marker)+'</td><td>'+escapeHtml(state)+'</td><td><a class="project-link-btn" href="'+escapeHtml(item.link || '#')+'" target="_blank" rel="noopener">Abrir item</a></td></tr>';
   }).join('') || '<tr class="empty-row"><td colspan="5">A API não retornou item de Fase 8 / Break Off nessa lista.</td></tr>';
-  return '<div class="bonus-section" style="margin-bottom:14px"><div class="bonus-section-title">Busca direta na API ClickUp</div><div class="dashx-inline-note" style="margin-bottom:10px"><strong>List ID:</strong> '+escapeHtml(result.list_id || '-')+' · '+Number(result.tasks_total || 0)+' tarefa(s) lidas · '+Number(result.aprovados_total || 0)+' aprovado(s) na regra</div><div class="dashx-table-wrap"><table class="dashx-table"><thead><tr><th>Item</th><th>Status</th><th>Flag</th><th>Regra</th><th>Ação</th></tr></thead><tbody>'+rows+'</tbody></table></div></div>';
+  return '<div class="bonus-section" style="margin-bottom:14px"><div class="bonus-section-title">Busca direta na API ClickUp</div>'+versionWarning+'<div class="dashx-inline-note" style="margin-bottom:10px"><strong>List ID:</strong> '+escapeHtml(result.list_id || '-')+' · '+Number(result.tasks_total || 0)+' tarefa(s) lidas · '+Number(result.aprovados_total || 0)+' aprovado(s) na regra</div><div class="dashx-table-wrap"><table class="dashx-table"><thead><tr><th>Item</th><th>Status</th><th>Flag</th><th>Regra</th><th>Ação</th></tr></thead><tbody>'+rows+'</tbody></table></div></div>';
 }
 function projectClosingRenderSearchResults(term) {
   term = String(term || '').trim();
@@ -5524,7 +5527,9 @@ function projectClosingRenderSearchResults(term) {
       var reason = ok ? ' · entra na regra' : (!hasFlag ? ' · não entra: flag Entrega ausente' : (!hasApproval ? ' · não entra: status não é APROVAR' : ' · não entra: fora do Break Off'));
       return escapeHtml(item.nome || item.marco || '-')+'<div class="closing-project-meta">'+escapeHtml(item.fase_nome || item.fase || '-')+' · '+escapeHtml(status)+' · '+marker+reason+'</div>';
     }).join('<hr style="border:0;border-top:1px solid var(--border);margin:7px 0">') : '<span class="dashx-score-pill warn">Nenhuma Fase 8 / Break Off encontrada no JSON salvo</span>';
-    return '<tr><td><strong>'+escapeHtml(p.cliente || '-')+'</strong><div class="closing-project-meta">'+escapeHtml(p.mes || '-')+' · '+escapeHtml(p.consultor || '-')+'</div></td><td>'+escapeHtml(p.status || '-')+'</td><td>'+detail+'</td><td>'+escapeHtml(info.source || '-')+'</td><td>'+dashProjectActionCell(p)+'</td></tr>';
+    var syncKey = encodeURIComponent(montarProjectKeyClickup(p));
+    var syncButton = '<button type="button" class="project-link-btn alt" data-sync-key="'+syncKey+'" onclick="sincronizarClickupProjeto(decodeURIComponent(this.dataset.syncKey||\'\'),this)">Sincronizar este projeto</button>';
+    return '<tr><td><strong>'+escapeHtml(p.cliente || '-')+'</strong><div class="closing-project-meta">'+escapeHtml(p.mes || '-')+' · '+escapeHtml(p.consultor || '-')+'</div></td><td>'+escapeHtml(p.status || '-')+'</td><td>'+detail+'</td><td>'+escapeHtml(info.source || '-')+'</td><td><div class="project-actions">'+dashProjectActionCell(p)+syncButton+'</div></td></tr>';
   }).join('') || '<tr class="empty-row"><td colspan="5">Nenhum projeto encontrado com esse texto.</td></tr>';
   return '<div class="bonus-section" style="margin-bottom:14px"><div class="bonus-section-title">Diagnóstico de busca</div><div class="dashx-inline-note" style="margin-bottom:10px"><strong>O que esta busca mostra:</strong> o dado que o painel recebeu da planilha/JSON. Se o ClickUp mostra APROVAR mas aqui aparece “a fazer”, precisa rodar Sync ClickUp atualizado.</div><div class="dashx-table-wrap"><table class="dashx-table"><thead><tr><th>Projeto</th><th>Controle Lais</th><th>Fase 8 / Break Off no dado salvo</th><th>Fonte</th><th>Ação</th></tr></thead><tbody>'+rows+'</tbody></table></div></div>';
 }
