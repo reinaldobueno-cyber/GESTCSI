@@ -1120,29 +1120,31 @@ function fetchProjectTasks_(mapping, options) {
 function fetchAllListTasks_(listId, options) {
   listId = normalizeClickUpId_(listId);
   if (!listId) throw new Error('CLICKUP_CONFIG com list_id invalido ou vazio.');
-  var page = 0;
   var all = [];
   var customItemTypes = fetchClickUpCustomItemTypes_();
-  var customItemParams = ['custom_items[]=1'];
+  var queryVariants = [[], ['custom_items[]=1']];
   Object.keys(customItemTypes).forEach(function(id) {
     if (normalizeKey_(customItemTypes[id]) !== 'ENTREGA') return;
     var param = 'custom_items[]=' + encodeURIComponent(id);
-    if (customItemParams.indexOf(param) < 0) customItemParams.push(param);
+    if (!queryVariants.some(function(parts) { return parts.indexOf(param) >= 0; })) queryVariants.push([param]);
   });
-  while (true) {
-    assertClickUpActivityDeadline_(options);
-    var query = [
-      'include_closed=true',
-      'subtasks=true',
-      'include_timl=true',
-      'page=' + page
-    ].concat(customItemParams).join('&');
-    var response = clickupRequest_('get', '/list/' + listId + '/task?' + query);
-    var batch = response.tasks || [];
-    all = all.concat(batch);
-    if (batch.length < 100) break;
-    page += 1;
-  }
+  queryVariants.forEach(function(extraParams) {
+    var page = 0;
+    while (true) {
+      assertClickUpActivityDeadline_(options);
+      var query = [
+        'include_closed=true',
+        'subtasks=true',
+        'include_timl=true',
+        'page=' + page
+      ].concat(extraParams).join('&');
+      var response = clickupRequest_('get', '/list/' + listId + '/task?' + query);
+      var batch = response.tasks || [];
+      all = all.concat(batch);
+      if (batch.length < 100) break;
+      page += 1;
+    }
+  });
   return enrichClickUpCustomItemNames_(dedupeTasks_(all), customItemTypes);
 }
 
