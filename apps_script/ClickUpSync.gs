@@ -30,6 +30,7 @@ var CLICKUP_DEFAULT_WORKSPACE_ID = '9007083069';
 var CLICKUP_MILESTONE_BONUS_VALUE = 30;
 var CLICKUP_PROJECT_CLOSING_BONUS_VALUE = 80;
 var CLICKUP_PROJECT_CLOSING_BONUS_START = '2026-06-15';
+var CLICKUP_PROJECT_CLOSING_RULE_VERSION = 'breakoff-entrega-aprovar-v3';
 var CLICKUP_MILESTONE_AUDIT_TASK_IDS = [];
 var CLICKUP_MILESTONE_CLOSING_SCHEMA_VERSION = 'strict-milestones-v2';
 var MONTHS = ['JAN', 'FEV', 'MAR', 'ABR', 'MAI', 'JUN', 'JUL', 'AGO', 'SET', 'OUT', 'NOV', 'DEZ'];
@@ -898,6 +899,7 @@ function syncProjectMapping_(mapping, options) {
     tasks_total: normalized.resumo.tasks_total,
     marcos_total: normalized.resumo.marcos_total,
     synced_at: normalized.synced_at,
+    project_closing_rule_version: CLICKUP_PROJECT_CLOSING_RULE_VERSION,
     source: normalized.clickup_payload && normalized.clickup_payload.source || '',
     warning: normalized.clickup_payload && normalized.clickup_payload.warning || ''
   };
@@ -1899,6 +1901,7 @@ function diagnoseProjectClosing_(params) {
   });
   return {
     ok: true,
+    project_closing_rule_version: CLICKUP_PROJECT_CLOSING_RULE_VERSION,
     list_id: listId,
     tasks_total: tasks.length,
     breakoff_total: breakOffItems.length,
