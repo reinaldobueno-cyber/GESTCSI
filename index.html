@@ -5491,13 +5491,13 @@ function projectClosingRenderApiLookup() {
   }).join('') || '<tr class="empty-row"><td colspan="5">A API não retornou item de Fase 8 / Break Off nessa lista.</td></tr>';
   return '<div class="bonus-section" style="margin-bottom:14px"><div class="bonus-section-title">Busca direta na API ClickUp</div>'+versionWarning+'<div class="dashx-inline-note" style="margin-bottom:10px"><strong>List ID:</strong> '+escapeHtml(result.list_id || '-')+' · '+Number(result.tasks_total || 0)+' tarefa(s) lidas · '+Number(result.aprovados_total || 0)+' aprovado(s) na regra</div><div class="dashx-table-wrap"><table class="dashx-table"><thead><tr><th>Item</th><th>Status</th><th>Flag</th><th>Regra</th><th>Ação</th></tr></thead><tbody>'+rows+'</tbody></table></div></div>';
 }
-function projectClosingRenderSearchResults(term) {
+function projectClosingFindProjects(term) {
   term = String(term || '').trim();
-  if (!term) return '';
+  if (!term) return [];
   var q = fechamentoSearchKey(term);
   var rawTerm = term.toLowerCase();
   var numeric = (term.match(/\d{6,}/g) || []);
-  var list = ordenarProjetosPainel((Array.isArray(DATA.projetos) ? DATA.projetos.slice() : []).filter(function(p) {
+  return ordenarProjetosPainel((Array.isArray(DATA.projetos) ? DATA.projetos.slice() : []).filter(function(p) {
     var hay = [
       p && p.cliente,
       p && p.consultor,
@@ -5515,6 +5515,11 @@ function projectClosingRenderSearchResults(term) {
       lowerHay.indexOf(rawTerm) >= 0 ||
       numeric.some(function(id){ return lowerHay.indexOf(id) >= 0; });
   })).slice(0, 12);
+}
+function projectClosingRenderSearchResults(term) {
+  term = String(term || '').trim();
+  if (!term) return '';
+  var list = projectClosingFindProjects(term);
   var rows = list.map(function(p) {
     var info = projectClosingInfo(p);
     var items = projectClosingBreakOffItemsFromJson(p);
@@ -5532,6 +5537,22 @@ function projectClosingRenderSearchResults(term) {
     return '<tr><td><strong>'+escapeHtml(p.cliente || '-')+'</strong><div class="closing-project-meta">'+escapeHtml(p.mes || '-')+' · '+escapeHtml(p.consultor || '-')+'</div></td><td>'+escapeHtml(p.status || '-')+'</td><td>'+detail+'</td><td>'+escapeHtml(info.source || '-')+'</td><td><div class="project-actions">'+dashProjectActionCell(p)+syncButton+'</div></td></tr>';
   }).join('') || '<tr class="empty-row"><td colspan="5">Nenhum projeto encontrado com esse texto.</td></tr>';
   return '<div class="bonus-section" style="margin-bottom:14px"><div class="bonus-section-title">Diagnóstico de busca</div><div class="dashx-inline-note" style="margin-bottom:10px"><strong>O que esta busca mostra:</strong> o dado que o painel recebeu da planilha/JSON. Se o ClickUp mostra APROVAR mas aqui aparece “a fazer”, precisa rodar Sync ClickUp atualizado.</div><div class="dashx-table-wrap"><table class="dashx-table"><thead><tr><th>Projeto</th><th>Controle Lais</th><th>Fase 8 / Break Off no dado salvo</th><th>Fonte</th><th>Ação</th></tr></thead><tbody>'+rows+'</tbody></table></div></div>';
+}
+function projectClosingSyncSearch(btn) {
+  var term = projectClosingSearchTerm();
+  if (!term) {
+    showToast('Digite o nome do projeto ou cole o link do ClickUp.', 'err');
+    var input = document.getElementById('project-closing-search');
+    if (input) input.focus();
+    return false;
+  }
+  var project = projectClosingFindProjects(term)[0];
+  if (!project) {
+    showToast('Projeto não encontrado na planilha. Use Buscar direto para diagnosticar o link.', 'err');
+    return false;
+  }
+  PROJECT_CLOSING_LOOKUP.term = term;
+  return sincronizarClickupProjeto(montarProjectKeyClickup(project), btn);
 }
 function projectClosingSearch() {
   var term = projectClosingSearchTerm();
@@ -5640,7 +5661,7 @@ function initProjectClosing() {
   }
   var table = '<div class="dashx-table-wrap"><table class="dashx-table"><thead><tr><th>Projeto</th><th>Consultor</th><th>Controle Lais</th><th>Status item Entrega</th><th>Situação ClickUp</th><th>Divergência controle</th><th>Fonte</th><th>Ação</th></tr></thead><tbody>'+rows(approved.concat(pending).concat(concluded))+'</tbody></table></div>';
   var searchTerm = projectClosingSearchTerm();
-  var searchBox = '<div class="closing-filter-block"><div class="closing-filter-label">Procurar projeto no fechamento</div><div style="display:flex;gap:8px;align-items:center"><input id="project-closing-search" class="closing-client-search" type="search" value="'+escapeHtml(searchTerm)+'" placeholder="Digite Roberto ou cole link/list_id do ClickUp..." onkeydown="if(event.key===\'Enter\'){return projectClosingSearch()}"><button class="btn-syncall" onclick="return projectClosingSearch()">Buscar direto</button></div></div>';
+  var searchBox = '<div class="closing-filter-block"><div class="closing-filter-label">Procurar projeto no fechamento</div><div style="display:flex;gap:8px;align-items:center"><input id="project-closing-search" class="closing-client-search" type="search" value="'+escapeHtml(searchTerm)+'" placeholder="Digite Roberto ou cole link/list_id do ClickUp..." onkeydown="if(event.key===\'Enter\'){return projectClosingSearch()}"><button class="btn-syncall" onclick="return projectClosingSearch()">Buscar direto</button><button class="btn-syncall" onclick="return projectClosingSyncSearch(this)">Sincronizar projeto</button></div></div>';
   box.innerHTML = '<div class="closing-head"><div><div class="closing-title">Fechamento de projeto</div><div class="closing-sub">Controle separado dos marcos. Aqui entram somente projetos que atendem às três condições do ClickUp.</div></div></div>'+
     '<div class="dashx-inline-note" style="margin-bottom:12px"><strong>Regra única:</strong> tarefa na Fase 8 / Break Off + flag vermelha Entrega marcada + status exatamente APROVAR. O controle da Lais aparece apenas como alerta de diverg&ecirc;ncia e não inclui nem exclui projetos.</div>'+
     searchBox+projectClosingRenderSearchResults(searchTerm)+projectClosingRenderApiLookup()+
