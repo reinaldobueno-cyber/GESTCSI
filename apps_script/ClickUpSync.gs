@@ -30,7 +30,7 @@ var CLICKUP_DEFAULT_WORKSPACE_ID = '9007083069';
 var CLICKUP_MILESTONE_BONUS_VALUE = 30;
 var CLICKUP_PROJECT_CLOSING_BONUS_VALUE = 80;
 var CLICKUP_PROJECT_CLOSING_BONUS_START = '2026-06-15';
-var CLICKUP_PROJECT_CLOSING_RULE_VERSION = 'breakoff-entrega-aprovar-v3';
+var CLICKUP_PROJECT_CLOSING_RULE_VERSION = 'breakoff-marco-aprovar-v4';
 var CLICKUP_MILESTONE_AUDIT_TASK_IDS = [];
 var CLICKUP_MILESTONE_CLOSING_SCHEMA_VERSION = 'strict-milestones-v2';
 var MONTHS = ['JAN', 'FEV', 'MAR', 'ABR', 'MAI', 'JUN', 'JUL', 'AGO', 'SET', 'OUT', 'NOV', 'DEZ'];
@@ -924,6 +924,11 @@ function buildNormalizedProjectFromClickUp_(mapping) {
         nome: sanitizeText_(task.name),
         ordem: extractLeadingNumber_(task.name),
         status_original: task.status && (task.status.status || task.status.type || task.status.label) || '',
+        custom_item_id: String(task.custom_item_id || ''),
+        custom_item_name: clickUpTaskCustomItemName_(task),
+        marcador_marco: isMilestoneTask_(task) ? 'sim' : '',
+        task_url: sanitizeText_(task.url || task.permalink || task.link || task.html_url) ||
+          ('https://app.clickup.com/t/' + String(task.id || '')),
         tasks_concluidas: 0,
         tasks_pendentes: 0,
         marcos_concluidos: 0,
@@ -1030,6 +1035,10 @@ function buildNormalizedProjectFromClickUp_(mapping) {
         nome: phase.nome,
         ordem: phase.ordem,
         status_original: phase.status_original || '',
+        custom_item_id: phase.custom_item_id || '',
+        custom_item_name: phase.custom_item_name || '',
+        marcador_marco: phase.marcador_marco || '',
+        task_url: phase.task_url || '',
         tasks_concluidas: phase.tasks_concluidas,
         tasks_pendentes: phase.tasks_pendentes,
         marcos_concluidos: phase.marcos_concluidos,
@@ -1874,8 +1883,10 @@ function diagnoseProjectClosing_(params) {
   });
   var breakOffItems = [];
   tasks.forEach(function(task) {
-    if (isPhaseTask_(task, byId)) return;
-    var phaseInfo = resolvePhaseForTask_(task, byId, phaseMap);
+    var phaseTask = isPhaseTask_(task, byId);
+    var phaseInfo = phaseTask
+      ? { phase: phaseMap[String(task.id)] || null }
+      : resolvePhaseForTask_(task, byId, phaseMap);
     var phaseName = phaseInfo.phase ? phaseInfo.phase.nome : '';
     if (!isProjectBreakOffText_(phaseName) && !isProjectBreakOffText_(task && task.name)) return;
     var status = sanitizeText_(task.status && (task.status.status || task.status.type || task.status.label));
@@ -1891,7 +1902,7 @@ function diagnoseProjectClosing_(params) {
       custom_item_id: String(task.custom_item_id || ''),
       custom_item_name: marker,
       item_tipo_clickup: marker,
-      marcador_entrega: isProjectDeliveryTask_(task) ? 'sim' : '',
+      marcador_marco: isMilestoneTask_(task) ? 'sim' : '',
       aprovar: approvalSignal,
       entra_regra: isProjectClosingDeliveryItem_(task, phaseName, phaseInfo.phase),
       sinal_aprovacao_bruto: approvalSignal && !isProjectClosingApprovalStatus_(status) ? 'sim' : '',
@@ -5167,6 +5178,7 @@ function buildSheetSafeClickUpJson_(normalized) {
       custom_item_id: String(item.custom_item_id || ''),
       custom_item_name: sanitizeText_(item.custom_item_name || ''),
       marcador_entrega: sanitizeText_(item.marcador_entrega || ''),
+      marcador_marco: sanitizeText_(item.marcador_marco || ''),
       task_url: sanitizeText_(item.task_url || ''),
       date_closed: sanitizeText_(item.date_closed || ''),
       updated_at: sanitizeText_(item.updated_at || ''),
@@ -5195,6 +5207,10 @@ function buildSheetSafeClickUpJson_(normalized) {
         nome: sanitizeText_(phase && phase.nome || ''),
         ordem: phase && phase.ordem || 0,
         status_original: sanitizeText_(phase && phase.status_original || ''),
+        custom_item_id: String(phase && phase.custom_item_id || ''),
+        custom_item_name: sanitizeText_(phase && phase.custom_item_name || ''),
+        marcador_marco: sanitizeText_(phase && phase.marcador_marco || ''),
+        task_url: sanitizeText_(phase && phase.task_url || ''),
         tasks_concluidas: phase && phase.tasks_concluidas || 0,
         tasks_pendentes: phase && phase.tasks_pendentes || 0,
         marcos_concluidos: phase && phase.marcos_concluidos || 0,
@@ -6246,7 +6262,7 @@ function isProjectDeliveryTask_(task) {
 }
 
 function isProjectDeliveryClosingCandidate_(task) {
-  return isProjectDeliveryTask_(task);
+  return isMilestoneTask_(task) || String(task && task.marcador_marco || '').toLowerCase() === 'sim';
 }
 
 function isProjectBreakOffText_(value) {
