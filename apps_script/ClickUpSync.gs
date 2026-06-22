@@ -100,6 +100,14 @@ function doGet(e) {
       });
       return jsonOutput_(allResult, params.callback);
     }
+    if (action === 'startProjectClosingSync') {
+      requireAdmin_(params);
+      return jsonOutput_(startProjectClosingSyncBackground_(), params.callback);
+    }
+    if (action === 'getProjectClosingSyncStatus') {
+      requireUser_(params);
+      return jsonOutput_(getProjectClosingSyncBackgroundStatus_(), params.callback);
+    }
     if (action === 'processDirty') {
       var dirtyResult = processDirtyQueue({
         limit: toInt_(params.limit, null)
@@ -897,6 +905,7 @@ function syncProjectMapping_(mapping, options) {
   var normalized = buildNormalizedProjectFromClickUp_(mapping);
   writeProjectSummaryToMonthlySheet_(mapping, normalized);
   upsertClickUpMilestoneClosing_(mapping, normalized);
+  reconcileProjectClosingDecisionFromNormalized_(mapping, normalized);
   writeSyncStatus_(mapping, 'ok', '');
   return {
     project_key: mapping.project_key,
@@ -934,6 +943,7 @@ function buildNormalizedProjectFromClickUp_(mapping) {
         custom_item_name: clickUpTaskCustomItemName_(task),
         marcador_entrega: isProjectDeliveryTask_(task) ? 'sim' : '',
         marcador_marco: isMilestoneTask_(task) ? 'sim' : '',
+        updated_at: task.date_updated ? fromMillisIso_(task.date_updated) : '',
         task_url: sanitizeText_(task.url || task.permalink || task.link || task.html_url) ||
           ('https://app.clickup.com/t/' + String(task.id || '')),
         tasks_concluidas: 0,
@@ -1046,6 +1056,7 @@ function buildNormalizedProjectFromClickUp_(mapping) {
         custom_item_name: phase.custom_item_name || '',
         marcador_entrega: phase.marcador_entrega || '',
         marcador_marco: phase.marcador_marco || '',
+        updated_at: phase.updated_at || '',
         task_url: phase.task_url || '',
         tasks_concluidas: phase.tasks_concluidas,
         tasks_pendentes: phase.tasks_pendentes,
@@ -1165,6 +1176,103 @@ function fetchAllListTasks_(listId, options) {
     }
   });
   return enrichClickUpCustomItemNames_(dedupeTasks_(all), customItemTypes);
+}
+
+function startProjectClosingSyncBackground_() {
+  var props = PropertiesService.getScriptProperties();
+  var alreadyActive = props.getProperty('PROJECT_CLOSING_SYNC_ACTIVE') === '1';
+  if (!alreadyActive) {
+    var total = loadProjectMappings_().filter(function(item) {
+      return item.enabled && MONTHS.indexOf(sanitizeMonth_(item.mes)) >= 0;
+    }).length;
+    props.setProperty('PROJECT_CLOSING_SYNC_ACTIVE', '1');
+    props.setProperty('PROJECT_CLOSING_SYNC_CURSOR', '0');
+    props.setProperty('PROJECT_CLOSING_SYNC_TOTAL', String(total));
+    props.setProperty('PROJECT_CLOSING_SYNC_PROCESSED', '0');
+    props.setProperty('PROJECT_CLOSING_SYNC_ERRORS', '0');
+    props.setProperty('PROJECT_CLOSING_SYNC_STARTED_AT', new Date().toISOString());
+    props.deleteProperty('PROJECT_CLOSING_SYNC_COMPLETED_AT');
+    props.deleteProperty('PROJECT_CLOSING_SYNC_ERROR');
+  }
+  scheduleProjectClosingSyncBackground_(1000);
+  var status = getProjectClosingSyncBackgroundStatus_();
+  status.already_active = alreadyActive;
+  return status;
+}
+
+function continueProjectClosingSyncBackgroundTrigger() {
+  var props = PropertiesService.getScriptProperties();
+  if (props.getProperty('PROJECT_CLOSING_SYNC_ACTIVE') !== '1') {
+    clearProjectClosingSyncBackgroundTriggers_();
+    return;
+  }
+  try {
+    var mappings = loadProjectMappings_().filter(function(item) {
+      return item.enabled && MONTHS.indexOf(sanitizeMonth_(item.mes)) >= 0;
+    });
+    var cursor = Math.max(0, toInt_(props.getProperty('PROJECT_CLOSING_SYNC_CURSOR'), 0));
+    var batchSize = Math.max(1, Math.min(toInt_(getScriptProperty_('PROJECT_CLOSING_SYNC_BATCH_SIZE', '3'), 3), 5));
+    var batch = mappings.slice(cursor, cursor + batchSize);
+    var processed = toInt_(props.getProperty('PROJECT_CLOSING_SYNC_PROCESSED'), 0);
+    var errors = toInt_(props.getProperty('PROJECT_CLOSING_SYNC_ERRORS'), 0);
+    batch.forEach(function(mapping) {
+      try {
+        syncProjectMapping_(mapping, { force: true });
+        processed += 1;
+      } catch (error) {
+        errors += 1;
+        writeSyncStatus_(mapping, 'error', error.message);
+        props.setProperty('PROJECT_CLOSING_SYNC_ERROR', simplifyErrorMessage_(error));
+      }
+    });
+    cursor += batch.length;
+    props.setProperty('PROJECT_CLOSING_SYNC_CURSOR', String(cursor));
+    props.setProperty('PROJECT_CLOSING_SYNC_PROCESSED', String(processed));
+    props.setProperty('PROJECT_CLOSING_SYNC_ERRORS', String(errors));
+    props.setProperty('PROJECT_CLOSING_SYNC_UPDATED_AT', new Date().toISOString());
+    if (!batch.length || cursor >= mappings.length) {
+      props.setProperty('PROJECT_CLOSING_SYNC_ACTIVE', '0');
+      props.setProperty('PROJECT_CLOSING_SYNC_COMPLETED_AT', new Date().toISOString());
+      clearProjectClosingSyncBackgroundTriggers_();
+      return;
+    }
+    scheduleProjectClosingSyncBackground_(3000);
+  } catch (error) {
+    props.setProperty('PROJECT_CLOSING_SYNC_ERROR', simplifyErrorMessage_(error));
+    props.setProperty('PROJECT_CLOSING_SYNC_ACTIVE', '0');
+    clearProjectClosingSyncBackgroundTriggers_();
+  }
+}
+
+function getProjectClosingSyncBackgroundStatus_() {
+  var props = PropertiesService.getScriptProperties();
+  return {
+    ok: true,
+    active: props.getProperty('PROJECT_CLOSING_SYNC_ACTIVE') === '1',
+    processed: toInt_(props.getProperty('PROJECT_CLOSING_SYNC_PROCESSED'), 0),
+    total: toInt_(props.getProperty('PROJECT_CLOSING_SYNC_TOTAL'), 0),
+    errors: toInt_(props.getProperty('PROJECT_CLOSING_SYNC_ERRORS'), 0),
+    started_at: props.getProperty('PROJECT_CLOSING_SYNC_STARTED_AT') || '',
+    updated_at: props.getProperty('PROJECT_CLOSING_SYNC_UPDATED_AT') || '',
+    completed_at: props.getProperty('PROJECT_CLOSING_SYNC_COMPLETED_AT') || '',
+    error: props.getProperty('PROJECT_CLOSING_SYNC_ERROR') || ''
+  };
+}
+
+function scheduleProjectClosingSyncBackground_(delayMs) {
+  clearProjectClosingSyncBackgroundTriggers_();
+  ScriptApp.newTrigger('continueProjectClosingSyncBackgroundTrigger')
+    .timeBased()
+    .after(Math.max(1000, Number(delayMs || 3000)))
+    .create();
+}
+
+function clearProjectClosingSyncBackgroundTriggers_() {
+  ScriptApp.getProjectTriggers().forEach(function(trigger) {
+    if (trigger.getHandlerFunction() === 'continueProjectClosingSyncBackgroundTrigger') {
+      ScriptApp.deleteTrigger(trigger);
+    }
+  });
 }
 
 function fetchAllViewTasks_(viewId, options) {
@@ -2233,17 +2341,6 @@ function setProjectClosingDecision_(params) {
   var desiredStatus = decision === 'approved' ? 'APROVADO GESTAO' : 'REPROVADO GESTAO';
   var clickupUpdate = updateProjectClosingStatusInClickUp_(itemId, desiredStatus, notes, admin);
 
-  var sheet = getProjectClosingDecisionSheet_();
-  var values = sheet.getDataRange().getValues();
-  var header = values[0] || [];
-  var keyIndex = header.indexOf('project_key');
-  var targetRow = 0;
-  for (var i = 1; i < values.length; i++) {
-    if (sanitizeText_(values[i][keyIndex]) === projectKey) {
-      targetRow = i + 1;
-      break;
-    }
-  }
   var now = new Date();
   var month = Utilities.formatDate(now, Session.getScriptTimeZone(), 'yyyy-MM');
   var item = {
@@ -2261,13 +2358,62 @@ function setProjectClosingDecision_(params) {
     clickup_status: clickupUpdate.status,
     clickup_updated_at: now
   };
-  var row = header.map(function(name) { return item[name] == null ? '' : item[name]; });
-  if (targetRow) sheet.getRange(targetRow, 1, 1, header.length).setValues([row]);
-  else sheet.appendRow(row);
+  upsertProjectClosingDecisionRow_(item);
   item.decided_at = now.toISOString();
   item.clickup_updated_at = now.toISOString();
   item.clickup_warning = clickupUpdate.warning || '';
   return { ok: true, item: item };
+}
+
+function upsertProjectClosingDecisionRow_(item) {
+  var sheet = getProjectClosingDecisionSheet_();
+  var values = sheet.getDataRange().getValues();
+  var header = values[0] || [];
+  var keyIndex = header.indexOf('project_key');
+  var targetRow = 0;
+  for (var i = 1; i < values.length; i++) {
+    if (sanitizeText_(values[i][keyIndex]) === sanitizeText_(item.project_key)) {
+      targetRow = i + 1;
+      break;
+    }
+  }
+  var row = header.map(function(name) { return item[name] == null ? '' : item[name]; });
+  if (targetRow) sheet.getRange(targetRow, 1, 1, header.length).setValues([row]);
+  else sheet.appendRow(row);
+}
+
+function reconcileProjectClosingDecisionFromNormalized_(mapping, normalized) {
+  var items = []
+    .concat(normalized && normalized.fases || [])
+    .concat(normalized && normalized.marcos || [])
+    .concat(normalized && normalized.tasks || []);
+  var finalItem = items.filter(function(item) {
+    if (!isProjectBreakOffText_(item && (item.nome || item.fase_nome))) return false;
+    if (!isProjectDeliveryClosingCandidate_(item)) return false;
+    var statusKey = normalizeKey_(item && item.status_original);
+    return statusKey === 'APROVADO GESTAO' || statusKey === 'REPROVADO GESTAO';
+  })[0];
+  if (!finalItem) return;
+  var statusKey = normalizeKey_(finalItem.status_original);
+  var approved = statusKey === 'APROVADO GESTAO';
+  var decidedAtText = sanitizeText_(finalItem.updated_at) || new Date().toISOString();
+  var decidedAt = new Date(decidedAtText);
+  if (isNaN(decidedAt.getTime())) decidedAt = new Date();
+  upsertProjectClosingDecisionRow_({
+    project_key: mapping.project_key,
+    project_name: normalized.cliente || mapping.cliente,
+    consultant: normalized.consultor || mapping.consultor,
+    item_id: finalItem.id || '',
+    item_name: finalItem.nome || 'Fase 8 - Break Off',
+    decision: approved ? 'approved' : 'rejected',
+    notes: 'Situacao reconciliada pelo status atual do ClickUp.',
+    decided_at: decidedAt,
+    decided_by: 'ClickUp',
+    month: Utilities.formatDate(decidedAt, Session.getScriptTimeZone(), 'yyyy-MM'),
+    bonus_value: approved ? CLICKUP_PROJECT_CLOSING_BONUS_VALUE : 0,
+    clickup_status: finalItem.status_original || '',
+    clickup_updated_at: decidedAt
+  });
 }
 
 function updateProjectClosingStatusInClickUp_(taskId, desiredStatus, notes, user) {
@@ -5344,6 +5490,7 @@ function buildSheetSafeClickUpJson_(normalized) {
         custom_item_name: sanitizeText_(phase && phase.custom_item_name || ''),
         marcador_entrega: sanitizeText_(phase && phase.marcador_entrega || ''),
         marcador_marco: sanitizeText_(phase && phase.marcador_marco || ''),
+        updated_at: sanitizeText_(phase && phase.updated_at || ''),
         task_url: sanitizeText_(phase && phase.task_url || ''),
         tasks_concluidas: phase && phase.tasks_concluidas || 0,
         tasks_pendentes: phase && phase.tasks_pendentes || 0,
