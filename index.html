@@ -3690,7 +3690,7 @@ var UPDATE_DEVICE_KEY = 'gestcsi_update_device_id_v1';
 var UPDATE_ACTOR_KEY = 'gestcsi_update_actor_v1';
 var LAST_UPDATE_KEY = 'gestcsi_last_update_label_v1';
 var PANEL_CACHE_KEY = 'gestcsi_panel_cache_v1';
-var PANEL_APP_VERSION = '2026-06-10-access-all-projects-v2';
+var PANEL_APP_VERSION = '2026-06-22-portfolio-integrity-v1';
 var THEME_MODE_KEY = 'gestcsi_theme_mode_v1';
 var AUTH_SESSION_KEY = 'gestcsi_auth_session_v1';
 var AUTH_STATE = { token:'', user:null };
@@ -3854,7 +3854,7 @@ function persistirPainelCache(projetos, info) {
   var lista = Array.isArray(projetos) ? projetos : [];
   if (!lista.length) return false;
   var atual = carregarPainelCache();
-  if (atual && atual.projetos && atual.projetos.length > lista.length && lista.length < PANEL_CACHE_MIN_PROJECTS) {
+  if (atual && atual.projetos && atual.projetos.length > lista.length) {
     console.warn('[CACHE] Carga menor ignorada para preservar cache mais completo:', lista.length, 'vs', atual.projetos.length);
     return false;
   }
@@ -14039,13 +14039,15 @@ function linhaProjetoMensalValida(ro) {
 function carregarProjetosDiretoPlanilha() {
   var abas = Object.keys(ABAS_GID_FIXAS).map(function(m){ return {title:m, gid:ABAS_GID_FIXAS[m]}; });
   var projetos = [];
-  return Promise.all(abas.map(function(aba){
-    var url = 'https://docs.google.com/spreadsheets/d/' + SHEET_ID + '/gviz/tq?gid=' + aba.gid + '&_ts=' + Date.now();
-    return loadGvizTableJsonp(url, 15000).then(function(table){
-      if (!table) return;
+  function carregarAba(aba, tentativa) {
+    tentativa = tentativa || 1;
+    var url = 'https://docs.google.com/spreadsheets/d/' + SHEET_ID + '/gviz/tq?gid=' + aba.gid + '&_ts=' + Date.now() + '_' + tentativa;
+    return loadGvizTableJsonp(url, 20000).then(function(table){
+      if (!table) throw new Error('Aba respondeu sem tabela');
       var normalizada = normalizarTabelaGviz(table);
       var ultimaDataVendaAba = '';
       var seqAba = 0;
+      var projetosAba = [];
       var ordemAba = indiceMesPainel(aba.title);
       (normalizada.rows || []).forEach(function(row){
         var ro = mapearGvizRow(normalizada.cols, row);
@@ -14057,13 +14059,25 @@ function carregarProjetosDiretoPlanilha() {
         seqAba += 1;
         ro._sheet_row = seqAba + 1;
         ro._sheet_order = (ordemAba * 10000) + seqAba;
-        projetos.push(ro);
+        projetosAba.push(ro);
       });
-      console.log('[SHEET DIRECT] '+aba.title+': projetos lidos', projetos.filter(function(p){ return p._aba_origem === aba.title; }).length);
+      projetos = projetos.concat(projetosAba);
+      console.log('[SHEET DIRECT] '+aba.title+': '+seqAba+' projeto(s) lido(s) na tentativa '+tentativa);
     }).catch(function(e){
-      console.error('[SHEET DIRECT] Falha na aba '+aba.title+':', e);
+      if (tentativa < 3) {
+        console.warn('[SHEET DIRECT] Nova tentativa para '+aba.title+' após falha:', e);
+        return new Promise(function(resolve){ setTimeout(resolve, 600 * tentativa); }).then(function(){
+          return carregarAba(aba, tentativa + 1);
+        });
+      }
+      throw new Error('Falha ao carregar integralmente a aba '+aba.title+': '+((e && e.message) || e));
     });
-  })).then(function(){
+  }
+  var sequencia = Promise.resolve();
+  abas.forEach(function(aba){
+    sequencia = sequencia.then(function(){ return carregarAba(aba, 1); });
+  });
+  return sequencia.then(function(){
     console.log('[SHEET DIRECT] Total projetos lidos:', projetos.length);
     return projetos;
   });
