@@ -108,6 +108,10 @@ function doGet(e) {
       requireUser_(params);
       return jsonOutput_(getProjectClosingSyncBackgroundStatus_(), params.callback);
     }
+    if (action === 'stopProjectClosingSync') {
+      requireAdmin_(params);
+      return jsonOutput_(stopProjectClosingSyncBackground_(), params.callback);
+    }
     if (action === 'processDirty') {
       var dirtyResult = processDirtyQueue({
         limit: toInt_(params.limit, null)
@@ -904,7 +908,7 @@ function syncProjectMapping_(mapping, options) {
   options = options || {};
   var normalized = buildNormalizedProjectFromClickUp_(mapping);
   writeProjectSummaryToMonthlySheet_(mapping, normalized);
-  upsertClickUpMilestoneClosing_(mapping, normalized);
+  if (!options.skip_milestone_closing) upsertClickUpMilestoneClosing_(mapping, normalized);
   reconcileProjectClosingDecisionFromNormalized_(mapping, normalized);
   writeSyncStatus_(mapping, 'ok', '');
   return {
@@ -1217,7 +1221,7 @@ function continueProjectClosingSyncBackgroundTrigger() {
     var errors = toInt_(props.getProperty('PROJECT_CLOSING_SYNC_ERRORS'), 0);
     batch.forEach(function(mapping) {
       try {
-        syncProjectMapping_(mapping, { force: true });
+        syncProjectMapping_(mapping, { force: true, skip_milestone_closing: true });
         processed += 1;
       } catch (error) {
         errors += 1;
@@ -1257,6 +1261,16 @@ function getProjectClosingSyncBackgroundStatus_() {
     completed_at: props.getProperty('PROJECT_CLOSING_SYNC_COMPLETED_AT') || '',
     error: props.getProperty('PROJECT_CLOSING_SYNC_ERROR') || ''
   };
+}
+
+function stopProjectClosingSyncBackground_() {
+  var props = PropertiesService.getScriptProperties();
+  props.setProperty('PROJECT_CLOSING_SYNC_ACTIVE', '0');
+  props.setProperty('PROJECT_CLOSING_SYNC_UPDATED_AT', new Date().toISOString());
+  clearProjectClosingSyncBackgroundTriggers_();
+  var status = getProjectClosingSyncBackgroundStatus_();
+  status.stopped = true;
+  return status;
 }
 
 function scheduleProjectClosingSyncBackground_(delayMs) {

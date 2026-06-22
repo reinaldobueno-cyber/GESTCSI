@@ -5658,6 +5658,20 @@ function projectClosingPollSync() {
     initProjectClosing();
   });
 }
+function projectClosingStopSync(button) {
+  if (button) { button.disabled = true; button.textContent = 'Parando...'; }
+  return chamarAppsScriptJsonp('stopProjectClosingSync', {auth_token:authTokenParam()}, 15000).then(function(resp) {
+    if (!resp || resp.ok === false) throw new Error((resp && (resp.error || resp.message)) || 'Falha ao parar sincronização.');
+    if (PROJECT_CLOSING_SYNC.timer) clearTimeout(PROJECT_CLOSING_SYNC.timer);
+    PROJECT_CLOSING_SYNC.active = false;
+    PROJECT_CLOSING_SYNC.error = 'Sincronização interrompida pelo usuário.';
+    initProjectClosing();
+    showToast('Sincronização de projetos interrompida.', 'ok');
+  }).catch(function(error) {
+    if (button) { button.disabled = false; button.textContent = 'Parar'; }
+    showToast((error && error.message) || 'Falha ao parar sincronização.', 'err');
+  });
+}
 function projectClosingDecisionFor(project) {
   var key = String(project && project.project_key || montarProjectKeyClickup(project) || '').trim();
   return (PROJECT_CLOSING_DECISIONS.items || []).filter(function(item) {
@@ -5827,7 +5841,8 @@ function initProjectClosing() {
   var table = '<div class="dashx-table-wrap"><table class="dashx-table"><thead><tr><th>Projeto</th><th>Consultor</th><th>Controle Lais</th><th>Status Fase 8</th><th>Decisão do fechamento</th><th>Divergência controle</th><th>Fonte</th><th>Ação</th></tr></thead><tbody>'+rows(pending.concat(approved).concat(rejected))+'</tbody></table></div>';
   var syncLabel = PROJECT_CLOSING_SYNC.active ? ('Sincronizando '+PROJECT_CLOSING_SYNC.processed+'/'+PROJECT_CLOSING_SYNC.total) : 'Sincronizar projetos';
   var syncProgress = PROJECT_CLOSING_SYNC.active || PROJECT_CLOSING_SYNC.error ? '<div class="closing-project-meta" style="margin-right:auto">'+(PROJECT_CLOSING_SYNC.active ? ('Processamento em segundo plano · '+PROJECT_CLOSING_SYNC.processed+' de '+PROJECT_CLOSING_SYNC.total+' · '+PROJECT_CLOSING_SYNC.errors+' erro(s)') : escapeHtml(PROJECT_CLOSING_SYNC.error))+'</div>' : '';
-  var syncBox = AUTH_STATE.user && AUTH_STATE.user.role === 'admin' ? '<div class="closing-filter-block"><div class="closing-filter-footer" style="margin-top:0">'+syncProgress+'<button class="btn-syncall" '+(PROJECT_CLOSING_SYNC.active?'disabled':'')+' onclick="return projectClosingStartSync(this)">'+syncLabel+'</button></div></div>' : '';
+  var stopSyncButton = PROJECT_CLOSING_SYNC.active ? '<button class="project-link-btn warn" onclick="return projectClosingStopSync(this)">Parar</button>' : '';
+  var syncBox = AUTH_STATE.user && AUTH_STATE.user.role === 'admin' ? '<div class="closing-filter-block"><div class="closing-filter-footer" style="margin-top:0">'+syncProgress+stopSyncButton+'<button class="btn-syncall" '+(PROJECT_CLOSING_SYNC.active?'disabled':'')+' onclick="return projectClosingStartSync(this)">'+syncLabel+'</button></div></div>' : '';
   var backendWarning = PROJECT_CLOSING_DECISIONS.backendReady === false ? '<div class="dashx-inline-note" style="margin-bottom:12px"><strong>Apps Script desatualizado:</strong> implante uma nova versão do Web App para habilitar Aprovar e Reprovar.</div>' : '';
   box.innerHTML = '<div class="closing-head"><div><div class="closing-title">Fechamento de projeto</div><div class="closing-sub">Controle separado dos marcos e sem corte de ano. Aqui entram somente projetos que atendem às três condições do ClickUp.</div></div></div>'+
     '<div class="dashx-inline-note" style="margin-bottom:12px"><strong>Fluxo:</strong> APROVAR envia o projeto para Em avaliação. Aprovar muda a Fase 8 para APROVADO GESTÃO; Reprovar muda para REPROVADO GESTÃO. Somente a aprovação final gera R$ 80 no relatório. O controle da Lais aparece apenas como divergência.</div>'+
@@ -6220,6 +6235,7 @@ window.fechamentoOpenPortfolioMismatchAudit = fechamentoOpenPortfolioMismatchAud
 window.projectClosingOpenDecision = projectClosingOpenDecision;
 window.projectClosingSaveDecision = projectClosingSaveDecision;
 window.projectClosingStartSync = projectClosingStartSync;
+window.projectClosingStopSync = projectClosingStopSync;
 window.fechamentoStartSync = fechamentoStartSync;
 window.fechamentoSyncRejected = fechamentoSyncRejected;
 window.fechamentoSyncApproved = fechamentoSyncApproved;
