@@ -2182,7 +2182,8 @@ function getProjectClosingDecisionSheet_() {
   var sheet = getOrCreateSheet_('CLICKUP_PROJECT_CLOSING_DECISIONS');
   ensureHeaders_(sheet, [
     'project_key', 'project_name', 'consultant', 'item_id', 'item_name',
-    'decision', 'notes', 'decided_at', 'decided_by', 'month', 'bonus_value'
+    'decision', 'notes', 'decided_at', 'decided_by', 'month', 'bonus_value',
+    'clickup_status', 'clickup_updated_at'
   ]);
   return sheet;
 }
@@ -2210,7 +2211,9 @@ function getProjectClosingDecisions_(params) {
       decided_at: projectClosingDecisionDateText_(item.decided_at),
       decided_by: sanitizeText_(item.decided_by),
       month: sanitizeText_(item.month),
-      bonus_value: Number(item.bonus_value || 0)
+      bonus_value: Number(item.bonus_value || 0),
+      clickup_status: sanitizeText_(item.clickup_status),
+      clickup_updated_at: projectClosingDecisionDateText_(item.clickup_updated_at)
     };
   }).filter(function(item) { return item.project_key && item.decision; });
   return { ok: true, items: items };
@@ -2224,6 +2227,11 @@ function setProjectClosingDecision_(params) {
   if (!projectKey) throw new Error('Projeto obrigatorio.');
   if (['approved', 'rejected'].indexOf(decision) < 0) throw new Error('Decisao invalida.');
   if (decision === 'rejected' && !notes) throw new Error('Informe o motivo da reprovacao.');
+
+  var itemId = sanitizeText_(params.item_id);
+  if (!itemId) throw new Error('Item Fase 8 nao encontrado para atualizar no ClickUp. Sincronize os projetos e tente novamente.');
+  var desiredStatus = decision === 'approved' ? 'APROVADO GESTAO' : 'REPROVADO GESTAO';
+  var clickupUpdate = updateProjectClosingStatusInClickUp_(itemId, desiredStatus, notes, admin);
 
   var sheet = getProjectClosingDecisionSheet_();
   var values = sheet.getDataRange().getValues();
@@ -2242,20 +2250,57 @@ function setProjectClosingDecision_(params) {
     project_key: projectKey,
     project_name: sanitizeText_(params.project_name),
     consultant: sanitizeText_(params.consultant),
-    item_id: sanitizeText_(params.item_id),
+    item_id: itemId,
     item_name: sanitizeText_(params.item_name),
     decision: decision,
     notes: notes,
     decided_at: now,
     decided_by: admin.name || admin.username,
     month: month,
-    bonus_value: decision === 'approved' ? CLICKUP_PROJECT_CLOSING_BONUS_VALUE : 0
+    bonus_value: decision === 'approved' ? CLICKUP_PROJECT_CLOSING_BONUS_VALUE : 0,
+    clickup_status: clickupUpdate.status,
+    clickup_updated_at: now
   };
   var row = header.map(function(name) { return item[name] == null ? '' : item[name]; });
   if (targetRow) sheet.getRange(targetRow, 1, 1, header.length).setValues([row]);
   else sheet.appendRow(row);
   item.decided_at = now.toISOString();
+  item.clickup_updated_at = now.toISOString();
+  item.clickup_warning = clickupUpdate.warning || '';
   return { ok: true, item: item };
+}
+
+function updateProjectClosingStatusInClickUp_(taskId, desiredStatus, notes, user) {
+  var task = clickupRequest_('get', '/task/' + encodeURIComponent(taskId));
+  var listId = sanitizeText_(task && task.list && task.list.id);
+  if (!listId) throw new Error('Lista do item Fase 8 nao encontrada no ClickUp.');
+  var list = clickupRequest_('get', '/list/' + encodeURIComponent(listId));
+  var statuses = Array.isArray(list && list.statuses) ? list.statuses : [];
+  var desiredKey = normalizeKey_(desiredStatus);
+  var matched = statuses.filter(function(status) {
+    return normalizeKey_(status && (status.status || status.name || status.label)) === desiredKey;
+  })[0];
+  if (!matched) {
+    throw new Error('O status ' + desiredStatus + ' nao existe na lista ' + sanitizeText_(list && list.name || listId) + '. Crie esse status no ClickUp e tente novamente.');
+  }
+  var statusLabel = sanitizeText_(matched.status || matched.name || matched.label);
+  var updated = clickupRequest_('put', '/task/' + encodeURIComponent(taskId), { status: statusLabel });
+  var confirmedStatus = sanitizeText_(updated && updated.status && (updated.status.status || updated.status.label));
+  if (confirmedStatus && normalizeKey_(confirmedStatus) !== normalizeKey_(statusLabel)) {
+    throw new Error('O ClickUp respondeu com status diferente do solicitado: ' + confirmedStatus + '.');
+  }
+  var warning = '';
+  if (notes) {
+    try {
+      clickupRequest_('post', '/task/' + encodeURIComponent(taskId) + '/comment', {
+        comment_text: notes + '\n\nDecisao registrada por ' + sanitizeText_(user && (user.name || user.username)),
+        notify_all: false
+      });
+    } catch (commentError) {
+      warning = 'Status atualizado, mas o comentario nao foi enviado ao ClickUp.';
+    }
+  }
+  return { status: statusLabel, warning: warning };
 }
 
 function hasProjectClosingApprovalSignal_(task, status) {
