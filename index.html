@@ -8710,7 +8710,7 @@ function dashOpenHeatmapAudit(consultor, mes) {
   mes = String(mes || '').toUpperCase();
   var list = ordenarProjetosPainel(projetosVisiveisParaUsuario(Array.isArray(DATA.projetos) ? DATA.projetos.slice() : [])).filter(function(p) {
     var nome = String((p && p.consultor) || 'Sem consultor');
-    return gestaoClickupProjectYear(p) === 2026 &&
+    return dashIs2026PortfolioProject(p) &&
       nome === consultor &&
       String((p && p.mes) || '').toUpperCase() === mes;
   });
@@ -9617,7 +9617,7 @@ function dashOpenStatusMonthAudit(mes, statusKey) {
     outro:'Outros'
   };
   var list = ordenarProjetosPainel(projetosVisiveisParaUsuario(Array.isArray(DATA.projetos) ? DATA.projetos.slice() : [])).filter(function(p) {
-    if (gestaoClickupProjectYear(p) !== 2026) return false;
+    if (!dashIs2026PortfolioProject(p)) return false;
     if (!isTotal && String((p && p.mes) || '').toUpperCase() !== mes) return false;
     var key = dashStatusKey(p && p.status);
     if (!labels.hasOwnProperty(key)) key = 'outro';
@@ -9796,7 +9796,7 @@ function dashRenderHealthSection(health) {
 function dashOpenTopKpiAudit(mode) {
   if(mode==='health')return dashOpenHealthAudit('issues');
   var list=ordenarProjetosPainel(projetosVisiveisParaUsuario(Array.isArray(DATA.projetos)?DATA.projetos.slice():[]).filter(function(p){
-    return gestaoClickupProjectYear(p)===2026;
+    return dashIs2026PortfolioProject(p);
   }));
   var title='Projetos de 2026';
   if(mode==='tracked'){
@@ -10105,10 +10105,14 @@ function dashOpenIdleAudit(name) {
 }
 window.dashOpenIdleAudit=dashOpenIdleAudit;
 
+function dashIs2026PortfolioProject(p) {
+  return ORDEM_MESES.indexOf(String((p && p.mes) || '').toUpperCase()) >= 0;
+}
+
 function initDash() {
   fechamentoApplyProjectStatuses();
   var sourceAll = projetosVisiveisParaUsuario(Array.isArray(DATA.projetos) ? DATA.projetos.slice() : []).filter(function(p) {
-    return gestaoClickupProjectYear(p) === 2026;
+    return dashIs2026PortfolioProject(p);
   });
   var list = ordenarProjetosPainel(sourceAll);
   var base = list.slice();
@@ -14709,6 +14713,11 @@ function loadAll(tipoAtualizacao) {
       var qtd = resp && Array.isArray(resp.projetos) ? resp.projetos.length : 0;
       console.log('[2B] Resposta Apps Script recebida. Projetos brutos:', qtd);
       if (resp && resp.projetos && resp.projetos.length > 0) {
+        if (fallbackProjetos.length > qtd) {
+          console.warn('[INIT] Apps Script retornou base parcial ('+qtd+'); preservando leitura direta mais completa ('+fallbackProjetos.length+').');
+          _finalizarLoad(fallbackProjetos, isRefresh, fallbackMotivo+'_preserved', window._lastUpdateTrigger);
+          return;
+        }
         _finalizarLoad(resp.projetos, isRefresh, 'apps_script', window._lastUpdateTrigger);
       } else {
         finalizarFallback('vazio');
