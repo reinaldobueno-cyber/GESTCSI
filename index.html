@@ -5696,7 +5696,7 @@ function projectClosingInfo(p) {
 }
 function projectClosingList() {
   return ordenarProjetosPainel(projetosVisiveisParaUsuario(Array.isArray(DATA.projetos) ? DATA.projetos.slice() : []).filter(function(p) {
-    return gestaoClickupProjectYear(p) === 2026 && dashProjectHasClickUpTrace(p);
+    return dashProjectHasClickUpTrace(p);
   })).map(function(p) {
     var info = projectClosingInfo(p);
     var decision = projectClosingDecisionFor(p);
@@ -5750,7 +5750,7 @@ function initProjectClosing() {
   var table = '<div class="dashx-table-wrap"><table class="dashx-table"><thead><tr><th>Projeto</th><th>Consultor</th><th>Controle Lais</th><th>Status Fase 8</th><th>Decisão do fechamento</th><th>Divergência controle</th><th>Fonte</th><th>Ação</th></tr></thead><tbody>'+rows(pending.concat(approved).concat(rejected))+'</tbody></table></div>';
   var syncBox = AUTH_STATE.user && AUTH_STATE.user.role === 'admin' ? '<div class="closing-filter-block"><div class="closing-filter-footer" style="margin-top:0"><button class="btn-syncall" onclick="return sincronizarTodosProjetosClickup(this)">Sincronizar projetos</button></div></div>' : '';
   var backendWarning = PROJECT_CLOSING_DECISIONS.backendReady === false ? '<div class="dashx-inline-note" style="margin-bottom:12px"><strong>Apps Script desatualizado:</strong> implante uma nova versão do Web App para habilitar Aprovar e Reprovar.</div>' : '';
-  box.innerHTML = '<div class="closing-head"><div><div class="closing-title">Fechamento de projeto</div><div class="closing-sub">Controle separado dos marcos. Aqui entram somente projetos que atendem às três condições do ClickUp.</div></div></div>'+
+  box.innerHTML = '<div class="closing-head"><div><div class="closing-title">Fechamento de projeto</div><div class="closing-sub">Controle separado dos marcos e sem corte de ano. Aqui entram somente projetos que atendem às três condições do ClickUp.</div></div></div>'+
     '<div class="dashx-inline-note" style="margin-bottom:12px"><strong>Fluxo:</strong> APROVAR envia o projeto para Em avaliação. Aprovar muda a Fase 8 para APROVADO GESTÃO; Reprovar muda para REPROVADO GESTÃO. Somente a aprovação final gera R$ 80 no relatório. O controle da Lais aparece apenas como divergência.</div>'+
     syncBox+backendWarning+
     '<div class="closing-kpis"><div class="closing-kpi warn"><span>Em avaliação</span><strong>'+pending.length+'</strong></div><div class="closing-kpi"><span>Aprovados</span><strong>'+approved.length+'</strong></div><div class="closing-kpi warn"><span>Reprovados</span><strong>'+rejected.length+'</strong></div><div class="closing-kpi warn"><span>Divergências controle</span><strong>'+divergences.length+'</strong></div><div class="closing-kpi"><span>Bônus aprovado</span><strong>'+fechamentoMoney(approved.length * 80)+'</strong></div></div>'+
