@@ -3816,6 +3816,13 @@ function logoutPainel() {
 function iniciarPainelAutenticado() {
   if (!AUTH_STATE.user || !AUTH_STATE.token || PANEL_STARTED) return;
   PANEL_STARTED = true;
+  if (AUTH_STATE.user.role === 'admin') {
+    chamarAppsScriptJsonp('stopLegacyClickUpMilestoneAudit', {
+      auth_token: authTokenParam()
+    }, 15000).catch(function(error) {
+      console.warn('[INIT] Nao foi possivel encerrar a varredura legada de marcos:', error);
+    });
+  }
   inicializarPainel();
 }
 function inicializarAuth() {
