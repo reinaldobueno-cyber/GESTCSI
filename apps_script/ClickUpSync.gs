@@ -1034,6 +1034,11 @@ function buildNormalizedProjectFromClickUp_(mapping) {
   var progress = totalItems ? Math.round(((tasksDone + milestonesDone) / totalItems) * 100) : 0;
   var latestUpdateItem = getLatestUpdateItemFromRawTasks_(tasks, byId, phaseMap);
   var latestUpdate = latestUpdateItem && latestUpdateItem.updated_at ? latestUpdateItem.updated_at : getLatestUpdate_(tasks);
+  var projectCreatedAt = tasks.reduce(function(earliest, task) {
+    var createdAt = task && task.date_created ? fromMillisIso_(task.date_created) : '';
+    if (!createdAt) return earliest;
+    return !earliest || createdAt < earliest ? createdAt : earliest;
+  }, '');
   var projectUrl = mapping.project_url || buildProjectUrl_(mapping, tasks);
   var consultorInferido = mapping.consultor || inferConsultorFromTasks_(tasks);
 
@@ -1045,6 +1050,7 @@ function buildNormalizedProjectFromClickUp_(mapping) {
     project_url: projectUrl,
     view_id: mapping.view_id,
     list_id: mapping.list_id,
+    data_criacao: projectCreatedAt,
     synced_at: new Date().toISOString(),
     fases: phases.map(function(phase) {
       var tasksTotal = phase.tasks_concluidas + phase.tasks_pendentes;
@@ -1917,6 +1923,7 @@ function inventoryRowFromNormalized_(mapping, normalized, status, errorMessage) 
     cliente: mapping.cliente || '',
     consultor: normalized && normalized.consultor || mapping.consultor || '',
     status: status === 'ok' ? inferProjectStatusFromSummary_(resumo) : '',
+    data_criacao: normalized && normalized.data_criacao || '',
     project_key: mapping.project_key || '',
     project_url: normalized && normalized.project_url || mapping.project_url || '',
     view_id: mapping.view_id || '',
@@ -4431,7 +4438,7 @@ function getClickUpAuditLogHeaders_() {
 
 function getClickUpInventoryHeaders_() {
   return [
-    'mes', 'cliente', 'consultor', 'status', 'project_key', 'project_url', 'view_id', 'list_id', 'folder_id', 'space_id',
+    'mes', 'cliente', 'consultor', 'status', 'data_criacao', 'project_key', 'project_url', 'view_id', 'list_id', 'folder_id', 'space_id',
     'tasks_concluidas', 'tasks_pendentes', 'marcos_concluidos', 'marcos_pendentes', 'fases_total', 'progresso',
     'data_ultima_atualizacao', 'dias_sem_atualizacao', 'clickup_json', 'ultima_sync_clickup', 'sync_status_clickup', 'sync_error_clickup'
   ];
