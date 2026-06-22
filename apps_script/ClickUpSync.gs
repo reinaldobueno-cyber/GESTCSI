@@ -2529,12 +2529,8 @@ function startClickUpMilestoneClosingBackground_(params) {
     props.deleteProperty('CLICKUP_CLOSED_INCREMENTAL_SINCE');
   }
   if (props.getProperty('CLICKUP_MILESTONE_CLOSING_ACTIVE') === '1') {
-    props.setProperty('CLICKUP_MILESTONE_CLOSING_PHASE', forceHistory ? 'monthly' : 'recent');
-    if (forceHistory) {
-      props.setProperty('CLICKUP_MILESTONE_CLOSING_OFFSET', '0');
-      props.setProperty('CLICKUP_MILESTONE_CLOSING_PROCESSED', '0');
-      props.setProperty('CLICKUP_MILESTONE_CLOSING_TOTAL', String(loadClickUpMilestoneClosingMappings_().length));
-    }
+    // A second click must never restart an in-flight historical rebuild. Restarting
+    // at "monthly" publishes the partial monthly cache again and loses progress.
     props.setProperty('CLICKUP_MILESTONE_CLOSING_UPDATED_AT', new Date().toISOString());
     scheduleClickUpMilestoneClosingBackground_(1000);
     return {
@@ -2668,7 +2664,7 @@ function continueClickUpMilestoneClosingBackgroundWorker_() {
   // A single large project can consume most of the Apps Script execution window.
   // Keep each continuation small so the offset is persisted instead of retrying
   // the same batch forever after a timeout.
-  var result = syncClickUpMilestoneClosingBatch_(offset, 1);
+  var result = syncClickUpMilestoneClosingBatch_(offset, 3);
   var processed = toInt_(props.getProperty('CLICKUP_MILESTONE_CLOSING_PROCESSED'), 0) + result.processed;
   var errors = toInt_(props.getProperty('CLICKUP_MILESTONE_CLOSING_ERRORS'), 0) + result.errors;
   var detected = toInt_(props.getProperty('CLICKUP_MILESTONE_CLOSING_DETECTED'), 0) + result.detected;
@@ -2686,7 +2682,7 @@ function continueClickUpMilestoneClosingBackgroundWorker_() {
     clearClickUpMilestoneClosingBackgroundTriggers_();
     return;
   }
-  scheduleClickUpMilestoneClosingBackground_(15000);
+  scheduleClickUpMilestoneClosingBackground_(1000);
 }
 
 function syncClickUpMilestoneClosingBatch_(offset, limit) {
