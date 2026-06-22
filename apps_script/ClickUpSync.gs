@@ -907,10 +907,11 @@ function isValidMonthlyClient_(cliente) {
 function syncProjectMapping_(mapping, options) {
   options = options || {};
   var normalized = buildNormalizedProjectFromClickUp_(mapping);
-  writeProjectSummaryToMonthlySheet_(mapping, normalized);
+  var hasMonthlySheet = MONTHS.indexOf(sanitizeMonth_(mapping.mes)) >= 0;
+  if (hasMonthlySheet) writeProjectSummaryToMonthlySheet_(mapping, normalized);
   if (!options.skip_milestone_closing) upsertClickUpMilestoneClosing_(mapping, normalized);
   reconcileProjectClosingDecisionFromNormalized_(mapping, normalized);
-  writeSyncStatus_(mapping, 'ok', '');
+  if (hasMonthlySheet) writeSyncStatus_(mapping, 'ok', '');
   return {
     project_key: mapping.project_key,
     cliente: mapping.cliente,
