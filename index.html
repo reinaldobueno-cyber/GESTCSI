@@ -5279,6 +5279,7 @@ var PROJECT_CLOSING_RULE_VERSION = 'breakoff-entrega-aprovar-v5';
 var PROJECT_CLOSING_LOOKUP = {term:'', loading:false, result:null, error:''};
 var PROJECT_CLOSING_DECISIONS = {items:[], loaded:false, loading:false, backendReady:null, error:''};
 var PROJECT_CLOSING_DECISION_TARGET = null;
+var PROJECT_CLOSING_SYNC = {active:false, processed:0, total:0, errors:0, error:'', timer:null};
 var FECHAMENTO_EXPANDED = {};
 try { FECHAMENTO_EXPANDED = JSON.parse(storageGet('gestcsi_fechamento_expanded_v1', '{}')) || {}; } catch(e) { FECHAMENTO_EXPANDED = {}; }
 function fechamentoToggleConsultant(name) {
@@ -5427,12 +5428,15 @@ function fechamentoApplyProjectStatuses() {
   // Fechamento de projeto nao altera o controle da Lais; divergencias sao apenas informativas.
 }
 function projectClosingDeliveryItemsFromJson(p) {
+  return projectClosingFlaggedItemsFromJson(p).filter(fechamentoItemStatusAprovarProjeto);
+}
+function projectClosingFlaggedItemsFromJson(p) {
   var payload = parseJsonSeguro((p && p.clickup_json) || '') || {};
   return []
     .concat(Array.isArray(payload.fases) ? payload.fases : [])
     .concat(Array.isArray(payload.marcos) ? payload.marcos : [])
     .concat(Array.isArray(payload.tasks) ? payload.tasks : [])
-    .filter(fechamentoItemAtendeRegraProjetoEntrega);
+    .filter(function(item) { return fechamentoItemEhBreakOff(item) && fechamentoItemTemFlagEntregaProjeto(item); });
 }
 function projectClosingBreakOffItemsFromJson(p) {
   var payload = parseJsonSeguro((p && p.clickup_json) || '') || {};
@@ -5606,6 +5610,54 @@ function projectClosingLoadDecisions(force) {
     return null;
   });
 }
+function projectClosingStartSync(button) {
+  if (button) { button.disabled = true; button.textContent = 'Agendando...'; }
+  return chamarAppsScriptJsonp('startProjectClosingSync', {auth_token:authTokenParam()}, 20000).then(function(resp) {
+    if (resp && resp.service === 'clickup-sync') throw new Error('Apps Script desatualizado. Implante uma nova versão do Web App.');
+    if (!resp || resp.ok === false) throw new Error((resp && (resp.error || resp.message)) || 'Falha ao iniciar sincronização.');
+    PROJECT_CLOSING_SYNC.active = true;
+    PROJECT_CLOSING_SYNC.processed = Number(resp.processed || 0);
+    PROJECT_CLOSING_SYNC.total = Number(resp.total || 0);
+    PROJECT_CLOSING_SYNC.errors = Number(resp.errors || 0);
+    PROJECT_CLOSING_SYNC.error = '';
+    initProjectClosing();
+    projectClosingPollSync();
+    showToast('Sincronização iniciada em segundo plano. Você pode continuar usando o painel.', 'ok');
+    return resp;
+  }).catch(function(error) {
+    PROJECT_CLOSING_SYNC.active = false;
+    PROJECT_CLOSING_SYNC.error = (error && error.message) || 'Falha ao iniciar sincronização.';
+    if (button) { button.disabled = false; button.textContent = 'Sincronizar projetos'; }
+    initProjectClosing();
+    showToast(PROJECT_CLOSING_SYNC.error, 'err');
+  });
+}
+function projectClosingPollSync() {
+  if (PROJECT_CLOSING_SYNC.timer) clearTimeout(PROJECT_CLOSING_SYNC.timer);
+  chamarAppsScriptJsonp('getProjectClosingSyncStatus', {auth_token:authTokenParam()}, 15000).then(function(resp) {
+    if (resp && resp.service === 'clickup-sync') throw new Error('Apps Script desatualizado. Implante uma nova versão do Web App.');
+    if (!resp || resp.ok === false) throw new Error((resp && (resp.error || resp.message)) || 'Falha ao consultar sincronização.');
+    PROJECT_CLOSING_SYNC.active = !!resp.active;
+    PROJECT_CLOSING_SYNC.processed = Number(resp.processed || 0);
+    PROJECT_CLOSING_SYNC.total = Number(resp.total || 0);
+    PROJECT_CLOSING_SYNC.errors = Number(resp.errors || 0);
+    PROJECT_CLOSING_SYNC.error = resp.error || '';
+    initProjectClosing();
+    if (resp.active) {
+      PROJECT_CLOSING_SYNC.timer = setTimeout(projectClosingPollSync, 5000);
+      return;
+    }
+    resetarCachesDerivadosPainel({limparCachePainel:true});
+    PROJECT_CLOSING_DECISIONS.loaded = false;
+    loadAll('manual');
+    projectClosingLoadDecisions(true);
+    showToast('Sincronização concluída: '+PROJECT_CLOSING_SYNC.processed+' projeto(s), '+PROJECT_CLOSING_SYNC.errors+' erro(s).', PROJECT_CLOSING_SYNC.errors ? 'warn' : 'ok');
+  }).catch(function(error) {
+    PROJECT_CLOSING_SYNC.error = (error && error.message) || 'Falha ao acompanhar sincronização.';
+    PROJECT_CLOSING_SYNC.timer = setTimeout(projectClosingPollSync, 10000);
+    initProjectClosing();
+  });
+}
 function projectClosingDecisionFor(project) {
   var key = String(project && project.project_key || montarProjectKeyClickup(project) || '').trim();
   return (PROJECT_CLOSING_DECISIONS.items || []).filter(function(item) {
@@ -5676,6 +5728,7 @@ function projectClosingInfo(p) {
     return fechamentoItemAtendeRegraProjetoEntrega(item) && fechamentoItemPertenceAoProjeto(item, projectKey, projectName);
   });
   var jsonItems = projectClosingDeliveryItemsFromJson(p);
+  var flaggedItems = projectClosingFlaggedItemsFromJson(p);
   var approved = rows.length > 0 || jsonItems.length > 0;
   var pending = false;
   var firstRow = rows[0] || null;
@@ -5689,9 +5742,33 @@ function projectClosingInfo(p) {
     pending: !!pending,
     rows: rows,
     jsonItems: jsonItems,
+    flaggedItems: flaggedItems,
     status: status,
     link: (firstRow && firstRow.link) || (p && p.link) || '',
     source: rows.length ? 'Fechamento ClickUp' : (jsonItems.length ? 'JSON mensal' : 'Projeto')
+  };
+}
+function projectClosingClickUpDecision(project, info) {
+  var item = (info && info.flaggedItems || []).filter(function(current) {
+    var status = fechamentoSearchKey(current && (current.status_original || current.status || current.status_atual));
+    return status === 'aprovado gestao' || status === 'reprovado gestao';
+  })[0];
+  if (!item) return null;
+  var status = fechamentoSearchKey(item.status_original || item.status || item.status_atual);
+  var decidedAt = item.updated_at || new Date().toISOString();
+  return {
+    project_key: project.project_key || montarProjectKeyClickup(project),
+    project_name: project.cliente || '',
+    consultant: project.consultor || '',
+    item_id: item.id || '',
+    item_name: item.nome || 'Fase 8 - Break Off',
+    decision: status === 'aprovado gestao' ? 'approved' : 'rejected',
+    notes: 'Situação confirmada pelo status atual do ClickUp.',
+    decided_at: decidedAt,
+    decided_by: 'ClickUp',
+    month: String(decidedAt).slice(0, 7),
+    bonus_value: status === 'aprovado gestao' ? 80 : 0,
+    clickup_status: item.status_original || item.status || item.status_atual || ''
   };
 }
 function projectClosingList() {
@@ -5699,7 +5776,7 @@ function projectClosingList() {
     return dashProjectHasClickUpTrace(p);
   })).map(function(p) {
     var info = projectClosingInfo(p);
-    var decision = projectClosingDecisionFor(p);
+    var decision = projectClosingClickUpDecision(p, info) || projectClosingDecisionFor(p);
     var category = 'fora';
     if (decision && decision.decision === 'approved') category = 'aprovado';
     else if (decision && decision.decision === 'rejected') category = 'reprovado';
@@ -5748,7 +5825,9 @@ function initProjectClosing() {
     }).join('') || '<tr class="empty-row"><td colspan="8">Nenhum projeto nesta regra.</td></tr>';
   }
   var table = '<div class="dashx-table-wrap"><table class="dashx-table"><thead><tr><th>Projeto</th><th>Consultor</th><th>Controle Lais</th><th>Status Fase 8</th><th>Decisão do fechamento</th><th>Divergência controle</th><th>Fonte</th><th>Ação</th></tr></thead><tbody>'+rows(pending.concat(approved).concat(rejected))+'</tbody></table></div>';
-  var syncBox = AUTH_STATE.user && AUTH_STATE.user.role === 'admin' ? '<div class="closing-filter-block"><div class="closing-filter-footer" style="margin-top:0"><button class="btn-syncall" onclick="return sincronizarTodosProjetosClickup(this)">Sincronizar projetos</button></div></div>' : '';
+  var syncLabel = PROJECT_CLOSING_SYNC.active ? ('Sincronizando '+PROJECT_CLOSING_SYNC.processed+'/'+PROJECT_CLOSING_SYNC.total) : 'Sincronizar projetos';
+  var syncProgress = PROJECT_CLOSING_SYNC.active || PROJECT_CLOSING_SYNC.error ? '<div class="closing-project-meta" style="margin-right:auto">'+(PROJECT_CLOSING_SYNC.active ? ('Processamento em segundo plano · '+PROJECT_CLOSING_SYNC.processed+' de '+PROJECT_CLOSING_SYNC.total+' · '+PROJECT_CLOSING_SYNC.errors+' erro(s)') : escapeHtml(PROJECT_CLOSING_SYNC.error))+'</div>' : '';
+  var syncBox = AUTH_STATE.user && AUTH_STATE.user.role === 'admin' ? '<div class="closing-filter-block"><div class="closing-filter-footer" style="margin-top:0">'+syncProgress+'<button class="btn-syncall" '+(PROJECT_CLOSING_SYNC.active?'disabled':'')+' onclick="return projectClosingStartSync(this)">'+syncLabel+'</button></div></div>' : '';
   var backendWarning = PROJECT_CLOSING_DECISIONS.backendReady === false ? '<div class="dashx-inline-note" style="margin-bottom:12px"><strong>Apps Script desatualizado:</strong> implante uma nova versão do Web App para habilitar Aprovar e Reprovar.</div>' : '';
   box.innerHTML = '<div class="closing-head"><div><div class="closing-title">Fechamento de projeto</div><div class="closing-sub">Controle separado dos marcos e sem corte de ano. Aqui entram somente projetos que atendem às três condições do ClickUp.</div></div></div>'+
     '<div class="dashx-inline-note" style="margin-bottom:12px"><strong>Fluxo:</strong> APROVAR envia o projeto para Em avaliação. Aprovar muda a Fase 8 para APROVADO GESTÃO; Reprovar muda para REPROVADO GESTÃO. Somente a aprovação final gera R$ 80 no relatório. O controle da Lais aparece apenas como divergência.</div>'+
@@ -6140,6 +6219,7 @@ window.fechamentoToggleConsultant = fechamentoToggleConsultant;
 window.fechamentoOpenPortfolioMismatchAudit = fechamentoOpenPortfolioMismatchAudit;
 window.projectClosingOpenDecision = projectClosingOpenDecision;
 window.projectClosingSaveDecision = projectClosingSaveDecision;
+window.projectClosingStartSync = projectClosingStartSync;
 window.fechamentoStartSync = fechamentoStartSync;
 window.fechamentoSyncRejected = fechamentoSyncRejected;
 window.fechamentoSyncApproved = fechamentoSyncApproved;
@@ -6170,6 +6250,7 @@ function bonusMonthOptions() {
   var months={};
   (FECHAMENTO_MARCOS||[]).forEach(function(item){if(item.mes_fechamento)months[item.mes_fechamento]=true;});
   (PROJECT_CLOSING_DECISIONS.items||[]).forEach(function(item){if(item.month)months[item.month]=true;});
+  projectClosingList().forEach(function(entry){if(entry.decision&&entry.decision.month)months[entry.decision.month]=true;});
   (CMAX_DAILY_STATE.months||[]).concat((CMAX_DAILY_STATE.events||[]).map(function(item){return item.mes;})).forEach(function(month){if(month)months[month]=true;});
   (BONUS_INDICATION_STATE.items||[]).forEach(function(item){if(item.month)months[item.month]=true;});
   months[BONUS_FILTER.month||fechamentoCurrentMonth()]=true;
@@ -6283,7 +6364,8 @@ function bonusDataset() {
   var monthMilestones=(FECHAMENTO_MARCOS||[]).filter(function(item){return String(item.mes_fechamento||'')===month&&!fechamentoIsProjectClosing(item);});
   var milestones=monthMilestones.filter(function(item){return item.situacao==='aprovado';});
   var rejectedMilestones=monthMilestones.filter(function(item){return item.situacao==='reprovado';});
-  var projectDecisionRows=(PROJECT_CLOSING_DECISIONS.items||[]).filter(function(item){return String(item.month||'')===month;}).map(projectClosingDecisionBonusRow);
+  var effectiveProjectDecisions=projectClosingList().filter(function(entry){return entry.decision&&(entry.category==='aprovado'||entry.category==='reprovado');}).map(function(entry){return entry.decision;});
+  var projectDecisionRows=effectiveProjectDecisions.filter(function(item){return String(item.month||'')===month;}).map(projectClosingDecisionBonusRow);
   var approvedProjects=projectDecisionRows.filter(function(item){return item.situacao==='aprovado';});
   var rejectedProjects=projectDecisionRows.filter(function(item){return item.situacao==='reprovado';});
   var indications=(BONUS_INDICATION_STATE.items||[]).filter(function(item){return String(item.month||'')===month;});
