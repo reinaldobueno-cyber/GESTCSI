@@ -14688,6 +14688,11 @@ function loadAll(tipoAtualizacao) {
           buscarViaAppsScript(projetosDiretos, 'sheet_direct_partial');
           return;
         }
+        if (!isRefresh) {
+          console.log('[INIT] Primeiro acesso concluido pela planilha publicada; Apps Script nao bloqueia a abertura.');
+          _finalizarLoad(projetosDiretos, false, 'sheet_direct', window._lastUpdateTrigger);
+          return;
+        }
         console.warn('[INIT] Leitura direta concluida, mas Apps Script sera usado como origem canonica para preservar datas exibidas na planilha.');
         buscarViaAppsScript(projetosDiretos, 'sheet_direct');
         return;
