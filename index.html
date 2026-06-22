@@ -14038,7 +14038,12 @@ function linhaProjetoMensalValida(ro) {
 }
 function carregarProjetosDiretoPlanilha() {
   var abas = Object.keys(ABAS_GID_FIXAS).map(function(m){ return {title:m, gid:ABAS_GID_FIXAS[m]}; });
+  var agora = new Date();
+  if (agora.getFullYear() === 2026) {
+    abas = abas.filter(function(aba){ return ORDEM_MESES.indexOf(aba.title) <= agora.getMonth(); });
+  }
   var projetos = [];
+  var falhas = [];
   function carregarAba(aba, tentativa) {
     tentativa = tentativa || 1;
     var url = 'https://docs.google.com/spreadsheets/d/' + SHEET_ID + '/gviz/tq?gid=' + aba.gid + '&_ts=' + Date.now() + '_' + tentativa;
@@ -14070,7 +14075,8 @@ function carregarProjetosDiretoPlanilha() {
           return carregarAba(aba, tentativa + 1);
         });
       }
-      throw new Error('Falha ao carregar integralmente a aba '+aba.title+': '+((e && e.message) || e));
+      falhas.push(aba.title);
+      console.error('[SHEET DIRECT] Aba indisponível após 3 tentativas: '+aba.title, e);
     });
   }
   var sequencia = Promise.resolve();
@@ -14078,7 +14084,8 @@ function carregarProjetosDiretoPlanilha() {
     sequencia = sequencia.then(function(){ return carregarAba(aba, 1); });
   });
   return sequencia.then(function(){
-    console.log('[SHEET DIRECT] Total projetos lidos:', projetos.length);
+    console.log('[SHEET DIRECT] Total projetos lidos:', projetos.length, 'Falhas:', falhas.join(', ') || 'nenhuma');
+    projetos._falhas_abas = falhas.slice();
     return projetos;
   });
 }
@@ -14708,6 +14715,26 @@ function loadAll(tipoAtualizacao) {
   function buscarViaAppsScript(fallbackProjetos, fallbackMotivo) {
     fallbackProjetos = Array.isArray(fallbackProjetos) ? fallbackProjetos : [];
     fallbackMotivo = fallbackMotivo || 'fallback';
+    function chaveMensal(item) {
+      return String((item && item.mes) || '').toUpperCase()+'|'+normalizeClienteKey((item && item.cliente) || '');
+    }
+    function mesclarComPlanilha(apiProjetos) {
+      var combinados = fallbackProjetos.slice();
+      var indice = {};
+      combinados.forEach(function(item, pos){
+        var chave = chaveMensal(item);
+        if (chave && !indice.hasOwnProperty(chave)) indice[chave] = pos;
+      });
+      (apiProjetos || []).forEach(function(item){
+        var chave = chaveMensal(item);
+        if (chave && indice.hasOwnProperty(chave)) {
+          combinados[indice[chave]] = Object.assign({}, item, combinados[indice[chave]]);
+        } else {
+          combinados.push(item);
+        }
+      });
+      return combinados;
+    }
     function finalizarFallback(motivoErro) {
       if (fallbackProjetos.length) {
         console.warn('[INIT] Apps Script indisponivel; usando fallback '+fallbackMotivo+':', motivoErro || '-');
@@ -14727,9 +14754,10 @@ function loadAll(tipoAtualizacao) {
       var qtd = resp && Array.isArray(resp.projetos) ? resp.projetos.length : 0;
       console.log('[2B] Resposta Apps Script recebida. Projetos brutos:', qtd);
       if (resp && resp.projetos && resp.projetos.length > 0) {
-        if (fallbackProjetos.length > qtd) {
-          console.warn('[INIT] Apps Script retornou base parcial ('+qtd+'); preservando leitura direta mais completa ('+fallbackProjetos.length+').');
-          _finalizarLoad(fallbackProjetos, isRefresh, fallbackMotivo+'_preserved', window._lastUpdateTrigger);
+        if (fallbackProjetos.length) {
+          var combinados = mesclarComPlanilha(resp.projetos);
+          console.log('[INIT] Base combinada: '+combinados.length+' projeto(s); planilha '+fallbackProjetos.length+', Apps Script '+qtd+'.');
+          _finalizarLoad(combinados, isRefresh, 'sheet_direct_merged', window._lastUpdateTrigger);
           return;
         }
         _finalizarLoad(resp.projetos, isRefresh, 'apps_script', window._lastUpdateTrigger);
@@ -14746,7 +14774,7 @@ function loadAll(tipoAtualizacao) {
     console.log('[1] Buscando planilha diretamente pelas abas mensais');
     carregarProjetosDiretoPlanilha().then(function(projetosDiretos){
       if (Array.isArray(projetosDiretos) && projetosDiretos.length > 0) {
-        if (projetosDiretos.length < PANEL_CACHE_MIN_PROJECTS) {
+        if (projetosDiretos.length < PANEL_CACHE_MIN_PROJECTS || (projetosDiretos._falhas_abas || []).length) {
           console.warn('[INIT] Leitura direta parece parcial ('+projetosDiretos.length+' projetos). Tentando Apps Script antes de finalizar.');
           buscarViaAppsScript(projetosDiretos, 'sheet_direct_partial');
           return;
