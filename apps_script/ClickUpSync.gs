@@ -2665,7 +2665,10 @@ function continueClickUpMilestoneClosingBackgroundWorker_() {
     return;
   }
   var offset = toInt_(props.getProperty('CLICKUP_MILESTONE_CLOSING_OFFSET'), 0);
-  var result = syncClickUpMilestoneClosingBatch_(offset, 10);
+  // A single large project can consume most of the Apps Script execution window.
+  // Keep each continuation small so the offset is persisted instead of retrying
+  // the same batch forever after a timeout.
+  var result = syncClickUpMilestoneClosingBatch_(offset, 1);
   var processed = toInt_(props.getProperty('CLICKUP_MILESTONE_CLOSING_PROCESSED'), 0) + result.processed;
   var errors = toInt_(props.getProperty('CLICKUP_MILESTONE_CLOSING_ERRORS'), 0) + result.errors;
   var detected = toInt_(props.getProperty('CLICKUP_MILESTONE_CLOSING_DETECTED'), 0) + result.detected;
@@ -3017,7 +3020,6 @@ function confirmClickUpMilestoneStatuses_(params) {
 
 function syncClickUpClosedMilestones_(params) {
   params = params || {};
-  stopLegacyClickUpMilestoneAudit_();
   var startedAt = new Date().getTime();
   var lock = LockService.getScriptLock();
   if (!lock.tryLock(5000)) throw new Error('Outra atualização está finalizando. Tente novamente em alguns segundos.');
@@ -3078,7 +3080,6 @@ function syncClickUpClosedMilestones_(params) {
 
 function syncClickUpValidationSituation_(params, situation) {
   params = params || {};
-  stopLegacyClickUpMilestoneAudit_();
   var startedAt = new Date().getTime();
   var month = sanitizeText_(params.month || params.mes).slice(0, 7);
   var lock = LockService.getScriptLock();
