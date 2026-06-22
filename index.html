@@ -12512,7 +12512,7 @@ function gestaoNormalizeInventoryProject(p) {
 function gestaoBuildViewData(inventory) {
   var hist = projetosVisiveisParaUsuario((Array.isArray(inventory) ? inventory : []).map(gestaoNormalizeInventoryProject));
   var current = projetosVisiveisParaUsuario(Array.isArray(DATA.projetos) ? DATA.projetos : []).filter(function(p) {
-    return dashProjectHasClickUpTrace(p) && gestaoClickupBucketKey(p) === 'current';
+    return gestaoClickupBucketKey(p) === 'current';
   });
   return hist.concat(current);
 }
