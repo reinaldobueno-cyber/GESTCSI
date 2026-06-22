@@ -12507,6 +12507,8 @@ function gestaoNormalizeInventoryProject(p) {
   out.link_projeto = out.link_projeto || out.project_url;
   out.status = out.status || out.sync_status_clickup || '';
   out.clickup_json = out.clickup_json || '';
+  var payload = parseJsonSeguro(out.clickup_json) || {};
+  out.data_criacao = out.data_criacao || payload.data_criacao || '';
   return out;
 }
 function gestaoBuildViewData(inventory) {
@@ -12553,11 +12555,22 @@ function gestaoProjectMetrics(p) {
 function gestaoIsProjectLate(p) {
   return gestaoClickupOverdueItems(p).length > 0 || dashStatusKey(p && p.status) === 'atrasado';
 }
+function gestaoProjectCreatedMs(p) {
+  var value=p&&p.data_criacao;
+  if(!value)return 0;
+  var time=new Date(value).getTime();
+  return isNaN(time)?0:time;
+}
+function gestaoProjectCreatedLabel(p) {
+  var time=gestaoProjectCreatedMs(p);
+  return time?new Date(time).toLocaleDateString('pt-BR'):'-';
+}
 function gestaoProjectRow(p, extra) {
   var m = gestaoProjectMetrics(p);
   var stale = dashClickUpAgingDays(p);
   var bucket = gestaoProjectBucket(p) === 'legacy' ? 'Histórico' : '2026';
   return '<tr><td><strong>'+escapeHtml(p.cliente || '-')+'</strong><div class="tower-cons-meta">'+bucket+' • '+escapeHtml((p.consultor || 'Sem consultor'))+'</div></td>'+
+    '<td>'+escapeHtml(gestaoProjectCreatedLabel(p))+'</td>'+
     '<td>'+escapeHtml(p.status || '-')+'</td>'+
     '<td class="num">'+fn(m.fasesConcluidas)+'</td>'+
     '<td class="num">'+fn(m.tasksConcluidas)+'</td>'+
@@ -12571,7 +12584,7 @@ function gestaoProjectRow(p, extra) {
 function gestaoFilterProjects(mode, bucket, consultor) {
   bucket = bucket || 'total';
   var consultorKey = consultor ? gestaoConsultorKey(consultor) : '';
-  return ordenarProjetosPainel((GESTAO_CLICKUP_VIEW_DATA || []).filter(function(p) {
+  var list=(GESTAO_CLICKUP_VIEW_DATA || []).filter(function(p) {
     if (bucket !== 'total' && gestaoProjectBucket(p) !== bucket) return false;
     if (consultorKey && gestaoConsultorKey(p.consultor || 'Sem consultor') !== consultorKey) return false;
     if (mode === 'atrasados') return gestaoIsProjectLate(p);
@@ -12580,7 +12593,13 @@ function gestaoFilterProjects(mode, bucket, consultor) {
       return stale !== null && stale >= 7;
     }
     return true;
-  }));
+  });
+  if(bucket==='legacy'){
+    return list.sort(function(a,b){
+      return gestaoProjectCreatedMs(b)-gestaoProjectCreatedMs(a)||String(a.cliente||'').localeCompare(String(b.cliente||''),'pt-BR');
+    });
+  }
+  return ordenarProjetosPainel(list);
 }
 function gestaoOpenAudit(mode, bucket) {
   var list = gestaoFilterProjects(mode, bucket, '');
@@ -12593,8 +12612,8 @@ function gestaoOpenAudit(mode, bucket) {
       detalhe = ultima ? (escapeHtml(ultima.nome || '-')+' • '+formatarDataHoraProjeto(ultima.updated_at)) : 'Sem última alteração localizada';
     }
     return gestaoProjectRow(p, detalhe);
-  }).join('') : '<tr class="empty-row"><td colspan="10">Nenhum projeto neste recorte.</td></tr>';
-  var html = '<div class="dashx-focus-note"><div><strong>'+label+' • '+gestaoBucketLabel(bucket)+':</strong> auditoria da Gestão ClickUp.</div><div class="dashx-focus-hint">'+list.length+' projeto(s)</div></div><div class="dashx-table-wrap" style="margin-top:12px"><table class="dashx-table"><thead><tr><th>Projeto</th><th>Status</th><th>Fases concl.</th><th>Tasks concl.</th><th>Tasks pend.</th><th>Marcos concl.</th><th>Marcos pend.</th><th>Sem update</th><th>Auditoria</th><th>Ação</th></tr></thead><tbody>'+rows+'</tbody></table></div>';
+  }).join('') : '<tr class="empty-row"><td colspan="11">Nenhum projeto neste recorte.</td></tr>';
+  var html = '<div class="dashx-focus-note"><div><strong>'+label+' • '+gestaoBucketLabel(bucket)+':</strong> auditoria da Gestão ClickUp.</div><div class="dashx-focus-hint">'+list.length+' projeto(s)</div></div><div class="dashx-table-wrap" style="margin-top:12px"><table class="dashx-table"><thead><tr><th>Projeto</th><th>Criado em</th><th>Status</th><th>Fases concl.</th><th>Tasks concl.</th><th>Tasks pend.</th><th>Marcos concl.</th><th>Marcos pend.</th><th>Sem update</th><th>Auditoria</th><th>Ação</th></tr></thead><tbody>'+rows+'</tbody></table></div>';
   dashOpenAuditModal(label+' — '+gestaoBucketLabel(bucket), html);
   return false;
 }
@@ -12605,8 +12624,8 @@ function gestaoOpenConsultorAudit(consultor) {
     return gestaoConsultorLabel(best, p && p.consultor);
   }, consultor);
   function section(title, list) {
-    var rows = list.length ? list.map(function(p){ return gestaoProjectRow(p, gestaoIsProjectLate(p) ? 'Atrasado' : ''); }).join('') : '<tr class="empty-row"><td colspan="10">Nenhum projeto.</td></tr>';
-    return '<div class="dashx-chart-title" style="font-size:14px;margin:16px 0 8px">'+title+' • '+list.length+' projeto(s)</div><div class="dashx-table-wrap"><table class="dashx-table"><thead><tr><th>Projeto</th><th>Status</th><th>Fases concl.</th><th>Tasks concl.</th><th>Tasks pend.</th><th>Marcos concl.</th><th>Marcos pend.</th><th>Sem update</th><th>Auditoria</th><th>Ação</th></tr></thead><tbody>'+rows+'</tbody></table></div>';
+    var rows = list.length ? list.map(function(p){ return gestaoProjectRow(p, gestaoIsProjectLate(p) ? 'Atrasado' : ''); }).join('') : '<tr class="empty-row"><td colspan="11">Nenhum projeto.</td></tr>';
+    return '<div class="dashx-chart-title" style="font-size:14px;margin:16px 0 8px">'+title+' • '+list.length+' projeto(s)</div><div class="dashx-table-wrap"><table class="dashx-table"><thead><tr><th>Projeto</th><th>Criado em</th><th>Status</th><th>Fases concl.</th><th>Tasks concl.</th><th>Tasks pend.</th><th>Marcos concl.</th><th>Marcos pend.</th><th>Sem update</th><th>Auditoria</th><th>Ação</th></tr></thead><tbody>'+rows+'</tbody></table></div>';
   }
   var html = '<div class="dashx-focus-note"><div><strong>'+escapeHtml(displayName)+':</strong> relação completa da Gestão ClickUp.</div><div class="dashx-focus-hint">'+hist.length+' histórico • '+cur.length+' em 2026</div></div>'+section('Histórico <= 2025', hist)+section('Projetos 2026', cur);
   dashOpenAuditModal('Gestão ClickUp — '+displayName, html);
