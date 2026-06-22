@@ -5277,7 +5277,7 @@ var FECHAMENTO_POLL_TIMER = null;
 var FECHAMENTO_FILTER = { month:'', consultor:'todos', projetoBusca:'', situacao:'todos' };
 var PROJECT_CLOSING_RULE_VERSION = 'breakoff-entrega-aprovar-v5';
 var PROJECT_CLOSING_LOOKUP = {term:'', loading:false, result:null, error:''};
-var PROJECT_CLOSING_DECISIONS = {items:[], loaded:false, loading:false};
+var PROJECT_CLOSING_DECISIONS = {items:[], loaded:false, loading:false, backendReady:null, error:''};
 var PROJECT_CLOSING_DECISION_TARGET = null;
 var FECHAMENTO_EXPANDED = {};
 try { FECHAMENTO_EXPANDED = JSON.parse(storageGet('gestcsi_fechamento_expanded_v1', '{}')) || {}; } catch(e) { FECHAMENTO_EXPANDED = {}; }
@@ -5585,16 +5585,24 @@ function projectClosingLoadDecisions(force) {
   if (!authTokenParam() || PROJECT_CLOSING_DECISIONS.loading || (PROJECT_CLOSING_DECISIONS.loaded && !force)) return Promise.resolve(null);
   PROJECT_CLOSING_DECISIONS.loading = true;
   return chamarAppsScriptJsonp('getProjectClosingDecisions', {auth_token:authTokenParam()}, 20000).then(function(resp) {
+    if (resp && resp.service === 'clickup-sync' && !Array.isArray(resp.items)) {
+      PROJECT_CLOSING_DECISIONS.backendReady = false;
+      throw new Error('Apps Script desatualizado. Implante uma nova versão do Web App.');
+    }
     if (!resp || resp.ok === false || !Array.isArray(resp.items)) throw new Error((resp && (resp.error || resp.message)) || 'Falha ao carregar decisões.');
     PROJECT_CLOSING_DECISIONS.items = resp.items;
     PROJECT_CLOSING_DECISIONS.loaded = true;
     PROJECT_CLOSING_DECISIONS.loading = false;
+    PROJECT_CLOSING_DECISIONS.backendReady = true;
+    PROJECT_CLOSING_DECISIONS.error = '';
     initProjectClosing();
     initBonus();
     return resp;
   }).catch(function(error) {
     PROJECT_CLOSING_DECISIONS.loading = false;
-    showToast((error && error.message) || 'Falha ao carregar decisões do fechamento.', 'err');
+    PROJECT_CLOSING_DECISIONS.error = (error && error.message) || 'Falha ao carregar decisões do fechamento.';
+    showToast(PROJECT_CLOSING_DECISIONS.error, 'err');
+    initProjectClosing();
     return null;
   });
 }
@@ -5646,6 +5654,7 @@ function projectClosingSaveDecision(button) {
     decision: target.decision,
     notes: notes
   }, 20000).then(function(resp) {
+    if (resp && resp.service === 'clickup-sync' && !resp.item) throw new Error('Apps Script desatualizado. Implante uma nova versão do Web App.');
     if (!resp || resp.ok === false || !resp.item) throw new Error((resp && (resp.error || resp.message)) || 'Falha ao salvar decisão.');
     PROJECT_CLOSING_DECISIONS.items = (PROJECT_CLOSING_DECISIONS.items || []).filter(function(current) { return current.project_key !== resp.item.project_key; }).concat([resp.item]);
     PROJECT_CLOSING_DECISIONS.loaded = true;
@@ -5739,9 +5748,10 @@ function initProjectClosing() {
   }
   var table = '<div class="dashx-table-wrap"><table class="dashx-table"><thead><tr><th>Projeto</th><th>Consultor</th><th>Controle Lais</th><th>Status Fase 8</th><th>Decisão do fechamento</th><th>Divergência controle</th><th>Fonte</th><th>Ação</th></tr></thead><tbody>'+rows(pending.concat(approved).concat(rejected))+'</tbody></table></div>';
   var syncBox = AUTH_STATE.user && AUTH_STATE.user.role === 'admin' ? '<div class="closing-filter-block"><div class="closing-filter-footer" style="margin-top:0"><button class="btn-syncall" onclick="return sincronizarTodosProjetosClickup(this)">Sincronizar projetos</button></div></div>' : '';
+  var backendWarning = PROJECT_CLOSING_DECISIONS.backendReady === false ? '<div class="dashx-inline-note" style="margin-bottom:12px"><strong>Apps Script desatualizado:</strong> implante uma nova versão do Web App para habilitar Aprovar e Reprovar.</div>' : '';
   box.innerHTML = '<div class="closing-head"><div><div class="closing-title">Fechamento de projeto</div><div class="closing-sub">Controle separado dos marcos. Aqui entram somente projetos que atendem às três condições do ClickUp.</div></div></div>'+
     '<div class="dashx-inline-note" style="margin-bottom:12px"><strong>Fluxo:</strong> APROVAR no ClickUp envia o projeto para Em avaliação. A decisão final é feita abaixo em Aprovar ou Reprovar; somente a aprovação final gera R$ 80 no relatório. O controle da Lais aparece apenas como divergência.</div>'+
-    syncBox+
+    syncBox+backendWarning+
     '<div class="closing-kpis"><div class="closing-kpi warn"><span>Em avaliação</span><strong>'+pending.length+'</strong></div><div class="closing-kpi"><span>Aprovados</span><strong>'+approved.length+'</strong></div><div class="closing-kpi warn"><span>Reprovados</span><strong>'+rejected.length+'</strong></div><div class="closing-kpi warn"><span>Divergências controle</span><strong>'+divergences.length+'</strong></div><div class="closing-kpi"><span>Bônus aprovado</span><strong>'+fechamentoMoney(approved.length * 80)+'</strong></div></div>'+
     '<div class="bonus-section"><div class="bonus-section-title">Gerenciador de fechamento de projeto</div>'+table+'</div>';
 }
