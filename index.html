@@ -5298,6 +5298,7 @@ var FECHAMENTO_LOADING = false;
 var FECHAMENTO_SESSION_REFRESHED = false;
 var FECHAMENTO_POLL_TIMER = null;
 var FECHAMENTO_FILTER = { month:'', consultor:'todos', projetoBusca:'', situacao:'todos' };
+var FECHAMENTO_CACHE_VERSION = 'closing-history-merge-v4';
 var FECHAMENTO_MILESTONE_BONUS_VALUE = 30;
 var PROJECT_CLOSING_RULE_VERSION = 'breakoff-entrega-aprovar-v5';
 var PROJECT_CLOSING_LOOKUP = {term:'', loading:false, result:null, error:''};
@@ -5317,6 +5318,7 @@ function fechamentoRestoreCache() {
   try {
     var cached = JSON.parse(localStorage.getItem('gestcsi_fechamento_cache') || 'null');
     if (!cached || !Array.isArray(cached.marcos)) return;
+    if (cached.version !== FECHAMENTO_CACHE_VERSION) return;
     FECHAMENTO_MARCOS = fechamentoNormalizeRows(cached.marcos);
     FECHAMENTO_META = cached.meta || {};
     FECHAMENTO_LOADED = true;
@@ -5325,6 +5327,7 @@ function fechamentoRestoreCache() {
 function fechamentoSaveCache() {
   try {
     localStorage.setItem('gestcsi_fechamento_cache', JSON.stringify({
+      version: FECHAMENTO_CACHE_VERSION,
       marcos: FECHAMENTO_MARCOS,
       meta: FECHAMENTO_META,
       saved_at: new Date().toISOString()
@@ -5364,10 +5367,52 @@ function fechamentoNormalizeRows(rows) {
     item.mes_fechamento = fechamentoMonthKey(item.mes_fechamento, item.closed_at);
     item.mes_validacao = fechamentoMonthKey(item.mes_validacao, item.validation_at);
     item.consultor = fechamentoConsultantName(item.consultor || item.responsaveis);
+    var statusSituation = fechamentoSituacaoPorStatus(item.status_atual || item.status || item.status_original || '');
+    if (statusSituation !== 'outro') item.situacao = statusSituation;
+    item.valor_bonus = Number(item.valor_bonus || 0);
+    if (item.situacao === 'aprovado' && item.valor_bonus <= 0) {
+      item.valor_bonus = fechamentoIsProjectClosing(item) ? 80 : FECHAMENTO_MILESTONE_BONUS_VALUE;
+    }
+    if (item.situacao !== 'aprovado') item.valor_bonus = 0;
     return item;
   }).filter(function(item) {
     return String(item.mes_fechamento || '') >= '2024-01';
   });
+}
+function fechamentoRowKey(item) {
+  return String(
+    (item && (item.task_id || item.id || item.item_id || item.link)) ||
+    ((item && item.projeto || '') + '|' + (item && item.marco || '') + '|' + (item && item.closed_at || ''))
+  ).trim();
+}
+function fechamentoSituacaoRank(item) {
+  var situacao = String(item && item.situacao || '');
+  if (situacao === 'aprovado' || situacao === 'reprovado') return 2;
+  if (situacao === 'aguardando') return 1;
+  return 0;
+}
+function fechamentoMergeClosingRows(primaryRows, historyRows) {
+  var byKey = {};
+  function mergeOne(item) {
+    var key = fechamentoRowKey(item);
+    if (!key) return;
+    var current = byKey[key];
+    if (!current) {
+      byKey[key] = item;
+      return;
+    }
+    var currentRank = fechamentoSituacaoRank(current);
+    var nextRank = fechamentoSituacaoRank(item);
+    if (currentRank > nextRank) return;
+    if (nextRank > currentRank) {
+      byKey[key] = Object.assign({}, current, item);
+      return;
+    }
+    byKey[key] = Object.assign({}, current, item);
+  }
+  (historyRows || []).forEach(mergeOne);
+  (primaryRows || []).forEach(mergeOne);
+  return Object.keys(byKey).map(function(key) { return byKey[key]; });
 }
 function fechamentoIsProjectClosing(item) {
   if (String(item && item.fechamento_projeto || '').toLowerCase() === 'sim') return true;
@@ -5940,29 +5985,23 @@ function fechamentoApplySyncRows(rows, syncMonth) {
     console.warn('[FECHAMENTO] Sync retornou zero item para '+month+'. Mantendo mês atual para não apagar a fila.');
     return atuais;
   }
-  function rowKey(item) {
-    return String(
-      (item && (item.task_id || item.id || item.item_id || item.link)) ||
-      ((item && item.projeto || '') + '|' + (item && item.marco || '') + '|' + (item && item.closed_at || ''))
-    ).trim();
-  }
   var novasPorChave = {};
   novasDoMes.forEach(function(item) {
-    var key = rowKey(item);
+    var key = fechamentoRowKey(item);
     if (key) novasPorChave[key] = item;
   });
   var usadas = {};
   var merged = atuais.map(function(item) {
     if (String(item && item.mes_fechamento || '') !== month) return item;
-    var key = rowKey(item);
+    var key = fechamentoRowKey(item);
     if (key && novasPorChave[key]) {
       usadas[key] = true;
-      return Object.assign({}, item, novasPorChave[key]);
+      return fechamentoMergeClosingRows([novasPorChave[key]], [item])[0] || Object.assign({}, item, novasPorChave[key]);
     }
     return item;
   });
   novasDoMes.forEach(function(item) {
-    var key = rowKey(item);
+    var key = fechamentoRowKey(item);
     if (!key || !usadas[key]) merged.push(item);
   });
   return merged;
@@ -6076,22 +6115,30 @@ function fechamentoLoadSheetFallback(metaExtra) {
       return item && item.task_id;
     });
     var consolidatedRows = fechamentoNormalizeRows(rows);
-    FECHAMENTO_MARCOS = consolidatedRows;
-    FECHAMENTO_META = Object.assign({
-      ok: true,
-      total: FECHAMENTO_MARCOS.length,
-      sheet_source: true,
-      warning: 'Leitura direta da aba CLICKUP_FECHAMENTO_MARCOS.'
-    }, metaExtra || {});
-    FECHAMENTO_LOADED = true;
-    FECHAMENTO_LOADING = false;
-    fechamentoSaveCache();
-    fechamentoApplyProjectStatuses();
-    initFechamento();
-    initProjectClosing();
-    initBonus();
-    initDash();
-    return FECHAMENTO_META;
+    return fechamentoLoadMonthlyHistoryFallback().catch(function(error) {
+      return { rows: [], errors: [((error && error.message) || 'Histórico mensal indisponível')] };
+    }).then(function(history) {
+      var historicalRows = fechamentoNormalizeRows((history && history.rows) || []);
+      FECHAMENTO_MARCOS = fechamentoMergeClosingRows(consolidatedRows, historicalRows);
+      var historyErrors = (history && history.errors || []).filter(Boolean);
+      FECHAMENTO_META = Object.assign({
+        ok: true,
+        total: FECHAMENTO_MARCOS.length,
+        sheet_source: true,
+        history_source: historicalRows.length,
+        warning: 'Leitura da aba CLICKUP_FECHAMENTO_MARCOS combinada com histórico mensal salvo nos JSONs.'
+      }, metaExtra || {});
+      if (historyErrors.length) FECHAMENTO_META.history_warning = historyErrors.slice(0, 4).join(' | ');
+      FECHAMENTO_LOADED = true;
+      FECHAMENTO_LOADING = false;
+      fechamentoSaveCache();
+      fechamentoApplyProjectStatuses();
+      initFechamento();
+      initProjectClosing();
+      initBonus();
+      initDash();
+      return FECHAMENTO_META;
+    });
   }).then(function(meta) {
     return meta;
   });
@@ -6285,7 +6332,7 @@ function initFechamento() {
       var chips = monthNames.map(function(monthLabel, monthIndex) {
         var month = year + '-' + String(monthIndex + 1).padStart(2, '0');
         var hasData = !!months[month];
-        var cls = 'closing-filter-chip '+(month === activeMonth ? 'on ' : '')+(hasData ? '' : 'is-empty');
+        var cls = 'closing-filter-chip '+(month === activeMonth ? 'on ' : '');
         var title = hasData ? 'Mês com Closed registrado' : 'Sem Closed registrado neste mês';
         return '<button class="'+cls+'" title="'+escapeHtml(title)+'" onclick="return fechamentoSetFilter(\'month\',\''+escapeHtml(month)+'\')">'+escapeHtml(monthLabel)+'</button>';
       }).join('');
