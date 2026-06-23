@@ -66,6 +66,7 @@ function onOpen() {
     .addItem('Importar projetos dos spaces históricos', 'inserirSpacesHistoricosClickUp')
     .addItem('Sincronizar inventário ClickUp', 'sincronizarInventarioClickUp')
     .addItem('Atualizar fechamento de marcos', 'sincronizarFechamentoMarcosClickUp')
+    .addItem('Restaurar fechamento pelo histórico mensal', 'restaurarFechamentoMarcosHistoricoMensal')
     .addItem('Sincronizar atividade dos usuários ClickUp', 'sincronizarAtividadeUsuariosClickUp')
     .addItem('Sincronizar diárias CMAX do mês atual', 'sincronizarDiariasCmaxMesAtual')
     .addItem('Sincronizar histórico de diárias CMAX', 'sincronizarHistoricoDiariasCmax')
@@ -139,6 +140,10 @@ function doGet(e) {
     if (action === 'startClickUpMilestoneClosingBackground') {
       requireAdmin_(params);
       return jsonOutput_(startClickUpMilestoneClosingBackground_(params), params.callback);
+    }
+    if (action === 'restoreMilestoneClosingFromMonthlyHistory') {
+      requireAdmin_(params);
+      return jsonOutput_(restoreClickUpMilestoneClosingFromMonthlyHistory_(params), params.callback);
     }
     if (action === 'syncClickUpMilestoneRecent') {
       requireAdmin_(params);
@@ -2593,6 +2598,60 @@ function sincronizarFechamentoMarcosClickUp() {
     );
   } catch (error) {}
   return result;
+}
+
+function restaurarFechamentoMarcosHistoricoMensal() {
+  var result = restoreClickUpMilestoneClosingFromMonthlyHistory_({});
+  try {
+    SpreadsheetApp.getUi().alert(
+      'Fechamento de marcos restaurado',
+      'Aba CLICKUP_FECHAMENTO_MARCOS restaurada pelo histórico mensal.' +
+        '\nAntes: ' + result.before_rows +
+        '\nDepois: ' + result.after_rows +
+        '\nMarcos lidos no histórico: ' + result.detected +
+        '\nProjetos com histórico: ' + result.projects +
+        '\nErros: ' + result.errors,
+      SpreadsheetApp.getUi().ButtonSet.OK
+    );
+  } catch (error) {}
+  return result;
+}
+
+function restoreClickUpMilestoneClosingFromMonthlyHistory_(params) {
+  params = params || {};
+  var lock = LockService.getScriptLock();
+  if (!lock.tryLock(30000)) {
+    throw new Error('Outra restauração/sincronização de fechamento ainda está em andamento. Tente novamente em alguns segundos.');
+  }
+  try {
+    migrateClickUpMilestoneClosingSchema_();
+    var sheet = getClickUpMilestoneClosingSheet_();
+    var beforeRows = Math.max(0, sheet.getLastRow() - 1);
+    var result = syncClickUpMilestoneClosingFromMonthlySheets_();
+    var afterRows = Math.max(0, sheet.getLastRow() - 1);
+    var props = PropertiesService.getScriptProperties();
+    props.setProperty('CLICKUP_MILESTONE_CLOSING_ACTIVE', '0');
+    props.setProperty('CLICKUP_MILESTONE_CLOSING_PHASE', 'monthly_restored');
+    props.setProperty('CLICKUP_MILESTONE_CLOSING_DETECTED', String(result.detected || 0));
+    props.setProperty('CLICKUP_MILESTONE_CLOSING_ERRORS', String(result.errors || 0));
+    props.setProperty('CLICKUP_MILESTONE_CLOSING_UPDATED_AT', new Date().toISOString());
+    props.setProperty('CLICKUP_MILESTONE_CLOSING_COMPLETED_AT', new Date().toISOString());
+    if (result.last_error) props.setProperty('CLICKUP_MILESTONE_CLOSING_ERROR', result.last_error);
+    clearClickUpMilestoneClosingBackgroundTriggers_();
+    return {
+      ok: true,
+      restored: true,
+      before_rows: beforeRows,
+      after_rows: afterRows,
+      detected: result.detected || 0,
+      projects: result.projects || 0,
+      errors: result.errors || 0,
+      last_error: result.last_error || '',
+      source: 'monthly_clickup_json'
+    };
+  } finally {
+    lock.releaseLock();
+  }
 }
 
 function syncClickUpMilestoneClosingTrigger() {

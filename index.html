@@ -6069,7 +6069,6 @@ function fechamentoLoadSheetFallback(metaExtra) {
     }).filter(function(item) {
       return item && item.task_id;
     });
-    if (!rows.length) throw new Error('Fallback de fechamento vazio.');
     var consolidatedRows = fechamentoNormalizeRows(rows);
     return fechamentoLoadMonthlyHistoryFallback().then(function(monthly) {
       var monthlyRows = monthly.rows || [];
@@ -6247,6 +6246,29 @@ function fechamentoRunSync(action, label, btn, extraParams) {
 function fechamentoStartSync(btn) {
   return fechamentoRunSync('startClickUpMilestoneClosingBackground', 'Atualizar Closed', btn, { force_history: '1' });
 }
+function fechamentoRestoreMonthlyHistory(btn) {
+  if (!AUTH_STATE.user || AUTH_STATE.user.role !== 'admin') {
+    showToast('Somente admin pode restaurar o histórico de fechamento', 'err');
+    return false;
+  }
+  var original = btn && btn.textContent;
+  if (btn) { btn.disabled = true; btn.textContent = 'Restaurando...'; }
+  chamarAppsScriptJsonp('restoreMilestoneClosingFromMonthlyHistory', {
+    auth_token: authTokenParam()
+  }, 90000).then(function(result) {
+    if (!result || result.ok === false) {
+      throw new Error((result && (result.error || result.message)) || 'Não foi possível restaurar o histórico mensal');
+    }
+    return fechamentoLoadSheetFallback(result).then(function() {
+      if (btn) { btn.disabled = false; btn.textContent = original || 'Restaurar histórico mensal'; }
+      showToast('Histórico restaurado: '+(result.after_rows || 0)+' marco(s) na base.', 'ok');
+    });
+  }).catch(function(error) {
+    if (btn) { btn.disabled = false; btn.textContent = original || 'Restaurar histórico mensal'; }
+    showToast((error && error.message) || 'Erro ao restaurar histórico mensal', 'err');
+  });
+  return false;
+}
 function fechamentoSyncRejected(btn) {
   return fechamentoRunSync('syncClickUpRejectedMilestones', 'Buscar Reprovados', btn);
 }
@@ -6366,7 +6388,7 @@ function initFechamento() {
     '<div class="closing-filter-label" style="margin-top:14px">Consultores</div><div class="closing-filter-chips">'+consultantChips+'</div>'+
     '<div class="closing-filter-label" style="margin-top:14px">Validação técnica</div><div class="closing-filter-chips">'+statusChips+'</div>'+
     '<div class="closing-filter-label" style="margin-top:14px">Filtrar cliente</div><input id="fechamento-client-search" class="closing-client-search" type="search" value="'+escapeHtml(FECHAMENTO_FILTER.projetoBusca || '')+'" placeholder="Digite o nome do cliente..." oninput="fechamentoSetProjectSearch(this.value)">'+
-    (AUTH_STATE.user && AUTH_STATE.user.role === 'admin' ? '<div class="closing-project-meta" style="margin-top:12px">Closed atualiza a fila geral compartilhada. Reprovados e Aprovados consultam somente a validação e os comentários do mês selecionado.</div><div class="closing-filter-footer" style="gap:8px;flex-wrap:wrap"><button class="btn-syncall" onclick="return fechamentoStartSync(this)">Atualizar Closed</button><button class="btn-syncall" onclick="return fechamentoSyncRejected(this)">Buscar Reprovados</button><button class="btn-syncall" onclick="return fechamentoSyncApproved(this)">Buscar Aprovados</button></div>' : '')+
+    (AUTH_STATE.user && AUTH_STATE.user.role === 'admin' ? '<div class="closing-project-meta" style="margin-top:12px">Closed atualiza a fila geral compartilhada. Reprovados e Aprovados consultam somente a validação e os comentários do mês selecionado.</div><div class="closing-filter-footer" style="gap:8px;flex-wrap:wrap"><button class="btn-syncall" onclick="return fechamentoRestoreMonthlyHistory(this)">Restaurar histórico mensal</button><button class="btn-syncall" onclick="return fechamentoStartSync(this)">Atualizar Closed</button><button class="btn-syncall" onclick="return fechamentoSyncRejected(this)">Buscar Reprovados</button><button class="btn-syncall" onclick="return fechamentoSyncApproved(this)">Buscar Aprovados</button></div>' : '')+
     '</div>'+
     '<div class="closing-kpis"><div class="closing-kpi"><span>Marcos no recorte</span><strong>'+list.length+'</strong></div><div class="closing-kpi"><span>Aguardando validação</span><strong>'+waiting+'</strong></div><div class="closing-kpi"><span>Aprovados / Reprovados</span><strong>'+approved+' / '+rejected+'</strong></div><button type="button" class="closing-kpi warn action" title="Ver marcos com responsável diferente do consultor da carteira" onclick="return fechamentoOpenPortfolioMismatchAudit()"><span>Conferir responsável</span><strong>'+portfolioMismatch+'</strong></button><div class="closing-kpi"><span>Bonificação aprovada</span><strong>'+fechamentoMoney(bonus)+'</strong></div></div>'+ 
     consultantCards;
