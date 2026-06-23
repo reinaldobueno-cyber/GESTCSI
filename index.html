@@ -3691,7 +3691,7 @@ var UPDATE_DEVICE_KEY = 'gestcsi_update_device_id_v1';
 var UPDATE_ACTOR_KEY = 'gestcsi_update_actor_v1';
 var LAST_UPDATE_KEY = 'gestcsi_last_update_label_v1';
 var PANEL_CACHE_KEY = 'gestcsi_panel_cache_v1';
-var PANEL_APP_VERSION = '2026-06-23-project-risk-filter-v2';
+var PANEL_APP_VERSION = '2026-06-23-project-risk-filter-v1';
 var THEME_MODE_KEY = 'gestcsi_theme_mode_v1';
 var AUTH_SESSION_KEY = 'gestcsi_auth_session_v1';
 var AUTH_STATE = { token:'', user:null };
@@ -10448,12 +10448,7 @@ function initAll() {
       ['sem_risco','Sem risco']
     ];
     filtroRisco.innerHTML = riscos.map(function(item){
-      var qtd = 0;
-      try {
-        qtd = item[0] === 'all' ? p.length : p.filter(function(x){ return projectMatchesRiskFilter(x, item[0]); }).length;
-      } catch (eRisco) {
-        qtd = 0;
-      }
+      var qtd = item[0] === 'all' ? p.length : p.filter(function(x){ return projectMatchesRiskFilter(x, item[0]); }).length;
       return '<button class="fb '+(fR===item[0]?'on':'')+'" onclick="setF(\'r\',\''+item[0]+'\',this)">'+item[1]+' ('+qtd+')</button>';
     }).join('');
   }
