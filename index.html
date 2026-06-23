@@ -3408,7 +3408,6 @@ body.theme-dark *{
   <div class="fbox">
     <div class="frow"><div class="flabel">Consultor</div><div class="fbts" id="f-co"></div></div>
     <div class="frow"><div class="flabel">M&ecirc;s</div><div class="fbts" id="f-me"></div></div>
-    <div class="frow"><div class="flabel">Risco</div><div class="fbts" id="f-ri"></div></div>
   </div>
   <div class="page-toolbar">
     <div class="page-toolbar-left">
@@ -3486,7 +3485,7 @@ var CONTRACTS_MRR = {
 };
 
 var activePeriod = 'all';
-var fS='all', fC='all', fM='all', fR='all', fQ='';
+var fS='all', fC='all', fM='all', fQ='';
 var DASH_FILTERS = { consultor:'all', vendedor:'all', status:'all', tipo:'all' };
 var DASH_HEALTH_VIEW = 'issues';
 var DASH_HEALTH_DATA = null;
@@ -3691,7 +3690,7 @@ var UPDATE_DEVICE_KEY = 'gestcsi_update_device_id_v1';
 var UPDATE_ACTOR_KEY = 'gestcsi_update_actor_v1';
 var LAST_UPDATE_KEY = 'gestcsi_last_update_label_v1';
 var PANEL_CACHE_KEY = 'gestcsi_panel_cache_v1';
-var PANEL_APP_VERSION = '2026-06-23-project-risk-filter-v1';
+var PANEL_APP_VERSION = '2026-06-22-portfolio-integrity-v3';
 var THEME_MODE_KEY = 'gestcsi_theme_mode_v1';
 var AUTH_SESSION_KEY = 'gestcsi_auth_session_v1';
 var AUTH_STATE = { token:'', user:null };
@@ -4251,7 +4250,7 @@ function setPeriod(p, btn) {
   activePeriod = p;
   document.querySelectorAll('.pb').forEach(function(b) { b.classList.remove('on'); });
   if (btn) btn.classList.add('on');
-  fS='all'; fC='all'; fM='all'; fR='all'; _openId=null;
+  fS='all'; fC='all'; fM='all'; _openId=null;
   renderAll();
 }
 function buildPeriodBar() {
@@ -6810,7 +6809,6 @@ function abrirProjetosComFiltro(status, clienteBusca) {
   fS = status || 'all';
   fC = 'all';
   fM = activePeriod && activePeriod !== 'all' ? activePeriod : 'all';
-  fR = 'all';
   fQ = String(clienteBusca || '').trim().toLowerCase();
   goTab('all');
   initAll();
@@ -7832,41 +7830,6 @@ function quantidadesResumoUI(p) {
     origem: 'Sem dados estruturados'
   };
 }
-function projectRiskLabels(p) {
-  p = p || {};
-  var riscos = [];
-  var qtd = quantidadesResumoUI(p);
-  var dV = parseD(p.data_venda), dK = parseD(p.data_kick), dT = parseD(p.data_inicio);
-  var vk = diffD(dV, dK), vt = diffD(dV, dT);
-  if (!dK) riscos.push('Kickoff não registrado');
-  if (vk !== null && vk > 7) riscos.push('Kickoff acima do limite (7d)');
-  if (vt !== null && vt > 15) riscos.push('1º agendamento acima do limite (15d)');
-  if (p.diarias_rest !== null && Number(p.diarias_rest) < 0) riscos.push('Diárias excedidas');
-  if (p.dias_sem_atualizacao !== null && p.dias_sem_atualizacao !== undefined && Number(p.dias_sem_atualizacao) > 7) riscos.push('Projeto sem atualização recente');
-  if (
-    p.diarias_rest !== null &&
-    Number(p.diarias_rest) <= 0 &&
-    (Number(qtd.tarefas_pendentes || 0) > 0 || Number(qtd.marcos_pendentes || 0) > 0)
-  ) {
-    riscos.push('Diárias esgotadas com atividades ou marcos pendentes');
-  }
-  return riscos;
-}
-function projectMatchesRiskFilter(p, filtro) {
-  if (!filtro || filtro === 'all') return true;
-  var riscos = projectRiskLabels(p || {});
-  if (filtro === 'com_risco') return riscos.length > 0;
-  if (filtro === 'sem_risco') return riscos.length === 0;
-  var map = {
-    kickoff: 'Kickoff não registrado',
-    kickoff_prazo: 'Kickoff acima do limite (7d)',
-    primeiro_agendamento: '1º agendamento acima do limite (15d)',
-    diarias_excedidas: 'Diárias excedidas',
-    sem_update: 'Projeto sem atualização recente',
-    diarias_esgotadas: 'Diárias esgotadas com atividades ou marcos pendentes'
-  };
-  return riscos.indexOf(map[filtro] || filtro) >= 0;
-}
 function ordenarFasesResumoProjeto(fases) {
   return (Array.isArray(fases) ? fases.slice() : []).sort(function(a, b){
     var ao = numeroProjeto(a && a.ordem);
@@ -8122,6 +8085,7 @@ function faseProjetoOperacional(p) {
 }
 function buildGerencialBase(p) {
   var fase = obterFaseAtualClickupProjeto(p || {}) || faseProjetoOperacional(p || {});
+  var riscos = [];
   var faltando = camposResumoFaltantes(p);
   var qtd = quantidadesResumoUI(p);
   var fasesDetalhadas = obterFasesDetalhadasProjeto(p || {});
@@ -8136,7 +8100,20 @@ function buildGerencialBase(p) {
     qtd.origem === 'ClickUp' ? 'ClickUp (sincronizado)' :
     qtd.origem === 'ClickUp Manual' ? 'Importacao manual do ClickUp' :
     'Sem dados estruturados do ClickUp';
-  var riscos = projectRiskLabels(p || {});
+  var dV = parseD(p && p.data_venda), dK = parseD(p && p.data_kick), dT = parseD(p && p.data_inicio);
+  var vk = diffD(dV, dK), vt = diffD(dV, dT);
+  if (!dK) riscos.push('Kickoff não registrado');
+  if (vk !== null && vk > 7) riscos.push('Kickoff acima do limite (7d)');
+  if (vt !== null && vt > 15) riscos.push('1º agendamento acima do limite (15d)');
+  if ((p && p.diarias_rest) !== null && Number(p.diarias_rest) < 0) riscos.push('Diárias excedidas');
+  if ((p && p.dias_sem_atualizacao) !== null && Number(p.dias_sem_atualizacao) > 7) riscos.push('Projeto sem atualização recente');
+  if (
+    (p && p.diarias_rest) !== null &&
+    Number(p.diarias_rest) <= 0 &&
+    (Number(qtd.tarefas_pendentes || 0) > 0 || Number(qtd.marcos_pendentes || 0) > 0)
+  ) {
+    riscos.push('Diárias esgotadas com atividades ou marcos pendentes');
+  }
   var riscoHtml = riscos.length ? riscos.map(function(r){ return '<span class="tag tag-r" style="margin-right:6px;margin-bottom:4px">'+r+'</span>'; }).join('') : '<span class="tag tag-g">Sem risco crítico identificado</span>';
   var etapas = ['Pré-Kickoff','Kickoff Realizado','Implantação em Execução','Pós-Implantação','Encerramento'];
   var trilha = etapas.map(function(e){
@@ -8505,7 +8482,6 @@ function abrirProjetoAtualizadoAposSync(foco, allowFilter) {
     fS = 'all';
     fC = 'all';
     fM = 'all';
-    fR = 'all';
     fQ = String(foco.cliente || '').trim().toLowerCase();
     var search = document.getElementById('project-search');
     if (search) search.value = fQ;
@@ -10435,23 +10411,6 @@ function initAll() {
   }).join('');
   var filtroMes = document.getElementById('f-me');
   if (filtroMes) filtroMes.innerHTML=['all'].concat(meses).map(function(v){return '<button class="fb '+(fM===v?'on':'')+'" onclick="setF(\'m\',\''+v+'\',this)">'+(v==='all'?'Todos':v)+'</button>';}).join('');
-  var filtroRisco = document.getElementById('f-ri');
-  if (filtroRisco) {
-    var riscos = [
-      ['all','Todos'],
-      ['com_risco','Com risco'],
-      ['kickoff','Kickoff não registrado'],
-      ['sem_update','Sem atualização recente'],
-      ['diarias_excedidas','Diárias excedidas'],
-      ['diarias_esgotadas','Diárias esgotadas'],
-      ['primeiro_agendamento','1º agendamento fora do prazo'],
-      ['sem_risco','Sem risco']
-    ];
-    filtroRisco.innerHTML = riscos.map(function(item){
-      var qtd = item[0] === 'all' ? p.length : p.filter(function(x){ return projectMatchesRiskFilter(x, item[0]); }).length;
-      return '<button class="fb '+(fR===item[0]?'on':'')+'" onclick="setF(\'r\',\''+item[0]+'\',this)">'+item[1]+' ('+qtd+')</button>';
-    }).join('');
-  }
   var search = document.getElementById('project-search');
   if (search && !search.dataset.bound) {
     search.dataset.bound = '1';
@@ -10472,7 +10431,7 @@ function setProjectStatusFilter(v){
   }
   applyF();
 }
-function setF(t,v,btn){if(t==='s')fS=v;else if(t==='c')fC=v;else if(t==='r')fR=v;else fM=v;btn.closest('.fbts').querySelectorAll('.fb').forEach(function(b){b.classList.remove('on');});btn.classList.add('on');applyF();}
+function setF(t,v,btn){if(t==='s')fS=v;else if(t==='c')fC=v;else fM=v;btn.closest('.fbts').querySelectorAll('.fb').forEach(function(b){b.classList.remove('on');});btn.classList.add('on');applyF();}
 function applyF(){
   var p=filteredProj();
   if(fS==='andamento')p=p.filter(function(x){return String(x.status||'').toLowerCase().indexOf('andamento')>=0;});
@@ -10488,7 +10447,6 @@ function applyF(){
   else if(fS==='excedido')p=p.filter(function(x){return x.diarias_rest!==null&&x.diarias_rest<0;});
   if(fC!=='all')p=p.filter(function(x){return x.consultor===fC;});
   if(fM!=='all')p=p.filter(function(x){return x.mes===fM;});
-  if(fR!=='all')p=p.filter(function(x){return projectMatchesRiskFilter(x,fR);});
   if(fQ)p=p.filter(function(x){return String(x.cliente||'').toLowerCase().indexOf(fQ)>=0;});
   if (!_pendingProjectOpen) _openId=null;
   document.getElementById('rows-all').innerHTML=buildMonthGroupedRows(p,'r-');
@@ -14032,7 +13990,7 @@ window.sincronizarClickupProjeto = function(key, btn) {
     projectKey: projectMonthKey(projeto || { project_key: projectKey }),
     cliente: projeto && projeto.cliente || '',
     pageId: ((document.querySelector('.page.on') || {}).id || 'page-all').replace('page-', ''),
-    filters: { status:fS, consultor:fC, mes:fM, risco:fR, busca:fQ }
+    filters: { status:fS, consultor:fC, mes:fM, busca:fQ }
   };
   var labelOriginal = btn ? btn.textContent : '';
   if (btn) {
@@ -15138,17 +15096,16 @@ function _finalizarLoad(projetos, isRefresh, motivo, tipoAtualizacao) {
       fS = focoSync.filters && focoSync.filters.status || 'all';
       fC = focoSync.filters && focoSync.filters.consultor || 'all';
       fM = focoSync.filters && focoSync.filters.mes || 'all';
-      fR = focoSync.filters && focoSync.filters.risco || 'all';
       fQ = focoSync.filters && focoSync.filters.busca || '';
       _pendingProjectOpen = focoSync;
       window._syncProjectFocus = null;
     } else {
-      activePeriod='all'; fS='all'; fC='all'; fM='all'; fR='all'; _openId=null;
+      activePeriod='all'; fS='all'; fC='all'; fM='all'; _openId=null;
     }
     renderAll();
     goTab(pageId, snbAtivo);
   } else {
-    activePeriod='all'; fS='all'; fC='all'; fM='all'; fR='all'; _openId=null;
+    activePeriod='all'; fS='all'; fC='all'; fM='all'; _openId=null;
     renderAll();
     var snbDash = document.querySelector('.snb');
     if (snbDash) goTab('dash', snbDash);
@@ -15180,7 +15137,7 @@ function inicializarPainel() {
       try {
         var baseCache = carregarBaseProjetos(lerDadosPlanilhaConsolidados(cacheInicial.projetos).projetos);
         DATA.projetos = baseCache.projetos;
-        activePeriod='all'; fS='all'; fC='all'; fM='all'; fR='all'; _openId=null;
+        activePeriod='all'; fS='all'; fC='all'; fM='all'; _openId=null;
         renderAll();
         var snbDash = document.querySelector('.snb');
         if (snbDash) goTab('dash', snbDash);
