@@ -5297,7 +5297,7 @@ var FECHAMENTO_LOADED = false;
 var FECHAMENTO_LOADING = false;
 var FECHAMENTO_SESSION_REFRESHED = false;
 var FECHAMENTO_POLL_TIMER = null;
-var FECHAMENTO_FILTER = { month:'todos', consultor:'todos', projetoBusca:'', situacao:'todos' };
+var FECHAMENTO_FILTER = { month:'', consultor:'todos', projetoBusca:'', situacao:'todos' };
 var FECHAMENTO_MILESTONE_BONUS_VALUE = 30;
 var PROJECT_CLOSING_RULE_VERSION = 'breakoff-entrega-aprovar-v5';
 var PROJECT_CLOSING_LOOKUP = {term:'', loading:false, result:null, error:''};
@@ -5341,8 +5341,8 @@ function fechamentoMoney(value) {
 }
 function fechamentoMonthKey(value, fallbackDate) {
   var text = String(value || '').trim();
-  var match = text.match(/^(\d{4})-(\d{2})/);
-  if (match) return match[1]+'-'+match[2];
+  var match = text.match(/^(\d{4})-(\d{1,2})/);
+  if (match) return match[1]+'-'+String(Number(match[2])).padStart(2,'0');
   var gviz = text.match(/^Date\((\d{4}),\s*(\d{1,2}),\s*(\d{1,2})\)$/);
   if (gviz) return gviz[1]+'-'+String(Number(gviz[2])+1).padStart(2,'0');
   var br = text.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
@@ -6087,7 +6087,6 @@ function fechamentoLoadSheetFallback(metaExtra) {
     FECHAMENTO_LOADING = false;
     fechamentoSaveCache();
     fechamentoApplyProjectStatuses();
-    if (!FECHAMENTO_FILTER.month) FECHAMENTO_FILTER.month = 'todos';
     initFechamento();
     initProjectClosing();
     initBonus();
@@ -6143,7 +6142,13 @@ function fechamentoLoad(force) {
 }
 function fechamentoSetFilter(key, value) {
   var next = String(value || '');
-  if ((key === 'month' || key === 'consultor') && FECHAMENTO_FILTER[key] === next) next = 'todos';
+  if (key === 'month') {
+    var nextMonth = /^\d{4}-\d{2}$/.test(next) ? next : '';
+    FECHAMENTO_FILTER.month = FECHAMENTO_FILTER.month === nextMonth ? '' : nextMonth;
+    initFechamento();
+    return false;
+  }
+  if (key === 'consultor' && FECHAMENTO_FILTER[key] === next) next = 'todos';
   FECHAMENTO_FILTER[key] = next;
   initFechamento();
   return false;
@@ -6167,7 +6172,7 @@ function fechamentoFilteredRows() {
   return (FECHAMENTO_MARCOS || []).filter(function(item) {
     if (fechamentoItemEhFechamentoProjeto(item)) return false;
     var month = String(FECHAMENTO_FILTER.month || '');
-    if (month && month !== 'todos' && String(item.mes_fechamento || '') !== month) return false;
+    if (/^\d{4}-\d{2}$/.test(month) && String(item.mes_fechamento || '') !== month) return false;
     if (FECHAMENTO_FILTER.consultor !== 'todos' && !bonusNamesMatch(fechamentoEffectiveConsultant(item), FECHAMENTO_FILTER.consultor)) return false;
     if (FECHAMENTO_FILTER.projetoBusca && fechamentoSearchKey(item.projeto).indexOf(fechamentoSearchKey(FECHAMENTO_FILTER.projetoBusca)) < 0) return false;
     if (FECHAMENTO_FILTER.situacao !== 'todos' && String(item.situacao || '') !== FECHAMENTO_FILTER.situacao) return false;
@@ -6180,8 +6185,8 @@ function fechamentoRunSync(action, label, btn, extraParams) {
     return false;
   }
   var original = btn && btn.textContent;
-  var month = String(FECHAMENTO_FILTER.month || fechamentoCurrentMonth());
-  var syncMonth = action === 'syncClickUpClosedMilestones' ? '' : (month === 'todos' ? '' : month);
+  var month = String(FECHAMENTO_FILTER.month || '');
+  var syncMonth = action === 'syncClickUpClosedMilestones' ? '' : (/^\d{4}-\d{2}$/.test(month) ? month : '');
   if (btn) { btn.disabled = true; btn.textContent = 'Buscando...'; }
   var requestParams = Object.assign({
     auth_token: authTokenParam(),
@@ -6252,7 +6257,8 @@ function initFechamento() {
     if (item.mes_fechamento) months[item.mes_fechamento] = true;
     if (item.consultor) consultants[fechamentoEffectiveConsultant(item)] = true;
   });
-  if (!FECHAMENTO_FILTER.month) FECHAMENTO_FILTER.month = 'todos';
+  var activeMonth = /^\d{4}-\d{2}$/.test(String(FECHAMENTO_FILTER.month || '')) ? String(FECHAMENTO_FILTER.month) : '';
+  FECHAMENTO_FILTER.month = activeMonth;
   var list = fechamentoFilteredRows();
   list.sort(function(a, b) {
     var consultantCompare = String(fechamentoEffectiveConsultant(a) || 'Sem consultor').localeCompare(String(fechamentoEffectiveConsultant(b) || 'Sem consultor'));
@@ -6274,12 +6280,12 @@ function initFechamento() {
   var monthNames = ['JAN','FEV','MAR','ABR','MAI','JUN','JUL','AGO','SET','OUT','NOV','DEZ'];
   var years = Object.keys(monthsByYear).sort().reverse();
   if (!years.length) years = [String(new Date().getFullYear())];
-  var allMonthsChip = '<div class="closing-filter-chips" style="margin-bottom:9px"><button class="closing-filter-chip '+(FECHAMENTO_FILTER.month === 'todos' ? 'on' : '')+'" title="Mostrar todos os meses carregados da aba CLICKUP_FECHAMENTO_MARCOS" onclick="return fechamentoSetFilter(\'month\',\'todos\')">Todos</button></div>';
+  var allMonthsChip = '<div class="closing-filter-chips" style="margin-bottom:9px"><button class="closing-filter-chip '+(!activeMonth ? 'on' : '')+'" title="Mostrar todos os meses carregados da aba CLICKUP_FECHAMENTO_MARCOS" onclick="return fechamentoSetFilter(\'month\',\'\')">Todos</button></div>';
   var monthChips = allMonthsChip+'<div class="closing-year-groups">'+years.map(function(year) {
       var chips = monthNames.map(function(monthLabel, monthIndex) {
         var month = year + '-' + String(monthIndex + 1).padStart(2, '0');
         var hasData = !!months[month];
-        var cls = 'closing-filter-chip '+(month === FECHAMENTO_FILTER.month ? 'on ' : '')+(hasData ? '' : 'is-empty');
+        var cls = 'closing-filter-chip '+(month === activeMonth ? 'on ' : '')+(hasData ? '' : 'is-empty');
         var title = hasData ? 'Mês com Closed registrado' : 'Sem Closed registrado neste mês';
         return '<button class="'+cls+'" title="'+escapeHtml(title)+'" onclick="return fechamentoSetFilter(\'month\',\''+escapeHtml(month)+'\')">'+escapeHtml(monthLabel)+'</button>';
       }).join('');
