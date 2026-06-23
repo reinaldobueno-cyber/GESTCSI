@@ -5297,7 +5297,7 @@ var FECHAMENTO_LOADED = false;
 var FECHAMENTO_LOADING = false;
 var FECHAMENTO_SESSION_REFRESHED = false;
 var FECHAMENTO_POLL_TIMER = null;
-var FECHAMENTO_FILTER = { month:'', consultor:'todos', projetoBusca:'', situacao:'todos' };
+var FECHAMENTO_FILTER = { month:'todos', consultor:'todos', projetoBusca:'', situacao:'todos' };
 var FECHAMENTO_MILESTONE_BONUS_VALUE = 30;
 var PROJECT_CLOSING_RULE_VERSION = 'breakoff-entrega-aprovar-v5';
 var PROJECT_CLOSING_LOOKUP = {term:'', loading:false, result:null, error:''};
@@ -5343,6 +5343,12 @@ function fechamentoMonthKey(value, fallbackDate) {
   var text = String(value || '').trim();
   var match = text.match(/^(\d{4})-(\d{2})/);
   if (match) return match[1]+'-'+match[2];
+  var gviz = text.match(/^Date\((\d{4}),\s*(\d{1,2}),\s*(\d{1,2})\)$/);
+  if (gviz) return gviz[1]+'-'+String(Number(gviz[2])+1).padStart(2,'0');
+  var br = text.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+  if (br) return br[3]+'-'+String(Number(br[2])).padStart(2,'0');
+  var brMonth = text.match(/^(\d{1,2})\/(\d{4})$/);
+  if (brMonth) return brMonth[2]+'-'+String(Number(brMonth[1])).padStart(2,'0');
   var date = new Date(fallbackDate || value);
   if (!isNaN(date.getTime())) return date.getFullYear()+'-'+String(date.getMonth()+1).padStart(2,'0');
   return '';
@@ -6070,50 +6076,23 @@ function fechamentoLoadSheetFallback(metaExtra) {
       return item && item.task_id;
     });
     var consolidatedRows = fechamentoNormalizeRows(rows);
-    return fechamentoLoadMonthlyHistoryFallback().then(function(monthly) {
-      var monthlyRows = monthly.rows || [];
-      var useMonthly = monthlyRows.length > consolidatedRows.length;
-      FECHAMENTO_MARCOS = useMonthly ? monthlyRows : consolidatedRows;
-      FECHAMENTO_META = Object.assign({
-        ok: true,
-        total: FECHAMENTO_MARCOS.length,
-        sheet_source: !useMonthly,
-        monthly_history_source: useMonthly,
-        detected: monthlyRows.length,
-        errors: (monthly.errors || []).length,
-        warning: useMonthly
-          ? 'Leitura recuperada pelas abas mensais porque a aba consolidada está menor.'
-          : 'Leitura via aba consolidada CLICKUP_FECHAMENTO_MARCOS.'
-      }, metaExtra || {});
-      FECHAMENTO_LOADED = true;
-      FECHAMENTO_LOADING = false;
-      fechamentoSaveCache();
-      fechamentoApplyProjectStatuses();
-      if (!FECHAMENTO_FILTER.month) FECHAMENTO_FILTER.month = fechamentoCurrentMonth();
-      initFechamento();
-      initProjectClosing();
-      initBonus();
-      initDash();
-      return FECHAMENTO_META;
-    }).catch(function() {
-      FECHAMENTO_MARCOS = consolidatedRows;
-      FECHAMENTO_META = Object.assign({
-        ok: true,
-        total: FECHAMENTO_MARCOS.length,
-        sheet_source: true,
-        warning: 'Leitura via aba consolidada CLICKUP_FECHAMENTO_MARCOS.'
-      }, metaExtra || {});
-      FECHAMENTO_LOADED = true;
-      FECHAMENTO_LOADING = false;
-      fechamentoSaveCache();
-      fechamentoApplyProjectStatuses();
-      if (!FECHAMENTO_FILTER.month) FECHAMENTO_FILTER.month = fechamentoCurrentMonth();
-      initFechamento();
-      initProjectClosing();
-      initBonus();
-      initDash();
-      return FECHAMENTO_META;
-    });
+    FECHAMENTO_MARCOS = consolidatedRows;
+    FECHAMENTO_META = Object.assign({
+      ok: true,
+      total: FECHAMENTO_MARCOS.length,
+      sheet_source: true,
+      warning: 'Leitura direta da aba CLICKUP_FECHAMENTO_MARCOS.'
+    }, metaExtra || {});
+    FECHAMENTO_LOADED = true;
+    FECHAMENTO_LOADING = false;
+    fechamentoSaveCache();
+    fechamentoApplyProjectStatuses();
+    if (!FECHAMENTO_FILTER.month) FECHAMENTO_FILTER.month = 'todos';
+    initFechamento();
+    initProjectClosing();
+    initBonus();
+    initDash();
+    return FECHAMENTO_META;
   }).then(function(meta) {
     return meta;
   });
@@ -6273,7 +6252,7 @@ function initFechamento() {
     if (item.mes_fechamento) months[item.mes_fechamento] = true;
     if (item.consultor) consultants[fechamentoEffectiveConsultant(item)] = true;
   });
-  if (!FECHAMENTO_FILTER.month) FECHAMENTO_FILTER.month = fechamentoCurrentMonth();
+  if (!FECHAMENTO_FILTER.month) FECHAMENTO_FILTER.month = 'todos';
   var list = fechamentoFilteredRows();
   list.sort(function(a, b) {
     var consultantCompare = String(fechamentoEffectiveConsultant(a) || 'Sem consultor').localeCompare(String(fechamentoEffectiveConsultant(b) || 'Sem consultor'));
@@ -6295,7 +6274,8 @@ function initFechamento() {
   var monthNames = ['JAN','FEV','MAR','ABR','MAI','JUN','JUL','AGO','SET','OUT','NOV','DEZ'];
   var years = Object.keys(monthsByYear).sort().reverse();
   if (!years.length) years = [String(new Date().getFullYear())];
-  var monthChips = '<div class="closing-year-groups">'+years.map(function(year) {
+  var allMonthsChip = '<div class="closing-filter-chips" style="margin-bottom:9px"><button class="closing-filter-chip '+(FECHAMENTO_FILTER.month === 'todos' ? 'on' : '')+'" title="Mostrar todos os meses carregados da aba CLICKUP_FECHAMENTO_MARCOS" onclick="return fechamentoSetFilter(\'month\',\'todos\')">Todos</button></div>';
+  var monthChips = allMonthsChip+'<div class="closing-year-groups">'+years.map(function(year) {
       var chips = monthNames.map(function(monthLabel, monthIndex) {
         var month = year + '-' + String(monthIndex + 1).padStart(2, '0');
         var hasData = !!months[month];
@@ -14119,7 +14099,10 @@ function mapearGvizRow(cols, row) {
   (cols || []).forEach(function(c, idx){
     var nome = normalizeColunaKey(c && (c.label || c.id || ('col_' + idx)));
     var cell = row && row.c ? row.c[idx] : null;
-    var valor = cell ? cell.v : null;
+    var valor = cell
+      ? (cell.f !== undefined && cell.f !== null && String(cell.f).trim() !== '' ? cell.f : cell.v)
+      : null;
+    valor = normalizeGvizDateValue_(valor);
     if (nome) out[nome] = valor;
   });
   return out;
