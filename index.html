@@ -3690,7 +3690,7 @@ var UPDATE_DEVICE_KEY = 'gestcsi_update_device_id_v1';
 var UPDATE_ACTOR_KEY = 'gestcsi_update_actor_v1';
 var LAST_UPDATE_KEY = 'gestcsi_last_update_label_v1';
 var PANEL_CACHE_KEY = 'gestcsi_panel_cache_v1';
-var PANEL_APP_VERSION = '2026-06-22-milestone-sheet-source-v1';
+var PANEL_APP_VERSION = '2026-06-22-portfolio-integrity-v3';
 var THEME_MODE_KEY = 'gestcsi_theme_mode_v1';
 var AUTH_SESSION_KEY = 'gestcsi_auth_session_v1';
 var AUTH_STATE = { token:'', user:null };
@@ -3857,8 +3857,7 @@ function carregarPainelCache() {
     var cache = JSON.parse(storageGet(PANEL_CACHE_KEY, 'null'));
     if (!cache || !Array.isArray(cache.projetos) || !cache.projetos.length) return null;
     if (cache.app_version !== PANEL_APP_VERSION) {
-      storageSet(PANEL_CACHE_KEY, '');
-      return null;
+      console.warn('[CACHE] Versao diferente, mas cache preservado para evitar tela vazia:', cache.app_version, '->', PANEL_APP_VERSION);
     }
     return cache;
   } catch(e) {
@@ -3892,7 +3891,7 @@ function resetarCachesDerivadosPainel(opcoes) {
   _projectRowsSemLink = [];
   _resumoLinksPorAba = {};
   if (opts.limparCachePainel) {
-    try { storageSet(PANEL_CACHE_KEY, ''); } catch(e) {}
+    console.warn('[CACHE] Cache principal preservado ate existir uma base substituta valida.');
   }
 }
 window.recarregarPainelManual = function() {
@@ -5299,6 +5298,7 @@ var FECHAMENTO_LOADING = false;
 var FECHAMENTO_SESSION_REFRESHED = false;
 var FECHAMENTO_POLL_TIMER = null;
 var FECHAMENTO_FILTER = { month:'', consultor:'todos', projetoBusca:'', situacao:'todos' };
+var FECHAMENTO_MILESTONE_BONUS_VALUE = 30;
 var PROJECT_CLOSING_RULE_VERSION = 'breakoff-entrega-aprovar-v5';
 var PROJECT_CLOSING_LOOKUP = {term:'', loading:false, result:null, error:''};
 var PROJECT_CLOSING_DECISIONS = {items:[], loaded:false, loading:false, backendReady:null, error:''};
@@ -5961,6 +5961,104 @@ function fechamentoApplySyncRows(rows, syncMonth) {
   });
   return merged;
 }
+function fechamentoSituacaoPorStatus(status) {
+  var key = fechamentoSearchKey(status);
+  if (/reprovad/.test(key) && /gestao/.test(key)) return 'reprovado';
+  if (/aprovad/.test(key) && /gestao/.test(key)) return 'aprovado';
+  if (/closed|close|concluid|finaliz|done|complete/.test(key)) return 'aguardando';
+  return 'outro';
+}
+function fechamentoDataMarcoMensal(marco) {
+  return String((marco && (
+    marco.date_closed || marco.closed_at || marco.data_closed || marco.data_fechamento ||
+    marco.validation_at || marco.date_updated || marco.updated_at || marco.data_ultima_atualizacao ||
+    marco.last_update || marco.date_done || marco.done_at
+  )) || '').trim();
+}
+function fechamentoExtrairMarcosMensaisDeProjeto(row, abaTitle) {
+  var estrutura = extrairEstruturaClickupDaLinha(row);
+  var payload = estrutura.clickup_payload || parseJsonSeguro(estrutura.clickup_json) || {};
+  var marcos = Array.isArray(payload.marcos) ? payload.marcos : [];
+  if (!marcos.length && payload && typeof payload === 'object') {
+    var bruto = coletarDadosBrutosProjeto(Object.assign({}, row, {
+      clickup_payload: payload,
+      clickup_json: estrutura.clickup_json
+    }));
+    marcos = normalizarEstruturaProjeto(bruto).marcos || [];
+  }
+  var cliente = String(payload.cliente || row.cliente || '').trim();
+  var consultorProjeto = String(payload.consultor || row.consultor || '').trim();
+  var projectKey = String(payload.project_key || (abaTitle + '|' + cliente)).trim();
+  return marcos.map(function(marco, idx) {
+    var id = String(marco.id || marco.task_id || marco.uuid || '').trim();
+    var status = String(marco.status_original || marco.status || marco.status_atual || '').trim();
+    var situacao = fechamentoSituacaoPorStatus(status);
+    if (situacao === 'outro') return null;
+    var closedAt = fechamentoDataMarcoMensal(marco);
+    var mesFechamento = fechamentoMonthKey(marco.mes_fechamento || marco.month || '', closedAt);
+    if (!mesFechamento) return null;
+    var validationAt = (situacao === 'aprovado' || situacao === 'reprovado')
+      ? String(marco.validation_at || marco.date_updated || marco.updated_at || closedAt || '').trim()
+      : '';
+    var nome = String(marco.nome || marco.name || marco.title || marco.task_name || '').trim();
+    var fase = String(marco.fase_nome || marco.fase || marco.phase_name || marco.group_name || marco.list_name || '').trim();
+    return {
+      task_id: id || (projectKey + '|' + nome + '|' + fase + '|' + mesFechamento + '|' + idx),
+      item_tipo: 'Marco',
+      project_key: projectKey,
+      projeto: cliente,
+      consultor: fechamentoConsultantName(marco.responsaveis || consultorProjeto),
+      marco: nome,
+      fase: fase,
+      status_atual: status,
+      situacao: situacao,
+      closed_at: closedAt,
+      mes_fechamento: mesFechamento,
+      validation_at: validationAt,
+      mes_validacao: fechamentoMonthKey(marco.mes_validacao || '', validationAt),
+      justificativa: String(marco.justificativa || marco.comment || marco.comentario || '').trim(),
+      justificativa_por: String(marco.justificativa_por || marco.comment_by || '').trim(),
+      valor_bonus: situacao === 'aprovado' ? FECHAMENTO_MILESTONE_BONUS_VALUE : 0,
+      link: String(marco.task_url || marco.url || marco.link || payload.project_url || row.projeto_link || row.link_projeto || '').trim(),
+      responsaveis: String(marco.responsaveis || '').trim(),
+      updated_at: String(marco.updated_at || marco.date_updated || '').trim(),
+      sincronizado_em: '',
+      status_history_json: '',
+      marcador_entrega: '',
+      fechamento_projeto: ''
+    };
+  }).filter(Boolean);
+}
+function fechamentoLoadMonthlyHistoryFallback() {
+  var abas = Object.keys(ABAS_GID_FIXAS).map(function(m){ return {title:m, gid:ABAS_GID_FIXAS[m]}; });
+  var all = [];
+  var errors = [];
+  return Promise.all(abas.map(function(aba) {
+    var url = 'https://docs.google.com/spreadsheets/d/' + SHEET_ID + '/gviz/tq?gid=' + aba.gid + '&_ts=' + Date.now();
+    return loadGvizTableJsonp(url, 20000).then(function(table) {
+      if (!table) throw new Error('Aba sem tabela');
+      var normalizada = normalizarTabelaGviz(table);
+      (normalizada.rows || []).forEach(function(row) {
+        var ro = mapearGvizRow(normalizada.cols, row);
+        ro = Object.assign(ro, mapearProjetoMensalPorIndice(row, aba.title));
+        if (!linhaProjetoMensalValida(ro)) return;
+        all = all.concat(fechamentoExtrairMarcosMensaisDeProjeto(ro, aba.title));
+      });
+    }).catch(function(error) {
+      errors.push(aba.title + ': ' + ((error && error.message) || 'erro'));
+    });
+  })).then(function() {
+    var byId = {};
+    fechamentoNormalizeRows(all).forEach(function(item) {
+      if (!item.task_id) return;
+      byId[String(item.task_id)] = item;
+    });
+    return {
+      rows: Object.keys(byId).map(function(id) { return byId[id]; }),
+      errors: errors
+    };
+  });
+}
 function fechamentoLoadSheetFallback(metaExtra) {
   var url = 'https://docs.google.com/spreadsheets/d/' + SHEET_ID + '/gviz/tq?gid=756684793&_ts=' + Date.now();
   return loadGvizTableJsonp(url, 15000).then(function(table) {
@@ -5972,23 +6070,53 @@ function fechamentoLoadSheetFallback(metaExtra) {
       return item && item.task_id;
     });
     if (!rows.length) throw new Error('Fallback de fechamento vazio.');
-    FECHAMENTO_MARCOS = fechamentoNormalizeRows(rows);
-    FECHAMENTO_META = Object.assign({
-      ok: true,
-      total: FECHAMENTO_MARCOS.length,
-      sheet_source: true,
-      warning: 'Leitura via aba consolidada CLICKUP_FECHAMENTO_MARCOS.'
-    }, metaExtra || {});
-    FECHAMENTO_LOADED = true;
-    FECHAMENTO_LOADING = false;
-    fechamentoSaveCache();
-    fechamentoApplyProjectStatuses();
-    if (!FECHAMENTO_FILTER.month) FECHAMENTO_FILTER.month = fechamentoCurrentMonth();
-    initFechamento();
-    initProjectClosing();
-    initBonus();
-    initDash();
-    return FECHAMENTO_META;
+    var consolidatedRows = fechamentoNormalizeRows(rows);
+    return fechamentoLoadMonthlyHistoryFallback().then(function(monthly) {
+      var monthlyRows = monthly.rows || [];
+      var useMonthly = monthlyRows.length > consolidatedRows.length;
+      FECHAMENTO_MARCOS = useMonthly ? monthlyRows : consolidatedRows;
+      FECHAMENTO_META = Object.assign({
+        ok: true,
+        total: FECHAMENTO_MARCOS.length,
+        sheet_source: !useMonthly,
+        monthly_history_source: useMonthly,
+        detected: monthlyRows.length,
+        errors: (monthly.errors || []).length,
+        warning: useMonthly
+          ? 'Leitura recuperada pelas abas mensais porque a aba consolidada está menor.'
+          : 'Leitura via aba consolidada CLICKUP_FECHAMENTO_MARCOS.'
+      }, metaExtra || {});
+      FECHAMENTO_LOADED = true;
+      FECHAMENTO_LOADING = false;
+      fechamentoSaveCache();
+      fechamentoApplyProjectStatuses();
+      if (!FECHAMENTO_FILTER.month) FECHAMENTO_FILTER.month = fechamentoCurrentMonth();
+      initFechamento();
+      initProjectClosing();
+      initBonus();
+      initDash();
+      return FECHAMENTO_META;
+    }).catch(function() {
+      FECHAMENTO_MARCOS = consolidatedRows;
+      FECHAMENTO_META = Object.assign({
+        ok: true,
+        total: FECHAMENTO_MARCOS.length,
+        sheet_source: true,
+        warning: 'Leitura via aba consolidada CLICKUP_FECHAMENTO_MARCOS.'
+      }, metaExtra || {});
+      FECHAMENTO_LOADED = true;
+      FECHAMENTO_LOADING = false;
+      fechamentoSaveCache();
+      fechamentoApplyProjectStatuses();
+      if (!FECHAMENTO_FILTER.month) FECHAMENTO_FILTER.month = fechamentoCurrentMonth();
+      initFechamento();
+      initProjectClosing();
+      initBonus();
+      initDash();
+      return FECHAMENTO_META;
+    });
+  }).then(function(meta) {
+    return meta;
   });
 }
 function fechamentoLoad(force) {

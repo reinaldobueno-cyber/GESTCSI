@@ -2641,7 +2641,7 @@ function continueClickUpMilestoneClosingBackgroundWorker_() {
     props.setProperty('CLICKUP_MILESTONE_CLOSING_ERRORS', String(
       toInt_(props.getProperty('CLICKUP_MILESTONE_CLOSING_ERRORS'), 0) + Number(history.errors || 0)
     ));
-    props.setProperty('CLICKUP_MILESTONE_CLOSING_PHASE', 'projects');
+    props.setProperty('CLICKUP_MILESTONE_CLOSING_PHASE', 'monthly');
     props.setProperty('CLICKUP_MILESTONE_CLOSING_UPDATED_AT', new Date().toISOString());
     if (history.last_error) props.setProperty('CLICKUP_MILESTONE_CLOSING_ERROR', history.last_error);
     scheduleClickUpMilestoneClosingBackground_(5000);
