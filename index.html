@@ -3690,7 +3690,7 @@ var UPDATE_DEVICE_KEY = 'gestcsi_update_device_id_v1';
 var UPDATE_ACTOR_KEY = 'gestcsi_update_actor_v1';
 var LAST_UPDATE_KEY = 'gestcsi_last_update_label_v1';
 var PANEL_CACHE_KEY = 'gestcsi_panel_cache_v1';
-var PANEL_APP_VERSION = '2026-06-22-portfolio-integrity-v3';
+var PANEL_APP_VERSION = '2026-06-22-milestone-sheet-source-v1';
 var THEME_MODE_KEY = 'gestcsi_theme_mode_v1';
 var AUTH_SESSION_KEY = 'gestcsi_auth_session_v1';
 var AUTH_STATE = { token:'', user:null };
@@ -5961,7 +5961,7 @@ function fechamentoApplySyncRows(rows, syncMonth) {
   });
   return merged;
 }
-function fechamentoLoadSheetFallback() {
+function fechamentoLoadSheetFallback(metaExtra) {
   var url = 'https://docs.google.com/spreadsheets/d/' + SHEET_ID + '/gviz/tq?gid=756684793&_ts=' + Date.now();
   return loadGvizTableJsonp(url, 15000).then(function(table) {
     if (!table) throw new Error('Fallback de fechamento indisponível.');
@@ -5973,12 +5973,12 @@ function fechamentoLoadSheetFallback() {
     });
     if (!rows.length) throw new Error('Fallback de fechamento vazio.');
     FECHAMENTO_MARCOS = fechamentoNormalizeRows(rows);
-    FECHAMENTO_META = {
+    FECHAMENTO_META = Object.assign({
       ok: true,
       total: FECHAMENTO_MARCOS.length,
-      fallback_sheet: true,
-      warning: 'Leitura via planilha publicada porque o Apps Script não respondeu.'
-    };
+      sheet_source: true,
+      warning: 'Leitura via aba consolidada CLICKUP_FECHAMENTO_MARCOS.'
+    }, metaExtra || {});
     FECHAMENTO_LOADED = true;
     FECHAMENTO_LOADING = false;
     fechamentoSaveCache();
@@ -6024,58 +6024,11 @@ function fechamentoLoad(force) {
   FECHAMENTO_LOADING = true;
   initFechamento();
   initProjectClosing();
-  return chamarAppsScriptJsonp('getClickUpMilestoneClosing', {
-    auth_token: authTokenParam()
-  }, 30000).then(function(resp) {
-    if (!resp || resp.ok === false || !Array.isArray(resp.marcos)) {
-      throw new Error('Fechamento ainda não está disponível no Apps Script publicado.');
-    }
-    if (!resp.marcos.length && FECHAMENTO_MARCOS.length) {
-      FECHAMENTO_META = Object.assign({}, resp, {
-        error: 'Leitura retornou vazia. Mantendo a última base válida para não zerar o fechamento.'
-      });
-      FECHAMENTO_LOADING = false;
-      initFechamento();
-      initProjectClosing();
-      initBonus();
-      return resp;
-    }
-    if (FECHAMENTO_MARCOS.length && resp.marcos.length < FECHAMENTO_MARCOS.length) {
-      FECHAMENTO_META = Object.assign({}, resp, {
-        error: 'Leitura retornou menor que a base atual ('+resp.marcos.length+'/'+FECHAMENTO_MARCOS.length+'). Mantendo a última base válida para não perder marcos.'
-      });
-      FECHAMENTO_LOADING = false;
-      initFechamento();
-      initProjectClosing();
-      initBonus();
-      return resp;
-    }
-    FECHAMENTO_MARCOS = fechamentoNormalizeRows(resp.marcos);
-    FECHAMENTO_META = resp;
-    FECHAMENTO_LOADED = true;
-    FECHAMENTO_LOADING = false;
-    delete FECHAMENTO_META.error;
-    fechamentoSaveCache();
-    fechamentoApplyProjectStatuses();
-    if (!FECHAMENTO_FILTER.month) FECHAMENTO_FILTER.month = fechamentoCurrentMonth();
-    initFechamento();
-    initProjectClosing();
-    initBonus();
-    initDash();
-    return resp;
-  }).catch(function(error) {
+  return fechamentoLoadSheetFallback().catch(function(error) {
     FECHAMENTO_LOADING = false;
     FECHAMENTO_META.error = FECHAMENTO_LOADED
       ? 'Não foi possível atualizar agora. Mantendo a última leitura válida.'
       : 'Não foi possível carregar o fechamento agora. Tente recarregar em alguns instantes.';
-    if (!FECHAMENTO_LOADED || !(FECHAMENTO_MARCOS || []).length) {
-      return fechamentoLoadSheetFallback().catch(function() {
-        initFechamento();
-        initProjectClosing();
-        initBonus();
-        return null;
-      });
-    }
     initFechamento();
     initProjectClosing();
     initBonus();
@@ -6128,35 +6081,35 @@ function fechamentoRunSync(action, label, btn, extraParams) {
     auth_token: authTokenParam(),
     month: syncMonth
   }, extraParams || {});
+  function reloadCanonical(meta, toastMessage) {
+    return fechamentoLoadSheetFallback(meta).then(function() {
+      if (btn) { btn.disabled = false; btn.textContent = original || label; }
+      if (toastMessage) showToast(toastMessage, 'ok');
+    }).catch(function() {
+      FECHAMENTO_META = Object.assign({}, meta || {}, {
+        error: 'Sync executado, mas a aba consolidada ainda não respondeu. Mantendo a última leitura válida.'
+      });
+      FECHAMENTO_LOADING = false;
+      initFechamento();
+      initProjectClosing();
+      initBonus();
+      if (btn) { btn.disabled = false; btn.textContent = original || label; }
+      if (toastMessage) showToast(toastMessage, 'ok');
+    });
+  }
   chamarAppsScriptJsonp(action, requestParams, 45000).then(function(recent) {
     if (recent && recent.ok !== false && recent.background_sync && !Array.isArray(recent.marcos)) {
-      FECHAMENTO_META = recent;
-      FECHAMENTO_LOADED = true;
-      FECHAMENTO_LOADING = false;
-      fechamentoSaveCache();
-      initFechamento();
-      initBonus();
+      reloadCanonical(recent, label+' iniciado em segundo plano. A lista será atualizada automaticamente.');
       fechamentoSchedulePoll(3000);
-      if (btn) { btn.disabled = false; btn.textContent = original || label; }
-      showToast(label+' iniciado em segundo plano. A lista será atualizada automaticamente.', 'ok');
       return;
     }
     if (!recent || recent.ok === false || !Array.isArray(recent.marcos)) {
       throw new Error((recent && (recent.error || recent.message)) || 'Não foi possível atualizar as alterações recentes');
     }
-    FECHAMENTO_MARCOS = fechamentoApplySyncRows(recent.marcos, syncMonth);
-    FECHAMENTO_META = recent;
-    FECHAMENTO_LOADED = true;
-    FECHAMENTO_LOADING = false;
-    fechamentoSaveCache();
-    fechamentoApplyProjectStatuses();
-    initFechamento();
-    initBonus();
-    if (btn) { btn.disabled = false; btn.textContent = original || label; }
     var changed = Number(recent.changed || 0);
     var confirmed = Number(recent.confirmed || 0);
     var seconds = Math.max(0, Number(recent.elapsed_ms || 0) / 1000).toFixed(1);
-    showToast(label+' em '+seconds+'s: '+confirmed+' marco(s); '+changed+' mudança(s).', 'ok');
+    reloadCanonical(recent, label+' em '+seconds+'s: '+confirmed+' marco(s); '+changed+' mudança(s).');
   }).catch(function(error) {
     if (btn) { btn.disabled = false; btn.textContent = original || label; }
     showToast((error && error.message) || 'Erro ao atualizar fechamento', 'err');
