@@ -3196,7 +3196,13 @@ function syncClickUpValidationSituation_(params, situation) {
       return (item.situacao === 'aguardando' || item.situacao === 'aprovado' || item.situacao === 'reprovado') &&
         (!month || itemMonth === month);
     });
-    var tasks = fetchClickUpMilestonesBySituation_(situation, currentIds).filter(function(task) {
+    var tasks = fetchClickUpMilestonesBySituation_(situation, currentIds);
+    var monthStartMs = month ? new Date(month + '-01T00:00:00').getTime() : 0;
+    if (monthStartMs) {
+      tasks = tasks.concat(fetchClickUpRecentMilestoneCoverageTasks_(monthStartMs, { max_pages: 12 }));
+    }
+    tasks = dedupeTasks_(tasks).filter(function(task) {
+      if (!clickUpMilestoneStatusMatchesSituation_(clickUpTaskStatusText_(task), situation)) return false;
       var taskId = String(task && task.id || '');
       var existing = current[taskId] || {};
       var taskUpdatedAt = task && task.date_updated ? fromMillisIso_(task.date_updated) : '';
