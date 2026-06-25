@@ -3274,6 +3274,42 @@ function fetchClickUpMilestonesBySituationOptimized_(situation, currentIds, opti
   return dedupeTasks_(tasks);
 }
 
+function clickUpMilestoneReconcileBatchIds_(current, month, mode, limit) {
+  current = current || {};
+  var ids = Object.keys(current).filter(function(taskId) {
+    return clickUpMilestoneTaskMatchesMonth_(null, current[taskId] || {}, month, false);
+  });
+  ids.sort(function(a, b) {
+    function score(id) {
+      var item = current[id] || {};
+      if (mode === 'closed') {
+        if (item.situacao === 'aprovado' || item.situacao === 'reprovado') return 0;
+        if (item.situacao === 'aguardando') return 1;
+        return 2;
+      }
+      if (item.situacao === 'aguardando') return 0;
+      if (item.situacao === mode) return 1;
+      return 2;
+    }
+    var diff = score(a) - score(b);
+    if (diff) return diff;
+    return String(current[b] && current[b].updated_at || current[b] && current[b].sincronizado_em || '').localeCompare(
+      String(current[a] && current[a].updated_at || current[a] && current[a].sincronizado_em || '')
+    );
+  });
+  limit = Math.max(1, Math.min(Number(limit || 140), 150));
+  if (!ids.length) return { ids: [], total: 0, offset: 0, next_offset: 0, done: true };
+  var props = PropertiesService.getScriptProperties();
+  var key = 'CLICKUP_MILESTONE_RECONCILE_CURSOR_' + mode + '_' + String(month || 'all').replace(/\D/g, '');
+  var offset = Math.max(0, toInt_(props.getProperty(key), 0));
+  if (offset >= ids.length) offset = 0;
+  var batch = ids.slice(offset, offset + limit);
+  var nextOffset = offset + batch.length;
+  var done = nextOffset >= ids.length;
+  props.setProperty(key, done ? '0' : String(nextOffset));
+  return { ids: batch, total: ids.length, offset: offset, next_offset: done ? 0 : nextOffset, done: done };
+}
+
 function syncClickUpClosedMilestones_(params) {
   params = params || {};
   var startedAt = new Date().getTime();
@@ -3288,15 +3324,12 @@ function syncClickUpClosedMilestones_(params) {
     var current = loadClickUpMilestoneClosingCurrent_(sheet);
     var mappings = loadClickUpMilestoneClosingMappings_();
     var deadlineMs = startedAt + 240000;
-    var returnCandidateIds = Object.keys(current).filter(function(taskId) {
-      var item = current[taskId] || {};
-      return clickUpMilestoneTaskMatchesMonth_(null, item, month, false);
-    });
+    var reconcile = clickUpMilestoneReconcileBatchIds_(current, month, 'closed', 140);
 
-    var tasks = fetchClickUpMilestonesBySituationOptimized_('aguardando', returnCandidateIds, {
+    var tasks = fetchClickUpMilestonesBySituationOptimized_('aguardando', reconcile.ids, {
       month: month,
       max_pages: 4,
-      direct_limit: 220,
+      direct_limit: 140,
       deadline_ms: deadlineMs,
       current: current
     });
@@ -3348,7 +3381,11 @@ function syncClickUpClosedMilestones_(params) {
       changed: changed,
       elapsed_ms: new Date().getTime() - startedAt,
       sync_type: 'closed',
-      month: month
+      month: month,
+      reconcile_processed: reconcile.ids.length,
+      reconcile_total: reconcile.total,
+      reconcile_next_offset: reconcile.next_offset,
+      reconcile_done: reconcile.done
     };
     if (params.skip_result) return summary;
     var resultParams = {};
@@ -3377,15 +3414,12 @@ function syncClickUpValidationSituation_(params, situation) {
     var current = loadClickUpMilestoneClosingCurrent_(sheet);
     var mappings = loadClickUpMilestoneClosingMappings_();
     var deadlineMs = startedAt + 240000;
-    var currentIds = Object.keys(current).filter(function(taskId) {
-      var item = current[taskId] || {};
-      return clickUpMilestoneTaskMatchesMonth_(null, item, month, false);
-    });
+    var reconcile = clickUpMilestoneReconcileBatchIds_(current, month, situation, 140);
 
-    var tasks = fetchClickUpMilestonesBySituationOptimized_(situation, currentIds, {
+    var tasks = fetchClickUpMilestonesBySituationOptimized_(situation, reconcile.ids, {
       month: month,
       max_pages: 4,
-      direct_limit: 220,
+      direct_limit: 140,
       deadline_ms: deadlineMs,
       current: current
     });
@@ -3456,6 +3490,10 @@ function syncClickUpValidationSituation_(params, situation) {
     result.changed = changed;
     result.elapsed_ms = new Date().getTime() - startedAt;
     result.sync_type = situation;
+    result.reconcile_processed = reconcile.ids.length;
+    result.reconcile_total = reconcile.total;
+    result.reconcile_next_offset = reconcile.next_offset;
+    result.reconcile_done = reconcile.done;
     Logger.log('📊 [' + situation + '] Finalizado. Confirmados=' + tasks.length + ' Mudancas=' + changed);
     return result;
   } finally {
