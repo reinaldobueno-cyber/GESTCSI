@@ -2529,29 +2529,35 @@ function fetchLatestClickUpTaskCommentsByIds_(taskIds) {
   });
   var commentsById = {};
   if (!ids.length) return commentsById;
-  var responses = UrlFetchApp.fetchAll(ids.map(function(id) {
-    return {
-      url: CLICKUP_API_BASE + '/task/' + id + '/comment',
-      method: 'get',
-      muteHttpExceptions: true,
-      headers: {
-        Authorization: token,
-        Accept: 'application/json',
-        'Content-Type': 'application/json'
+  var batchSize = 10;
+  for (var offset = 0; offset < ids.length; offset += batchSize) {
+    if (offset > 0) Utilities.sleep(1100);
+    var batch = ids.slice(offset, offset + batchSize);
+    var responses = UrlFetchApp.fetchAll(batch.map(function(id) {
+      return {
+        url: CLICKUP_API_BASE + '/task/' + id + '/comment',
+        method: 'get',
+        muteHttpExceptions: true,
+        headers: {
+          Authorization: token,
+          Accept: 'application/json',
+          'Content-Type': 'application/json'
+        }
+      };
+    }));
+    responses.forEach(function(response, index) {
+      var id = batch[index];
+      if (response.getResponseCode() < 200 || response.getResponseCode() >= 300) {
+        commentsById[id] = { text: '', user: '' };
+        return;
       }
-    };
-  }));
-  responses.forEach(function(response, index) {
-    if (response.getResponseCode() < 200 || response.getResponseCode() >= 300) {
-      commentsById[ids[index]] = { text: '', user: '' };
-      return;
-    }
-    try {
-      commentsById[ids[index]] = parseLatestClickUpTaskComment_(JSON.parse(response.getContentText() || '{}'));
-    } catch (error) {
-      commentsById[ids[index]] = { text: '', user: '' };
-    }
-  });
+      try {
+        commentsById[id] = parseLatestClickUpTaskComment_(JSON.parse(response.getContentText() || '{}'));
+      } catch (error) {
+        commentsById[id] = { text: '', user: '' };
+      }
+    });
+  }
   return commentsById;
 }
 
