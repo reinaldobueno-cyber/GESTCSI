@@ -1592,10 +1592,10 @@ function fetchClickUpValidationAndCurrentTasks_(currentValidationIds) {
 
 function clickUpMilestoneStatusAliases_(situation) {
   if (situation === 'aprovado') {
-    return ['APROVADO GESTÃO', 'Aprovado Gestão', 'Aprovado Gestao'];
+    return ['APROVADO GESTÃO', 'Aprovado Gestão', 'Aprovado Gestao', 'aprovado gestão'];
   }
   if (situation === 'reprovado') {
-    return ['REPROVADO GESTÃO', 'Reprovado Gestão', 'Reprovado Gestao'];
+    return ['REPROVADO GESTÃO', 'Reprovado Gestão', 'Reprovado Gestao', 'reprovado gestão'];
   }
   return ['Closed', 'closed'];
 }
@@ -2126,6 +2126,7 @@ function upsertClickUpMilestoneClosing_(mapping, normalized, options) {
       recoveredClosedHistory = true;
     }
     if (!previous && situation === 'outro') return;
+    if (previous && situation === 'outro' && options.authoritative) return;
     var rowStatus = recoveredClosedHistory ? 'Closed historico' : status;
     var statusChanged = !previous || sanitizeText_(previous.status_atual) !== rowStatus;
     var closedAt = (returnedToClosed ? sanitizeText_(milestone.updated_at) : '') ||
@@ -3188,8 +3189,10 @@ function syncClickUpValidationSituation_(params, situation) {
     var mappings = loadClickUpMilestoneClosingMappings_();
     var currentIds = Object.keys(current).filter(function(taskId) {
       var item = current[taskId] || {};
-      return item.situacao === situation &&
-        (!month || sanitizeText_(item.mes_validacao).slice(0, 7) === month);
+      var itemMonth = sanitizeText_(item.mes_validacao).slice(0, 7) ||
+        sanitizeText_(item.mes_fechamento).slice(0, 7);
+      return (item.situacao === 'aguardando' || item.situacao === 'aprovado' || item.situacao === 'reprovado') &&
+        (!month || itemMonth === month);
     });
     var tasks = fetchClickUpMilestonesBySituation_(situation, currentIds).filter(function(task) {
       var taskId = String(task && task.id || '');
@@ -3199,8 +3202,7 @@ function syncClickUpValidationSituation_(params, situation) {
       return !month || taskMonth === month;
     });
     var matchingIds = tasks.filter(function(task) {
-      var status = task && task.status && (task.status.status || task.status.type || task.status.label) || '';
-      return clickUpMilestoneSituation_(status) === situation;
+      return clickUpMilestoneStatusMatchesSituation_(clickUpTaskStatusText_(task), situation);
     }).map(function(task) { return String(task.id || ''); });
     var commentsById = fetchLatestClickUpTaskCommentsByIds_(matchingIds);
     var changed = 0;
