@@ -3189,11 +3189,15 @@ function syncClickUpClosedMilestones_(params) {
       : (monthStart || broadClosedSince);
     var currentTrackedIds = Object.keys(current).filter(function(taskId) {
       var item = current[taskId] || {};
-      return item.situacao === 'aguardando' || item.situacao === 'aprovado' || item.situacao === 'reprovado';
+      var itemMonth = sanitizeText_(item.mes_validacao).slice(0, 7) ||
+        sanitizeText_(item.mes_fechamento).slice(0, 7);
+      return (item.situacao === 'aprovado' || item.situacao === 'reprovado') &&
+        (!month || itemMonth === month);
     });
     var tasks = [];
     tasks = tasks.concat(fetchClickUpRecentMilestoneCoverageTasks_(since, { max_pages: 12 }));
-    tasks = tasks.concat(fetchClickUpMilestonesBySituation_('aguardando', currentTrackedIds));
+    tasks = tasks.concat(fetchClickUpMilestonesBySituation_('aguardando', []));
+    tasks = tasks.concat(fetchClickUpTasksByIds_(currentTrackedIds));
     tasks = dedupeTasks_(tasks).filter(function(task) {
       var status = clickUpTaskStatusText_(task);
       if (!clickUpMilestoneStatusMatchesSituation_(status, 'aguardando')) return false;
