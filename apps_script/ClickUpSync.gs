@@ -3088,7 +3088,7 @@ function confirmClickUpMilestoneStatuses_(params) {
   var month = sanitizeText_((params || {}).month || (params || {}).mes).slice(0, 7);
 
   var lock = LockService.getScriptLock();
-  if (!lock.tryLock(5000)) {
+  if (!lock.tryLock(15000)) {
     throw new Error('A base ainda está finalizando outra gravação. Tente novamente em alguns segundos.');
   }
   try {
@@ -3174,7 +3174,7 @@ function syncClickUpClosedMilestones_(params) {
   var month = sanitizeText_(params.month || params.mes).slice(0, 7) ||
     Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'yyyy-MM');
   var lock = LockService.getScriptLock();
-  if (!lock.tryLock(5000)) throw new Error('Outra atualização está finalizando. Tente novamente em alguns segundos.');
+  if (!lock.tryLock(15000)) throw new Error('Outra atualização está finalizando. Tente novamente em alguns segundos.');
   try {
     var sheet = getClickUpMilestoneClosingSheet_();
     var headers = getClickUpMilestoneClosingHeaders_();
@@ -3260,7 +3260,7 @@ function syncClickUpValidationSituation_(params, situation) {
   var startedAt = new Date().getTime();
   var month = sanitizeText_(params.month || params.mes).slice(0, 7);
   var lock = LockService.getScriptLock();
-  if (!lock.tryLock(5000)) throw new Error('Outra atualização está finalizando. Tente novamente em alguns segundos.');
+  if (!lock.tryLock(15000)) throw new Error('Outra atualização está finalizando. Tente novamente em alguns segundos.');
   try {
     var sheet = getClickUpMilestoneClosingSheet_();
     var headers = getClickUpMilestoneClosingHeaders_();
@@ -3270,7 +3270,7 @@ function syncClickUpValidationSituation_(params, situation) {
       var item = current[taskId] || {};
       var itemMonth = sanitizeText_(item.mes_validacao).slice(0, 7) ||
         sanitizeText_(item.mes_fechamento).slice(0, 7);
-      return (item.situacao === 'aguardando' || item.situacao === 'aprovado' || item.situacao === 'reprovado') &&
+      return item.situacao === situation &&
         (!month || itemMonth === month);
     });
     var tasks = fetchClickUpMilestonesBySituation_(situation, currentIds);
