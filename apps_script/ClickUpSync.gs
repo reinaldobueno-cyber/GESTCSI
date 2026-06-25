@@ -3198,6 +3198,7 @@ function fetchClickUpMilestonesBySituationOptimized_(situation, currentIds, opti
   var maxPages = Math.max(1, Math.min(toInt_(options.max_pages, 6), 20));
   var directLimit = Math.max(0, Math.min(toInt_(options.direct_limit, 120), 250));
   var deadlineMs = Number(options.deadline_ms || (new Date().getTime() + 240000));
+  var current = options.current || {};
   var statuses = clickUpMilestoneStatusAliases_(situation);
   var tasks = [];
   var seen = {};
@@ -3208,12 +3209,12 @@ function fetchClickUpMilestonesBySituationOptimized_(situation, currentIds, opti
     }
   }
 
-  function addTask(task) {
+  function addTask(task, existing) {
     if (!task || !task.id) return;
     var taskId = String(task.id || '');
     if (seen[taskId]) return;
     if (!clickUpMilestoneStatusMatchesSituation_(clickUpTaskStatusText_(task), situation)) return;
-    if (!clickUpMilestoneTaskMatchesMonth_(task, {}, month, situation !== 'aguardando')) return;
+    if (!clickUpMilestoneTaskMatchesMonth_(task, existing || {}, month, situation !== 'aguardando')) return;
     if (!isClosingTrackedTask_(task)) return;
     task._confirmed_milestone = true;
     seen[taskId] = true;
@@ -3231,7 +3232,7 @@ function fetchClickUpMilestonesBySituationOptimized_(situation, currentIds, opti
         'statuses[]=' + encodeURIComponent(status)
       ].join('&'));
       var batch = response.tasks || [];
-      batch.forEach(addTask);
+      batch.forEach(function(task) { addTask(task, current[String(task && task.id || '')] || {}); });
       if (batch.length < 100) break;
       Utilities.sleep(300);
     }
@@ -3247,25 +3248,28 @@ function fetchClickUpMilestonesBySituationOptimized_(situation, currentIds, opti
         'statuses[]=' + encodeURIComponent(status)
       ].join('&'));
       var batch = response.tasks || [];
-      batch.filter(isProjectDeliveryTask_).forEach(addTask);
+      batch.filter(isProjectDeliveryTask_).forEach(function(task) { addTask(task, current[String(task && task.id || '')] || {}); });
       if (batch.length < 100) break;
       Utilities.sleep(300);
     }
   });
 
-  (currentIds || []).map(function(id) {
+  var directIds = (currentIds || []).map(function(id) {
     return sanitizeText_(id);
   }).filter(function(id, index, all) {
     return !!id && all.indexOf(id) === index;
-  }).slice(0, directLimit).forEach(function(id, index) {
+  }).slice(0, directLimit);
+  if (directIds.length) {
     assertDeadline();
     try {
-      addTask(clickupRequest_('get', '/task/' + encodeURIComponent(id)));
-      if (index % 10 === 9) Utilities.sleep(300);
+      fetchClickUpTasksByIds_(directIds).forEach(function(task) {
+        addTask(task, current[String(task && task.id || '')] || {});
+      });
+      Utilities.sleep(300);
     } catch (error) {
-      Logger.log('[Marcos] Falha ao confirmar task ' + id + ': ' + simplifyErrorMessage_(error));
+      Logger.log('[Marcos] Falha ao confirmar lote direto: ' + simplifyErrorMessage_(error));
     }
-  });
+  }
 
   return dedupeTasks_(tasks);
 }
@@ -3286,19 +3290,20 @@ function syncClickUpClosedMilestones_(params) {
     var deadlineMs = startedAt + 240000;
     var returnCandidateIds = Object.keys(current).filter(function(taskId) {
       var item = current[taskId] || {};
-      return item.situacao === 'aprovado' || item.situacao === 'reprovado';
+      return clickUpMilestoneTaskMatchesMonth_(null, item, month, false);
     });
 
     var tasks = fetchClickUpMilestonesBySituationOptimized_('aguardando', returnCandidateIds, {
       month: month,
-      max_pages: 8,
-      direct_limit: 180,
-      deadline_ms: deadlineMs
+      max_pages: 4,
+      direct_limit: 220,
+      deadline_ms: deadlineMs,
+      current: current
     });
 
     var recentSince = Math.max(0, new Date(month + '-01T00:00:00').getTime() || (startedAt - 75 * 24 * 60 * 60 * 1000));
     try {
-      tasks = tasks.concat(fetchClickUpRecentMilestoneCoverageTasks_(recentSince, { max_pages: 6 }));
+      tasks = tasks.concat(fetchClickUpRecentMilestoneCoverageTasks_(recentSince, { max_pages: 3 }));
     } catch (recentError) {
       Logger.log('[Closed] Busca recente parcial: ' + simplifyErrorMessage_(recentError));
     }
@@ -3374,21 +3379,21 @@ function syncClickUpValidationSituation_(params, situation) {
     var deadlineMs = startedAt + 240000;
     var currentIds = Object.keys(current).filter(function(taskId) {
       var item = current[taskId] || {};
-      return item.situacao === situation &&
-        clickUpMilestoneTaskMatchesMonth_(null, item, month, true);
+      return clickUpMilestoneTaskMatchesMonth_(null, item, month, false);
     });
 
     var tasks = fetchClickUpMilestonesBySituationOptimized_(situation, currentIds, {
       month: month,
-      max_pages: 8,
-      direct_limit: 100,
-      deadline_ms: deadlineMs
+      max_pages: 4,
+      direct_limit: 220,
+      deadline_ms: deadlineMs,
+      current: current
     });
 
     var monthStartMs = new Date(month + '-01T00:00:00').getTime();
     if (monthStartMs) {
       try {
-        tasks = tasks.concat(fetchClickUpRecentMilestoneCoverageTasks_(monthStartMs, { max_pages: 5 }));
+        tasks = tasks.concat(fetchClickUpRecentMilestoneCoverageTasks_(monthStartMs, { max_pages: 3 }));
       } catch (recentError) {
         Logger.log('[' + situation + '] Busca recente parcial: ' + simplifyErrorMessage_(recentError));
       }
@@ -3402,7 +3407,14 @@ function syncClickUpValidationSituation_(params, situation) {
     });
     Logger.log('📊 [' + situation + '] Marcos para processar: ' + tasks.length);
 
-    var matchingIds = tasks.map(function(task) {
+    var matchingIds = tasks.filter(function(task) {
+      var taskId = String(task && task.id || '');
+      var existing = current[taskId] || {};
+      return !existing.task_id ||
+        existing.situacao !== situation ||
+        sanitizeText_(existing.status_atual) !== clickUpTaskStatusText_(task) ||
+        !sanitizeText_(existing.justificativa);
+    }).map(function(task) {
       return String(task && task.id || '');
     }).filter(function(id, index, all) {
       return !!id && all.indexOf(id) === index;
