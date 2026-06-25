@@ -2587,7 +2587,9 @@ function startClickUpMilestoneClosingBackground_(params) {
   props.setProperty('CLICKUP_MILESTONE_CLOSING_PROCESSED', '0');
   props.setProperty('CLICKUP_MILESTONE_CLOSING_ERRORS', '0');
   props.setProperty('CLICKUP_MILESTONE_CLOSING_DETECTED', '0');
-  props.setProperty('CLICKUP_MILESTONE_CLOSING_PHASE', forceHistory ? 'monthly' : 'recent');
+  // Mesmo uma reconstrução completa precisa começar pelo incremental recente:
+  // é nessa fase que capturamos retornos de Aprovado/Reprovado para Closed.
+  props.setProperty('CLICKUP_MILESTONE_CLOSING_PHASE', 'recent');
   props.setProperty('CLICKUP_MILESTONE_CLOSING_STARTED_AT', new Date().toISOString());
   props.deleteProperty('CLICKUP_MILESTONE_CLOSING_ERROR');
   if (forceHistory || clickUpMilestoneClosingDistinctMonths_().length <= 1) {

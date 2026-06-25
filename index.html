@@ -5298,7 +5298,7 @@ var FECHAMENTO_LOADING = false;
 var FECHAMENTO_SESSION_REFRESHED = false;
 var FECHAMENTO_POLL_TIMER = null;
 var FECHAMENTO_FILTER = { month:'', consultor:'todos', projetoBusca:'', situacao:'todos' };
-var FECHAMENTO_CACHE_VERSION = 'closing-history-merge-v4';
+var FECHAMENTO_CACHE_VERSION = 'closing-appscript-primary-v5';
 var FECHAMENTO_MILESTONE_BONUS_VALUE = 30;
 var PROJECT_CLOSING_RULE_VERSION = 'breakoff-entrega-aprovar-v5';
 var PROJECT_CLOSING_LOOKUP = {term:'', loading:false, result:null, error:''};
@@ -5393,12 +5393,16 @@ function fechamentoSituacaoRank(item) {
 }
 function fechamentoMergeClosingRows(primaryRows, historyRows) {
   var byKey = {};
-  function mergeOne(item) {
+  function mergeOne(item, preferIncoming) {
     var key = fechamentoRowKey(item);
     if (!key) return;
     var current = byKey[key];
     if (!current) {
       byKey[key] = item;
+      return;
+    }
+    if (preferIncoming) {
+      byKey[key] = Object.assign({}, current, item);
       return;
     }
     var currentRank = fechamentoSituacaoRank(current);
@@ -5410,8 +5414,8 @@ function fechamentoMergeClosingRows(primaryRows, historyRows) {
     }
     byKey[key] = Object.assign({}, current, item);
   }
-  (historyRows || []).forEach(mergeOne);
-  (primaryRows || []).forEach(mergeOne);
+  (historyRows || []).forEach(function(item) { mergeOne(item, false); });
+  (primaryRows || []).forEach(function(item) { mergeOne(item, true); });
   return Object.keys(byKey).map(function(key) { return byKey[key]; });
 }
 function fechamentoIsProjectClosing(item) {
@@ -6119,7 +6123,12 @@ function fechamentoLoadSheetFallback(metaExtra) {
       return { rows: [], errors: [((error && error.message) || 'Histórico mensal indisponível')] };
     }).then(function(history) {
       var historicalRows = fechamentoNormalizeRows((history && history.rows) || []);
-      FECHAMENTO_MARCOS = fechamentoMergeClosingRows(consolidatedRows, historicalRows);
+      var mergedRows = fechamentoMergeClosingRows(consolidatedRows, historicalRows);
+      var currentRows = FECHAMENTO_MARCOS || [];
+      if (FECHAMENTO_LOADED && currentRows.length > 0 && mergedRows.length < Math.floor(currentRows.length * 0.8)) {
+        throw new Error('Leitura parcial da aba CLICKUP_FECHAMENTO_MARCOS bloqueada.');
+      }
+      FECHAMENTO_MARCOS = mergedRows;
       var historyErrors = (history && history.errors || []).filter(Boolean);
       FECHAMENTO_META = Object.assign({
         ok: true,
@@ -6141,6 +6150,41 @@ function fechamentoLoadSheetFallback(metaExtra) {
     });
   }).then(function(meta) {
     return meta;
+  });
+}
+function fechamentoLoadAppsScriptClosing(metaExtra) {
+  if (!authTokenParam()) return Promise.reject(new Error('Login obrigatório.'));
+  return chamarAppsScriptJsonp('getClickUpMilestoneClosing', {auth_token: authTokenParam()}, 45000).then(function(resp) {
+    if (!resp || resp.ok === false || !Array.isArray(resp.marcos)) {
+      throw new Error((resp && (resp.error || resp.message)) || 'Fechamento indisponível no Apps Script.');
+    }
+    var consolidatedRows = fechamentoNormalizeRows(resp.marcos);
+    return fechamentoLoadMonthlyHistoryFallback().catch(function(error) {
+      return { rows: [], errors: [((error && error.message) || 'Histórico mensal indisponível')] };
+    }).then(function(history) {
+      var historicalRows = fechamentoNormalizeRows((history && history.rows) || []);
+      FECHAMENTO_MARCOS = fechamentoMergeClosingRows(consolidatedRows, historicalRows);
+      var historyErrors = (history && history.errors || []).filter(Boolean);
+      FECHAMENTO_META = Object.assign({
+        ok: true,
+        total: FECHAMENTO_MARCOS.length,
+        apps_script_source: true,
+        background_sync: resp.background_sync || null,
+        bonus_por_marco: resp.bonus_por_marco,
+        history_source: historicalRows.length,
+        warning: 'Leitura canônica via Apps Script combinada com histórico mensal salvo nos JSONs.'
+      }, metaExtra || {});
+      if (historyErrors.length) FECHAMENTO_META.history_warning = historyErrors.slice(0, 4).join(' | ');
+      FECHAMENTO_LOADED = true;
+      FECHAMENTO_LOADING = false;
+      fechamentoSaveCache();
+      fechamentoApplyProjectStatuses();
+      initFechamento();
+      initProjectClosing();
+      initBonus();
+      initDash();
+      return FECHAMENTO_META;
+    });
   });
 }
 function fechamentoLoad(force) {
@@ -6176,7 +6220,12 @@ function fechamentoLoad(force) {
   FECHAMENTO_LOADING = true;
   initFechamento();
   initProjectClosing();
-  return fechamentoLoadSheetFallback().catch(function(error) {
+  return fechamentoLoadAppsScriptClosing().catch(function(primaryError) {
+    return fechamentoLoadSheetFallback({
+      warning: 'Apps Script indisponível; usando leitura pública da planilha.',
+      apps_script_error: (primaryError && primaryError.message) || ''
+    });
+  }).catch(function(error) {
     FECHAMENTO_LOADING = false;
     FECHAMENTO_META.error = FECHAMENTO_LOADED
       ? 'Não foi possível atualizar agora. Mantendo a última leitura válida.'
