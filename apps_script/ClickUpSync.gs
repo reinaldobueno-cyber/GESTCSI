@@ -2103,6 +2103,7 @@ function summarizeClickUpProjectClosingDebug_(task) {
 
 function upsertClickUpMilestoneClosing_(mapping, normalized, options) {
   options = options || {};
+  if (options.preserve_closed_history === undefined) options.preserve_closed_history = true;
   var sheet = getClickUpMilestoneClosingSheet_();
   var headers = getClickUpMilestoneClosingHeaders_();
   var current = options.current || loadClickUpMilestoneClosingCurrent_(sheet);
@@ -2118,8 +2119,9 @@ function upsertClickUpMilestoneClosing_(mapping, normalized, options) {
     var isProjectClosing = hasDeliveryMarker && isProjectClosingApprovalStatus_(status);
     if (isProjectClosing) situation = 'aprovado';
     var previousSituation = sanitizeText_(previous && previous.situacao);
-    var returnedToClosed = situation === 'aguardando' &&
-      (previousSituation === 'aprovado' || previousSituation === 'reprovado');
+    var returnedToClosed = (situation === 'aguardando' &&
+      (previousSituation === 'aprovado' || previousSituation === 'reprovado')) ||
+      (situation === 'outro' && hasClosedDate && !previous);
     var recoveredClosedHistory = false;
     if (situation === 'outro' && hasClosedDate && options.preserve_closed_history) {
       situation = 'aguardando';
@@ -2229,7 +2231,7 @@ function upsertClickUpMilestoneClosingEntries_(entries, options) {
       fetch_comments: options.fetch_comments !== false,
       authoritative: options.authoritative === true,
       validation_comments_only: options.validation_comments_only === true,
-      preserve_closed_history: options.preserve_closed_history === true
+      preserve_closed_history: options.preserve_closed_history !== false
     });
   });
   writeClickUpMilestoneClosingCurrent_(sheet, headers, current);
@@ -3111,15 +3113,16 @@ function syncClickUpClosedMilestones_(params) {
     var props = PropertiesService.getScriptProperties();
     var previousCursor = toInt_(props.getProperty('CLICKUP_CLOSED_INCREMENTAL_SINCE'), 0);
     var monthStart = new Date(month + '-01T00:00:00').getTime();
+    var broadClosedSince = startedAt - 40 * 24 * 60 * 60 * 1000;
     var since = previousCursor
-      ? Math.max(0, Math.min(previousCursor - 5 * 60 * 1000, monthStart || previousCursor))
-      : (monthStart || startedAt - 48 * 60 * 60 * 1000);
+      ? Math.max(0, Math.min(previousCursor - 5 * 60 * 1000, monthStart || previousCursor, broadClosedSince))
+      : (monthStart || broadClosedSince);
     var currentTrackedIds = Object.keys(current).filter(function(taskId) {
       var item = current[taskId] || {};
       return item.situacao === 'aguardando' || item.situacao === 'aprovado' || item.situacao === 'reprovado';
     });
     var tasks = [];
-    tasks = tasks.concat(fetchClickUpRecentMilestoneCoverageTasks_(since, { max_pages: 8 }));
+    tasks = tasks.concat(fetchClickUpRecentMilestoneCoverageTasks_(since, { max_pages: 12 }));
     tasks = tasks.concat(fetchClickUpMilestonesBySituation_('aguardando', currentTrackedIds));
     tasks = dedupeTasks_(tasks).filter(function(task) {
       var status = clickUpTaskStatusText_(task);
