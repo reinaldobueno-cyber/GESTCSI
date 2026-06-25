@@ -15064,23 +15064,25 @@ function _finalizarLoad(projetos, isRefresh, motivo, tipoAtualizacao) {
     var baseInfo = carregarBaseProjetos(baseRaw);
     console.log('[5] Projetos normalizados:', baseInfo.projetos.length);
     var minimoCarteira = painelMinimoCarteiraAtual();
+    var cargaParcialBloqueada = false;
     if (baseInfo.projetos.length < minimoCarteira) {
       var preservada = painelMaiorBasePreservada(minimoCarteira);
       if (preservada.length) {
         console.warn('[CONSOLIDADO] Carga parcial bloqueada:', baseInfo.projetos.length, 'mínimo:', minimoCarteira, 'motivo:', motivo, 'preservando:', preservada.length);
         var preservadaInfo = carregarBaseProjetos(lerDadosPlanilhaConsolidados(preservada).projetos);
-        DATA.projetos = preservadaInfo.projetos;
+        if (!preservadaInfo.projetos.length) preservadaInfo = carregarBaseProjetos(preservada);
+        baseInfo = preservadaInfo;
+        cargaParcialBloqueada = true;
         if (nd) nd.textContent = 'Carga parcial bloqueada (' + baseInfo.projetos.length + '/' + minimoCarteira + ')';
         registrarHistoricoAtualizacao({tipo: tipoAtualizacao || 'auto', resultado: 'bloqueado', motivo: motivo || 'base_parcial', projetos: baseInfo.projetos.length});
         showToast('Carga parcial bloqueada. Mantive a base completa salva.', 'err');
-        throw { _partialHandled: true };
+      } else {
+        console.error('[CONSOLIDADO] Carga parcial sem base completa preservada:', baseInfo.projetos.length, 'mínimo:', minimoCarteira, 'motivo:', motivo);
+        cargaParcialBloqueada = true;
+        if (nd) nd.textContent = 'Carga parcial exibida (' + baseInfo.projetos.length + '/' + minimoCarteira + ')';
+        registrarHistoricoAtualizacao({tipo: tipoAtualizacao || 'auto', resultado: 'parcial', motivo: motivo || 'base_parcial_sem_cache', projetos: baseInfo.projetos.length});
+        showToast('Carga parcial exibida. A planilha ainda não retornou a base completa.', 'err');
       }
-      console.error('[CONSOLIDADO] Carga parcial sem base completa preservada:', baseInfo.projetos.length, 'mínimo:', minimoCarteira, 'motivo:', motivo);
-      DATA.projetos = [];
-      if (nd) nd.textContent = 'Carga parcial bloqueada (' + baseInfo.projetos.length + '/' + minimoCarteira + ')';
-      registrarHistoricoAtualizacao({tipo: tipoAtualizacao || 'auto', resultado: 'bloqueado', motivo: motivo || 'base_parcial_sem_cache', projetos: baseInfo.projetos.length});
-      showToast('Carga parcial bloqueada. A planilha precisa retornar a base completa.', 'err');
-      throw { _partialHandled: true };
     }
     (baseInfo.projetos || []).slice(0, 25).forEach(function(projetoAtual){
       try {
@@ -15113,11 +15115,16 @@ function _finalizarLoad(projetos, isRefresh, motivo, tipoAtualizacao) {
     var now = new Date();
     var hora = now.toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'});
     var data = now.toLocaleDateString('pt-BR',{day:'2-digit',month:'2-digit',year:'numeric'});
-    var labelAtualizacao = 'Planilha: ' + data + ' ' + hora;
+    var labelAtualizacao = cargaParcialBloqueada ? ('Planilha parcial preservada: ' + data + ' ' + hora) : ('Planilha: ' + data + ' ' + hora);
     if (nd) nd.textContent = labelAtualizacao;
-    var entradaHistorico = registrarHistoricoAtualizacao({tipo: tipoAtualizacao || 'auto', resultado: 'ok', motivo: motivo, projetos: DATA.projetos.length});
-    persistirPainelCache(DATA.projetos, {label: labelAtualizacao, fonte: motivo, historico: entradaHistorico});
-    if (isRefresh) showToast(projetos.length + ' projetos atualizados \u2714', 'ok');
+    var entradaHistorico = registrarHistoricoAtualizacao({
+      tipo: tipoAtualizacao || 'auto',
+      resultado: cargaParcialBloqueada ? 'preservado' : 'ok',
+      motivo: motivo,
+      projetos: DATA.projetos.length
+    });
+    if (!cargaParcialBloqueada) persistirPainelCache(DATA.projetos, {label: labelAtualizacao, fonte: motivo, historico: entradaHistorico});
+    if (isRefresh && !cargaParcialBloqueada) showToast(projetos.length + ' projetos atualizados \u2714', 'ok');
     } else {
       var fallback = obterProjetosFallback();
       var baseLocalInfo = carregarBaseProjetos(lerDadosPlanilhaConsolidados(fallback.projetos).projetos);
