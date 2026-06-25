@@ -2702,7 +2702,8 @@ function continueClickUpMilestoneClosingBackgroundWorker_() {
   if (phase === 'recent') {
     var recent = syncClickUpRecentMilestoneCoverage_({
       authoritative: true,
-      validation_comments_only: true
+      validation_comments_only: true,
+      preserve_closed_history: true
     });
     props.setProperty('CLICKUP_MILESTONE_CLOSING_DETECTED', String(recent.detected || 0));
     props.setProperty('CLICKUP_MILESTONE_CLOSING_ERRORS', String(recent.errors || 0));
@@ -2976,7 +2977,8 @@ function syncClickUpRecentMilestoneCoverage_(options) {
   });
   upsertClickUpMilestoneClosingEntries_(entries, {
     authoritative: options.authoritative === true,
-    validation_comments_only: options.validation_comments_only === true
+    validation_comments_only: options.validation_comments_only === true,
+    preserve_closed_history: options.preserve_closed_history === true
   });
   if (!errors) props.setProperty('CLICKUP_MILESTONE_INCREMENTAL_SINCE', String(startedAt));
   return {

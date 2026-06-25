@@ -6233,7 +6233,7 @@ function fechamentoRunSync(action, label, btn, extraParams) {
   }
   var original = btn && btn.textContent;
   var month = String(FECHAMENTO_FILTER.month || '');
-  var syncMonth = action === 'syncClickUpClosedMilestones' ? '' : (/^\d{4}-\d{2}$/.test(month) ? month : '');
+  var syncMonth = /^\d{4}-\d{2}$/.test(month) ? month : fechamentoCurrentMonth();
   if (btn) { btn.disabled = true; btn.textContent = 'Buscando...'; }
   var requestParams = Object.assign({
     auth_token: authTokenParam(),
@@ -6275,7 +6275,7 @@ function fechamentoRunSync(action, label, btn, extraParams) {
   return false;
 }
 function fechamentoStartSync(btn) {
-  return fechamentoRunSync('startClickUpMilestoneClosingBackground', 'Atualizar Closed', btn, { force_history: '1' });
+  return fechamentoRunSync('syncClickUpClosedMilestones', 'Atualizar Closed', btn);
 }
 function fechamentoSyncRejected(btn) {
   return fechamentoRunSync('syncClickUpRejectedMilestones', 'Buscar Reprovados', btn);
