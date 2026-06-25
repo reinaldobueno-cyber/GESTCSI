@@ -131,6 +131,14 @@ function doGet(e) {
     if (action === 'diagnoseProjectClosing') {
       return jsonOutput_(diagnoseProjectClosing_(params), params.callback);
     }
+    if (action === 'diagnoseClickUpMilestoneTask') {
+      requireAdmin_(params);
+      return jsonOutput_(diagnoseClickUpMilestoneTask_(params), params.callback);
+    }
+    if (action === 'syncClickUpMilestoneTask') {
+      requireAdmin_(params);
+      return jsonOutput_(syncClickUpMilestoneTask_(params), params.callback);
+    }
     if (action === 'getProjectClosingDecisions') {
       return jsonOutput_(getProjectClosingDecisions_(params), params.callback);
     }
@@ -3011,6 +3019,60 @@ function syncClickUpRecentMilestoneAndGetClosing_(params) {
   var result = getClickUpMilestoneClosing_(params || {});
   result.recent_sync = recent;
   return result;
+}
+
+function diagnoseClickUpMilestoneTask_(params) {
+  params = params || {};
+  var taskId = normalizeClickUpId_(params.task_id || params.id || params.query || params.link || params.url);
+  if (!taskId) throw new Error('Informe task_id.');
+  var task = clickupRequest_('get', '/task/' + encodeURIComponent(taskId));
+  var status = clickUpTaskStatusText_(task);
+  var mapping = findProjectMappingForTask_(task, loadClickUpMilestoneClosingMappings_()) || fallbackProjectMappingForTask_(task);
+  var normalized = buildNormalizedMilestoneCoverageProject_(mapping, task);
+  var milestone = normalized.marcos && normalized.marcos[0] || {};
+  return {
+    ok: true,
+    task_id: String(task && task.id || taskId),
+    name: sanitizeText_(task && task.name),
+    status: status,
+    situation: clickUpMilestoneSituation_(status),
+    is_milestone: isMilestoneTask_(task),
+    is_delivery: isProjectDeliveryTask_(task),
+    is_closing_tracked: isClosingTrackedTask_(task),
+    custom_item_id: String(task && task.custom_item_id || ''),
+    custom_item_name: clickUpTaskCustomItemName_(task),
+    list_id: normalizeClickUpId_(task && task.list && task.list.id),
+    list_name: sanitizeText_(task && task.list && task.list.name),
+    folder_id: normalizeClickUpId_(task && task.folder && task.folder.id),
+    folder_name: sanitizeText_(task && task.folder && task.folder.name),
+    project_key: mapping && mapping.project_key || '',
+    project_name: mapping && mapping.cliente || '',
+    date_closed: task && task.date_closed ? fromMillisIso_(task.date_closed) : '',
+    date_updated: task && task.date_updated ? fromMillisIso_(task.date_updated) : '',
+    normalized_marco: milestone
+  };
+}
+
+function syncClickUpMilestoneTask_(params) {
+  params = params || {};
+  var diagnosis = diagnoseClickUpMilestoneTask_(params);
+  if (!diagnosis.is_closing_tracked) {
+    diagnosis.synced = false;
+    diagnosis.reason = 'Task nao reconhecida como marco/entrega rastreavel.';
+    return diagnosis;
+  }
+  var task = clickupRequest_('get', '/task/' + encodeURIComponent(diagnosis.task_id));
+  var mappings = loadClickUpMilestoneClosingMappings_();
+  var mapping = findProjectMappingForTask_(task, mappings) || fallbackProjectMappingForTask_(task);
+  upsertClickUpMilestoneClosing_(mapping, buildNormalizedMilestoneCoverageProject_(mapping, task), {
+    fetch_comments: false,
+    authoritative: false,
+    validation_comments_only: true,
+    preserve_closed_history: true
+  });
+  diagnosis.synced = true;
+  diagnosis.after = getClickUpMilestoneClosing_({ month: sanitizeText_(params.month || params.mes).slice(0, 7) });
+  return diagnosis;
 }
 
 function confirmClickUpMilestoneStatuses_(params) {
