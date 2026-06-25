@@ -3711,6 +3711,32 @@ function painelMaiorBasePreservada(minimo) {
   var melhor = atual.length >= cacheProjetos.length ? atual : cacheProjetos;
   return melhor.length >= Number(minimo || 0) ? melhor : [];
 }
+function painelProjetoCarteiraKey(item) {
+  var mes = String((item && item.mes) || '').toUpperCase().trim();
+  var cliente = normalizeClienteKey((item && item.cliente) || '');
+  return mes && cliente ? (mes + '|' + cliente) : '';
+}
+function painelMesclarBaseParcialComPreservada(parcial, preservada) {
+  var merged = [];
+  var indexByKey = {};
+  function add(item, preferirNovo) {
+    if (!item || typeof item !== 'object') return;
+    var key = painelProjetoCarteiraKey(item);
+    if (!key) return;
+    if (!indexByKey.hasOwnProperty(key)) {
+      indexByKey[key] = merged.length;
+      merged.push(item);
+      return;
+    }
+    var pos = indexByKey[key];
+    merged[pos] = preferirNovo
+      ? Object.assign({}, merged[pos], item)
+      : Object.assign({}, item, merged[pos]);
+  }
+  (preservada || []).forEach(function(item) { add(item, false); });
+  (parcial || []).forEach(function(item) { add(item, true); });
+  return merged;
+}
 function storageGet(key, fallback) {
   try {
     if (!window.localStorage) return fallback;
@@ -14487,6 +14513,13 @@ function valorPorAlias(obj, aliases) {
   }
   return null;
 }
+function normalizarConsultorCarteira(value) {
+  var text = String(value || '').trim();
+  var key = normalizeClienteKey(text);
+  if (key === 'YASMIM' || key === 'YASMIIM' || key === 'YASMIIN') return 'YASMIN';
+  if (key === 'YASMIM SOUSA' || key === 'YASMIIM SOUSA' || key === 'YASMIIN SOUSA') return 'Yasmin Sousa';
+  return text;
+}
 
 function normalizarProjetoPlanilha(p) {
   var projeto = Object.assign({}, p || {});
@@ -14509,7 +14542,7 @@ function normalizarProjetoPlanilha(p) {
   var linkProjeto = valorPorAlias(projeto, ['link_projeto','projeto_link','url_projeto','link','LINK DO PROJETO']);
 
   projeto.cliente = String(cliente || '').trim();
-  projeto.consultor = String(consultor || '').trim();
+  projeto.consultor = normalizarConsultorCarteira(consultor);
   projeto.mes = String(mes || '').toUpperCase().trim();
   projeto.status_original = String(status || '').trim();
   projeto.status = projeto.status_original;
@@ -15065,17 +15098,29 @@ function _finalizarLoad(projetos, isRefresh, motivo, tipoAtualizacao) {
     console.log('[5] Projetos normalizados:', baseInfo.projetos.length);
     var minimoCarteira = painelMinimoCarteiraAtual();
     var cargaParcialBloqueada = false;
+    var cargaParcialComplementada = false;
     if (baseInfo.projetos.length < minimoCarteira) {
       var preservada = painelMaiorBasePreservada(minimoCarteira);
       if (preservada.length) {
-        console.warn('[CONSOLIDADO] Carga parcial bloqueada:', baseInfo.projetos.length, 'mínimo:', minimoCarteira, 'motivo:', motivo, 'preservando:', preservada.length);
-        var preservadaInfo = carregarBaseProjetos(lerDadosPlanilhaConsolidados(preservada).projetos);
-        if (!preservadaInfo.projetos.length) preservadaInfo = carregarBaseProjetos(preservada);
-        baseInfo = preservadaInfo;
-        cargaParcialBloqueada = true;
-        if (nd) nd.textContent = 'Carga parcial bloqueada (' + baseInfo.projetos.length + '/' + minimoCarteira + ')';
-        registrarHistoricoAtualizacao({tipo: tipoAtualizacao || 'auto', resultado: 'bloqueado', motivo: motivo || 'base_parcial', projetos: baseInfo.projetos.length});
-        showToast('Carga parcial bloqueada. Mantive a base completa salva.', 'err');
+        var mesclada = painelMesclarBaseParcialComPreservada(baseRaw, preservada);
+        var mescladaInfo = carregarBaseProjetos(lerDadosPlanilhaConsolidados(mesclada).projetos);
+        if (mescladaInfo.projetos.length >= minimoCarteira) {
+          console.warn('[CONSOLIDADO] Carga parcial complementada:', baseInfo.projetos.length, 'mínimo:', minimoCarteira, 'motivo:', motivo, 'preservando:', preservada.length, 'final:', mescladaInfo.projetos.length);
+          baseInfo = mescladaInfo;
+          cargaParcialComplementada = true;
+          if (nd) nd.textContent = 'Carga parcial complementada (' + baseRaw.length + '/' + minimoCarteira + ')';
+          registrarHistoricoAtualizacao({tipo: tipoAtualizacao || 'auto', resultado: 'complementado', motivo: motivo || 'base_parcial', projetos: baseInfo.projetos.length});
+          showToast('Carga parcial complementada com a base salva.', 'ok');
+        } else {
+          console.warn('[CONSOLIDADO] Carga parcial bloqueada:', baseInfo.projetos.length, 'mínimo:', minimoCarteira, 'motivo:', motivo, 'preservando:', preservada.length);
+          var preservadaInfo = carregarBaseProjetos(lerDadosPlanilhaConsolidados(preservada).projetos);
+          if (!preservadaInfo.projetos.length) preservadaInfo = carregarBaseProjetos(preservada);
+          baseInfo = preservadaInfo;
+          cargaParcialBloqueada = true;
+          if (nd) nd.textContent = 'Carga parcial bloqueada (' + baseInfo.projetos.length + '/' + minimoCarteira + ')';
+          registrarHistoricoAtualizacao({tipo: tipoAtualizacao || 'auto', resultado: 'bloqueado', motivo: motivo || 'base_parcial', projetos: baseInfo.projetos.length});
+          showToast('Carga parcial bloqueada. Mantive a base completa salva.', 'err');
+        }
       } else {
         console.error('[CONSOLIDADO] Carga parcial sem base completa preservada:', baseInfo.projetos.length, 'mínimo:', minimoCarteira, 'motivo:', motivo);
         cargaParcialBloqueada = true;
@@ -15115,16 +15160,22 @@ function _finalizarLoad(projetos, isRefresh, motivo, tipoAtualizacao) {
     var now = new Date();
     var hora = now.toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'});
     var data = now.toLocaleDateString('pt-BR',{day:'2-digit',month:'2-digit',year:'numeric'});
-    var labelAtualizacao = cargaParcialBloqueada ? ('Planilha parcial preservada: ' + data + ' ' + hora) : ('Planilha: ' + data + ' ' + hora);
+    var labelAtualizacao = cargaParcialBloqueada
+      ? ('Planilha parcial preservada: ' + data + ' ' + hora)
+      : (cargaParcialComplementada ? ('Planilha parcial complementada: ' + data + ' ' + hora) : ('Planilha: ' + data + ' ' + hora));
     if (nd) nd.textContent = labelAtualizacao;
     var entradaHistorico = registrarHistoricoAtualizacao({
       tipo: tipoAtualizacao || 'auto',
-      resultado: cargaParcialBloqueada ? 'preservado' : 'ok',
+      resultado: cargaParcialBloqueada ? 'preservado' : (cargaParcialComplementada ? 'complementado' : 'ok'),
       motivo: motivo,
       projetos: DATA.projetos.length
     });
     if (!cargaParcialBloqueada) persistirPainelCache(DATA.projetos, {label: labelAtualizacao, fonte: motivo, historico: entradaHistorico});
-    if (isRefresh && !cargaParcialBloqueada) showToast(projetos.length + ' projetos atualizados \u2714', 'ok');
+    if (isRefresh && !cargaParcialBloqueada) {
+      showToast(cargaParcialComplementada
+        ? (DATA.projetos.length + ' projetos atualizados; base salva completou ausentes \u2714')
+        : (projetos.length + ' projetos atualizados \u2714'), 'ok');
+    }
     } else {
       var fallback = obterProjetosFallback();
       var baseLocalInfo = carregarBaseProjetos(lerDadosPlanilhaConsolidados(fallback.projetos).projetos);
