@@ -2126,10 +2126,6 @@ function upsertClickUpMilestoneClosing_(mapping, normalized, options) {
       recoveredClosedHistory = true;
     }
     if (!previous && situation === 'outro') return;
-    if (previous && situation === 'outro' && options.authoritative) {
-      delete current[taskId];
-      return;
-    }
     var rowStatus = recoveredClosedHistory ? 'Closed historico' : status;
     var statusChanged = !previous || sanitizeText_(previous.status_atual) !== rowStatus;
     var closedAt = (returnedToClosed ? sanitizeText_(milestone.updated_at) : '') ||
