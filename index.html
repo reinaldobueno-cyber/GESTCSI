@@ -5526,7 +5526,10 @@ function projectClosingSearchTerm() {
   return input ? String(input.value || '').trim() : '';
 }
 function projectClosingResolveListId(term) {
-  var ids = String(term || '').match(/\d{6,}/g) || [];
+  var raw = String(term || '');
+  var ids = raw.match(/\d{6,}/g) || [];
+  var viewMatch = raw.match(/\/v\/l\/(?!f\/)([^/?#]+)/i) || raw.match(/\/v\/o\/(?!f\/)([^/?#]+)/i) || raw.match(/[?&]view_id=([^&#]+)/i);
+  if (viewMatch) return decodeURIComponent(viewMatch[1] || '').trim();
   var candidates = Array.isArray(DATA.projetos) ? DATA.projetos.slice() : [];
   var found = candidates.filter(function(p) {
     var hay = [
@@ -5541,7 +5544,7 @@ function projectClosingResolveListId(term) {
   })[0];
   if (found) {
     var payload = parseJsonSeguro((found && found.clickup_json) || '') || {};
-    return String(found.list_id || payload.list_id || '').trim();
+    return String(found.list_id || payload.list_id || found.view_id || payload.view_id || '').trim();
   }
   return ids.length ? ids[ids.length - 1] : '';
 }
@@ -5564,7 +5567,7 @@ function projectClosingRenderApiLookup() {
     var debug = item.debug_tipo ? '<div class="closing-project-meta">'+escapeHtml(item.debug_tipo)+'</div>' : '';
     return '<tr><td><strong>'+escapeHtml(item.nome || '-')+'</strong><div class="closing-project-meta">'+escapeHtml(item.fase_nome || '-')+'</div>'+debug+'</td><td>'+escapeHtml(status)+phaseStatus+'</td><td>'+escapeHtml(marker)+'</td><td>'+escapeHtml(state)+'</td><td><a class="project-link-btn" href="'+escapeHtml(item.link || '#')+'" target="_blank" rel="noopener">Abrir item</a></td></tr>';
   }).join('') || '<tr class="empty-row"><td colspan="5">A API não retornou item de Fase 8 / Break Off nessa lista.</td></tr>';
-  return '<div class="bonus-section" style="margin-bottom:14px"><div class="bonus-section-title">Busca direta na API ClickUp</div>'+versionWarning+'<div class="dashx-inline-note" style="margin-bottom:10px"><strong>List ID:</strong> '+escapeHtml(result.list_id || '-')+' · '+Number(result.tasks_total || 0)+' tarefa(s) lidas · '+Number(result.aprovados_total || 0)+' aprovado(s) na regra</div><div class="dashx-table-wrap"><table class="dashx-table"><thead><tr><th>Item</th><th>Status</th><th>Flag</th><th>Regra</th><th>Ação</th></tr></thead><tbody>'+rows+'</tbody></table></div></div>';
+  return '<div class="bonus-section" style="margin-bottom:14px"><div class="bonus-section-title">Busca direta na API ClickUp</div>'+versionWarning+'<div class="dashx-inline-note" style="margin-bottom:10px"><strong>Origem:</strong> '+escapeHtml(result.source || (result.view_id ? 'view' : 'list'))+' · <strong>List/View:</strong> '+escapeHtml(result.list_id || result.view_id || '-')+' · '+Number(result.tasks_total || 0)+' tarefa(s) lidas · '+Number(result.aprovados_total || 0)+' aprovado(s) na regra</div><div class="dashx-table-wrap"><table class="dashx-table"><thead><tr><th>Item</th><th>Status</th><th>Flag</th><th>Regra</th><th>Ação</th></tr></thead><tbody>'+rows+'</tbody></table></div></div>';
 }
 function projectClosingFindProjects(term) {
   term = String(term || '').trim();
@@ -5636,12 +5639,17 @@ function projectClosingSearch() {
   PROJECT_CLOSING_LOOKUP.result = null;
   PROJECT_CLOSING_LOOKUP.error = '';
   initProjectClosing();
-  var listId = projectClosingResolveListId(term);
-  chamarAppsScriptJsonp('diagnoseProjectClosing', {
+  var resolvedId = projectClosingResolveListId(term);
+  var diagnoseParams = {
     auth_token: authTokenParam(),
     query: term,
-    list_id: listId
-  }, 35000).then(function(resp) {
+    link: term
+  };
+  if (resolvedId) {
+    if (/^\d+$/.test(resolvedId)) diagnoseParams.list_id = resolvedId;
+    else diagnoseParams.view_id = resolvedId;
+  }
+  chamarAppsScriptJsonp('diagnoseProjectClosing', diagnoseParams, 35000).then(function(resp) {
     if (!resp || resp.ok === false) throw new Error((resp && (resp.error || resp.message)) || 'Resposta inválida do Apps Script.');
     PROJECT_CLOSING_LOOKUP.loading = false;
     PROJECT_CLOSING_LOOKUP.result = resp;
@@ -5719,7 +5727,7 @@ function projectClosingPollSync() {
     PROJECT_CLOSING_SYNC.error = resp.error || '';
     initProjectClosing();
     if (resp.active) {
-      PROJECT_CLOSING_SYNC.timer = setTimeout(projectClosingPollSync, 5000);
+      PROJECT_CLOSING_SYNC.timer = setTimeout(projectClosingContinueSyncBatch, 800);
       return;
     }
     resetarCachesDerivadosPainel({limparCachePainel:true});
@@ -5731,6 +5739,23 @@ function projectClosingPollSync() {
     PROJECT_CLOSING_SYNC.error = (error && error.message) || 'Falha ao acompanhar sincronização.';
     PROJECT_CLOSING_SYNC.timer = setTimeout(projectClosingPollSync, 10000);
     initProjectClosing();
+  });
+}
+function projectClosingContinueSyncBatch() {
+  chamarAppsScriptJsonp('continueProjectClosingSyncBatch', {auth_token:authTokenParam()}, 150000).then(function(resp) {
+    if (resp && resp.service === 'clickup-sync') throw new Error('Apps Script desatualizado. Implante uma nova versão do Web App.');
+    if (!resp || resp.ok === false) throw new Error((resp && (resp.error || resp.message)) || 'Falha ao continuar sincronização.');
+    PROJECT_CLOSING_SYNC.active = !!resp.active;
+    PROJECT_CLOSING_SYNC.processed = Number(resp.processed || 0);
+    PROJECT_CLOSING_SYNC.total = Number(resp.total || 0);
+    PROJECT_CLOSING_SYNC.errors = Number(resp.errors || 0);
+    PROJECT_CLOSING_SYNC.error = resp.error || '';
+    initProjectClosing();
+    PROJECT_CLOSING_SYNC.timer = setTimeout(projectClosingPollSync, resp.active ? 1200 : 300);
+  }).catch(function(error) {
+    PROJECT_CLOSING_SYNC.error = (error && error.message) || 'Falha ao continuar sincronização.';
+    initProjectClosing();
+    PROJECT_CLOSING_SYNC.timer = setTimeout(projectClosingPollSync, 10000);
   });
 }
 function projectClosingStopSync(button) {
@@ -5860,10 +5885,41 @@ function projectClosingClickUpDecision(project, info) {
     clickup_status: item.status_original || item.status || item.status_atual || ''
   };
 }
+function projectClosingProjectFromFechamentoItem(item) {
+  item = item || {};
+  var existing = fechamentoProjectFromItem(item);
+  if (existing) return existing;
+  var name = String(item.projeto || '').trim() || 'Projeto não mapeado';
+  return {
+    mes: String(item.mes_fechamento || item.mes_validacao || '').slice(0, 7),
+    cliente: name,
+    consultor: fechamentoEffectiveConsultant(item),
+    status: 'Aguardando entrega',
+    project_key: String(item.project_key || '').trim() || ('CLICKUP|' + String(item.task_id || name)),
+    projeto_link: item.link || '',
+    link_projeto: item.link || '',
+    clickup: 'SIM',
+    _synthetic_project_closing: true
+  };
+}
 function projectClosingList() {
-  return ordenarProjetosPainel(projetosVisiveisParaUsuario(Array.isArray(DATA.projetos) ? DATA.projetos.slice() : []).filter(function(p) {
+  var byKey = {};
+  var projects = (Array.isArray(DATA.projetos) ? DATA.projetos.slice() : []).filter(function(p) {
     return dashProjectHasClickUpTrace(p);
-  })).map(function(p) {
+  });
+  projects.forEach(function(p) {
+    byKey[String(p && (p.project_key || montarProjectKeyClickup(p)) || normalizeClienteKey(p && p.cliente) || '').trim()] = true;
+  });
+  (FECHAMENTO_MARCOS || []).filter(function(item) {
+    return fechamentoItemAtendeRegraProjetoEntrega(item) || fechamentoIsProjectClosing(item);
+  }).forEach(function(item) {
+    var p = projectClosingProjectFromFechamentoItem(item);
+    var key = String(p && (p.project_key || montarProjectKeyClickup(p)) || normalizeClienteKey(p && p.cliente) || '').trim();
+    if (!key || byKey[key]) return;
+    byKey[key] = true;
+    projects.push(p);
+  });
+  return ordenarProjetosPainel(projetosVisiveisParaUsuario(projects)).map(function(p) {
     var info = projectClosingInfo(p);
     var decision = projectClosingClickUpDecision(p, info) || projectClosingDecisionFor(p);
     var category = 'fora';

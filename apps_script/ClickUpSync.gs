@@ -109,6 +109,10 @@ function doGet(e) {
       requireUser_(params);
       return jsonOutput_(getProjectClosingSyncBackgroundStatus_(), params.callback);
     }
+    if (action === 'continueProjectClosingSyncBatch') {
+      requireAdmin_(params);
+      return jsonOutput_(continueProjectClosingSyncBackgroundWorker_(), params.callback);
+    }
     if (action === 'stopProjectClosingSync') {
       requireAdmin_(params);
       return jsonOutput_(stopProjectClosingSyncBackground_(), params.callback);
@@ -1211,10 +1215,21 @@ function startProjectClosingSyncBackground_() {
 }
 
 function continueProjectClosingSyncBackgroundTrigger() {
+  continueProjectClosingSyncBackgroundWorker_();
+}
+
+function continueProjectClosingSyncBackgroundWorker_() {
   var props = PropertiesService.getScriptProperties();
+  var lock = LockService.getScriptLock();
+  if (!lock.tryLock(1000)) {
+    var busyStatus = getProjectClosingSyncBackgroundStatus_();
+    busyStatus.busy = true;
+    return busyStatus;
+  }
+  try {
   if (props.getProperty('PROJECT_CLOSING_SYNC_ACTIVE') !== '1') {
     clearProjectClosingSyncBackgroundTriggers_();
-    return;
+    return getProjectClosingSyncBackgroundStatus_();
   }
   try {
     var mappings = loadProjectMappings_().filter(function(item) {
@@ -1244,13 +1259,21 @@ function continueProjectClosingSyncBackgroundTrigger() {
       props.setProperty('PROJECT_CLOSING_SYNC_ACTIVE', '0');
       props.setProperty('PROJECT_CLOSING_SYNC_COMPLETED_AT', new Date().toISOString());
       clearProjectClosingSyncBackgroundTriggers_();
-      return;
+      var doneStatus = getProjectClosingSyncBackgroundStatus_();
+      doneStatus.batch_processed = batch.length;
+      return doneStatus;
     }
     scheduleProjectClosingSyncBackground_(3000);
   } catch (error) {
     props.setProperty('PROJECT_CLOSING_SYNC_ERROR', simplifyErrorMessage_(error));
     props.setProperty('PROJECT_CLOSING_SYNC_ACTIVE', '0');
     clearProjectClosingSyncBackgroundTriggers_();
+  }
+  var status = getProjectClosingSyncBackgroundStatus_();
+  status.batch_processed = batch ? batch.length : 0;
+  return status;
+  } finally {
+    lock.releaseLock();
   }
 }
 
@@ -1997,11 +2020,20 @@ function getClickUpMilestoneClosing_(params) {
 
 function diagnoseProjectClosing_(params) {
   requireUser_(params || {});
-  var raw = sanitizeText_(params.list_id || params.query || params.link || params.url);
+  var raw = sanitizeText_(params.query || params.link || params.url || params.list_id || params.view_id);
+  var viewId = normalizeClickUpId_(params.view_id) || extractClickUpIdFromUrl_(raw, 'view');
+  var listId = normalizeClickUpId_(params.list_id) || extractClickUpIdFromUrl_(raw, 'list');
   var ids = raw.match(/\d{6,}/g) || [];
-  var listId = normalizeClickUpId_(params.list_id || ids[ids.length - 1] || raw);
-  if (!listId) throw new Error('Informe um list_id ou link do ClickUp.');
-  var tasks = fetchAllListTasks_(listId, { deadline: new Date().getTime() + 25000 });
+  if (!listId && !viewId) listId = normalizeClickUpId_(ids[ids.length - 1] || raw);
+  if (!listId && !viewId) throw new Error('Informe um list_id, view_id ou link do ClickUp.');
+  var payload = fetchProjectTasks_({
+    enabled: true,
+    project_key: 'diagnose-project-closing',
+    cliente: 'Diagnostico fechamento',
+    list_id: listId,
+    view_id: viewId
+  }, { deadline_ms: new Date().getTime() + 25000 });
+  var tasks = payload.tasks || [];
   var phaseMap = {};
   var byId = {};
   tasks.forEach(function(task) { byId[String(task.id)] = task; });
@@ -2049,7 +2081,9 @@ function diagnoseProjectClosing_(params) {
   return {
     ok: true,
     project_closing_rule_version: CLICKUP_PROJECT_CLOSING_RULE_VERSION,
+    source: payload.source || (viewId ? 'view' : 'list'),
     list_id: listId,
+    view_id: viewId,
     tasks_total: tasks.length,
     breakoff_total: breakOffItems.length,
     aprovados_total: breakOffItems.filter(function(item) { return item.entra_regra; }).length,
