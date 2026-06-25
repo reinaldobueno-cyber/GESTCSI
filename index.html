@@ -14975,7 +14975,7 @@ function loadAll(tipoAtualizacao) {
     fallbackProjetos = Array.isArray(fallbackProjetos) ? fallbackProjetos : [];
     fallbackMotivo = fallbackMotivo || 'fallback';
     function chaveMensal(item) {
-      return String((item && item.mes) || '').toUpperCase()+'|'+normalizeClienteKey((item && item.cliente) || '');
+      return painelProjetoCarteiraKey(item);
     }
     function mesclarComPlanilha(apiProjetos) {
       var combinados = fallbackProjetos.slice();
@@ -14987,7 +14987,7 @@ function loadAll(tipoAtualizacao) {
       (apiProjetos || []).forEach(function(item){
         var chave = chaveMensal(item);
         if (chave && indice.hasOwnProperty(chave)) {
-          combinados[indice[chave]] = Object.assign({}, item, combinados[indice[chave]]);
+          combinados[indice[chave]] = Object.assign({}, combinados[indice[chave]], item);
         } else {
           combinados.push(item);
         }
