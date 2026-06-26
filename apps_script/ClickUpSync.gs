@@ -4006,11 +4006,18 @@ function mergeClickUpUserActivityRows_(existingRows, batchRows, fetchedAt) {
       'tarefas_criadas_estimadas',
       'tarefas_atualizadas_hoje',
       'tarefas_concluidas_hoje',
-      'tarefas_criadas_hoje',
-      'projetos_associados'
+      'tarefas_criadas_hoje'
     ].forEach(function(field) {
       current[field] = toInt_(current[field], 0) + toInt_(batch[field], 0);
     });
+    var previousProjectCount = toInt_(current.projetos_associados, 0);
+    var batchProjectCount = toInt_(batch.projetos_associados, 0);
+    current.projetos_carteira_json = mergeClickUpPortfolioProjectsJson_(
+      current.projetos_carteira_json,
+      batch.projetos_carteira_json
+    );
+    var portfolioProjectCount = parseClickUpPortfolioProjects_(current.projetos_carteira_json).length;
+    current.projetos_associados = portfolioProjectCount || (previousProjectCount + batchProjectCount);
     current.atividades_hoje_json = mergeClickUpTodayActionsJson_(current.atividades_hoje_json, batch.atividades_hoje_json);
     current.atividades_7_dias_json = mergeClickUpTodayActionsJson_(current.atividades_7_dias_json, batch.atividades_7_dias_json, 300);
     current.sincronizado_em = batch.sincronizado_em || current.sincronizado_em;
@@ -4093,6 +4100,39 @@ function mergeClickUpTodayActionsJson_(currentJson, batchJson, limit) {
   });
   if (Number(limit || 0) > 0) merged = merged.slice(0, Number(limit));
   return JSON.stringify(merged);
+}
+
+function parseClickUpPortfolioProjects_(raw) {
+  if (Array.isArray(raw)) return raw;
+  if (!raw) return [];
+  try {
+    var parsed = JSON.parse(String(raw));
+    return Array.isArray(parsed) ? parsed : [];
+  } catch (e) {
+    return [];
+  }
+}
+
+function mergeClickUpPortfolioProjectsJson_(currentJson, batchJson) {
+  var byKey = {};
+  parseClickUpPortfolioProjects_(currentJson).concat(parseClickUpPortfolioProjects_(batchJson)).forEach(function(project) {
+    project = project || {};
+    var key = sanitizeText_(project.project_key || project.cliente || project.project_url);
+    if (!key) return;
+    byKey[key] = {
+      project_key: key,
+      cliente: sanitizeText_(project.cliente || key),
+      mes: sanitizeText_(project.mes),
+      project_url: sanitizeText_(project.project_url),
+      list_id: normalizeClickUpId_(project.list_id),
+      view_id: normalizeClickUpId_(project.view_id)
+    };
+  });
+  return JSON.stringify(Object.keys(byKey).map(function(key) {
+    return byKey[key];
+  }).sort(function(a, b) {
+    return String(a.cliente || '').localeCompare(String(b.cliente || ''));
+  }));
 }
 
 function fetchClickUpWorkspaceMembers_(workspaceId, forceRefresh) {
@@ -4194,7 +4234,13 @@ function buildApproxClickUpUserActivityFromTasks_(mappings, options) {
     item.dias_sem_acao = item.ultima_acao ? daysBetween_(new Date(item.ultima_acao), options.fetched_at) : '';
     item.total_eventos_periodo = item.total_eventos_periodo || 0;
     item.total_acoes_periodo = item.total_acoes_periodo || 0;
-    item.projetos_associados = Object.keys(item._portfolio_projects || {}).length;
+    var portfolioProjects = Object.keys(item._portfolio_projects || {}).map(function(projectKey) {
+      return item._portfolio_projects[projectKey];
+    }).filter(function(project) { return !!project; }).sort(function(a, b) {
+      return String(a.cliente || '').localeCompare(String(b.cliente || ''));
+    });
+    item.projetos_associados = portfolioProjects.length;
+    item.projetos_carteira_json = JSON.stringify(portfolioProjects);
     item.tarefas_atribuidas = item.tarefas_atribuidas || 0;
     item.tarefas_concluidas_estimadas = item.tarefas_concluidas_estimadas || 0;
     item.tarefas_criadas_estimadas = item.tarefas_criadas_estimadas || 0;
@@ -4337,7 +4383,14 @@ function associateApproxProjectWithConsultant_(byKey, mapping) {
   var projectKey = sanitizeText_(mapping && (mapping.project_key || mapping.cliente));
   if (!item || !projectKey) return null;
   if (!item._portfolio_projects) item._portfolio_projects = {};
-  item._portfolio_projects[projectKey] = true;
+  item._portfolio_projects[projectKey] = {
+    project_key: projectKey,
+    cliente: sanitizeText_(mapping && mapping.cliente),
+    mes: sanitizeText_(mapping && mapping.mes),
+    project_url: sanitizeText_(mapping && mapping.project_url) || buildProjectUrl_(mapping || {}, []),
+    list_id: normalizeClickUpId_(mapping && mapping.list_id),
+    view_id: normalizeClickUpId_(mapping && mapping.view_id)
+  };
   return item;
 }
 
@@ -4802,6 +4855,7 @@ function getClickUpUserActivityHeaders_() {
     'tarefas_criadas_hoje',
     'atividades_hoje_json',
     'projetos_associados',
+    'projetos_carteira_json',
     'projetos_configurados_controle',
     'projetos_elegiveis_controle',
     'projetos_selecionados_controle',
