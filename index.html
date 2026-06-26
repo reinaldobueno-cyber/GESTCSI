@@ -3690,7 +3690,7 @@ var UPDATE_DEVICE_KEY = 'gestcsi_update_device_id_v1';
 var UPDATE_ACTOR_KEY = 'gestcsi_update_actor_v1';
 var LAST_UPDATE_KEY = 'gestcsi_last_update_label_v1';
 var PANEL_CACHE_KEY = 'gestcsi_panel_cache_v2';
-var PANEL_APP_VERSION = '2026-06-25-portfolio-merge-v4';
+var PANEL_APP_VERSION = '2026-06-26-portfolio-monthly-fallback-v5';
 var THEME_MODE_KEY = 'gestcsi_theme_mode_v1';
 var AUTH_SESSION_KEY = 'gestcsi_auth_session_v1';
 var AUTH_STATE = { token:'', user:null };
@@ -3882,6 +3882,10 @@ function carregarPainelCache() {
   try {
     var cache = JSON.parse(storageGet(PANEL_CACHE_KEY, 'null'));
     if (!cache || !Array.isArray(cache.projetos) || !cache.projetos.length) return null;
+    if (!painelCarteiraCompleta(cache.projetos)) {
+      console.warn('[CACHE] Cache parcial descartado:', cache.projetos.length, 'mínimo:', painelMinimoCarteiraAtual());
+      return null;
+    }
     if (cache.app_version !== PANEL_APP_VERSION) {
       console.warn('[CACHE] Versao diferente, mas cache preservado para evitar tela vazia:', cache.app_version, '->', PANEL_APP_VERSION);
     }
@@ -3893,6 +3897,10 @@ function carregarPainelCache() {
 function persistirPainelCache(projetos, info) {
   var lista = Array.isArray(projetos) ? projetos : [];
   if (!lista.length) return false;
+  if (!painelCarteiraCompleta(lista)) {
+    console.warn('[CACHE] Cache parcial nao salvo:', lista.length, 'mínimo:', painelMinimoCarteiraAtual());
+    return false;
+  }
   var atual = carregarPainelCache();
   if (atual && atual.projetos && atual.projetos.length > lista.length) {
     console.warn('[CACHE] Carga menor ignorada para preservar cache mais completo:', lista.length, 'vs', atual.projetos.length);
@@ -15035,6 +15043,40 @@ function loadAll(tipoAtualizacao) {
         _finalizarLoad([], isRefresh, motivoErro || 'apps_script_indisponivel', window._lastUpdateTrigger);
       }
     }
+    function mesesCarteiraAtual() {
+      var meses = Object.keys(ABAS_GID_FIXAS);
+      var agora = new Date();
+      if (agora.getFullYear() === 2026) {
+        meses = meses.filter(function(mes){ return ORDEM_MESES.indexOf(mes) <= agora.getMonth(); });
+      }
+      return meses;
+    }
+    function buscarAppsScriptPorMes(motivoOrigem) {
+      var meses = mesesCarteiraAtual();
+      if (nd) nd.textContent = 'Atualizando por mês...';
+      console.warn('[INIT] Apps Script ALL indisponivel/parcial. Buscando por mês:', motivoOrigem || '-');
+      return Promise.all(meses.map(function(mes){
+        return chamarAppsScriptJsonp('getMonthlyProjects', {mes:mes}, 18000).then(function(respMes){
+          var rows = respMes && Array.isArray(respMes.projetos) ? respMes.projetos : [];
+          console.log('[INIT] Apps Script '+mes+': '+rows.length+' projeto(s).');
+          return rows;
+        }).catch(function(errorMes){
+          console.warn('[INIT] Apps Script falhou no mês '+mes+':', errorMes);
+          return [];
+        });
+      })).then(function(partes){
+        var apiProjetos = [];
+        partes.forEach(function(rows){ apiProjetos = apiProjetos.concat(rows || []); });
+        var combinados = fallbackProjetos.length ? mesclarComPlanilha(apiProjetos) : apiProjetos;
+        console.log('[INIT] Apps Script mensal combinado: '+combinados.length+' projeto(s); API '+apiProjetos.length+', fallback '+fallbackProjetos.length+'.');
+        if (painelCarteiraCompleta(combinados)) {
+          _finalizarLoad(combinados, isRefresh, fallbackProjetos.length ? 'apps_script_monthly_merged' : 'apps_script_monthly', window._lastUpdateTrigger);
+          return true;
+        }
+        finalizarFallback('apps_script_monthly_parcial');
+        return false;
+      });
+    }
     if (!APPS_SCRIPT_URL || APPS_SCRIPT_URL.indexOf('AK') < 0) {
       console.warn('[INIT] URL do Apps Script ausente/invalida. Usando fallback.');
       finalizarFallback('local');
@@ -15042,7 +15084,7 @@ function loadAll(tipoAtualizacao) {
     }
 
     console.log('[1B] Buscando origem via Apps Script');
-    chamarAppsScriptJsonp('getMonthlyProjects', {mes:'ALL'}, 12000).then(function(resp) {
+    chamarAppsScriptJsonp('getMonthlyProjects', {mes:'ALL'}, 25000).then(function(resp) {
       var qtd = resp && Array.isArray(resp.projetos) ? resp.projetos.length : 0;
       console.log('[2B] Resposta Apps Script recebida. Projetos brutos:', qtd);
       if (resp && resp.projetos && resp.projetos.length > 0) {
@@ -15050,25 +15092,25 @@ function loadAll(tipoAtualizacao) {
           var combinados = mesclarComPlanilha(resp.projetos);
           console.log('[INIT] Base combinada: '+combinados.length+' projeto(s); planilha '+fallbackProjetos.length+', Apps Script '+qtd+'.');
           if (!painelCarteiraCompleta(combinados)) {
-            console.warn('[INIT] Apps Script tambem retornou base parcial. Mantendo fallback/cache em vez de substituir por '+combinados.length+'.');
-            finalizarFallback('apps_script_parcial');
+            console.warn('[INIT] Apps Script ALL tambem retornou base parcial. Tentando mês a mês antes de fallback: '+combinados.length+'.');
+            buscarAppsScriptPorMes('apps_script_all_parcial');
             return;
           }
           _finalizarLoad(combinados, isRefresh, 'sheet_direct_merged', window._lastUpdateTrigger);
           return;
         }
         if (!painelCarteiraCompleta(resp.projetos)) {
-          console.warn('[INIT] Apps Script retornou base parcial ('+qtd+'). Nao sera usada como base principal.');
-          _finalizarLoad([], isRefresh, 'apps_script_parcial', window._lastUpdateTrigger);
+          console.warn('[INIT] Apps Script ALL retornou base parcial ('+qtd+'). Tentando mês a mês.');
+          buscarAppsScriptPorMes('apps_script_all_parcial_sem_fallback');
           return;
         }
         _finalizarLoad(resp.projetos, isRefresh, 'apps_script', window._lastUpdateTrigger);
       } else {
-        finalizarFallback('vazio');
+        buscarAppsScriptPorMes('apps_script_all_vazio');
       }
     }).catch(function(error) {
       console.error('[INIT] Erro de rede/JSONP ao carregar Apps Script:', error);
-      finalizarFallback(error && /timeout/i.test(error.message || '') ? 'timeout' : 'erro');
+      buscarAppsScriptPorMes(error && /timeout/i.test(error.message || '') ? 'timeout_all' : 'erro_all');
     });
   }
 
