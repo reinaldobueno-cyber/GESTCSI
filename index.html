@@ -12402,7 +12402,9 @@ function gestaoActivityDays(value) {
   var d = gestaoActivityDate(value);
   if (!d) return null;
   var now = new Date();
-  return Math.max(0, Math.floor((now.getTime() - d.getTime()) / 86400000));
+  var today = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+  var day = new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
+  return Math.max(0, Math.floor((today - day) / 86400000));
 }
 function gestaoActivityLastSignal(user) {
   user = user || {};
@@ -12530,22 +12532,9 @@ function gestaoUserSevenDayActivities(user) {
 function gestaoUserDayActivitiesForDay(user, dayKey) {
   user = user || {};
   var actions = gestaoUserDayActivities(user);
-  var dayActions = actions.filter(function(action) {
+  return actions.filter(function(action) {
     return gestaoActivityDayKey(action && action.horario) === dayKey;
   });
-  if (dayActions.length) return dayActions;
-  var fallbackLast = user.ultima_acao || user.ultimo_evento || user.primeira_acao || user.clickup_last_active;
-  if (!fallbackLast || gestaoActivityDayKey(fallbackLast) !== dayKey) return [];
-  return [{
-    horario: fallbackLast,
-    tipo: user.tipo_ultima_acao || user.tipo_primeira_acao || 'Último sinal encontrado',
-    projeto: '',
-    item_tipo: '',
-    item_nome: user.ultima_acao_contexto || user.primeira_acao_contexto || 'Origem registrada',
-    lista: '',
-    link: user.ultima_acao_link || user.primeira_acao_link || '',
-    contexto: user.ultima_acao_contexto || user.primeira_acao_contexto || ''
-  }];
 }
 function gestaoOpenUserDayActivity(index) {
   var users = Array.isArray(GESTAO_CLICKUP_USER_ACTIVITY) ? GESTAO_CLICKUP_USER_ACTIVITY : [];
@@ -12652,7 +12641,7 @@ function gestaoRenderClickUpUserActivity(users, meta) {
       '</tr>';
   }).join('');
   var modeNote = estimatedMode ? 'Modo estimado: usa tarefas, responsáveis, criadores, status fechado e datas de atualização. Não mede login real.' : 'Modo Audit Log: usa eventos reais liberados pelo ClickUp.';
-  var numbersNote = estimatedMode ? 'Dias sem atividade usa o melhor sinal disponível entre last active e tarefas. Projetos e movimentos usam a carteira oficial do consultor; a API informa que o projeto mudou, mas não identifica com certeza quem fez a alteração.' : 'Eventos e Ações vêm do período do Audit Log.';
+  var numbersNote = estimatedMode ? 'Dias sem atividade usa o melhor sinal disponível entre last active e tarefas. Mov. hoje lista somente tasks em que o usuário aparece como responsável ou criador.' : 'Eventos e Ações vêm do período do Audit Log.';
   var projectsMissingId = Math.max(0, projectsConfigured - projectsEligible);
   var coverageState = projectsConfigured && !syncComplete && projectsNextOffset < projectsSelected
     ? ' Sincronização incompleta; Gerar estimativa continuará do projeto '+projectsNextOffset+'.'

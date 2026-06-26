@@ -4031,9 +4031,10 @@ function mergeClickUpUserActivityRows_(existingRows, batchRows, fetchedAt) {
 }
 
 function mergeClickUpActivityIdentity_(current, batch) {
-  ['user_id', 'nome', 'email', 'role', 'clickup_last_active', 'date_joined', 'date_invited'].forEach(function(field) {
+  ['user_id', 'nome', 'email', 'role', 'date_joined', 'date_invited'].forEach(function(field) {
     if (!current[field] && batch[field]) current[field] = batch[field];
   });
+  current.clickup_last_active = laterIso_(current.clickup_last_active, batch.clickup_last_active);
 }
 
 function mergeClickUpActivityFirst_(current, batch, dateField, relatedFields) {
@@ -4344,6 +4345,28 @@ function associateApproxConsultantMovement_(byKey, task, mapping, context, flags
   flags = flags || {};
   var item = associateApproxProjectWithConsultant_(byKey, mapping);
   if (!item) return;
+  if (flags.require_direct_user_signal) return;
+  if (flags.updated_today || flags.created_today) {
+    addApproxTodayAction_(item, task, mapping, context, {
+      updated: flags.updated_today,
+      created: flags.created_today,
+      completed: !!(flags.completed && flags.updated_today),
+      timestamp: flags.updated_today ? flags.updated : flags.created
+    });
+  }
+  if (flags.updated_seven_days || flags.created_seven_days) {
+    addApproxSevenDayAction_(item, task, mapping, context, {
+      updated: flags.updated_seven_days,
+      created: flags.created_seven_days,
+      completed: !!(flags.completed && flags.updated_seven_days),
+      timestamp: flags.updated_seven_days ? flags.updated : flags.created
+    });
+  }
+}
+
+function addApproxTaskMovementForUser_(item, task, mapping, context, flags) {
+  if (!item) return;
+  flags = flags || {};
   if (flags.updated_today || flags.created_today) {
     addApproxTodayAction_(item, task, mapping, context, {
       updated: flags.updated_today,
@@ -4386,7 +4409,8 @@ function aggregateApproxTaskForUsers_(byKey, task, mapping, options) {
     created_seven_days: !!createdSevenDays,
     completed: !!done,
     updated: updated,
-    created: created
+    created: created,
+    require_direct_user_signal: true
   });
 
   (task.assignees || []).forEach(function(user) {
@@ -4411,6 +4435,15 @@ function aggregateApproxTaskForUsers_(byKey, task, mapping, options) {
     if (updatedToday) item.tarefas_atualizadas_hoje += 1;
     if (done && updatedToday) item.tarefas_concluidas_hoje += 1;
     if (createdToday) item.tarefas_criadas_hoje += 1;
+    addApproxTaskMovementForUser_(item, task, mapping, context, {
+      updated_today: !!updatedToday,
+      created_today: !!createdToday,
+      updated_seven_days: !!updatedSevenDays,
+      created_seven_days: !!createdSevenDays,
+      completed: !!done,
+      updated: updated,
+      created: created
+    });
     if (projectKey) item._projects[projectKey] = true;
     if (created && (!item._first_created || created < item._first_created)) {
       item._first_created = created;
@@ -4440,8 +4473,7 @@ function aggregateApproxTaskForUsers_(byKey, task, mapping, options) {
     if (creatorItem) {
       creatorItem.tarefas_criadas_estimadas += 1;
       if (createdToday) creatorItem.tarefas_criadas_hoje += 1;
-      if (updatedToday) creatorItem.tarefas_atualizadas_hoje += 1;
-      if (updatedInPeriod || createdInPeriod) {
+      if (createdInPeriod) {
         creatorItem.total_eventos_periodo += 1;
         creatorItem.total_acoes_periodo += 1;
       }
@@ -4450,8 +4482,19 @@ function aggregateApproxTaskForUsers_(byKey, task, mapping, options) {
         creatorItem._first_created = created;
         creatorItem._first_created_ctx = context;
       }
-      if (updated && updated > creatorItem._last_action) {
-        creatorItem._last_action = updated;
+      if (createdToday || createdSevenDays) {
+        addApproxTaskMovementForUser_(creatorItem, task, mapping, context, {
+          updated_today: false,
+          created_today: !!createdToday,
+          updated_seven_days: false,
+          created_seven_days: !!createdSevenDays,
+          completed: !!done,
+          updated: updated,
+          created: created
+        });
+      }
+      if (created && created > creatorItem._last_action) {
+        creatorItem._last_action = created;
         creatorItem._last_action_ctx = context;
       }
       count += 1;
