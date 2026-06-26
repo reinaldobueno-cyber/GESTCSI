@@ -12546,7 +12546,7 @@ function gestaoOpenUserDayActivity(index) {
     return '<tr><td>'+gestaoActivityDateLabel(action.horario)+'</td><td><span class="dashx-score-pill neutral">'+escapeHtml(action.tipo || '-')+'</span></td><td><strong>'+escapeHtml(action.item_nome || '-')+'</strong><div class="dashx-list-sub">'+escapeHtml((action.projeto || '-')+' • '+(action.item_tipo || 'Item')+(action.lista ? ' • '+action.lista : ''))+'</div></td><td>'+(link ? '<a class="project-link-btn" href="'+escapeHtml(link)+'" target="_blank" rel="noopener">Abrir</a>' : '-')+'</td></tr>';
   }).join('') : '<tr class="empty-row"><td colspan="4">Nenhuma movimentação registrada hoje para este usuário.</td></tr>';
   var title = 'Movimento hoje — ' + (user.nome || user.email || 'Usuário');
-  var html = '<div class="dashx-focus-note"><div><strong>'+escapeHtml(user.nome || user.email || '-')+'</strong><br>Movimentações estimadas nos projetos da carteira deste consultor, com base nas tasks retornadas pela API do ClickUp.</div><div class="dashx-focus-hint">'+actions.length+' item(ns)</div></div><div class="dashx-table-wrap" style="margin-top:12px"><table class="dashx-table"><thead><tr><th>Horário</th><th>Tipo</th><th>Origem</th><th>Ação</th></tr></thead><tbody>'+rows+'</tbody></table></div>';
+  var html = '<div class="dashx-focus-note"><div><strong>'+escapeHtml(user.nome || user.email || '-')+'</strong><br>Tasks em que este usuário aparece como responsável ou criador, retornadas pela API do ClickUp. Não é o mesmo campo do Last active.</div><div class="dashx-focus-hint">'+actions.length+' item(ns)</div></div><div class="dashx-table-wrap" style="margin-top:12px"><table class="dashx-table"><thead><tr><th>Horário</th><th>Tipo</th><th>Origem</th><th>Ação</th></tr></thead><tbody>'+rows+'</tbody></table></div>';
   dashOpenAuditModal(title, html);
   return false;
 }
@@ -12563,7 +12563,7 @@ function gestaoOpenUserSevenDayActivity(index) {
     return '<tr><td>'+gestaoActivityDateLabel(action.horario)+'</td><td><span class="dashx-score-pill neutral">'+escapeHtml(action.tipo || '-')+'</span></td><td><strong>'+escapeHtml(action.item_nome || '-')+'</strong><div class="dashx-list-sub">'+escapeHtml((action.projeto || '-')+' • '+(action.item_tipo || 'Item')+(action.lista ? ' • '+action.lista : ''))+'</div></td><td>'+(link ? '<a class="project-link-btn" href="'+escapeHtml(link)+'" target="_blank" rel="noopener">Abrir</a>' : '-')+'</td></tr>';
   }).join('') : '<tr class="empty-row"><td colspan="4">Nenhuma movimentação registrada nos últimos 7 dias para este usuário.</td></tr>';
   var title = 'Movimentos dos últimos 7 dias — ' + (user.nome || user.email || 'Usuário');
-  var html = '<div class="dashx-focus-note"><div><strong>'+escapeHtml(user.nome || user.email || '-')+'</strong><br>Relação estimada das movimentações nos projetos da carteira deste consultor durante os últimos sete dias.</div><div class="dashx-focus-hint">'+actions.length+' item(ns)</div></div><div class="dashx-table-wrap" style="margin-top:12px"><table class="dashx-table"><thead><tr><th>Data/hora</th><th>Tipo</th><th>Origem</th><th>Ação</th></tr></thead><tbody>'+rows+'</tbody></table></div>';
+  var html = '<div class="dashx-focus-note"><div><strong>'+escapeHtml(user.nome || user.email || '-')+'</strong><br>Tasks em que este usuário aparece como responsável ou criador nos últimos sete dias. Não é o mesmo campo do Last active.</div><div class="dashx-focus-hint">'+actions.length+' item(ns)</div></div><div class="dashx-table-wrap" style="margin-top:12px"><table class="dashx-table"><thead><tr><th>Data/hora</th><th>Tipo</th><th>Origem</th><th>Ação</th></tr></thead><tbody>'+rows+'</tbody></table></div>';
   dashOpenAuditModal(title, html);
   return false;
 }
@@ -12584,8 +12584,8 @@ function gestaoRenderClickUpUserActivity(users, meta) {
     }
     return '<div class="dashx-unavailable"><strong>Sem dados de uso ainda</strong><span>Clique em “Gerar estimativa” acima para criar a visão aproximada por tarefas.</span></div>';
   }
-  var active7 = users.filter(function(u){ var d = gestaoActivityDays(gestaoActivityLastSignal(u)); return d !== null && d <= 7; }).length;
-  var stale15 = users.filter(function(u){ var d = gestaoActivityDays(gestaoActivityLastSignal(u)); return d === null || d > 15; }).length;
+  var active7 = users.filter(function(u){ var d = gestaoActivityDays(u.clickup_last_active); return d !== null && d <= 7; }).length;
+  var stale15 = users.filter(function(u){ var d = gestaoActivityDays(u.clickup_last_active); return d === null || d > 15; }).length;
   var estimatedMode = users.some(function(u){ return String(u.modo_controle || '') === 'estimado_por_tarefas'; });
   var synced = users.map(function(u){ return u.sincronizado_em || ''; }).filter(Boolean).sort().slice(-1)[0] || '';
   var todayKey = gestaoActivityDayKey(synced || new Date());
@@ -12610,9 +12610,9 @@ function gestaoRenderClickUpUserActivity(users, meta) {
   }
   var cards =
     '<div class="dashx-top-grid" style="grid-template-columns:repeat(4,minmax(0,1fr));margin-bottom:14px">'+
-      '<div class="dashx-card good"><div class="dashx-card-label">Ativos em 7 dias</div><div class="dashx-card-value">'+active7+'</div><div class="dashx-card-note">'+(estimatedMode ? 'com tarefa atualizada recentemente' : 'com login, ação ou last active recente')+'</div></div>'+
-      '<div class="dashx-card warn"><div class="dashx-card-label">15+ dias sem atividade</div><div class="dashx-card-value">'+stale15+'</div><div class="dashx-card-note">sem last active ou tarefa recente</div></div>'+
-      '<div class="dashx-card neutral"><div class="dashx-card-label">Com movimento hoje</div><div class="dashx-card-value">'+movedToday+'</div><div class="dashx-card-note">última ação no dia da sync</div></div>'+
+      '<div class="dashx-card good"><div class="dashx-card-label">Ativos em 7 dias</div><div class="dashx-card-value">'+active7+'</div><div class="dashx-card-note">com Last active recente no ClickUp</div></div>'+
+      '<div class="dashx-card warn"><div class="dashx-card-label">15+ dias sem atividade</div><div class="dashx-card-value">'+stale15+'</div><div class="dashx-card-note">sem Last active recente no ClickUp</div></div>'+
+      '<div class="dashx-card neutral"><div class="dashx-card-label">Com movimento hoje</div><div class="dashx-card-value">'+movedToday+'</div><div class="dashx-card-note">task associada no dia da sync</div></div>'+
       '<div class="dashx-card neutral"><div class="dashx-card-label">Sem movimento hoje</div><div class="dashx-card-value">'+notMovedToday+'</div><div class="dashx-card-note">última ação antes de hoje</div></div>'+
     '</div>';
   var sortedUsers = users.slice().sort(function(a,b){
@@ -12621,7 +12621,7 @@ function gestaoRenderClickUpUserActivity(users, meta) {
   GESTAO_CLICKUP_USER_ACTIVITY = sortedUsers;
   var rows = sortedUsers.map(function(u, idx){
     var last = gestaoActivityLastSignal(u);
-    var days = gestaoActivityDays(last);
+    var days = gestaoActivityDays(u.clickup_last_active);
     var cls = gestaoActivityRiskClass(days);
     var label = days === null ? 'sem dado' : (days === 0 ? 'Hoje' : (days+'d'));
     var fallbackLast = u.ultima_acao || u.ultimo_evento || u.primeira_acao || u.clickup_last_active;
@@ -12641,7 +12641,7 @@ function gestaoRenderClickUpUserActivity(users, meta) {
       '</tr>';
   }).join('');
   var modeNote = estimatedMode ? 'Modo estimado: usa tarefas, responsáveis, criadores, status fechado e datas de atualização. Não mede login real.' : 'Modo Audit Log: usa eventos reais liberados pelo ClickUp.';
-  var numbersNote = estimatedMode ? 'Dias sem atividade usa o melhor sinal disponível entre last active e tarefas. Mov. hoje lista somente tasks em que o usuário aparece como responsável ou criador.' : 'Eventos e Ações vêm do período do Audit Log.';
+  var numbersNote = estimatedMode ? 'Dias sem atividade usa somente Last active do ClickUp. Mov. hoje lista tasks em que o usuário aparece como responsável ou criador.' : 'Eventos e Ações vêm do período do Audit Log.';
   var projectsMissingId = Math.max(0, projectsConfigured - projectsEligible);
   var coverageState = projectsConfigured && !syncComplete && projectsNextOffset < projectsSelected
     ? ' Sincronização incompleta; Gerar estimativa continuará do projeto '+projectsNextOffset+'.'
@@ -12655,7 +12655,7 @@ function gestaoRenderClickUpUserActivity(users, meta) {
     ? ' <button type="button" class="project-link-btn warn" onclick="return gestaoOpenClickUpErrors()">'+projectErrorDetails.length+' com erro</button>'
     : (projectsWithError ? ' '+projectsWithError+' erro(s) antigos; gere novamente para detalhar.' : '');
   var coverageNote = projectsConfigured ? ' Cobertura: '+projectsRead+' de '+projectsSelected+' projetos elegíveis tentados'+(projectsWithError ? ', '+projectsWithError+' com erro' : '')+(projectsMissingId ? ', '+projectsMissingId+' habilitados sem ID ClickUp' : '')+'.'+coverageState : '';
-  return '<div class="dashx-focus-note" style="margin-bottom:14px"><div><strong>Controle de adoção.</strong> '+modeNote+' '+numbersNote+coverageNote+errorAction+'</div><div class="dashx-focus-hint">última sync '+escapeHtml(gestaoActivityDateLabel(synced))+'</div></div>'+cards+'<div class="dashx-table-wrap"><table class="dashx-table"><thead><tr><th>Usuário</th><th>Last active</th><th>Última ação</th><th>Dias sem atividade</th><th>Mov. hoje</th><th>Mov. últ. 7 dias</th><th class="num">Projetos carteira</th></tr></thead><tbody>'+rows+'</tbody></table></div>';
+  return '<div class="dashx-focus-note" style="margin-bottom:14px"><div><strong>Controle de adoção.</strong> '+modeNote+' '+numbersNote+coverageNote+errorAction+'</div><div class="dashx-focus-hint">última sync '+escapeHtml(gestaoActivityDateLabel(synced))+'</div></div>'+cards+'<div class="dashx-table-wrap"><table class="dashx-table"><thead><tr><th>Usuário</th><th>Last active</th><th>Última task associada</th><th>Dias sem atividade</th><th>Mov. hoje</th><th>Mov. últ. 7 dias</th><th class="num">Projetos carteira</th></tr></thead><tbody>'+rows+'</tbody></table></div>';
 }
 function gestaoReloadClickUpUserActivity(force) {
   var box = document.getElementById('clickup-user-activity-content');
