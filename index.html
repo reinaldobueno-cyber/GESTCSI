@@ -3237,10 +3237,10 @@ body.theme-dark .tower-kpis [style*="background:#fff"]{
 .bonus-activity.rejected{background:#fff5f3;border-color:#f3c5bd}.bonus-activity.rejected strong{color:#b44535}
 .bonus-activity span{display:block;color:#687b98;font-size:9px;font-weight:900;letter-spacing:.1em;text-transform:uppercase}.bonus-activity strong{display:block;color:#173b67;font-size:22px;margin-top:8px}.bonus-activity small{display:block;color:#92a3b8;font-size:10px;margin-top:5px}
 .bonus-financial{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;padding:0 28px 22px}.bonus-financial-item{border-left:4px solid #667eea;border-radius:10px;background:#f5f8fb;padding:14px 16px}.bonus-financial-item.marcos{border-left-color:#ed8936}.bonus-financial-item.indicacoes{border-left-color:#8b5cf6}.bonus-financial-item.total{border-left-color:#38a169;background:#edfbf1}.bonus-financial-item span{display:block;font-size:9px;font-weight:900;letter-spacing:.1em;text-transform:uppercase;color:#687b98}.bonus-financial-item strong{display:block;font-size:18px;color:#173b67;margin-top:7px}.bonus-financial-item.total strong{color:#237543;font-size:21px}
-.bonus-indication-form{display:grid;grid-template-columns:1.1fr 1.4fr .8fr 1fr 1fr 1.2fr auto;gap:8px;align-items:end}.bonus-indication-field label{display:block;font-size:8px;font-weight:900;letter-spacing:.09em;text-transform:uppercase;color:var(--muted);margin:0 0 5px 3px}.bonus-indication-field input,.bonus-indication-field select{width:100%;border:1px solid var(--border);border-radius:8px;background:var(--surf2);color:var(--text);padding:9px;font:800 10px 'Inter',sans-serif}
+.bonus-indication-form{display:grid;grid-template-columns:1.1fr 1.4fr .8fr 1fr 1fr 1.2fr auto;gap:8px;align-items:end}.bonus-seniority-form{display:grid;grid-template-columns:minmax(220px,1.4fr) minmax(160px,.7fr) auto;gap:8px;align-items:end}.bonus-indication-field label{display:block;font-size:8px;font-weight:900;letter-spacing:.09em;text-transform:uppercase;color:var(--muted);margin:0 0 5px 3px}.bonus-indication-field input,.bonus-indication-field select{width:100%;border:1px solid var(--border);border-radius:8px;background:var(--surf2);color:var(--text);padding:9px;font:800 10px 'Inter',sans-serif}
 .bonus-section{padding:16px;border-top:1px solid var(--border)}.bonus-section:first-of-type{border-top:0}.bonus-section-title{font-size:12px;font-weight:900;color:var(--text);margin-bottom:10px}
 .bonus-empty{padding:30px;text-align:center;color:var(--text2)}
-@media(max-width:1200px){.bonus-indication-form{grid-template-columns:repeat(3,1fr)}}
+@media(max-width:1200px){.bonus-indication-form,.bonus-seniority-form{grid-template-columns:repeat(3,1fr)}}
 @media(max-width:1050px){.bonus-exec-grid{grid-template-columns:repeat(2,1fr)}.bonus-exec-columns{grid-template-columns:1fr}}
 @media(max-width:900px){.bonus-activity-grid{grid-template-columns:repeat(2,1fr)}.bonus-financial{grid-template-columns:1fr}.bonus-report-head{padding:20px}.bonus-report-total strong{font-size:24px}.bonus-rank-row{grid-template-columns:24px 1fr auto}.bonus-rank-track{display:none}}
 @media print{nav,.period-bar,.sidenav,.bonus-actions{display:none!important}.app-shell,.main-content{display:block!important}.page{display:none!important}.page.on{display:block!important}.bonus-exec,.bonus-admin-table,.bonus-report{break-inside:avoid}}
@@ -6789,14 +6789,17 @@ function initBonus() {
       .concat((BONUS_INDICATION_STATE.items||[]).map(function(item){return item.consultant_name;}))
       .concat(Object.keys(CONSULTANT_COMP_STATE.items||{}).map(function(key){return CONSULTANT_COMP_STATE.items[key].consultant_name;}))
   );
-  var consultantOptions='<option value="todos">Todos os consultores</option>'+allNames.sort().map(function(name){return '<option value="'+escapeHtml(name)+'" '+(BONUS_FILTER.consultant===name?'selected':'')+'>'+escapeHtml(name)+'</option>';}).join('');
-  var adminRows=people.map(function(person){return '<tr><td><strong>'+escapeHtml(person.name)+'</strong><div class="cmax-date-sub">'+escapeHtml(consultantSeniorityLabel(person.seniority))+'</div></td><td>'+cmaxEquivalentLabel(person.dailyEquivalent)+'</td><td>'+consultantMoney(person.dailyValue)+'</td><td>'+person.milestoneRows.length+'</td><td>'+person.rejectedRows.length+'</td><td>'+consultantMoney(person.milestoneValue)+'</td><td>'+person.indicationRows.length+'</td><td>'+consultantMoney(person.indicationValue)+'</td><td><strong>'+consultantMoney(person.total)+'</strong></td></tr>';}).join('');
-  var indicationForm='<section class="bonus-admin-table"><div class="bonus-section"><div class="bonus-admin-label">Lan&ccedil;ar indica&ccedil;&atilde;o convertida</div><div class="bonus-admin-sub">Upgrade gera R$ 150,00 e m&oacute;dulo gera R$ 50,00. O valor entra no m&ecirc;s da venda.</div><form id="bonus-indication-form" class="bonus-indication-form" onsubmit="event.preventDefault();return bonusSaveIndication(this.querySelector(\'button[type=submit]\'))"><div class="bonus-indication-field"><label>Consultor</label><select name="consultant_name" required><option value="">Selecione</option>'+allNames.sort().map(function(name){return '<option value="'+escapeHtml(name)+'">'+escapeHtml(name)+'</option>';}).join('')+'</select></div><div class="bonus-indication-field"><label>Cliente</label><input name="client" required placeholder="Nome do cliente"></div><div class="bonus-indication-field"><label>Tipo</label><select name="indication_type" required><option value="upgrade">Upgrade - R$ 150</option><option value="modulo">M&oacute;dulo - R$ 50</option></select></div><div class="bonus-indication-field"><label>Data da indica&ccedil;&atilde;o</label><input name="indication_date" type="date" required></div><div class="bonus-indication-field"><label>Data da venda</label><input name="sale_date" type="date" required></div><div class="bonus-indication-field"><label>Observa&ccedil;&atilde;o</label><input name="notes" placeholder="Opcional"></div><button class="btn-syncall" type="submit">Lan&ccedil;ar indica&ccedil;&atilde;o</button></form></div></section>';
+  var sortedBonusNames=allNames.slice().sort();
+  var consultantOptions='<option value="todos">Todos os consultores</option>'+sortedBonusNames.map(function(name){return '<option value="'+escapeHtml(name)+'" '+(BONUS_FILTER.consultant===name?'selected':'')+'>'+escapeHtml(name)+'</option>';}).join('');
+  var seniorityNameOptions=sortedBonusNames.map(function(name){return '<option value="'+escapeHtml(name)+'"></option>';}).join('');
+  var adminRows=people.map(function(person){return '<tr><td><strong>'+escapeHtml(person.name)+'</strong></td><td>'+consultantSeniorityControl(person.name)+'</td><td>'+cmaxEquivalentLabel(person.dailyEquivalent)+'</td><td>'+consultantMoney(person.dailyValue)+'</td><td>'+person.milestoneRows.length+'</td><td>'+person.rejectedRows.length+'</td><td>'+consultantMoney(person.milestoneValue)+'</td><td>'+person.indicationRows.length+'</td><td>'+consultantMoney(person.indicationValue)+'</td><td><strong>'+consultantMoney(person.total)+'</strong></td></tr>';}).join('');
+  var indicationForm='<section class="bonus-admin-table"><div class="bonus-section"><div class="bonus-admin-label">Lan&ccedil;ar indica&ccedil;&atilde;o convertida</div><div class="bonus-admin-sub">Upgrade gera R$ 150,00 e m&oacute;dulo gera R$ 50,00. O valor entra no m&ecirc;s da venda.</div><form id="bonus-indication-form" class="bonus-indication-form" onsubmit="event.preventDefault();return bonusSaveIndication(this.querySelector(\'button[type=submit]\'))"><div class="bonus-indication-field"><label>Consultor</label><select name="consultant_name" required><option value="">Selecione</option>'+sortedBonusNames.map(function(name){return '<option value="'+escapeHtml(name)+'">'+escapeHtml(name)+'</option>';}).join('')+'</select></div><div class="bonus-indication-field"><label>Cliente</label><input name="client" required placeholder="Nome do cliente"></div><div class="bonus-indication-field"><label>Tipo</label><select name="indication_type" required><option value="upgrade">Upgrade - R$ 150</option><option value="modulo">M&oacute;dulo - R$ 50</option></select></div><div class="bonus-indication-field"><label>Data da indica&ccedil;&atilde;o</label><input name="indication_date" type="date" required></div><div class="bonus-indication-field"><label>Data da venda</label><input name="sale_date" type="date" required></div><div class="bonus-indication-field"><label>Observa&ccedil;&atilde;o</label><input name="notes" placeholder="Opcional"></div><button class="btn-syncall" type="submit">Lan&ccedil;ar indica&ccedil;&atilde;o</button></form></div></section>';
+  var seniorityForm='<section class="bonus-admin-table"><div class="bonus-section"><div class="bonus-admin-label">Senioridade pontual</div><div class="bonus-admin-sub">Use para suporte ou trabalho avulso sem criar usuário. A informação fica na aba CONSULTORES_REMUNERACAO e entra no cálculo das diárias.</div><form id="bonus-seniority-form" class="bonus-seniority-form" onsubmit="event.preventDefault();return bonusSaveSeniority(this.querySelector(\'button[type=submit]\'))"><div class="bonus-indication-field"><label>Nome</label><input name="consultant_name" list="bonus-seniority-names" required placeholder="Nome como aparece no CMAX"><datalist id="bonus-seniority-names">'+seniorityNameOptions+'</datalist></div><div class="bonus-indication-field"><label>Senioridade</label><select name="seniority" required><option value="">Selecione</option><option value="junior">Junior - R$ 60</option><option value="pleno">Pleno - R$ 85</option><option value="senior">Senior - R$ 110</option><option value="master">Master - R$ 220</option></select></div><button class="btn-syncall" type="submit">Salvar senioridade</button></form></div></section>';
   var status=(CMAX_DAILY_STATE.loading?'Carregando di&aacute;rias do m&ecirc;s selecionado. ':'')+(FECHAMENTO_LOADING?'Carregando fechamento de marcos. ':'');
   box.innerHTML='<div class="bonus-shell"><div class="bonus-hero"><div><div class="bonus-title">Bonifica&ccedil;&atilde;o mensal</div><div class="bonus-sub">Relat&oacute;rio consolidado alimentado pelas di&aacute;rias contabiliz&aacute;veis do CMAX e pelos marcos aprovados na valida&ccedil;&atilde;o t&eacute;cnica.</div></div><div class="bonus-actions"><select class="bonus-select" onchange="return bonusSetMonth(this.value)">'+monthOptions+'</select>'+(isAdmin?'<select class="bonus-select" onchange="return bonusSetConsultant(this.value)">'+consultantOptions+'</select>':'')+'<button class="btn-syncall" onclick="return bonusRefresh(this)">Atualizar relat&oacute;rio</button><button class="btn-syncall" onclick="window.print()">Imprimir / PDF</button></div></div>'+
     (status?'<div class="cmax-status">'+status+'</div>':'')+
-    bonusExecutivePanel(people,daily,milestones,equivalents,total,closedStats)+indicationForm+
-    (isAdmin?'<section class="bonus-admin-table"><div class="bonus-section"><div class="bonus-admin-label">Base detalhada administrativa</div><div class="bonus-admin-sub">Composi&ccedil;&atilde;o financeira por consultor para confer&ecirc;ncia e envio ao administrativo.</div><div class="dashx-table-wrap"><table class="dashx-table"><thead><tr><th>Consultor</th><th>Di&aacute;rias</th><th>Valor di&aacute;rias</th><th>Aprovados</th><th>Reprovados</th><th>Valor marcos</th><th>Indica&ccedil;&otilde;es</th><th>Valor indica&ccedil;&otilde;es</th><th>Total</th></tr></thead><tbody>'+adminRows+'</tbody></table></div></div><div class="bonus-section"><div class="bonus-admin-label">Marcos reprovados e justificativas</div><div class="bonus-admin-sub">Pontos que não geraram bonifica&ccedil;&atilde;o e precisam de transpar&ecirc;ncia com o time.</div>'+bonusAdminRejectedTable(people)+'</div></section>':'')+
+    bonusExecutivePanel(people,daily,milestones,equivalents,total,closedStats)+indicationForm+seniorityForm+
+    (isAdmin?'<section class="bonus-admin-table"><div class="bonus-section"><div class="bonus-admin-label">Base detalhada administrativa</div><div class="bonus-admin-sub">Composi&ccedil;&atilde;o financeira por consultor para confer&ecirc;ncia e envio ao administrativo.</div><div class="dashx-table-wrap"><table class="dashx-table"><thead><tr><th>Consultor</th><th>Senioridade</th><th>Di&aacute;rias</th><th>Valor di&aacute;rias</th><th>Aprovados</th><th>Reprovados</th><th>Valor marcos</th><th>Indica&ccedil;&otilde;es</th><th>Valor indica&ccedil;&otilde;es</th><th>Total</th></tr></thead><tbody>'+adminRows+'</tbody></table></div></div><div class="bonus-section"><div class="bonus-admin-label">Marcos reprovados e justificativas</div><div class="bonus-admin-sub">Pontos que não geraram bonifica&ccedil;&atilde;o e precisam de transpar&ecirc;ncia com o time.</div>'+bonusAdminRejectedTable(people)+'</div></section>':'')+
     (people.map(bonusPersonReport).join('')||'<div class="bonus-empty">Nenhuma bonifica&ccedil;&atilde;o encontrada para este usu&aacute;rio no m&ecirc;s selecionado.</div>')+'</div>';
 }
 window.bonusSetMonth=bonusSetMonth;
@@ -6804,6 +6807,7 @@ window.bonusSetConsultant=bonusSetConsultant;
 window.bonusRefresh=bonusRefresh;
 window.bonusSaveIndication=bonusSaveIndication;
 window.bonusDeleteIndication=bonusDeleteIndication;
+window.bonusSaveSeniority=bonusSaveSeniority;
 
 function initAdmin() {
   var el = document.getElementById('admin-content');
@@ -8948,10 +8952,10 @@ function dashProjectDeliveryItems(p) {
   return out;
 }
 function dashOpenHeatmapAudit(consultor, mes) {
-  consultor = String(consultor || 'Sem consultor');
+  consultor = dashPortfolioConsultantName(consultor || 'Sem consultor');
   mes = String(mes || '').toUpperCase();
   var list = ordenarProjetosPainel(projetosVisiveisParaUsuario(Array.isArray(DATA.projetos) ? DATA.projetos.slice() : [])).filter(function(p) {
-    var nome = String((p && p.consultor) || 'Sem consultor');
+    var nome = dashPortfolioConsultantName((p && p.consultor) || 'Sem consultor');
     return dashIs2026PortfolioProject(p) &&
       nome === consultor &&
       String((p && p.mes) || '').toUpperCase() === mes;
@@ -9308,7 +9312,7 @@ function dashOperation(list, analyses) {
   }).sort(function(a,b){ return (b.diasSemClickUp || 0) - (a.diasSemClickUp || 0); }).slice(0,12);
   analyses.forEach(function(a){
     var d = dashClickUpAgingDays(a.projeto);
-    var nomeConsultor = (a.projeto && a.projeto.consultor) || 'Sem consultor';
+    var nomeConsultor = dashPortfolioConsultantName((a.projeto && a.projeto.consultor) || 'Sem consultor');
     if (!agingByConsultor[nomeConsultor]) {
       agingByConsultor[nomeConsultor] = {
         nome: nomeConsultor,
@@ -9381,7 +9385,7 @@ function dashOperation(list, analyses) {
   });
   var heatMap = {};
   list.forEach(function(p){
-    var c = p.consultor || 'Sem consultor';
+    var c = dashPortfolioConsultantName(p.consultor || 'Sem consultor');
     var m = String(p.mes || '').toUpperCase() || 'SEM';
     if (!heatMap[c]) heatMap[c] = {};
     if (!heatMap[c][m]) heatMap[c][m] = { projetos:0, diariasContr:0, diariasReal:0, riscos:0 };
@@ -9390,7 +9394,7 @@ function dashOperation(list, analyses) {
     heatMap[c][m].diariasReal += Number(p.diarias_real || 0);
   });
   analyses.forEach(function(a){
-    var c = a.projeto.consultor || 'Sem consultor';
+    var c = dashPortfolioConsultantName(a.projeto.consultor || 'Sem consultor');
     var m = String(a.projeto.mes || '').toUpperCase() || 'SEM';
     if (heatMap[c] && heatMap[c][m] && a.risco) heatMap[c][m].riscos += 1;
   });
@@ -13015,12 +13019,10 @@ function consultantCompensationLoad(force) {
 }
 function consultantSeniorityControl(name) {
   var comp=consultantCompensation(name);
-  if(comp.seniority){
-    return '<span class="consultant-seniority-badge" title="Configurado no cadastro de usuários">'+consultantSeniorityLabel(comp.seniority)+' - '+consultantMoney(comp.daily_value)+'</span>';
-  }
   if(AUTH_STATE.user&&AUTH_STATE.user.role==='admin'){
-    return '<select class="consultant-seniority" title="Senioridade para cálculo de diária" onclick="event.stopPropagation()" onchange="event.stopPropagation();return consultantSetSeniority(decodeURIComponent(\''+encodeURIComponent(name)+'\'),this.value,this)"><option value="">Senioridade</option><option value="junior" '+(comp.seniority==='junior'?'selected':'')+'>Junior</option><option value="pleno" '+(comp.seniority==='pleno'?'selected':'')+'>Pleno</option><option value="senior" '+(comp.seniority==='senior'?'selected':'')+'>Senior</option><option value="master" '+(comp.seniority==='master'?'selected':'')+'>Master</option></select>';
+    return '<select class="consultant-seniority" title="Senioridade para cálculo de diária" onclick="event.stopPropagation()" onchange="event.stopPropagation();return consultantSetSeniority(decodeURIComponent(\''+encodeURIComponent(name)+'\'),this.value,this)"><option value="">Senioridade</option><option value="junior" '+(comp.seniority==='junior'?'selected':'')+'>Junior - R$ 60</option><option value="pleno" '+(comp.seniority==='pleno'?'selected':'')+'>Pleno - R$ 85</option><option value="senior" '+(comp.seniority==='senior'?'selected':'')+'>Senior - R$ 110</option><option value="master" '+(comp.seniority==='master'?'selected':'')+'>Master - R$ 220</option></select>';
   }
+  if(comp.seniority)return '<span class="consultant-seniority-badge">'+consultantSeniorityLabel(comp.seniority)+' - '+consultantMoney(comp.daily_value)+'</span>';
   return '<span class="cmax-count-pill">Sem senioridade</span>';
 }
 function adminUserSeniorityControl(user) {
@@ -13063,7 +13065,7 @@ function consultantSetSeniority(name,seniority,select) {
     CONSULTANT_COMP_STATE.loaded=true;
     initCons();
     renderDiariasCmax();
-    carregarDiariasCmax(true);
+    initBonus();
     showToast('Senioridade de '+name+' salva para todos.','ok');
     return false;
   }).catch(function(error){
@@ -13071,6 +13073,19 @@ function consultantSetSeniority(name,seniority,select) {
     showToast((error&&error.message)||'Falha ao salvar senioridade','err');
     return false;
   });
+}
+function bonusSaveSeniority(button) {
+  var form=document.getElementById('bonus-seniority-form');
+  if(!form)return false;
+  var nameField=form.elements&&form.elements.consultant_name;
+  var seniorityField=form.elements&&form.elements.seniority;
+  var name=String(nameField&&nameField.value||'').trim();
+  var seniority=String(seniorityField&&seniorityField.value||'').trim();
+  if(!name||!seniority){
+    showToast('Informe o nome e a senioridade.','err');
+    return false;
+  }
+  return consultantSetSeniority(name,seniority,button);
 }
 
 function cmaxCurrentMonth() {
@@ -14520,6 +14535,24 @@ function normalizarConsultorCarteira(value) {
   if (key === 'YASMIM SOUSA' || key === 'YASMIIM SOUSA' || key === 'YASMIIN SOUSA') return 'Yasmin Sousa';
   return text;
 }
+function dashPortfolioConsultantName(value) {
+  var text = normalizarConsultorCarteira(value || 'Sem consultor');
+  var key = normalizeClienteKey(text);
+  if (!key) return 'Sem consultor';
+  if (key.indexOf('ANA PAULA') === 0) return 'ANA PAULA';
+  if (key.indexOf('ANITA') === 0) return 'ANITA';
+  if (key.indexOf('BRUNO') === 0) return 'BRUNO';
+  if (key.indexOf('CAIO') === 0) return 'CAIO';
+  if (key.indexOf('EVELYN') === 0) return 'EVELYN';
+  if (key.indexOf('JULIANA') === 0) return 'JULIANA';
+  if (key.indexOf('LUCAS') === 0) return 'LUCAS';
+  if (key.indexOf('MARIA') === 0) return 'MARIA';
+  if (key.indexOf('SERGIO') === 0) return 'SÉRGIO';
+  if (key.indexOf('WANDERLEY') === 0 || key.indexOf('WANDERLEI') === 0 || key === 'WAND') return 'WANDERLEY';
+  if (key.indexOf('YASMIN') === 0) return 'YASMIN';
+  if (key.indexOf('SEM CONSULTOR') === 0) return 'Sem consultor';
+  return text;
+}
 
 function normalizarProjetoPlanilha(p) {
   var projeto = Object.assign({}, p || {});
@@ -14542,7 +14575,7 @@ function normalizarProjetoPlanilha(p) {
   var linkProjeto = valorPorAlias(projeto, ['link_projeto','projeto_link','url_projeto','link','LINK DO PROJETO']);
 
   projeto.cliente = String(cliente || '').trim();
-  projeto.consultor = normalizarConsultorCarteira(consultor);
+  projeto.consultor = dashPortfolioConsultantName(consultor);
   projeto.mes = String(mes || '').toUpperCase().trim();
   projeto.status_original = String(status || '').trim();
   projeto.status = projeto.status_original;
