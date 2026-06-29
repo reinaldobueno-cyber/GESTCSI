@@ -8987,17 +8987,30 @@ function dashProjectDeliveryItems(p) {
 function dashOpenHeatmapAudit(consultor, mes) {
   consultor = dashPortfolioConsultantName(consultor || 'Sem consultor');
   mes = String(mes || '').toUpperCase();
+  var totalMode = !mes || mes === 'TOTAL' || mes === 'ALL';
   var list = ordenarProjetosPainel(projetosVisiveisParaUsuario(Array.isArray(DATA.projetos) ? DATA.projetos.slice() : [])).filter(function(p) {
     var nome = dashPortfolioConsultantName((p && p.consultor) || 'Sem consultor');
     return dashIs2026PortfolioProject(p) &&
       nome === consultor &&
-      String((p && p.mes) || '').toUpperCase() === mes;
+      (totalMode || String((p && p.mes) || '').toUpperCase() === mes);
   });
-  var rows = list.length ? list.map(function(p) {
-    return '<tr><td><strong>'+escapeHtml(p.cliente || '-')+'</strong></td><td>'+escapeHtml(p.consultor || 'Sem consultor')+'</td><td>'+sl(String(p.status || '-'))+'</td><td>'+escapeHtml(p.tipo || '-')+'</td><td>'+escapeHtml(p.vendedor || '-')+'</td><td>'+dashProjectActionCell(p)+'</td></tr>';
-  }).join('') : '<tr class="empty-row"><td colspan="6">Nenhum projeto encontrado nesta célula.</td></tr>';
-  var html = '<div class="dashx-focus-note"><div><strong>'+escapeHtml(consultor)+' · '+escapeHtml(mes)+'/2026</strong><br>Projetos que compõem esta célula do heatmap.</div><div class="dashx-focus-hint">'+list.length+' projeto(s)</div></div><div class="dashx-table-wrap" style="margin-top:12px"><table class="dashx-table"><thead><tr><th>Projeto</th><th>Consultor</th><th>Status</th><th>Tipo</th><th>Vendedor</th><th>Ação</th></tr></thead><tbody>'+rows+'</tbody></table></div>';
-  dashOpenAuditModal('Carteira de projetos — '+consultor+' · '+mes+'/2026', html);
+  function renderRows(rowsList) {
+    return rowsList.length ? rowsList.map(function(p) {
+      return '<tr><td><strong>'+escapeHtml(p.cliente || '-')+'</strong></td><td>'+escapeHtml(p.consultor || 'Sem consultor')+'</td><td>'+sl(String(p.status || '-'))+'</td><td>'+escapeHtml(p.tipo || '-')+'</td><td>'+escapeHtml(p.vendedor || '-')+'</td><td>'+dashProjectActionCell(p)+'</td></tr>';
+    }).join('') : '<tr class="empty-row"><td colspan="6">Nenhum projeto encontrado.</td></tr>';
+  }
+  var html = '<div class="dashx-focus-note"><div><strong>'+escapeHtml(consultor)+' · '+(totalMode ? 'Total 2026' : escapeHtml(mes)+'/2026')+'</strong><br>'+(totalMode ? 'Projetos separados por mês para não misturar a carteira.' : 'Projetos que compõem esta célula do heatmap.')+'</div><div class="dashx-focus-hint">'+list.length+' projeto(s)</div></div>';
+  if (totalMode) {
+    var sections = ORDEM_MESES.map(function(m) {
+      var monthRows = list.filter(function(p) { return String((p && p.mes) || '').toUpperCase() === m; });
+      if (!monthRows.length) return '';
+      return '<div class="bonus-section" style="margin-top:12px"><div class="bonus-section-title">'+escapeHtml(m)+' · '+monthRows.length+' projeto(s)</div><div class="dashx-table-wrap"><table class="dashx-table"><thead><tr><th>Projeto</th><th>Consultor</th><th>Status</th><th>Tipo</th><th>Vendedor</th><th>Ação</th></tr></thead><tbody>'+renderRows(monthRows)+'</tbody></table></div></div>';
+    }).join('');
+    html += sections || '<div class="dashx-table-wrap" style="margin-top:12px"><table class="dashx-table"><tbody>'+renderRows([])+'</tbody></table></div>';
+  } else {
+    html += '<div class="dashx-table-wrap" style="margin-top:12px"><table class="dashx-table"><thead><tr><th>Projeto</th><th>Consultor</th><th>Status</th><th>Tipo</th><th>Vendedor</th><th>Ação</th></tr></thead><tbody>'+renderRows(list)+'</tbody></table></div>';
+  }
+  dashOpenAuditModal('Carteira de projetos — '+consultor+' · '+(totalMode ? 'Total 2026' : mes+'/2026'), html);
   return false;
 }
 window.dashOpenHeatmapAudit = dashOpenHeatmapAudit;
@@ -10130,7 +10143,10 @@ function dashRenderHeatmap(map) {
         : '';
       return '<div class="dashx-heatmap-cell '+cls+action+'" title="'+title+'">'+cell.projetos+'</div>';
     }).join('');
-    return '<div class="dashx-heatmap-row"><div class="dashx-heatmap-name">'+nome+'</div>'+cells+'<div class="dashx-heatmap-cell total" title="'+nome+' | Total 2026\\nProjetos de 2026: '+total+'">'+total+'</div></div>';
+    var totalAction = total > 0
+      ? ' clickable" role="button" tabindex="0" onclick="return dashOpenHeatmapAudit(\''+jsQuote(nome)+'\',\'TOTAL\')" onkeydown="if(event.key===\'Enter\'||event.key===\' \'){event.preventDefault();return dashOpenHeatmapAudit(\''+jsQuote(nome)+'\',\'TOTAL\');}'
+      : '';
+    return '<div class="dashx-heatmap-row"><div class="dashx-heatmap-name">'+nome+'</div>'+cells+'<div class="dashx-heatmap-cell total'+totalAction+'" title="'+nome+' | Total 2026\\nProjetos de 2026: '+total+'">'+total+'</div></div>';
   }).join('');
   return '<div class="dashx-heatmap">'+head+body+'</div>';
 }
