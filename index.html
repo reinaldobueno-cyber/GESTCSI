@@ -2303,7 +2303,7 @@ button.dashx-mini-chip:hover{background:#f3f8f3;border-color:#b9c9b8;}
 .dashx-table .num{text-align:right;font-variant-numeric:tabular-nums;}
 .dashx-table .empty-row td{text-align:center;color:#7b887d;padding:18px 14px;}
 .dashx-heatmap{display:grid;gap:8px;}
-.dashx-heatmap-header,.dashx-heatmap-row{display:grid;grid-template-columns:150px repeat(12,minmax(36px,1fr));gap:8px;align-items:center;}
+.dashx-heatmap-header,.dashx-heatmap-row{display:grid;grid-template-columns:150px repeat(12,minmax(36px,1fr)) minmax(46px,.65fr);gap:8px;align-items:center;}
 .dashx-heatmap-name{font-size:11px;font-weight:800;color:#27372c;}
 .dashx-heatmap-head{font-size:10px;font-weight:900;letter-spacing:.12em;color:#839185;text-transform:uppercase;text-align:center;}
 .dashx-heatmap-cell{height:38px;border-radius:12px;border:1px solid #dde6dd;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:900;cursor:default;}
@@ -2311,6 +2311,7 @@ button.dashx-mini-chip:hover{background:#f3f8f3;border-color:#b9c9b8;}
 .dashx-heatmap-cell.low{background:#e8f0e7;color:#2f593a;}
 .dashx-heatmap-cell.med{background:#f3ead9;color:#91622f;}
 .dashx-heatmap-cell.high{background:#f5dfdc;color:#b24f45;}
+.dashx-heatmap-cell.total{background:#f8faf8;color:#314638;border-color:#cfdbd0;}
 .dashx-heatmap-cell.clickable{cursor:pointer;transition:transform .15s ease,box-shadow .15s ease,border-color .15s ease;}
 .dashx-heatmap-cell.clickable:hover,.dashx-heatmap-cell.clickable:focus{transform:translateY(-1px);box-shadow:0 5px 14px rgba(34,55,39,.14);border-color:#9db2a0;outline:none;}
 .dashx-bars{display:flex;flex-direction:column;gap:10px;}
@@ -2448,7 +2449,7 @@ button.dashx-mini-chip:hover{background:#f3f8f3;border-color:#b9c9b8;}
 @media(max-width:1180px){
   .dashx-top-grid,.dashx-mini-grid,.dashx-health-grid,.dashx-burndown-hero,.dashx-funnel,.dashx-chart-grid{grid-template-columns:repeat(2,minmax(0,1fr));}
   .dashx-grid-2,.dashx-grid-3,.dashx-exec-grid{grid-template-columns:1fr;}
-  .dashx-heatmap-header,.dashx-heatmap-row{grid-template-columns:120px repeat(12,minmax(32px,1fr));}
+  .dashx-heatmap-header,.dashx-heatmap-row{grid-template-columns:120px repeat(12,minmax(32px,1fr)) minmax(42px,.65fr);}
 }
 @media(max-width:820px){
   .dashx-hero{padding:18px 16px 16px;border-radius:18px;}
@@ -2456,7 +2457,7 @@ button.dashx-mini-chip:hover{background:#f3f8f3;border-color:#b9c9b8;}
   .dashx-top-grid,.dashx-mini-grid,.dashx-health-grid,.dashx-burndown-hero,.dashx-funnel,.dashx-chart-grid{grid-template-columns:1fr;}
   .dashx-filter-label{min-width:100%;padding-top:0;}
   .dashx-section-head,.dashx-section-body{padding-left:14px;padding-right:14px;}
-  .dashx-heatmap-header,.dashx-heatmap-row{grid-template-columns:100px repeat(12,minmax(28px,1fr));gap:6px;}
+  .dashx-heatmap-header,.dashx-heatmap-row{grid-template-columns:100px repeat(12,minmax(28px,1fr)) minmax(38px,.65fr);gap:6px;}
   .dashx-status-period-total{justify-items:start;}
   .dashx-status-plot{grid-template-columns:30px 1fr;gap:8px;overflow-x:auto;padding-bottom:4px;}
   .dashx-status-axis{height:240px;padding-bottom:24px;font-size:9px;}
@@ -2760,13 +2761,15 @@ body.theme-dark .tower-cons-name{
 body.theme-dark .dashx-heatmap-cell.zero,
 body.theme-dark .dashx-heatmap-cell.low,
 body.theme-dark .dashx-heatmap-cell.med,
-body.theme-dark .dashx-heatmap-cell.high{
+body.theme-dark .dashx-heatmap-cell.high,
+body.theme-dark .dashx-heatmap-cell.total{
   border:1px solid var(--border)!important;
 }
 body.theme-dark .dashx-heatmap-cell.zero{background:#111827!important;color:#64748B!important;}
 body.theme-dark .dashx-heatmap-cell.low{background:rgba(34,197,94,.13)!important;color:#86EFAC!important;}
 body.theme-dark .dashx-heatmap-cell.med{background:rgba(213,154,70,.18)!important;color:#e3b15f!important;}
 body.theme-dark .dashx-heatmap-cell.high{background:rgba(225,112,107,.18)!important;color:#f08b84!important;}
+body.theme-dark .dashx-heatmap-cell.total{background:#111827!important;color:#E5E7EB!important;}
 body.theme-dark .tabs,
 body.theme-dark .auth-card,
 body.theme-dark .acom-hero,
@@ -3690,7 +3693,7 @@ var UPDATE_DEVICE_KEY = 'gestcsi_update_device_id_v1';
 var UPDATE_ACTOR_KEY = 'gestcsi_update_actor_v1';
 var LAST_UPDATE_KEY = 'gestcsi_last_update_label_v1';
 var PANEL_CACHE_KEY = 'gestcsi_panel_cache_v2';
-var PANEL_APP_VERSION = '2026-06-29-portfolio-row-identity-v1';
+var PANEL_APP_VERSION = '2026-06-29-portfolio-row-occurrence-v1';
 var THEME_MODE_KEY = 'gestcsi_theme_mode_v1';
 var AUTH_SESSION_KEY = 'gestcsi_auth_session_v1';
 var AUTH_STATE = { token:'', user:null };
@@ -3712,27 +3715,28 @@ function painelMaiorBasePreservada(minimo) {
   return melhor.length >= Number(minimo || 0) ? melhor : [];
 }
 function painelProjetoCarteiraKey(item) {
-  var mes = String((item && item.mes) || '').toUpperCase().trim();
-  var cliente = normalizeClienteKey((item && item.cliente) || '');
-  if (mes && cliente) {
-    var detalhes = [
-      item && (item.data_venda || item.data_da_venda),
-      item && (item.consultor || item.consultora || item.responsavel),
-      item && (item.formato || item.modalidade),
-      item && item.cidade,
-      item && (item.tipo || item.tipo_projeto),
-      item && item.pacote,
-      item && item.adicionais
-    ].map(function(value) {
-      return normalizeClienteKey(value || '');
-    }).filter(function(value) {
-      return !!value;
-    });
-    if (detalhes.length) return ['CARTEIRA', mes, cliente].concat(detalhes).join('|');
-  }
+  var carteiraKey = String((item && item._carteira_key) || '').toUpperCase().trim();
+  if (carteiraKey) return carteiraKey;
   var projectKey = String((item && (item.project_key || item.projectKey)) || '').toUpperCase().trim();
   if (projectKey) return projectKey;
-  return mes && cliente ? (mes + '|' + cliente) : '';
+  var mes = String((item && item.mes) || '').toUpperCase().trim();
+  var cliente = normalizeClienteKey((item && item.cliente) || '');
+  var sheetRow = String((item && (item._sheet_row || item.row_number)) || '').trim();
+  if (mes && cliente && sheetRow) return ['CARTEIRA', mes, cliente, 'ROW', sheetRow].join('|');
+  return mes && cliente ? ['CARTEIRA', mes, cliente].join('|') : '';
+}
+function painelAplicarChavesCarteira(list) {
+  var counters = {};
+  return (list || []).map(function(item) {
+    if (!item || typeof item !== 'object') return item;
+    var mes = String((item.mes || item.mes_origem) || '').toUpperCase().trim();
+    var cliente = normalizeClienteKey(item.cliente || item.nome_cliente || '');
+    if (!mes || !cliente) return item;
+    var base = ['CARTEIRA', mes, cliente].join('|');
+    counters[base] = (counters[base] || 0) + 1;
+    item._carteira_key = base + '|#' + counters[base];
+    return item;
+  });
 }
 function painelMesclarBaseParcialComPreservada(parcial, preservada) {
   var merged = [];
@@ -3751,8 +3755,10 @@ function painelMesclarBaseParcialComPreservada(parcial, preservada) {
       ? Object.assign({}, merged[pos], item)
       : Object.assign({}, item, merged[pos]);
   }
-  (preservada || []).forEach(function(item) { add(item, false); });
-  (parcial || []).forEach(function(item) { add(item, true); });
+  var preservadaLista = painelAplicarChavesCarteira((preservada || []).slice());
+  var parcialLista = painelAplicarChavesCarteira((parcial || []).slice());
+  preservadaLista.forEach(function(item) { add(item, false); });
+  parcialLista.forEach(function(item) { add(item, true); });
   return merged;
 }
 function storageGet(key, fallback) {
@@ -6935,7 +6941,7 @@ function abrirProjetosComFiltro(status, clienteBusca) {
   window.scrollTo({ top: 0, behavior: 'smooth' });
 }
 function projectMonthKey(p){
-  return String((p && p.project_key) || painelProjetoCarteiraKey(p) || (((p && p.mes) || '') + '|' + ((p && p.cliente) || ''))).toUpperCase();
+  return String((p && p.project_key) || (((p && p.mes) || '') + '|' + ((p && p.cliente) || ''))).toUpperCase();
 }
 function annotateMonthSequence(list){
   var ordem = {};
@@ -6944,7 +6950,7 @@ function annotateMonthSequence(list){
     if(!item || !item.cliente) return;
     var mes = String(item.mes || 'SEM MES').toUpperCase();
     if(!contagem[mes]) contagem[mes] = 0;
-    var key = projectMonthKey(item);
+    var key = painelProjetoCarteiraKey(item) || projectMonthKey(item);
     if(ordem[key] == null){
       contagem[mes] += 1;
       ordem[key] = contagem[mes];
@@ -6952,7 +6958,7 @@ function annotateMonthSequence(list){
   });
   (list || []).forEach(function(item, idx){
     if(!item) return;
-    var key = projectMonthKey(item);
+    var key = painelProjetoCarteiraKey(item) || projectMonthKey(item);
     item._monthSeq = ordem[key] || (idx + 1);
   });
   return list;
@@ -10111,17 +10117,20 @@ function dashRenderHeatmap(map) {
   var consultores = Object.keys(map || {}).sort(function(a, b){ return a.localeCompare(b); });
   var meses = ORDEM_MESES;
   if (!consultores.length) return '<div class="dashx-unavailable"><strong>Heatmap indisponível</strong><span>Nenhum projeto com consultor encontrado no recorte atual.</span></div>';
-  var head = '<div class="dashx-heatmap-header"><div></div>'+meses.map(function(m){ return '<div class="dashx-heatmap-head">'+m+'</div>'; }).join('')+'</div>';
+  var head = '<div class="dashx-heatmap-header"><div></div>'+meses.map(function(m){ return '<div class="dashx-heatmap-head">'+m+'</div>'; }).join('')+'<div class="dashx-heatmap-head">Total</div></div>';
   var body = consultores.map(function(nome){
-    return '<div class="dashx-heatmap-row"><div class="dashx-heatmap-name">'+nome+'</div>'+meses.map(function(m){
+    var total = 0;
+    var cells = meses.map(function(m){
       var cell = (map[nome] && map[nome][m]) || {projetos:0,diariasContr:0,diariasReal:0,riscos:0};
+      total += Number(cell.projetos || 0);
       var cls = cell.projetos === 0 ? 'zero' : cell.projetos <= 2 ? 'low' : cell.projetos <= 4 ? 'med' : 'high';
       var title = nome+' | '+m+'\\nProjetos de 2026: '+cell.projetos;
       var action = cell.projetos > 0
         ? ' clickable" role="button" tabindex="0" onclick="return dashOpenHeatmapAudit(\''+jsQuote(nome)+'\',\''+jsQuote(m)+'\')" onkeydown="if(event.key===\'Enter\'||event.key===\' \'){event.preventDefault();return dashOpenHeatmapAudit(\''+jsQuote(nome)+'\',\''+jsQuote(m)+'\');}'
         : '';
       return '<div class="dashx-heatmap-cell '+cls+action+'" title="'+title+'">'+cell.projetos+'</div>';
-    }).join('')+'</div>';
+    }).join('');
+    return '<div class="dashx-heatmap-row"><div class="dashx-heatmap-name">'+nome+'</div>'+cells+'<div class="dashx-heatmap-cell total" title="'+nome+' | Total 2026\\nProjetos de 2026: '+total+'">'+total+'</div></div>';
   }).join('');
   return '<div class="dashx-heatmap">'+head+body+'</div>';
 }
@@ -10423,7 +10432,7 @@ function initDash() {
     dashKpiCard('Saúde dos dados', health.completude === null ? '-' : dashPct(health.completude), health.completude === null ? 'Não há base suficiente.' : (health.inconsistencias.length+' projeto(s) com campo essencial ausente. Clique para listar.'), dashMetricClass(health.completude, 70, 90, false), 'dataHealthSummary', '<span class="dashx-kpi-delta neutral">'+health.syncErrors+' falha(s) de sync</span>', "return dashOpenTopKpiAudit('health')")+
   '</div>';
   var hero = '<div class="dashx-hero"><div class="dashx-hero-top"><div class="dashx-title-wrap"><div class="dashx-eyebrow">Dashboard Executivo CSI</div><div class="dashx-title">Visão operacional explicável</div><div class="dashx-sub">Indicadores de 2026 com fontes e regras auditáveis para apoiar as decisões operacionais.</div></div><div class="dashx-meta"><span class="dashx-meta-chip"><b>Escopo</b> '+rotuloEscopoUsuario()+'</span><span class="dashx-meta-chip"><b>Ano</b> 2026</span><span class="dashx-meta-chip"><b>Projetos</b> '+total+'</span><span class="dashx-meta-chip"><b>Última base</b> '+(TOWER_INFO_CONTEXT.ultima || '-')+'</span></div></div>'+dashRenderFilters(base)+'</div>';
-  var prioritySection = '<div class="dashx-section"><div class="dashx-section-head"><div><div class="dashx-section-kicker">Prioridade</div><div class="dashx-section-title">Carteira e entregas de 2026</div><div class="dashx-section-sub">Heatmap da entrada de projetos e produtividade baseada no Fechamento de Marcos validado.</div></div></div><div class="dashx-section-body"><div class="dashx-stack"><div class="dashx-focus-note"><div><strong>Distribuição da carteira.</strong> Cada célula mostra quantos projetos de 2026 entraram por consultor e mês.</div><div class="dashx-focus-hint">sem score subjetivo</div></div>'+dashRenderHeatmap(operation.heatMap)+dashRenderMilestoneProductivity2026()+dashRenderStatusStack(statusByMonth)+'</div></div></div>';
+  var prioritySection = '<div class="dashx-section"><div class="dashx-section-head"><div><div class="dashx-section-kicker">Prioridade</div><div class="dashx-section-title">Carteira e entregas de 2026</div><div class="dashx-section-sub">Heatmap da entrada de projetos e produtividade baseada no Fechamento de Marcos validado.</div></div><div class="dashx-section-answer"><span class="dashx-answer-chip">'+total+' projetos</span></div></div><div class="dashx-section-body"><div class="dashx-stack"><div class="dashx-focus-note"><div><strong>Distribuição da carteira.</strong> Cada célula mostra quantos projetos de 2026 entraram por consultor e mês.</div><div class="dashx-focus-hint">sem score subjetivo</div></div>'+dashRenderHeatmap(operation.heatMap)+dashRenderMilestoneProductivity2026()+dashRenderStatusStack(statusByMonth)+'</div></div></div>';
   var clickUpTrackingSection = '<div class="dashx-section"><div class="dashx-section-head"><div><div class="dashx-section-kicker">Rastreabilidade</div><div class="dashx-section-title">Cobertura técnica do ClickUp</div><div class="dashx-section-sub">Mostra a cobertura de rastreio por consultor e identifica os projetos que ainda não entram na auditoria técnica do ClickUp.</div></div><div class="dashx-section-answer"><span class="dashx-answer-chip">'+tracked+' rastreado(s) · '+untracked+' sem ClickUp</span></div></div><div class="dashx-section-body"><div class="dashx-stack">'+dashRenderClickUpTracker(operation, total)+dashRenderUntrackedClickUpList(operation.untrackedProjects || [], operation.untrackedTotal)+'</div></div></div>';
   var idleSection = '<div class="dashx-section"><div class="dashx-section-head"><div><div class="dashx-section-kicker">Capacidade</div><div class="dashx-section-title">Sinais de ociosidade</div><div class="dashx-section-sub">Cruza agenda CMAX, carteira ativa e movimentações recentes do ClickUp para indicar onde a liderança deve investigar disponibilidade.</div></div></div><div class="dashx-section-body">'+dashRenderIdleSignal(list)+'</div></div>';
   var healthSection = '<div class="dashx-section"><div class="dashx-section-head"><div><div class="dashx-section-kicker">Qualidade</div><div class="dashx-section-title">Saúde dos dados</div><div class="dashx-section-sub">Somente verificações objetivas de cadastro, sync e atualização.</div></div></div><div class="dashx-section-body">'+dashRenderReliableHealthSection(health)+'</div></div>';
@@ -14399,6 +14408,7 @@ function carregarProjetosDiretoPlanilha() {
   });
   return sequencia.then(function(){
     console.log('[SHEET DIRECT] Total projetos lidos:', projetos.length, 'Falhas:', falhas.join(', ') || 'nenhuma');
+    painelAplicarChavesCarteira(projetos);
     projetos._falhas_abas = falhas.slice();
     return projetos;
   });
@@ -14725,9 +14735,9 @@ function applyMetricasPlanilha(projetos) {
 
 function prepararProjetosBase(projetos) {
   var lista = Array.isArray(projetos) ? projetos : [];
-  return lista
+  return painelAplicarChavesCarteira(lista
     .filter(function(p){ return p && typeof p === 'object'; })
-    .map(function(p){ return normalizarProjetoPlanilha(p); });
+    .map(function(p){ return normalizarProjetoPlanilha(p); }));
 }
 function lerDadosPlanilhaConsolidados(projetosRaw) {
   var base = prepararProjetosBase(projetosRaw);
@@ -15058,13 +15068,15 @@ function loadAll(tipoAtualizacao) {
       return painelProjetoCarteiraKey(item);
     }
     function mesclarComPlanilha(apiProjetos) {
-      var combinados = fallbackProjetos.slice();
+      var fallbackLista = painelAplicarChavesCarteira(fallbackProjetos.slice());
+      var apiLista = painelAplicarChavesCarteira((apiProjetos || []).slice());
+      var combinados = fallbackLista.slice();
       var indice = {};
       combinados.forEach(function(item, pos){
         var chave = chaveMensal(item);
         if (chave && !indice.hasOwnProperty(chave)) indice[chave] = pos;
       });
-      (apiProjetos || []).forEach(function(item){
+      apiLista.forEach(function(item){
         var chave = chaveMensal(item);
         if (chave && indice.hasOwnProperty(chave)) {
           combinados[indice[chave]] = Object.assign({}, combinados[indice[chave]], item);
