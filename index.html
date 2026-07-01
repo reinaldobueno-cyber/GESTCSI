@@ -3244,7 +3244,7 @@ body.theme-dark .tower-kpis [style*="background:#fff"]{
 .bonus-indication-form{display:grid;grid-template-columns:1.1fr 1.4fr .8fr 1fr 1fr 1.2fr auto;gap:8px;align-items:end}.bonus-seniority-form{display:grid;grid-template-columns:minmax(220px,1.4fr) minmax(160px,.7fr) auto;gap:8px;align-items:end}.bonus-indication-field label{display:block;font-size:8px;font-weight:900;letter-spacing:.09em;text-transform:uppercase;color:var(--muted);margin:0 0 5px 3px}.bonus-indication-field input,.bonus-indication-field select{width:100%;border:1px solid var(--border);border-radius:8px;background:var(--surf2);color:var(--text);padding:9px;font:800 10px 'Inter',sans-serif}
 .bonus-section{padding:16px;border-top:1px solid var(--border)}.bonus-section:first-of-type{border-top:0}.bonus-section-title{font-size:12px;font-weight:900;color:var(--text);margin-bottom:10px}
 .bonus-empty{padding:30px;text-align:center;color:var(--text2)}
-.bonus-signatures{display:none}.bonus-signature-card{border:1px solid #cfd8dc;background:#fff;border-radius:10px;padding:16px 18px;color:#111}.bonus-signature-line{height:34px;border-bottom:1px solid #111;margin-bottom:9px}.bonus-signature-name{font-size:11px;font-weight:900;color:#111}.bonus-signature-role{font-size:9px;color:#53616f;margin-top:3px}.bonus-signature-card.primary{border-top:3px solid #173b67}
+.bonus-signatures{display:none}.bonus-signatures-head{grid-column:1/-1;display:flex;justify-content:space-between;gap:12px;align-items:end;color:#111}.bonus-signatures-title{font-size:12px;font-weight:900;color:#111}.bonus-signatures-issued{font-size:9px;color:#53616f}.bonus-signature-card{border:1px solid #cfd8dc;background:#fff;border-radius:10px;padding:18px;color:#111}.bonus-signature-line{height:48px;border-bottom:1px solid #111;margin-bottom:10px}.bonus-signature-name{font-size:11px;font-weight:900;color:#111}.bonus-signature-role{font-size:9px;color:#53616f;margin-top:3px}.bonus-signature-card.primary{border-top:3px solid #173b67}
 @media(max-width:1200px){.bonus-indication-form,.bonus-seniority-form{grid-template-columns:repeat(3,1fr)}}
 @media(max-width:1050px){.bonus-exec-grid,.bonus-exec-groups{grid-template-columns:repeat(2,1fr)}.bonus-exec-columns{grid-template-columns:1fr}.bonus-exec-group:first-child{grid-column:1/-1}}
 @media(max-width:900px){.bonus-activity-grid{grid-template-columns:repeat(2,1fr)}.bonus-financial{grid-template-columns:1fr}.bonus-report-head{padding:20px}.bonus-report-total strong{font-size:24px}.bonus-rank-row{grid-template-columns:24px 1fr auto}.bonus-rank-track{display:none}}
@@ -3288,29 +3288,27 @@ body.theme-dark .tower-kpis [style*="background:#fff"]{
   .bonus-rank-name,.bonus-rank-value,.bonus-insight strong{font-size:8px!important}
   .bonus-rank-meta,.bonus-insight span{font-size:7px!important;line-height:1.25!important}
   .bonus-insight{padding:6px 7px!important;break-inside:avoid;page-break-inside:avoid}
-  body.print-summary .bonus-hero{margin:0 0 3mm!important}
-  body.print-summary .bonus-title{font-size:13px!important}
-  body.print-summary .bonus-sub{font-size:7px!important}
+  body.print-summary .bonus-hero{margin:0 0 4mm!important}
+  body.print-summary .bonus-title{font-size:15px!important}
+  body.print-summary .bonus-sub{font-size:8px!important}
   body.print-summary .bonus-exec{break-inside:avoid!important;page-break-inside:avoid!important}
-  body.print-summary .bonus-exec-head{padding:5px 7px!important}
-  body.print-summary .bonus-exec-title{font-size:12px!important;margin-top:2px!important}
-  body.print-summary .bonus-exec-meta{font-size:7px!important;margin-top:2px!important}
-  body.print-summary .bonus-exec-total strong{font-size:15px!important;margin-top:2px!important}
-  body.print-summary .bonus-exec-groups{gap:3px!important;padding:4px!important}
-  body.print-summary .bonus-exec-group-title{padding:3px 5px!important;font-size:6px!important}
-  body.print-summary .bonus-exec-group-grid,body.print-summary .bonus-exec-group.compact .bonus-exec-group-grid{gap:3px!important;padding:4px!important}
-  body.print-summary .bonus-exec-kpi{padding:3px 5px!important}
-  body.print-summary .bonus-exec-kpi span,body.print-summary .bonus-exec-kpi small{font-size:6px!important;line-height:1.15!important}
-  body.print-summary .bonus-exec-kpi strong{font-size:10px!important;margin-top:1px!important}
-  body.print-summary .bonus-exec-columns{gap:4px!important;padding:4px!important}
-  body.print-summary .bonus-exec-panel-title{padding:4px 5px!important;font-size:7px!important}
-  body.print-summary .bonus-exec-columns>.bonus-exec-panel:first-child{display:grid!important;grid-template-columns:1fr 1fr!important;column-gap:4px!important;align-content:start!important}
-  body.print-summary .bonus-exec-columns>.bonus-exec-panel:first-child .bonus-exec-panel-title{grid-column:1/-1}
-  body.print-summary .bonus-exec-columns>.bonus-exec-panel:first-child .bonus-rank-row{grid-template-columns:14px minmax(0,1fr) auto!important;gap:3px!important;padding:3px 4px!important;min-width:0}
-  body.print-summary .bonus-exec-columns>.bonus-exec-panel:first-child .bonus-rank-track{display:none!important}
-  body.print-summary .bonus-rank-name,body.print-summary .bonus-rank-value,body.print-summary .bonus-insight strong{font-size:7px!important}
-  body.print-summary .bonus-rank-meta,body.print-summary .bonus-insight span{font-size:6px!important;line-height:1.15!important}
-  body.print-summary .bonus-insight{padding:4px 5px!important}
+  body.print-summary .bonus-exec-head{padding:7px 9px!important}
+  body.print-summary .bonus-exec-title{font-size:13px!important;margin-top:3px!important}
+  body.print-summary .bonus-exec-meta{font-size:8px!important;margin-top:3px!important}
+  body.print-summary .bonus-exec-total strong{font-size:16px!important;margin-top:3px!important}
+  body.print-summary .bonus-exec-groups{gap:6px!important;padding:7px!important}
+  body.print-summary .bonus-exec-group-title{padding:5px 7px!important;font-size:7px!important}
+  body.print-summary .bonus-exec-group-grid,body.print-summary .bonus-exec-group.compact .bonus-exec-group-grid{gap:5px!important;padding:6px!important}
+  body.print-summary .bonus-exec-kpi{padding:5px 7px!important}
+  body.print-summary .bonus-exec-kpi span,body.print-summary .bonus-exec-kpi small{font-size:6.8px!important;line-height:1.2!important}
+  body.print-summary .bonus-exec-kpi strong{font-size:11px!important;margin-top:2px!important}
+  body.print-summary .bonus-exec-columns{grid-template-columns:1.15fr .85fr!important;gap:7px!important;padding:7px!important}
+  body.print-summary .bonus-exec-panel-title{padding:5px 7px!important;font-size:8px!important}
+  body.print-summary .bonus-exec-columns>.bonus-exec-panel:first-child .bonus-rank-row{grid-template-columns:16px minmax(0,1fr) minmax(80px,.55fr) auto!important;gap:4px!important;padding:4px 6px!important;min-width:0}
+  body.print-summary .bonus-exec-columns>.bonus-exec-panel:first-child .bonus-rank-track{display:block!important}
+  body.print-summary .bonus-rank-name,body.print-summary .bonus-rank-value,body.print-summary .bonus-insight strong{font-size:7.5px!important}
+  body.print-summary .bonus-rank-meta,body.print-summary .bonus-insight span{font-size:6.5px!important;line-height:1.2!important}
+  body.print-summary .bonus-insight{padding:5px 7px!important}
   body.print-summary .bonus-admin-summary-table{break-before:page!important;page-break-before:always!important;break-inside:avoid!important;page-break-inside:avoid!important;margin-top:0!important}
   body.print-summary .bonus-admin-summary-table .bonus-section{padding:5px 6px!important;break-inside:avoid!important;page-break-inside:avoid!important}
   body.print-summary .bonus-admin-summary-table .bonus-admin-label{font-size:12px!important;margin-bottom:2px!important}
@@ -3337,9 +3335,9 @@ body.theme-dark .tower-kpis [style*="background:#fff"]{
   .bonus-signature-line{height:22px!important;margin-bottom:5px!important}
   .bonus-signature-name{font-size:8px!important}
   .bonus-signature-role{font-size:7px!important;margin-top:2px!important}
-  body.print-summary .bonus-signatures{gap:5px;margin-top:3mm}
-  body.print-summary .bonus-signature-card{padding:6px 8px!important}
-  body.print-summary .bonus-signature-line{height:16px!important;margin-bottom:4px!important}
+  body.print-summary .bonus-signatures{gap:7px;margin-top:6mm}
+  body.print-summary .bonus-signature-card{padding:10px 11px!important}
+  body.print-summary .bonus-signature-line{height:30px!important;margin-bottom:6px!important}
   .dashx-table-wrap{overflow:visible!important;border-radius:0!important;border-color:#d9e0d9!important}
   .dashx-table{min-width:0!important;width:100%!important;table-layout:fixed!important;page-break-inside:auto!important}
   .dashx-table thead{display:table-header-group}
@@ -6955,7 +6953,8 @@ function bonusValidationCarryoverSection(rows) {
   return '<section class="bonus-admin-table bonus-carryover-section"><div class="bonus-section"><div class="bonus-admin-label">Aprovados no m&ecirc;s vindos de Closed anterior</div><div class="bonus-admin-sub">Inclu&iacute;dos na bonifica&ccedil;&atilde;o pela data de aprova&ccedil;&atilde;o, sem alterar a lista principal de Fechamento.</div><div class="dashx-table-wrap"><table class="dashx-table"><thead><tr><th>Consultor</th><th>Projeto</th><th>Marco</th><th>Closed em</th><th>Aprovado em</th><th>Valor</th><th>A&ccedil;&atilde;o</th></tr></thead><tbody>'+body+'</tbody></table></div></div></section>';
 }
 function bonusSignatureSection() {
-  return '<section class="bonus-signatures"><div class="bonus-signature-card primary"><div class="bonus-signature-line"></div><div class="bonus-signature-name">Reinaldo Bueno</div><div class="bonus-signature-role">Gerente CS/CSI &middot; assinatura principal</div></div><div class="bonus-signature-card"><div class="bonus-signature-line"></div><div class="bonus-signature-name">Guilherme Paiva</div><div class="bonus-signature-role">L&iacute;der t&eacute;cnico</div></div><div class="bonus-signature-card"><div class="bonus-signature-line"></div><div class="bonus-signature-name">Lais Medeiros</div><div class="bonus-signature-role">Analista de projetos</div></div></section>';
+  var issuedAt=new Date().toLocaleString('pt-BR',{dateStyle:'short',timeStyle:'short'});
+  return '<section class="bonus-signatures"><div class="bonus-signatures-head"><div class="bonus-signatures-title">Validado por:</div><div class="bonus-signatures-issued">Emitido em '+escapeHtml(issuedAt)+'</div></div><div class="bonus-signature-card primary"><div class="bonus-signature-line"></div><div class="bonus-signature-name">Reinaldo Bueno</div><div class="bonus-signature-role">Gerente CS/CSI</div></div><div class="bonus-signature-card"><div class="bonus-signature-line"></div><div class="bonus-signature-name">Guilherme Paiva</div><div class="bonus-signature-role">L&iacute;der t&eacute;cnico</div></div><div class="bonus-signature-card"><div class="bonus-signature-line"></div><div class="bonus-signature-name">Lais Medeiros</div><div class="bonus-signature-role">Analista de projetos</div></div></section>';
 }
 function initBonus() {
   var box=document.getElementById('bonus-content');
