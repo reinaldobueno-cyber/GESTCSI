@@ -6626,7 +6626,7 @@ window.fechamentoStartSync = fechamentoStartSync;
 window.fechamentoSyncRejected = fechamentoSyncRejected;
 window.fechamentoSyncApproved = fechamentoSyncApproved;
 
-var BONUS_FILTER = {month:fechamentoCurrentMonth(), consultant:'todos'};
+var BONUS_FILTER = {month:fechamentoCurrentMonth(), consultant:'todos', manualMonth:false};
 var BONUS_INDICATION_STATE = {items:[],loadedMonth:'',loading:false};
 function bonusNamesMatch(a,b) {
   var aKey=consultantCompKey(a),bKey=consultantCompKey(b);
@@ -6661,9 +6661,55 @@ function bonusMonthOptions() {
   months[BONUS_FILTER.month||fechamentoCurrentMonth()]=true;
   return Object.keys(months).filter(function(month){return month>='2024-01';}).sort().reverse();
 }
+function bonusMonthDataScore(month) {
+  month=String(month||'').slice(0,7);
+  if(!month)return 0;
+  var score=0;
+  (CMAX_DAILY_STATE.events||[]).forEach(function(item){
+    if(String(item.mes||'')===month&&cmaxCountsDaily(item))score+=1;
+  });
+  (FECHAMENTO_MARCOS||[]).forEach(function(item){
+    if(!item||fechamentoIsProjectClosing(item))return;
+    if(String(item.mes_fechamento||'')===month)score+=1;
+    if(item.situacao==='aprovado'&&String(item.mes_validacao||'')===month)score+=1;
+  });
+  (PROJECT_CLOSING_DECISIONS.items||[]).forEach(function(item){
+    if(String(item.month||'')===month)score+=1;
+  });
+  projectClosingList().forEach(function(entry){
+    if(entry.decision&&String(entry.decision.month||'')===month)score+=1;
+  });
+  (BONUS_INDICATION_STATE.items||[]).forEach(function(item){
+    if(String(item.month||'')===month)score+=1;
+  });
+  return score;
+}
+function bonusBestAvailableMonth() {
+  var options=bonusMonthOptions();
+  for(var i=0;i<options.length;i++){
+    if(bonusMonthDataScore(options[i])>0)return options[i];
+  }
+  return BONUS_FILTER.month||fechamentoCurrentMonth();
+}
+function bonusUseBestAvailableMonth() {
+  if(BONUS_FILTER.manualMonth)return false;
+  var current=BONUS_FILTER.month||fechamentoCurrentMonth();
+  var best=bonusBestAvailableMonth();
+  if(!best||best===current||bonusMonthDataScore(current)>0)return false;
+  BONUS_FILTER.month=best;
+  BONUS_FILTER.consultant='todos';
+  if(CMAX_DAILY_STATE.month!==best){
+    CMAX_DAILY_STATE.month=best;
+    CMAX_DAILY_STATE.loaded=false;
+    setTimeout(function(){carregarDiariasCmax(false);},0);
+  }
+  bonusLoadIndications(false);
+  return true;
+}
 function bonusSetMonth(month) {
   BONUS_FILTER.month=String(month||fechamentoCurrentMonth());
   BONUS_FILTER.consultant='todos';
+  BONUS_FILTER.manualMonth=true;
   bonusLoad();
   return false;
 }
@@ -6734,6 +6780,7 @@ function bonusSaveIndication(button) {
     form.reset();
     BONUS_FILTER.month=resp.item.month;
     BONUS_FILTER.consultant='todos';
+    BONUS_FILTER.manualMonth=true;
     BONUS_INDICATION_STATE.items=(BONUS_INDICATION_STATE.items||[]).filter(function(item){return item.id!==resp.item.id&&item.month===resp.item.month;}).concat([resp.item]);
     BONUS_INDICATION_STATE.loadedMonth=resp.item.month;
     initBonus();
@@ -6964,6 +7011,7 @@ function initBonus() {
     box.innerHTML='<div class="empty">Acesso restrito ao administrador.</div>';
     return;
   }
+  bonusUseBestAvailableMonth();
   var people=bonusDataset(),isAdmin=AUTH_STATE.user&&AUTH_STATE.user.role==='admin';
   var daily=people.reduce(function(total,p){return total+p.dailyValue;},0);
   var milestones=people.reduce(function(total,p){return total+p.milestoneValue;},0);
