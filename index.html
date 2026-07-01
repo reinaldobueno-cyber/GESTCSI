@@ -3246,7 +3246,58 @@ body.theme-dark .tower-kpis [style*="background:#fff"]{
 @media(max-width:1200px){.bonus-indication-form,.bonus-seniority-form{grid-template-columns:repeat(3,1fr)}}
 @media(max-width:1050px){.bonus-exec-grid{grid-template-columns:repeat(2,1fr)}.bonus-exec-columns{grid-template-columns:1fr}}
 @media(max-width:900px){.bonus-activity-grid{grid-template-columns:repeat(2,1fr)}.bonus-financial{grid-template-columns:1fr}.bonus-report-head{padding:20px}.bonus-report-total strong{font-size:24px}.bonus-rank-row{grid-template-columns:24px 1fr auto}.bonus-rank-track{display:none}}
-@media print{nav,.period-bar,.sidenav,.bonus-actions{display:none!important}.app-shell,.main-content{display:block!important}.page{display:none!important}.page.on{display:block!important}.bonus-exec,.bonus-admin-table,.bonus-report{break-inside:avoid}}
+@media print{
+  @page{size:A4 landscape;margin:8mm}
+  html,body{background:#fff!important;color:#111!important;overflow:visible!important;font-size:10px!important}
+  nav,.period-bar,.sidenav,.tabs,.bonus-actions,.btn-syncall,.project-link-btn.warn,.auth-backdrop{display:none!important}
+  .app-shell,.main-content{display:block!important;width:100%!important;max-width:none!important;margin:0!important;padding:0!important;overflow:visible!important}
+  .page{display:none!important;padding:0!important;max-width:none!important;margin:0!important}
+  .page.on{display:block!important}
+  #bonus-content,.bonus-shell{display:block!important;width:100%!important;max-width:none!important;overflow:visible!important}
+  .bonus-hero{margin:0 0 6mm!important;break-inside:avoid;page-break-inside:avoid}
+  .bonus-title{font-size:17px!important;letter-spacing:0!important}
+  .bonus-sub{font-size:9px!important;line-height:1.3!important;max-width:none!important}
+  .cmax-status,.bonus-indication-form,.bonus-seniority-form,.bonus-admin-table{display:none!important}
+  .bonus-exec,.bonus-report{box-shadow:none!important;border:1px solid #cfd8dc!important;border-radius:0!important;overflow:visible!important;background:#fff!important;color:#111!important}
+  .bonus-exec{break-after:page;page-break-after:always}
+  .bonus-exec-head,.bonus-report-head{background:#173b67!important;color:#fff!important;padding:8px 10px!important;break-inside:avoid;page-break-inside:avoid}
+  .bonus-exec-kicker,.bonus-exec-meta,.bonus-exec-total span,.bonus-person-meta,.bonus-report-total span{color:#eef6ff!important}
+  .bonus-exec-title,.bonus-person-name{font-size:15px!important;letter-spacing:0!important}
+  .bonus-exec-total strong,.bonus-report-total strong{font-size:18px!important}
+  .bonus-exec-grid{grid-template-columns:repeat(3,minmax(0,1fr))!important;gap:5px!important;padding:7px!important}
+  .bonus-exec-kpi{padding:6px 7px!important;border-radius:0!important;break-inside:avoid;page-break-inside:avoid}
+  .bonus-exec-kpi span,.bonus-exec-kpi small{font-size:7px!important;letter-spacing:0!important}
+  .bonus-exec-kpi strong{font-size:12px!important;margin-top:3px!important}
+  .bonus-exec-columns{grid-template-columns:1fr 1fr!important;gap:7px!important;padding:7px!important}
+  .bonus-exec-panel{border-radius:0!important;overflow:visible!important}
+  .bonus-exec-panel-title{padding:6px 7px!important;font-size:8px!important}
+  .bonus-rank-row{grid-template-columns:18px minmax(120px,1fr) minmax(110px,.7fr) auto!important;gap:5px!important;padding:5px 7px!important;break-inside:avoid;page-break-inside:avoid}
+  .bonus-rank-name,.bonus-rank-value,.bonus-insight strong{font-size:8px!important}
+  .bonus-rank-meta,.bonus-insight span{font-size:7px!important;line-height:1.25!important}
+  .bonus-insight{padding:6px 7px!important;break-inside:avoid;page-break-inside:avoid}
+  .bonus-report{break-before:page;page-break-before:always;margin:0!important}
+  .bonus-report-head{gap:8px!important}
+  .bonus-avatar{width:32px!important;height:32px!important;border-width:1px!important;font-size:14px!important}
+  .bonus-activity-grid{grid-template-columns:repeat(5,minmax(0,1fr))!important;gap:5px!important;padding:7px!important}
+  .bonus-activity{min-height:auto!important;padding:6px 7px!important;border-radius:0!important;break-inside:avoid;page-break-inside:avoid}
+  .bonus-activity span,.bonus-financial-item span{font-size:7px!important;letter-spacing:0!important}
+  .bonus-activity strong{font-size:13px!important;margin-top:3px!important}
+  .bonus-activity small{font-size:7px!important;margin-top:2px!important}
+  .bonus-financial{grid-template-columns:repeat(4,minmax(0,1fr))!important;gap:5px!important;padding:0 7px 7px!important}
+  .bonus-financial-item{padding:6px 7px!important;border-radius:0!important;break-inside:avoid;page-break-inside:avoid}
+  .bonus-financial-item strong,.bonus-financial-item.total strong{font-size:12px!important;margin-top:3px!important}
+  .bonus-section{padding:6px 7px!important;break-inside:auto!important;page-break-inside:auto!important}
+  .bonus-section-title{font-size:9px!important;margin-bottom:4px!important}
+  .bonus-empty{padding:8px!important;font-size:8px!important}
+  .dashx-table-wrap{overflow:visible!important;border-radius:0!important;border-color:#d9e0d9!important}
+  .dashx-table{min-width:0!important;width:100%!important;table-layout:fixed!important;page-break-inside:auto!important}
+  .dashx-table thead{display:table-header-group}
+  .dashx-table tr{break-inside:avoid;page-break-inside:avoid}
+  .dashx-table th,.dashx-table td{padding:3px 4px!important;font-size:7px!important;line-height:1.2!important;white-space:normal!important;word-break:break-word!important;color:#111!important}
+  .dashx-table th{letter-spacing:0!important;background:#f1f4f1!important}
+  .dashx-table td strong{color:#111!important}
+  a[href]{color:#111!important;text-decoration:none!important}
+}
 body.theme-dark .pb.on,
 body.theme-dark .fb.on,
 body.theme-dark .pf-btn.on,
@@ -6549,6 +6600,9 @@ function bonusMonthLabel(month) {
 function bonusMonthOptions() {
   var months={};
   (FECHAMENTO_MARCOS||[]).forEach(function(item){if(item.mes_fechamento)months[item.mes_fechamento]=true;});
+  (FECHAMENTO_MARCOS||[]).forEach(function(item){
+    if(item.situacao==='aprovado'&&item.mes_validacao)months[item.mes_validacao]=true;
+  });
   (PROJECT_CLOSING_DECISIONS.items||[]).forEach(function(item){if(item.month)months[item.month]=true;});
   projectClosingList().forEach(function(entry){if(entry.decision&&entry.decision.month)months[entry.decision.month]=true;});
   (CMAX_DAILY_STATE.months||[]).concat((CMAX_DAILY_STATE.events||[]).map(function(item){return item.mes;})).forEach(function(month){if(month)months[month]=true;});
@@ -6658,11 +6712,37 @@ function projectClosingDecisionBonusRow(item) {
     fechamento_projeto:'sim'
   };
 }
+function bonusMilestoneKey(item) {
+  return String(item&&(
+    item.task_id||
+    item.link||
+    [item.project_key,item.projeto,item.marco,item.closed_at].join('|')
+  )||'');
+}
+function bonusMilestonesApprovedForMonth(month) {
+  var seen={};
+  return (FECHAMENTO_MARCOS||[]).filter(function(item){
+    if(!item||fechamentoIsProjectClosing(item)||item.situacao!=='aprovado')return false;
+    var closedMonth=String(item.mes_fechamento||'');
+    var validationMonth=String(item.mes_validacao||'');
+    return closedMonth===month||(validationMonth===month&&closedMonth!==month);
+  }).filter(function(item){
+    var key=bonusMilestoneKey(item);
+    if(key&&seen[key])return false;
+    if(key)seen[key]=true;
+    return true;
+  });
+}
+function bonusMilestonesCarriedByValidationMonth(month) {
+  return bonusMilestonesApprovedForMonth(month).filter(function(item){
+    return String(item.mes_validacao||'')===month&&String(item.mes_fechamento||'')!==month;
+  });
+}
 function bonusDataset() {
   var month=BONUS_FILTER.month||fechamentoCurrentMonth();
   var daily=(CMAX_DAILY_STATE.events||[]).filter(function(item){return String(item.mes||'')===month&&cmaxCountsDaily(item);});
   var monthMilestones=(FECHAMENTO_MARCOS||[]).filter(function(item){return String(item.mes_fechamento||'')===month&&!fechamentoIsProjectClosing(item);});
-  var milestones=monthMilestones.filter(function(item){return item.situacao==='aprovado';});
+  var milestones=bonusMilestonesApprovedForMonth(month);
   var rejectedMilestones=monthMilestones.filter(function(item){return item.situacao==='reprovado';});
   var effectiveProjectDecisions=projectClosingList().filter(function(entry){return entry.decision&&(entry.category==='aprovado'||entry.category==='reprovado');}).map(function(entry){return entry.decision;});
   var projectDecisionRows=effectiveProjectDecisions.filter(function(item){return String(item.month||'')===month;}).map(projectClosingDecisionBonusRow);
@@ -6672,6 +6752,7 @@ function bonusDataset() {
   var names=bonusCanonicalNames(
     daily.map(function(item){return item.consultor;})
       .concat(monthMilestones.map(function(item){return fechamentoEffectiveConsultant(item);}))
+      .concat(milestones.map(function(item){return fechamentoEffectiveConsultant(item);}))
       .concat(projectDecisionRows.map(function(item){return fechamentoEffectiveConsultant(item);}))
       .concat(indications.map(function(item){return item.consultant_name;}))
   );
@@ -6728,7 +6809,10 @@ function bonusIndicationDetails(person) {
 }
 function bonusMilestoneDetails(person) {
   var rows=person.milestoneRows.map(function(item){
-    return '<tr><td>'+(item.validation_at?escapeHtml(formatarDataHoraProjeto(item.validation_at)):'-')+'</td><td><strong>'+escapeHtml(item.projeto||'-')+'</strong></td><td>'+escapeHtml(item.item_tipo||'Marco')+'</td><td>'+escapeHtml(item.marco||'-')+'</td><td>'+escapeHtml(item.justificativa||'-')+'</td><td><strong>'+fechamentoMoney(item.valor_bonus||30)+'</strong></td></tr>';
+    var competenceNote=String(item.mes_validacao||'')===BONUS_FILTER.month&&String(item.mes_fechamento||'')!==BONUS_FILTER.month
+      ? '<div class="closing-project-meta">Closed em '+escapeHtml(bonusMonthLabel(item.mes_fechamento||''))+'</div>'
+      : '';
+    return '<tr><td>'+(item.validation_at?escapeHtml(formatarDataHoraProjeto(item.validation_at)):'-')+'</td><td><strong>'+escapeHtml(item.projeto||'-')+'</strong>'+competenceNote+'</td><td>'+escapeHtml(item.item_tipo||'Marco')+'</td><td>'+escapeHtml(item.marco||'-')+'</td><td>'+escapeHtml(item.justificativa||'-')+'</td><td><strong>'+fechamentoMoney(item.valor_bonus||30)+'</strong></td></tr>';
   }).join('');
   return rows?'<div class="dashx-table-wrap"><table class="dashx-table"><thead><tr><th>Aprovado em</th><th>Projeto</th><th>Tipo</th><th>Marco</th><th>Coment&aacute;rio</th><th>Valor</th></tr></thead><tbody>'+rows+'</tbody></table></div>':'<div class="bonus-empty">Nenhum marco aprovado neste m&ecirc;s.</div>';
 }
@@ -6777,7 +6861,7 @@ function bonusExecutivePanel(people,daily,milestones,equivalents,total,closedSta
   if(missingSeniority.length)insights.push('<div class="bonus-insight warn"><strong>Cadastro financeiro incompleto</strong><span>'+escapeHtml(missingSeniority.map(function(p){return p.name;}).join(', '))+' possuem di&aacute;rias sem senioridade configurada.</span></div>');
   if(!insights.length)insights.push('<div class="bonus-insight"><strong>Sem ocorr&ecirc;ncias para destacar</strong><span>Atualize as bases para gerar a leitura executiva.</span></div>');
   return '<section class="bonus-exec"><div class="bonus-exec-head"><div><div class="bonus-exec-kicker">Vis&atilde;o administrativa e diretoria</div><div class="bonus-exec-title">Fechamento CSI &middot; '+escapeHtml(bonusMonthLabel(BONUS_FILTER.month))+'</div><div class="bonus-exec-meta">'+active+' consultor(es) com bonifica&ccedil;&atilde;o &middot; dados consolidados do CMAX e ClickUp</div></div><div class="bonus-exec-total"><span>Total previsto</span><strong>'+consultantMoney(total)+'</strong></div></div>'+
-    '<div class="bonus-exec-grid"><div class="bonus-exec-kpi"><span>Closed no m&ecirc;s</span><strong>'+Number(closedStats.total||0)+'</strong><small>marcos que entraram em Closed</small></div><div class="bonus-exec-kpi good"><span>Marcos aprovados</span><strong>'+Number(closedStats.approved||0)+'</strong><small>geram bonifica&ccedil;&atilde;o</small></div><div class="bonus-exec-kpi warn"><span>Aguardando valida&ccedil;&atilde;o</span><strong>'+Number(closedStats.waiting||0)+'</strong><small>pendentes de decis&atilde;o t&eacute;cnica</small></div><div class="bonus-exec-kpi warn"><span>Marcos reprovados</span><strong>'+Number(closedStats.rejected||0)+'</strong><small>n&atilde;o geram bonifica&ccedil;&atilde;o</small></div><div class="bonus-exec-kpi good"><span>Valor das di&aacute;rias</span><strong>'+consultantMoney(daily)+'</strong><small>'+cmaxEquivalentLabel(equivalents)+' equivalente(s); '+cmaxEquivalentLabel(special)+' especial(is)</small></div><div class="bonus-exec-kpi"><span>Valor dos marcos</span><strong>'+consultantMoney(milestones)+'</strong><small>'+approved+' aprovado(s)</small></div><div class="bonus-exec-kpi good"><span>Indica&ccedil;&otilde;es convertidas</span><strong>'+consultantMoney(indicationValue)+'</strong><small>'+indications+' venda(s)</small></div><div class="bonus-exec-kpi good"><span>Taxa de aprova&ccedil;&atilde;o</span><strong>'+approvalRate+'%</strong><small>'+approved+' de '+validationTotal+' valida&ccedil;&otilde;es</small></div><div class="bonus-exec-kpi"><span>M&eacute;dia por consultor ativo</span><strong>'+consultantMoney(active?total/active:0)+'</strong><small>'+active+' com valor no m&ecirc;s</small></div></div>'+
+    '<div class="bonus-exec-grid"><div class="bonus-exec-kpi"><span>Closed no m&ecirc;s</span><strong>'+Number(closedStats.total||0)+'</strong><small>marcos que entraram em Closed</small></div><div class="bonus-exec-kpi good"><span>Marcos aprovados</span><strong>'+approved+'</strong><small>compet&ecirc;ncia da valida&ccedil;&atilde;o'+(Number(closedStats.validation_carryover||0)?'; '+Number(closedStats.validation_carryover||0)+' de Closed anterior':'')+'</small></div><div class="bonus-exec-kpi warn"><span>Aguardando valida&ccedil;&atilde;o</span><strong>'+Number(closedStats.waiting||0)+'</strong><small>pendentes de decis&atilde;o t&eacute;cnica</small></div><div class="bonus-exec-kpi warn"><span>Marcos reprovados</span><strong>'+Number(closedStats.rejected||0)+'</strong><small>n&atilde;o geram bonifica&ccedil;&atilde;o</small></div><div class="bonus-exec-kpi good"><span>Valor das di&aacute;rias</span><strong>'+consultantMoney(daily)+'</strong><small>'+cmaxEquivalentLabel(equivalents)+' equivalente(s); '+cmaxEquivalentLabel(special)+' especial(is)</small></div><div class="bonus-exec-kpi"><span>Valor dos marcos</span><strong>'+consultantMoney(milestones)+'</strong><small>'+approved+' aprovado(s)</small></div><div class="bonus-exec-kpi good"><span>Indica&ccedil;&otilde;es convertidas</span><strong>'+consultantMoney(indicationValue)+'</strong><small>'+indications+' venda(s)</small></div><div class="bonus-exec-kpi good"><span>Taxa de aprova&ccedil;&atilde;o</span><strong>'+approvalRate+'%</strong><small>'+approved+' de '+validationTotal+' valida&ccedil;&otilde;es</small></div><div class="bonus-exec-kpi"><span>M&eacute;dia por consultor ativo</span><strong>'+consultantMoney(active?total/active:0)+'</strong><small>'+active+' com valor no m&ecirc;s</small></div></div>'+
     '<div class="bonus-exec-columns"><div class="bonus-exec-panel"><div class="bonus-exec-panel-title">Ranking e composi&ccedil;&atilde;o do fechamento</div>'+(rankRows||'<div class="bonus-empty">Nenhum valor encontrado.</div>')+'</div><div class="bonus-exec-panel"><div class="bonus-exec-panel-title">Insights gerenciais</div>'+insights.join('')+'</div></div></section>';
 }
 function bonusAdminRejectedTable(people) {
@@ -6790,6 +6874,17 @@ function bonusAdminRejectedTable(people) {
     });
   });
   return rows.length?'<div class="dashx-table-wrap"><table class="dashx-table"><thead><tr><th>Consultor</th><th>Projeto</th><th>Marco</th><th>Reprovado em</th><th>Motivo / coment&aacute;rio</th><th>A&ccedil;&atilde;o</th></tr></thead><tbody>'+rows.join('')+'</tbody></table></div>':'<div class="bonus-empty">Nenhum marco reprovado neste m&ecirc;s.</div>';
+}
+function bonusValidationCarryoverSection(rows) {
+  rows=(rows||[]).slice().sort(function(a,b){
+    return String(fechamentoEffectiveConsultant(a)||'').localeCompare(String(fechamentoEffectiveConsultant(b)||''))||
+      String(b.validation_at||'').localeCompare(String(a.validation_at||''));
+  });
+  if(!rows.length)return '';
+  var body=rows.map(function(item){
+    return '<tr><td><strong>'+escapeHtml(fechamentoEffectiveConsultant(item)||'Sem consultor')+'</strong></td><td>'+escapeHtml(item.projeto||'-')+'</td><td>'+escapeHtml(item.marco||'-')+'</td><td>'+escapeHtml(bonusMonthLabel(item.mes_fechamento||''))+'</td><td>'+(item.validation_at?escapeHtml(formatarDataHoraProjeto(item.validation_at)):'-')+'</td><td><strong>'+fechamentoMoney(item.valor_bonus||30)+'</strong></td><td><a class="project-link-btn" href="'+escapeHtml(item.link||'#')+'" target="_blank" rel="noopener">Abrir marco</a></td></tr>';
+  }).join('');
+  return '<section class="bonus-admin-table"><div class="bonus-section"><div class="bonus-admin-label">Aprovados no m&ecirc;s vindos de Closed anterior</div><div class="bonus-admin-sub">Inclu&iacute;dos na bonifica&ccedil;&atilde;o pela data de aprova&ccedil;&atilde;o, sem alterar a lista principal de Fechamento.</div><div class="dashx-table-wrap"><table class="dashx-table"><thead><tr><th>Consultor</th><th>Projeto</th><th>Marco</th><th>Closed em</th><th>Aprovado em</th><th>Valor</th><th>A&ccedil;&atilde;o</th></tr></thead><tbody>'+body+'</tbody></table></div></div></section>';
 }
 function initBonus() {
   var box=document.getElementById('bonus-content');
@@ -6809,11 +6904,15 @@ function initBonus() {
     if(String(item.mes_fechamento||'')!==BONUS_FILTER.month)return false;
     return BONUS_FILTER.consultant==='todos'||bonusNamesMatch(fechamentoEffectiveConsultant(item),BONUS_FILTER.consultant);
   });
+  var carryoverRows=bonusMilestonesCarriedByValidationMonth(BONUS_FILTER.month).filter(function(item){
+    return BONUS_FILTER.consultant==='todos'||bonusNamesMatch(fechamentoEffectiveConsultant(item),BONUS_FILTER.consultant);
+  });
   var closedStats={
     total:closedRows.length,
-    approved:closedRows.filter(function(item){return item.situacao==='aprovado';}).length,
+    approved:people.reduce(function(sum,p){return sum+p.milestoneRows.length;},0),
     rejected:closedRows.filter(function(item){return item.situacao==='reprovado';}).length,
-    waiting:closedRows.filter(function(item){return item.situacao!=='aprovado'&&item.situacao!=='reprovado';}).length
+    waiting:closedRows.filter(function(item){return item.situacao!=='aprovado'&&item.situacao!=='reprovado';}).length,
+    validation_carryover:carryoverRows.length
   };
   var monthOptions=bonusMonthOptions().map(function(month){return '<option value="'+escapeHtml(month)+'" '+(month===BONUS_FILTER.month?'selected':'')+'>'+escapeHtml(bonusMonthLabel(month))+'</option>';}).join('');
   var allNames=bonusCanonicalNames(
@@ -6829,9 +6928,10 @@ function initBonus() {
   var indicationForm='<section class="bonus-admin-table"><div class="bonus-section"><div class="bonus-admin-label">Lan&ccedil;ar indica&ccedil;&atilde;o convertida</div><div class="bonus-admin-sub">Upgrade gera R$ 150,00 e m&oacute;dulo gera R$ 50,00. O valor entra no m&ecirc;s da venda.</div><form id="bonus-indication-form" class="bonus-indication-form" onsubmit="event.preventDefault();return bonusSaveIndication(this.querySelector(\'button[type=submit]\'))"><div class="bonus-indication-field"><label>Consultor</label><select name="consultant_name" required><option value="">Selecione</option>'+sortedBonusNames.map(function(name){return '<option value="'+escapeHtml(name)+'">'+escapeHtml(name)+'</option>';}).join('')+'</select></div><div class="bonus-indication-field"><label>Cliente</label><input name="client" required placeholder="Nome do cliente"></div><div class="bonus-indication-field"><label>Tipo</label><select name="indication_type" required><option value="upgrade">Upgrade - R$ 150</option><option value="modulo">M&oacute;dulo - R$ 50</option></select></div><div class="bonus-indication-field"><label>Data da indica&ccedil;&atilde;o</label><input name="indication_date" type="date" required></div><div class="bonus-indication-field"><label>Data da venda</label><input name="sale_date" type="date" required></div><div class="bonus-indication-field"><label>Observa&ccedil;&atilde;o</label><input name="notes" placeholder="Opcional"></div><button class="btn-syncall" type="submit">Lan&ccedil;ar indica&ccedil;&atilde;o</button></form></div></section>';
   var seniorityForm='<section class="bonus-admin-table"><div class="bonus-section"><div class="bonus-admin-label">Senioridade pontual</div><div class="bonus-admin-sub">Use para suporte ou trabalho avulso sem criar usuário. A informação fica na aba CONSULTORES_REMUNERACAO e entra no cálculo das diárias.</div><form id="bonus-seniority-form" class="bonus-seniority-form" onsubmit="event.preventDefault();return bonusSaveSeniority(this.querySelector(\'button[type=submit]\'))"><div class="bonus-indication-field"><label>Nome</label><input name="consultant_name" list="bonus-seniority-names" required placeholder="Nome como aparece no CMAX"><datalist id="bonus-seniority-names">'+seniorityNameOptions+'</datalist></div><div class="bonus-indication-field"><label>Senioridade</label><select name="seniority" required><option value="">Selecione</option><option value="junior">Junior - R$ 60</option><option value="pleno">Pleno - R$ 85</option><option value="senior">Senior - R$ 110</option><option value="master">Master - R$ 220</option></select></div><button class="btn-syncall" type="submit">Salvar senioridade</button></form></div></section>';
   var status=(CMAX_DAILY_STATE.loading?'Carregando di&aacute;rias do m&ecirc;s selecionado. ':'')+(FECHAMENTO_LOADING?'Carregando fechamento de marcos. ':'');
+  var carryoverSection=bonusValidationCarryoverSection(carryoverRows);
   box.innerHTML='<div class="bonus-shell"><div class="bonus-hero"><div><div class="bonus-title">Bonifica&ccedil;&atilde;o mensal</div><div class="bonus-sub">Relat&oacute;rio consolidado alimentado pelas di&aacute;rias contabiliz&aacute;veis do CMAX e pelos marcos aprovados na valida&ccedil;&atilde;o t&eacute;cnica.</div></div><div class="bonus-actions"><select class="bonus-select" onchange="return bonusSetMonth(this.value)">'+monthOptions+'</select>'+(isAdmin?'<select class="bonus-select" onchange="return bonusSetConsultant(this.value)">'+consultantOptions+'</select>':'')+'<button class="btn-syncall" onclick="return bonusRefresh(this)">Atualizar relat&oacute;rio</button><button class="btn-syncall" onclick="window.print()">Imprimir / PDF</button></div></div>'+
     (status?'<div class="cmax-status">'+status+'</div>':'')+
-    bonusExecutivePanel(people,daily,milestones,equivalents,total,closedStats)+indicationForm+seniorityForm+
+    bonusExecutivePanel(people,daily,milestones,equivalents,total,closedStats)+carryoverSection+indicationForm+seniorityForm+
     (isAdmin?'<section class="bonus-admin-table"><div class="bonus-section"><div class="bonus-admin-label">Base detalhada administrativa</div><div class="bonus-admin-sub">Composi&ccedil;&atilde;o financeira por consultor para confer&ecirc;ncia e envio ao administrativo.</div><div class="dashx-table-wrap"><table class="dashx-table"><thead><tr><th>Consultor</th><th>Senioridade</th><th>Di&aacute;rias</th><th>Valor di&aacute;rias</th><th>Aprovados</th><th>Reprovados</th><th>Valor marcos</th><th>Indica&ccedil;&otilde;es</th><th>Valor indica&ccedil;&otilde;es</th><th>Total</th></tr></thead><tbody>'+adminRows+'</tbody></table></div></div><div class="bonus-section"><div class="bonus-admin-label">Marcos reprovados e justificativas</div><div class="bonus-admin-sub">Pontos que não geraram bonifica&ccedil;&atilde;o e precisam de transpar&ecirc;ncia com o time.</div>'+bonusAdminRejectedTable(people)+'</div></section>':'')+
     (people.map(bonusPersonReport).join('')||'<div class="bonus-empty">Nenhuma bonifica&ccedil;&atilde;o encontrada para este usu&aacute;rio no m&ecirc;s selecionado.</div>')+'</div>';
 }
