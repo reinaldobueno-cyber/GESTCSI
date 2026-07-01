@@ -3220,7 +3220,7 @@ body.theme-dark .tower-kpis [style*="background:#fff"]{
 .bonus-card span{display:block;font-size:9px;text-transform:uppercase;letter-spacing:.12em;font-weight:900;color:var(--muted)}
 .bonus-card strong{display:block;margin-top:7px;font-size:25px;color:var(--text)}
 .bonus-card.total{border-color:#78a98a;background:#edf8ef}.bonus-card.total strong{color:#23623d}
-.bonus-admin-table,.bonus-report{background:var(--surf);border:1px solid var(--border);border-radius:18px;overflow:hidden;box-shadow:0 14px 35px rgba(30,64,105,.08)}
+.bonus-admin-table,.bonus-report,.bonus-observation{background:var(--surf);border:1px solid var(--border);border-radius:18px;overflow:hidden;box-shadow:0 14px 35px rgba(30,64,105,.08)}
 .bonus-exec{background:var(--surf);border:1px solid var(--border);border-radius:18px;overflow:hidden;box-shadow:0 18px 42px rgba(30,64,105,.1)}
 .bonus-exec-head{display:flex;justify-content:space-between;align-items:center;gap:18px;flex-wrap:wrap;padding:22px 24px;background:linear-gradient(120deg,#173b67,#2f72b5);color:#fff}
 .bonus-exec-kicker{font-size:9px;font-weight:900;letter-spacing:.14em;text-transform:uppercase;color:#c8e5ff}.bonus-exec-title{font-size:22px;font-weight:900;margin-top:5px}.bonus-exec-meta{font-size:11px;color:#d9edff;margin-top:5px}
@@ -3241,9 +3241,11 @@ body.theme-dark .tower-kpis [style*="background:#fff"]{
 .bonus-activity span{display:block;color:#687b98;font-size:9px;font-weight:900;letter-spacing:.1em;text-transform:uppercase}.bonus-activity strong{display:block;color:#173b67;font-size:22px;margin-top:8px}.bonus-activity small{display:block;color:#92a3b8;font-size:10px;margin-top:5px}
 .bonus-financial{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;padding:0 28px 22px}.bonus-financial-item{border-left:4px solid #667eea;border-radius:10px;background:#f5f8fb;padding:14px 16px}.bonus-financial-item.marcos{border-left-color:#ed8936}.bonus-financial-item.indicacoes{border-left-color:#8b5cf6}.bonus-financial-item.total{border-left-color:#38a169;background:#edfbf1}.bonus-financial-item span{display:block;font-size:9px;font-weight:900;letter-spacing:.1em;text-transform:uppercase;color:#687b98}.bonus-financial-item strong{display:block;font-size:18px;color:#173b67;margin-top:7px}.bonus-financial-item.total strong{color:#237543;font-size:21px}
 .bonus-indication-form{display:grid;grid-template-columns:1.1fr 1.4fr .8fr 1fr 1fr 1.2fr auto;gap:8px;align-items:end}.bonus-seniority-form{display:grid;grid-template-columns:minmax(220px,1.4fr) minmax(160px,.7fr) auto;gap:8px;align-items:end}.bonus-indication-field label{display:block;font-size:8px;font-weight:900;letter-spacing:.09em;text-transform:uppercase;color:var(--muted);margin:0 0 5px 3px}.bonus-indication-field input,.bonus-indication-field select{width:100%;border:1px solid var(--border);border-radius:8px;background:var(--surf2);color:var(--text);padding:9px;font:800 10px 'Inter',sans-serif}
+.bonus-observation-form{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:10px;align-items:end}.bonus-observation-field label{display:block;font-size:8px;font-weight:900;letter-spacing:.09em;text-transform:uppercase;color:var(--muted);margin:0 0 5px 3px}.bonus-observation-field textarea{width:100%;min-height:86px;resize:vertical;border:1px solid var(--border);border-radius:10px;background:var(--surf2);color:var(--text);padding:10px 12px;font:700 12px/1.45 'Inter',sans-serif}.bonus-observation-actions{display:flex;gap:8px;align-items:center;flex-wrap:wrap}.bonus-observation-text{white-space:pre-wrap;font-size:12px;line-height:1.55;color:var(--text);background:#f7fafd;border:1px solid #dce5ef;border-radius:12px;padding:13px 14px;margin-top:12px}.bonus-observation-meta{font-size:9px;color:var(--muted);font-weight:800;text-transform:uppercase;letter-spacing:.08em;margin-top:8px}
 .bonus-section{padding:16px;border-top:1px solid var(--border)}.bonus-section:first-of-type{border-top:0}.bonus-section-title{font-size:12px;font-weight:900;color:var(--text);margin-bottom:10px}
 .bonus-empty{padding:30px;text-align:center;color:var(--text2)}
 @media(max-width:1200px){.bonus-indication-form,.bonus-seniority-form{grid-template-columns:repeat(3,1fr)}}
+@media(max-width:900px){.bonus-observation-form{grid-template-columns:1fr}}
 @media(max-width:1050px){.bonus-exec-grid{grid-template-columns:repeat(2,1fr)}.bonus-exec-columns{grid-template-columns:1fr}}
 @media(max-width:900px){.bonus-activity-grid{grid-template-columns:repeat(2,1fr)}.bonus-financial{grid-template-columns:1fr}.bonus-report-head{padding:20px}.bonus-report-total strong{font-size:24px}.bonus-rank-row{grid-template-columns:24px 1fr auto}.bonus-rank-track{display:none}}
 @media print{
@@ -3258,7 +3260,9 @@ body.theme-dark .tower-kpis [style*="background:#fff"]{
   .bonus-title{font-size:17px!important;letter-spacing:0!important}
   .bonus-sub{font-size:9px!important;line-height:1.3!important;max-width:none!important}
   .cmax-status,.bonus-indication-form,.bonus-seniority-form,.bonus-admin-table{display:none!important}
-  .bonus-exec,.bonus-report{box-shadow:none!important;border:1px solid #cfd8dc!important;border-radius:0!important;overflow:visible!important;background:#fff!important;color:#111!important}
+  .bonus-admin-table.bonus-detail-base,.bonus-observation:not(.is-empty){display:block!important}
+  .bonus-observation.is-empty,.bonus-observation-form,.bonus-observation-actions{display:none!important}
+  .bonus-exec,.bonus-report,.bonus-admin-table.bonus-detail-base,.bonus-observation{box-shadow:none!important;border:1px solid #cfd8dc!important;border-radius:0!important;overflow:visible!important;background:#fff!important;color:#111!important}
   .bonus-exec{break-after:page;page-break-after:always}
   .bonus-exec-head,.bonus-report-head{background:#173b67!important;color:#fff!important;padding:8px 10px!important;break-inside:avoid;page-break-inside:avoid}
   .bonus-exec-kicker,.bonus-exec-meta,.bonus-exec-total span,.bonus-person-meta,.bonus-report-total span{color:#eef6ff!important}
@@ -3288,6 +3292,8 @@ body.theme-dark .tower-kpis [style*="background:#fff"]{
   .bonus-financial-item strong,.bonus-financial-item.total strong{font-size:12px!important;margin-top:3px!important}
   .bonus-section{padding:6px 7px!important;break-inside:auto!important;page-break-inside:auto!important}
   .bonus-section-title{font-size:9px!important;margin-bottom:4px!important}
+  .bonus-admin-label{font-size:10px!important}.bonus-admin-sub,.bonus-observation-meta{font-size:7px!important}
+  .bonus-observation-text{font-size:8px!important;line-height:1.3!important;padding:6px 7px!important;border-radius:0!important;background:#fff!important;color:#111!important}
   .bonus-empty{padding:8px!important;font-size:8px!important}
   .dashx-table-wrap{overflow:visible!important;border-radius:0!important;border-color:#d9e0d9!important}
   .dashx-table{min-width:0!important;width:100%!important;table-layout:fixed!important;page-break-inside:auto!important}
@@ -6577,6 +6583,8 @@ window.fechamentoSyncApproved = fechamentoSyncApproved;
 
 var BONUS_FILTER = {month:fechamentoCurrentMonth(), consultant:'todos'};
 var BONUS_INDICATION_STATE = {items:[],loadedMonth:'',loading:false};
+var BONUS_REPORT_NOTES_STORAGE_KEY = 'pmo_bonus_report_notes_v1';
+var _bonusReportNotesMap = null;
 function bonusNamesMatch(a,b) {
   var aKey=consultantCompKey(a),bKey=consultantCompKey(b);
   if(!aKey||!bKey)return false;
@@ -6695,6 +6703,60 @@ function bonusDeleteIndication(id,button) {
     showToast('Indicação excluída.','ok');
     return bonusLoadIndications(true);
   }).catch(function(error){if(button)button.disabled=false;showToast((error&&error.message)||'Falha ao excluir indicação','err');});
+}
+function bonusReportNotesMap() {
+  if(_bonusReportNotesMap&&typeof _bonusReportNotesMap==='object')return _bonusReportNotesMap;
+  _bonusReportNotesMap={};
+  try{
+    var raw=window.localStorage&&localStorage.getItem(BONUS_REPORT_NOTES_STORAGE_KEY);
+    if(raw)_bonusReportNotesMap=JSON.parse(raw)||{};
+  }catch(e){_bonusReportNotesMap={};}
+  return _bonusReportNotesMap;
+}
+function bonusPersistReportNotes() {
+  try{
+    if(window.localStorage)localStorage.setItem(BONUS_REPORT_NOTES_STORAGE_KEY,JSON.stringify(bonusReportNotesMap()));
+  }catch(e){}
+}
+function bonusReportNoteKey(month) {
+  return String(month||BONUS_FILTER.month||fechamentoCurrentMonth()).slice(0,7);
+}
+function bonusReportNoteForMonth(month) {
+  return bonusReportNotesMap()[bonusReportNoteKey(month)]||null;
+}
+function bonusReportObservationSection(month) {
+  var key=bonusReportNoteKey(month);
+  var note=bonusReportNoteForMonth(key);
+  var text=note&&note.text?String(note.text):'';
+  var meta='';
+  if(note&&note.updated_at){
+    meta='Atualizado em '+formatarDataHoraProjeto(note.updated_at)+(note.updated_by?' por '+escapeHtml(note.updated_by):'');
+  }
+  return '<section class="bonus-observation '+(text?'':'is-empty')+'"><div class="bonus-section"><div class="bonus-admin-label">Considera&ccedil;&otilde;es do fechamento</div><div class="bonus-admin-sub">Observa&ccedil;&atilde;o administrativa exibida no relat&oacute;rio Resumo abaixo da base detalhada.</div><form class="bonus-observation-form" onsubmit="event.preventDefault();return bonusSaveReportObservation(this)"><div class="bonus-observation-field"><label>Observa&ccedil;&atilde;o de '+escapeHtml(bonusMonthLabel(key))+'</label><textarea name="observation" placeholder="Digite as considera&ccedil;&otilde;es sobre o fechamento...">'+escapeHtml(text)+'</textarea></div><div class="bonus-observation-actions"><button class="btn-syncall" type="submit">'+(text?'Editar observa&ccedil;&atilde;o':'Lan&ccedil;ar observa&ccedil;&atilde;o')+'</button>'+(text?'<button class="project-link-btn warn" type="button" onclick="return bonusDeleteReportObservation()">Excluir</button>':'')+'</div></form>'+(text?'<div class="bonus-observation-text">'+escapeHtml(text)+'</div>':'<div class="bonus-empty">Nenhuma considera&ccedil;&atilde;o lan&ccedil;ada para este fechamento.</div>')+(meta?'<div class="bonus-observation-meta">'+meta+'</div>':'')+'</div></section>';
+}
+function bonusSaveReportObservation(form) {
+  var month=bonusReportNoteKey(BONUS_FILTER.month);
+  var text=String(form&&form.observation&&form.observation.value||'').trim();
+  if(!text){
+    return bonusDeleteReportObservation(true);
+  }
+  var user=AUTH_STATE.user&&(AUTH_STATE.user.name||AUTH_STATE.user.username)||'';
+  var map=bonusReportNotesMap();
+  map[month]={text:text,updated_at:new Date().toISOString(),updated_by:user};
+  bonusPersistReportNotes();
+  initBonus();
+  showToast('Considerações do fechamento salvas.','ok');
+  return false;
+}
+function bonusDeleteReportObservation(skipConfirm) {
+  var month=bonusReportNoteKey(BONUS_FILTER.month);
+  if(!skipConfirm&&!confirm('Excluir as considerações deste fechamento?'))return false;
+  var map=bonusReportNotesMap();
+  delete map[month];
+  bonusPersistReportNotes();
+  initBonus();
+  showToast('Considerações do fechamento excluídas.','ok');
+  return false;
 }
 function projectClosingDecisionBonusRow(item) {
   return {
@@ -6929,10 +6991,11 @@ function initBonus() {
   var seniorityForm='<section class="bonus-admin-table"><div class="bonus-section"><div class="bonus-admin-label">Senioridade pontual</div><div class="bonus-admin-sub">Use para suporte ou trabalho avulso sem criar usuário. A informação fica na aba CONSULTORES_REMUNERACAO e entra no cálculo das diárias.</div><form id="bonus-seniority-form" class="bonus-seniority-form" onsubmit="event.preventDefault();return bonusSaveSeniority(this.querySelector(\'button[type=submit]\'))"><div class="bonus-indication-field"><label>Nome</label><input name="consultant_name" list="bonus-seniority-names" required placeholder="Nome como aparece no CMAX"><datalist id="bonus-seniority-names">'+seniorityNameOptions+'</datalist></div><div class="bonus-indication-field"><label>Senioridade</label><select name="seniority" required><option value="">Selecione</option><option value="junior">Junior - R$ 60</option><option value="pleno">Pleno - R$ 85</option><option value="senior">Senior - R$ 110</option><option value="master">Master - R$ 220</option></select></div><button class="btn-syncall" type="submit">Salvar senioridade</button></form></div></section>';
   var status=(CMAX_DAILY_STATE.loading?'Carregando di&aacute;rias do m&ecirc;s selecionado. ':'')+(FECHAMENTO_LOADING?'Carregando fechamento de marcos. ':'');
   var carryoverSection=bonusValidationCarryoverSection(carryoverRows);
+  var detailedBaseSection=isAdmin?'<section class="bonus-admin-table bonus-detail-base"><div class="bonus-section"><div class="bonus-admin-label">Base detalhada administrativa</div><div class="bonus-admin-sub">Composi&ccedil;&atilde;o financeira por consultor para confer&ecirc;ncia e envio ao administrativo.</div><div class="dashx-table-wrap"><table class="dashx-table"><thead><tr><th>Consultor</th><th>Senioridade</th><th>Di&aacute;rias</th><th>Valor di&aacute;rias</th><th>Aprovados</th><th>Reprovados</th><th>Valor marcos</th><th>Indica&ccedil;&otilde;es</th><th>Valor indica&ccedil;&otilde;es</th><th>Total</th></tr></thead><tbody>'+adminRows+'</tbody></table></div></div><div class="bonus-section"><div class="bonus-admin-label">Marcos reprovados e justificativas</div><div class="bonus-admin-sub">Pontos que não geraram bonifica&ccedil;&atilde;o e precisam de transpar&ecirc;ncia com o time.</div>'+bonusAdminRejectedTable(people)+'</div></section>':'';
   box.innerHTML='<div class="bonus-shell"><div class="bonus-hero"><div><div class="bonus-title">Bonifica&ccedil;&atilde;o mensal</div><div class="bonus-sub">Relat&oacute;rio consolidado alimentado pelas di&aacute;rias contabiliz&aacute;veis do CMAX e pelos marcos aprovados na valida&ccedil;&atilde;o t&eacute;cnica.</div></div><div class="bonus-actions"><select class="bonus-select" onchange="return bonusSetMonth(this.value)">'+monthOptions+'</select>'+(isAdmin?'<select class="bonus-select" onchange="return bonusSetConsultant(this.value)">'+consultantOptions+'</select>':'')+'<button class="btn-syncall" onclick="return bonusRefresh(this)">Atualizar relat&oacute;rio</button><button class="btn-syncall" onclick="window.print()">Imprimir / PDF</button></div></div>'+
     (status?'<div class="cmax-status">'+status+'</div>':'')+
     bonusExecutivePanel(people,daily,milestones,equivalents,total,closedStats)+carryoverSection+indicationForm+seniorityForm+
-    (isAdmin?'<section class="bonus-admin-table"><div class="bonus-section"><div class="bonus-admin-label">Base detalhada administrativa</div><div class="bonus-admin-sub">Composi&ccedil;&atilde;o financeira por consultor para confer&ecirc;ncia e envio ao administrativo.</div><div class="dashx-table-wrap"><table class="dashx-table"><thead><tr><th>Consultor</th><th>Senioridade</th><th>Di&aacute;rias</th><th>Valor di&aacute;rias</th><th>Aprovados</th><th>Reprovados</th><th>Valor marcos</th><th>Indica&ccedil;&otilde;es</th><th>Valor indica&ccedil;&otilde;es</th><th>Total</th></tr></thead><tbody>'+adminRows+'</tbody></table></div></div><div class="bonus-section"><div class="bonus-admin-label">Marcos reprovados e justificativas</div><div class="bonus-admin-sub">Pontos que não geraram bonifica&ccedil;&atilde;o e precisam de transpar&ecirc;ncia com o time.</div>'+bonusAdminRejectedTable(people)+'</div></section>':'')+
+    detailedBaseSection+bonusReportObservationSection(BONUS_FILTER.month)+
     (people.map(bonusPersonReport).join('')||'<div class="bonus-empty">Nenhuma bonifica&ccedil;&atilde;o encontrada para este usu&aacute;rio no m&ecirc;s selecionado.</div>')+'</div>';
 }
 window.bonusSetMonth=bonusSetMonth;
@@ -6941,6 +7004,8 @@ window.bonusRefresh=bonusRefresh;
 window.bonusSaveIndication=bonusSaveIndication;
 window.bonusDeleteIndication=bonusDeleteIndication;
 window.bonusSaveSeniority=bonusSaveSeniority;
+window.bonusSaveReportObservation=bonusSaveReportObservation;
+window.bonusDeleteReportObservation=bonusDeleteReportObservation;
 
 function initAdmin() {
   var el = document.getElementById('admin-content');
