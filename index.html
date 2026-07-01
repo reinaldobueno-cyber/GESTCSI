@@ -3244,6 +3244,7 @@ body.theme-dark .tower-kpis [style*="background:#fff"]{
 .bonus-indication-form{display:grid;grid-template-columns:1.1fr 1.4fr .8fr 1fr 1fr 1.2fr auto;gap:8px;align-items:end}.bonus-seniority-form{display:grid;grid-template-columns:minmax(220px,1.4fr) minmax(160px,.7fr) auto;gap:8px;align-items:end}.bonus-indication-field label{display:block;font-size:8px;font-weight:900;letter-spacing:.09em;text-transform:uppercase;color:var(--muted);margin:0 0 5px 3px}.bonus-indication-field input,.bonus-indication-field select{width:100%;border:1px solid var(--border);border-radius:8px;background:var(--surf2);color:var(--text);padding:9px;font:800 10px 'Inter',sans-serif}
 .bonus-section{padding:16px;border-top:1px solid var(--border)}.bonus-section:first-of-type{border-top:0}.bonus-section-title{font-size:12px;font-weight:900;color:var(--text);margin-bottom:10px}
 .bonus-empty{padding:30px;text-align:center;color:var(--text2)}
+.bonus-signatures{display:none}.bonus-signature-card{border:1px solid #cfd8dc;background:#fff;border-radius:10px;padding:16px 18px;color:#111}.bonus-signature-line{height:34px;border-bottom:1px solid #111;margin-bottom:9px}.bonus-signature-name{font-size:11px;font-weight:900;color:#111}.bonus-signature-role{font-size:9px;color:#53616f;margin-top:3px}.bonus-signature-card.primary{border-top:3px solid #173b67}
 @media(max-width:1200px){.bonus-indication-form,.bonus-seniority-form{grid-template-columns:repeat(3,1fr)}}
 @media(max-width:1050px){.bonus-exec-grid,.bonus-exec-groups{grid-template-columns:repeat(2,1fr)}.bonus-exec-columns{grid-template-columns:1fr}.bonus-exec-group:first-child{grid-column:1/-1}}
 @media(max-width:900px){.bonus-activity-grid{grid-template-columns:repeat(2,1fr)}.bonus-financial{grid-template-columns:1fr}.bonus-report-head{padding:20px}.bonus-report-total strong{font-size:24px}.bonus-rank-row{grid-template-columns:24px 1fr auto}.bonus-rank-track{display:none}}
@@ -3324,6 +3325,14 @@ body.theme-dark .tower-kpis [style*="background:#fff"]{
   .bonus-section{padding:6px 7px!important;break-inside:auto!important;page-break-inside:auto!important}
   .bonus-section-title{font-size:9px!important;margin-bottom:4px!important}
   .bonus-empty{padding:8px!important;font-size:8px!important}
+  .bonus-signatures{display:grid!important;grid-template-columns:1.2fr 1fr 1fr;gap:7px;margin-top:7mm;break-inside:avoid;page-break-inside:avoid}
+  .bonus-signature-card{border-radius:0!important;padding:9px 10px!important;break-inside:avoid;page-break-inside:avoid}
+  .bonus-signature-line{height:22px!important;margin-bottom:5px!important}
+  .bonus-signature-name{font-size:8px!important}
+  .bonus-signature-role{font-size:7px!important;margin-top:2px!important}
+  body.print-summary .bonus-signatures{gap:5px;margin-top:3mm}
+  body.print-summary .bonus-signature-card{padding:6px 8px!important}
+  body.print-summary .bonus-signature-line{height:16px!important;margin-bottom:4px!important}
   .dashx-table-wrap{overflow:visible!important;border-radius:0!important;border-color:#d9e0d9!important}
   .dashx-table{min-width:0!important;width:100%!important;table-layout:fixed!important;page-break-inside:auto!important}
   .dashx-table thead{display:table-header-group}
@@ -6938,6 +6947,9 @@ function bonusValidationCarryoverSection(rows) {
   }).join('');
   return '<section class="bonus-admin-table bonus-carryover-section"><div class="bonus-section"><div class="bonus-admin-label">Aprovados no m&ecirc;s vindos de Closed anterior</div><div class="bonus-admin-sub">Inclu&iacute;dos na bonifica&ccedil;&atilde;o pela data de aprova&ccedil;&atilde;o, sem alterar a lista principal de Fechamento.</div><div class="dashx-table-wrap"><table class="dashx-table"><thead><tr><th>Consultor</th><th>Projeto</th><th>Marco</th><th>Closed em</th><th>Aprovado em</th><th>Valor</th><th>A&ccedil;&atilde;o</th></tr></thead><tbody>'+body+'</tbody></table></div></div></section>';
 }
+function bonusSignatureSection() {
+  return '<section class="bonus-signatures"><div class="bonus-signature-card primary"><div class="bonus-signature-line"></div><div class="bonus-signature-name">Reinaldo Bueno</div><div class="bonus-signature-role">Gerente CS/CSI &middot; assinatura principal</div></div><div class="bonus-signature-card"><div class="bonus-signature-line"></div><div class="bonus-signature-name">Guilherme Paiva</div><div class="bonus-signature-role">L&iacute;der t&eacute;cnico</div></div><div class="bonus-signature-card"><div class="bonus-signature-line"></div><div class="bonus-signature-name">Lais Medeiros</div><div class="bonus-signature-role">Analista de projetos</div></div></section>';
+}
 function initBonus() {
   var box=document.getElementById('bonus-content');
   if(!box)return;
@@ -6985,7 +6997,7 @@ function initBonus() {
     (status?'<div class="cmax-status">'+status+'</div>':'')+
     bonusExecutivePanel(people,daily,milestones,equivalents,total,closedStats)+carryoverSection+indicationForm+seniorityForm+
     (isAdmin?'<section class="bonus-admin-table bonus-admin-summary-table"><div class="bonus-section"><div class="bonus-admin-label">Base detalhada administrativa</div><div class="bonus-admin-sub">Composi&ccedil;&atilde;o financeira por consultor para confer&ecirc;ncia e envio ao administrativo.</div><div class="dashx-table-wrap"><table class="dashx-table"><thead><tr><th>Consultor</th><th>Senioridade</th><th>Di&aacute;rias normais</th><th>Di&aacute;rias especiais</th><th>Di&aacute;rias total</th><th>Valor di&aacute;rias</th><th>Aprovados</th><th>Reprovados</th><th>Valor marcos</th><th>Indica&ccedil;&otilde;es</th><th>Valor indica&ccedil;&otilde;es</th><th>Total</th></tr></thead><tbody>'+adminRows+'</tbody></table></div></div></section><section class="bonus-admin-table"><div class="bonus-section"><div class="bonus-admin-label">Marcos reprovados e justificativas</div><div class="bonus-admin-sub">Pontos que não geraram bonifica&ccedil;&atilde;o e precisam de transpar&ecirc;ncia com o time.</div>'+bonusAdminRejectedTable(people)+'</div></section>':'')+
-    (people.map(bonusPersonReport).join('')||'<div class="bonus-empty">Nenhuma bonifica&ccedil;&atilde;o encontrada para este usu&aacute;rio no m&ecirc;s selecionado.</div>')+'</div>';
+    (people.map(bonusPersonReport).join('')||'<div class="bonus-empty">Nenhuma bonifica&ccedil;&atilde;o encontrada para este usu&aacute;rio no m&ecirc;s selecionado.</div>')+bonusSignatureSection()+'</div>';
 }
 window.bonusSetMonth=bonusSetMonth;
 window.bonusSetConsultant=bonusSetConsultant;
