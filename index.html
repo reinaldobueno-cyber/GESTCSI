@@ -3750,7 +3750,7 @@ var UPDATE_DEVICE_KEY = 'gestcsi_update_device_id_v1';
 var UPDATE_ACTOR_KEY = 'gestcsi_update_actor_v1';
 var LAST_UPDATE_KEY = 'gestcsi_last_update_label_v1';
 var PANEL_CACHE_KEY = 'gestcsi_panel_cache_v2';
-var PANEL_APP_VERSION = '2026-07-02-portfolio-170-v2';
+var PANEL_APP_VERSION = '2026-07-02-portfolio-170-v3';
 var THEME_MODE_KEY = 'gestcsi_theme_mode_v1';
 var AUTH_SESSION_KEY = 'gestcsi_auth_session_v1';
 var AUTH_STATE = { token:'', user:null };
@@ -4063,7 +4063,7 @@ function pollSyncClickupGeral(btn, labelOriginal, immediate) {
   function poll() {
     chamarAppsScriptJsonp('getProjectSyncBackgroundStatus', {
       auth_token: authTokenParam()
-    }, 20000).then(function(status) {
+    }, 120000).then(function(status) {
       if (status && status.service === 'clickup-sync' && !isProjectSyncBackgroundStatus(status)) {
         throw new Error('Apps Script desatualizado: reimplante o ClickUpSync.gs atualizado na planilha.');
       }
