@@ -919,6 +919,7 @@ function isValidMonthlyClient_(cliente) {
 
 function syncProjectMapping_(mapping, options) {
   options = options || {};
+  mapping = reconcileProjectMappingWithMonthlyLink_(mapping);
   var normalized = buildNormalizedProjectFromClickUp_(mapping);
   var hasMonthlySheet = MONTHS.indexOf(sanitizeMonth_(mapping.mes)) >= 0;
   if (hasMonthlySheet) writeProjectSummaryToMonthlySheet_(mapping, normalized);
@@ -936,6 +937,39 @@ function syncProjectMapping_(mapping, options) {
     source: normalized.clickup_payload && normalized.clickup_payload.source || '',
     warning: normalized.clickup_payload && normalized.clickup_payload.warning || ''
   };
+}
+
+function reconcileProjectMappingWithMonthlyLink_(mapping) {
+  if (!mapping || MONTHS.indexOf(sanitizeMonth_(mapping.mes)) < 0) return mapping;
+  var rows = getMonthlyProjectsFromSheet_(sanitizeMonth_(mapping.mes));
+  var target = normalizeKey_(mapping.cliente);
+  var matches = rows.filter(function(item) {
+    return normalizeKey_(item && item.cliente) === target;
+  });
+  if (!matches.length) return mapping;
+
+  var mappingUrl = sanitizeText_(mapping.project_url || mapping.link_projeto || mapping.projeto_link);
+  var targetListId = normalizeClickUpId_(mapping.list_id) || extractClickUpIdFromUrl_(mappingUrl, 'list');
+  var targetViewId = normalizeClickUpId_(mapping.view_id) || extractClickUpIdFromUrl_(mappingUrl, 'view');
+  var targetFolderId = normalizeClickUpNumericId_(mapping.folder_id) || extractClickUpIdFromUrl_(mappingUrl, 'folder');
+  var targetSpaceId = normalizeClickUpNumericId_(mapping.space_id) || extractClickUpIdFromUrl_(mappingUrl, 'space');
+  var monthly = matches.filter(function(item) {
+    var rowUrl = sanitizeText_(item && (item.link_projeto || item.projeto_link));
+    return (targetListId && targetListId === extractClickUpIdFromUrl_(rowUrl, 'list')) ||
+      (targetViewId && targetViewId === extractClickUpIdFromUrl_(rowUrl, 'view')) ||
+      (targetFolderId && targetFolderId === extractClickUpIdFromUrl_(rowUrl, 'folder')) ||
+      (targetSpaceId && targetSpaceId === extractClickUpIdFromUrl_(rowUrl, 'space')) ||
+      (mappingUrl && rowUrl && sanitizeText_(mappingUrl) === rowUrl);
+  })[0] || matches.filter(function(item) {
+    return normalizeProjectKey_(item && item.project_key) === normalizeProjectKey_(mapping.project_key);
+  })[0] || matches[0];
+
+  var monthlyUrl = sanitizeText_(monthly && (monthly.link_projeto || monthly.projeto_link));
+  if (!monthlyUrl || !isRecognizedClickUpSourceUrl_(monthlyUrl)) return mapping;
+  return projectMappingFromConfigItem_(Object.assign({}, mapping, {
+    project_url: monthlyUrl,
+    link_projeto: monthlyUrl
+  })) || mapping;
 }
 
 function buildNormalizedProjectFromClickUp_(mapping) {
@@ -5153,27 +5187,67 @@ function startOfDayMillis_(date) {
 function loadProjectMappings_() {
   var sheet = getConfigSheet_();
   var values = sheet.getDataRange().getValues();
-  if (values.length <= 1) return [];
   var seen = {};
   var out = [];
-  getConfigHeaderCandidates_(values).forEach(function(candidate) {
-    values.slice(candidate.index + 1).forEach(function(row) {
-      var item = rowToObject_(candidate.header, row);
-      var mapping = projectMappingFromConfigItem_(item);
-      if (!mapping || !mapping.cliente || !mapping.mes) return;
-      var key = normalizeProjectKey_(mapping.project_key || buildProjectKey_(mapping.mes, mapping.cliente));
-      if (seen[key] !== undefined) {
-        var existing = out[seen[key]];
-        var existingHasId = !!(existing && (existing.list_id || existing.view_id || existing.folder_id || existing.space_id || existing.project_url));
-        var mappingHasId = !!(mapping.list_id || mapping.view_id || mapping.folder_id || mapping.space_id || mapping.project_url);
-        if (!existingHasId && mappingHasId) out[seen[key]] = mapping;
-        return;
-      }
-      seen[key] = out.length;
-      out.push(mapping);
+
+  function addMapping(mapping) {
+    if (!mapping || !mapping.cliente || !mapping.mes) return;
+    var key = normalizeProjectKey_(mapping.project_key || buildProjectKey_(mapping.mes, mapping.cliente));
+    if (seen[key] !== undefined) {
+      var existing = out[seen[key]];
+      var existingHasId = !!(existing && (existing.list_id || existing.view_id || existing.folder_id || existing.space_id || existing.project_url));
+      var mappingHasId = !!(mapping.list_id || mapping.view_id || mapping.folder_id || mapping.space_id || mapping.project_url);
+      if (!existingHasId && mappingHasId) out[seen[key]] = mapping;
+      return;
+    }
+    seen[key] = out.length;
+    out.push(mapping);
+  }
+
+  if (values.length > 1) {
+    getConfigHeaderCandidates_(values).forEach(function(candidate) {
+      values.slice(candidate.index + 1).forEach(function(row) {
+        addMapping(projectMappingFromConfigItem_(rowToObject_(candidate.header, row)));
+      });
     });
+  }
+  loadMonthlyProjectLinkMappings_().forEach(addMapping);
+  return out;
+}
+
+function loadMonthlyProjectLinkMappings_() {
+  var out = [];
+  MONTHS.forEach(function(month) {
+    try {
+      getMonthlyProjectsFromSheet_(month).forEach(function(project) {
+        var projectUrl = sanitizeText_(project && (project.link_projeto || project.projeto_link));
+        if (!projectUrl || !isRecognizedClickUpSourceUrl_(projectUrl)) return;
+        var rowKey = String(project._sheet_row || '').trim();
+        var mapping = projectMappingFromConfigItem_({
+          enabled: true,
+          mes: month,
+          cliente: project.cliente,
+          consultor: project.consultor,
+          project_key: buildProjectKey_(month, project.cliente) + (rowKey ? ('|ROW|' + rowKey) : ''),
+          project_url: projectUrl,
+          view_id: project.view_id,
+          list_id: project.list_id,
+          notes: 'Link lido da aba mensal'
+        });
+        if (mapping) out.push(mapping);
+      });
+    } catch (error) {}
   });
   return out;
+}
+
+function isRecognizedClickUpSourceUrl_(url) {
+  return !!(
+    extractClickUpIdFromUrl_(url, 'view') ||
+    extractClickUpIdFromUrl_(url, 'list') ||
+    extractClickUpIdFromUrl_(url, 'folder') ||
+    extractClickUpIdFromUrl_(url, 'space')
+  );
 }
 
 function enrichClickUpActivityMappingsWithConsultants_(mappings) {
@@ -5227,10 +5301,15 @@ function projectMappingFromConfigItem_(item) {
   var mes = sanitizeMonth_(item.mes);
   var cliente = sanitizeText_(item.cliente);
   var projectUrl = sanitizeText_(item.project_url || item.link_projeto || item.link_do_projeto || item.link_clickup);
-  var viewId = normalizeClickUpId_(item.view_id) || extractClickUpIdFromUrl_(projectUrl, 'view');
-  var listId = normalizeClickUpId_(item.list_id) || extractClickUpIdFromUrl_(projectUrl, 'list');
-  var folderId = normalizeClickUpNumericId_(item.folder_id) || extractClickUpIdFromUrl_(projectUrl, 'folder');
-  var spaceId = normalizeClickUpNumericId_(item.space_id) || extractClickUpIdFromUrl_(projectUrl, 'space');
+  var urlViewId = extractClickUpIdFromUrl_(projectUrl, 'view');
+  var urlListId = extractClickUpIdFromUrl_(projectUrl, 'list');
+  var urlFolderId = extractClickUpIdFromUrl_(projectUrl, 'folder');
+  var urlSpaceId = extractClickUpIdFromUrl_(projectUrl, 'space');
+  var urlDefinesSource = !!(urlViewId || urlListId || urlFolderId || urlSpaceId);
+  var viewId = urlDefinesSource ? urlViewId : normalizeClickUpId_(item.view_id);
+  var listId = urlDefinesSource ? urlListId : normalizeClickUpId_(item.list_id);
+  var folderId = urlDefinesSource ? urlFolderId : normalizeClickUpNumericId_(item.folder_id);
+  var spaceId = urlDefinesSource ? urlSpaceId : normalizeClickUpNumericId_(item.space_id);
   if (!mes && !cliente && !projectUrl && !viewId && !listId && !folderId && !spaceId) return null;
   return {
     enabled: normalizeBoolean_(item.enabled, true),
@@ -5404,9 +5483,6 @@ function findClientRow_(sheet, cliente) {
 }
 
 function findProjectRowForMapping_(sheet, mapping) {
-  var byClient = findClientRow_(sheet, mapping && mapping.cliente);
-  if (byClient) return byClient;
-
   var lastRow = sheet.getLastRow();
   var lastCol = sheet.getLastColumn();
   if (lastRow < 2 || lastCol < 1) return null;
@@ -5415,6 +5491,8 @@ function findProjectRowForMapping_(sheet, mapping) {
   var header = normalizeMonthlyHeader_(values[0]);
   var targetListId = normalizeClickUpId_(mapping && mapping.list_id);
   var targetViewId = normalizeClickUpId_(mapping && mapping.view_id);
+  var targetFolderId = normalizeClickUpNumericId_(mapping && mapping.folder_id);
+  var targetSpaceId = normalizeClickUpNumericId_(mapping && mapping.space_id);
   var targetProjectUrl = sanitizeText_(mapping && mapping.project_url);
 
   for (var i = 1; i < values.length; i++) {
@@ -5422,12 +5500,16 @@ function findProjectRowForMapping_(sheet, mapping) {
     var rowUrl = sanitizeText_(item.link_projeto || item.projeto_link);
     var rowListId = normalizeClickUpId_(item.list_id) || extractClickUpIdFromUrl_(rowUrl, 'list');
     var rowViewId = normalizeClickUpId_(item.view_id) || extractClickUpIdFromUrl_(rowUrl, 'view');
+    var rowFolderId = extractClickUpIdFromUrl_(rowUrl, 'folder');
+    var rowSpaceId = extractClickUpIdFromUrl_(rowUrl, 'space');
 
     if (targetListId && rowListId && targetListId === rowListId) return i + 1;
     if (targetViewId && rowViewId && targetViewId === rowViewId) return i + 1;
+    if (targetFolderId && rowFolderId && targetFolderId === rowFolderId) return i + 1;
+    if (targetSpaceId && rowSpaceId && targetSpaceId === rowSpaceId) return i + 1;
     if (targetProjectUrl && rowUrl && sanitizeText_(targetProjectUrl) === rowUrl) return i + 1;
   }
-  return null;
+  return findClientRow_(sheet, mapping && mapping.cliente);
 }
 
 function enqueueDirtyEvent_(event) {
