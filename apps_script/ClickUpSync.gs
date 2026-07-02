@@ -316,9 +316,7 @@ function doPost(e) {
 
 function syncAllProjects(options) {
   options = options || {};
-  var mappings = loadProjectMappings_().filter(function(item) {
-    return item.enabled && MONTHS.indexOf(sanitizeMonth_(item.mes)) >= 0;
-  });
+  var mappings = loadProjectSyncMappings_();
   var offset = Math.max(0, Number(options.offset || 0));
   var limit = options.limit || mappings.length;
   var force = !!options.force;
@@ -352,9 +350,7 @@ function syncAllProjects(options) {
 function startProjectSyncBackground_(params) {
   params = params || {};
   var props = PropertiesService.getScriptProperties();
-  var total = loadProjectMappings_().filter(function(item) {
-    return item.enabled && MONTHS.indexOf(sanitizeMonth_(item.mes)) >= 0;
-  }).length;
+  var total = loadProjectSyncMappings_().length;
   props.setProperty('CLICKUP_PROJECT_SYNC_ACTIVE', '1');
   props.setProperty('CLICKUP_PROJECT_SYNC_OFFSET', '0');
   props.setProperty('CLICKUP_PROJECT_SYNC_TOTAL', String(total));
@@ -390,6 +386,7 @@ function continueProjectSyncBackgroundStepWithLock_(options) {
     return busy;
   }
   try {
+    normalizeProjectSyncBackgroundQueue_(props);
     return continueProjectSyncBackgroundStep_();
   } finally {
     lock.releaseLock();
@@ -406,8 +403,10 @@ function continueProjectSyncBackgroundStep_() {
     var offset = toInt_(props.getProperty('CLICKUP_PROJECT_SYNC_OFFSET'), 0);
     var batchSize = Math.max(1, Math.min(toInt_(getScriptProperty_('CLICKUP_PROJECT_SYNC_BATCH_SIZE', '2'), 2), 5));
     var result = syncAllProjects({ force: true, offset: offset, limit: batchSize });
-    var processed = toInt_(props.getProperty('CLICKUP_PROJECT_SYNC_PROCESSED'), 0) + result.processed.length;
+    var attempted = Number(result.batch_total || 0) || (result.processed.length + result.errors.length);
+    var processed = toInt_(props.getProperty('CLICKUP_PROJECT_SYNC_PROCESSED'), 0) + attempted;
     var errors = toInt_(props.getProperty('CLICKUP_PROJECT_SYNC_ERRORS'), 0) + result.errors.length;
+    props.setProperty('CLICKUP_PROJECT_SYNC_TOTAL', String(result.total || 0));
     props.setProperty('CLICKUP_PROJECT_SYNC_OFFSET', String(result.next_offset));
     props.setProperty('CLICKUP_PROJECT_SYNC_PROCESSED', String(processed));
     props.setProperty('CLICKUP_PROJECT_SYNC_ERRORS', String(errors));
@@ -427,6 +426,20 @@ function continueProjectSyncBackgroundStep_() {
     clearProjectSyncBackgroundTriggers_();
     return getProjectSyncBackgroundStatus_();
   }
+}
+
+function normalizeProjectSyncBackgroundQueue_(props) {
+  props = props || PropertiesService.getScriptProperties();
+  var expectedTotal = loadProjectSyncMappings_().length;
+  var currentTotal = toInt_(props.getProperty('CLICKUP_PROJECT_SYNC_TOTAL'), 0);
+  if (currentTotal === expectedTotal) return;
+  props.setProperty('CLICKUP_PROJECT_SYNC_TOTAL', String(expectedTotal));
+  props.setProperty('CLICKUP_PROJECT_SYNC_OFFSET', '0');
+  props.setProperty('CLICKUP_PROJECT_SYNC_PROCESSED', '0');
+  props.setProperty('CLICKUP_PROJECT_SYNC_ERRORS', '0');
+  props.deleteProperty('CLICKUP_PROJECT_SYNC_ERROR');
+  props.deleteProperty('CLICKUP_PROJECT_SYNC_COMPLETED_AT');
+  props.setProperty('CLICKUP_PROJECT_SYNC_UPDATED_AT', new Date().toISOString());
 }
 
 function getProjectSyncBackgroundStatus_() {
@@ -5338,6 +5351,45 @@ function loadProjectMappings_() {
     });
   }
   loadMonthlyProjectLinkMappings_().forEach(addMapping);
+  return out;
+}
+
+function loadProjectSyncMappings_() {
+  var configMappings = loadProjectMappings_();
+  var out = [];
+  var seenRows = {};
+
+  function addProject(project) {
+    if (!project || !monthlyProjectExpectsClickUpSummary_(project)) return;
+    var rowKey = [sanitizeMonth_(project.mes), String(project._sheet_row || ''), normalizeKey_(project.cliente)].join('|');
+    if (seenRows[rowKey]) return;
+    var match = findDiagnosticMappingForProject_(project, configMappings);
+    var base = match && match.mapping || {};
+    var projectUrl = sanitizeText_(project.link_projeto || project.projeto_link || base.project_url);
+    var mapping = projectMappingFromConfigItem_(Object.assign({}, base, {
+      enabled: true,
+      mes: project.mes,
+      cliente: project.cliente,
+      consultor: project.consultor || base.consultor || '',
+      project_key: buildProjectKey_(project.mes, project.cliente) + '|ROW|' + String(project._sheet_row || ''),
+      project_url: projectUrl,
+      link_projeto: projectUrl,
+      view_id: project.view_id || base.view_id,
+      list_id: project.list_id || base.list_id,
+      folder_id: base.folder_id,
+      space_id: base.space_id
+    }));
+    if (!mapping || !mapping.enabled) return;
+    if (!(mapping.list_id || mapping.view_id || mapping.folder_id || mapping.space_id || mapping.project_url)) return;
+    seenRows[rowKey] = true;
+    out.push(mapping);
+  }
+
+  MONTHS.forEach(function(month) {
+    try {
+      getMonthlyProjectsFromSheet_(month).forEach(addProject);
+    } catch (error) {}
+  });
   return out;
 }
 
