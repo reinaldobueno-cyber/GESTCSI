@@ -350,10 +350,9 @@ function syncAllProjects(options) {
 function startProjectSyncBackground_(params) {
   params = params || {};
   var props = PropertiesService.getScriptProperties();
-  var total = loadProjectSyncMappings_().length;
   props.setProperty('CLICKUP_PROJECT_SYNC_ACTIVE', '1');
   props.setProperty('CLICKUP_PROJECT_SYNC_OFFSET', '0');
-  props.setProperty('CLICKUP_PROJECT_SYNC_TOTAL', String(total));
+  props.setProperty('CLICKUP_PROJECT_SYNC_TOTAL', '0');
   props.setProperty('CLICKUP_PROJECT_SYNC_PROCESSED', '0');
   props.setProperty('CLICKUP_PROJECT_SYNC_ERRORS', '0');
   props.setProperty('CLICKUP_PROJECT_SYNC_STARTED_AT', new Date().toISOString());
@@ -361,7 +360,9 @@ function startProjectSyncBackground_(params) {
   props.deleteProperty('CLICKUP_PROJECT_SYNC_ERROR');
   props.deleteProperty('CLICKUP_PROJECT_SYNC_COMPLETED_AT');
   scheduleProjectSyncBackground_(1000);
-  return getProjectSyncBackgroundStatus_();
+  var status = getProjectSyncBackgroundStatus_();
+  status.initializing = true;
+  return status;
 }
 
 function continueProjectSyncBackgroundTrigger() {
