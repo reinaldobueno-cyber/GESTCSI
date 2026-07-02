@@ -4022,6 +4022,25 @@ function clickupProjectSyncLabel(status) {
   var errors = Number(status && status.errors || 0);
   return processed + (total ? ('/' + total) : '') + (errors ? (' - ' + errors + ' erro(s)') : '');
 }
+function isProjectSyncBackgroundStatus(resp) {
+  return !!resp && (
+    Object.prototype.hasOwnProperty.call(resp, 'active') ||
+    Object.prototype.hasOwnProperty.call(resp, 'total') ||
+    Object.prototype.hasOwnProperty.call(resp, 'processed') ||
+    Object.prototype.hasOwnProperty.call(resp, 'completed_at')
+  );
+}
+function assertProjectSyncBackgroundReady(resp) {
+  if (resp && resp.service === 'clickup-sync' && !isProjectSyncBackgroundStatus(resp)) {
+    throw new Error('Apps Script desatualizado: reimplante o ClickUpSync.gs atualizado na planilha antes de rodar o Sync ClickUp.');
+  }
+  if (!resp || resp.ok === false) {
+    throw new Error((resp && (resp.error || resp.message)) || 'Nao foi possivel iniciar o sync em segundo plano');
+  }
+  if (!isProjectSyncBackgroundStatus(resp)) {
+    throw new Error('Apps Script nao retornou status do sync em segundo plano.');
+  }
+}
 function finalizarSyncClickupGeral(btn, labelOriginal, status) {
   resetarCachesDerivadosPainel({ limparCachePainel: true });
   if (btn) btn.textContent = 'Atualizando painel...';
@@ -4045,6 +4064,9 @@ function pollSyncClickupGeral(btn, labelOriginal, immediate) {
     chamarAppsScriptJsonp('getProjectSyncBackgroundStatus', {
       auth_token: authTokenParam()
     }, 20000).then(function(status) {
+      if (status && status.service === 'clickup-sync' && !isProjectSyncBackgroundStatus(status)) {
+        throw new Error('Apps Script desatualizado: reimplante o ClickUpSync.gs atualizado na planilha.');
+      }
       if (!status || status.ok === false) throw new Error((status && (status.error || status.message)) || 'Status do sync indisponivel');
       var label = clickupProjectSyncLabel(status);
       if (status.active) {
@@ -4113,10 +4135,18 @@ window.sincronizarTodosProjetosClickup = function(btn) {
     auth_token: authTokenParam(),
     force: '1'
   }, 30000).then(function(resp) {
-    if (!resp || resp.ok === false) throw new Error((resp && (resp.error || resp.message)) || 'Nao foi possivel iniciar o sync em segundo plano');
+    assertProjectSyncBackgroundReady(resp);
     showToast('Sync ClickUp iniciado. Pode acompanhar o progresso no botao.', 'ok');
     pollSyncClickupGeral(btn, labelOriginal, true);
   }).catch(function(error) {
+    if (/Apps Script desatualizado/i.test(String(error && error.message || error || ''))) {
+      if (btn) {
+        btn.disabled = false;
+        btn.textContent = labelOriginal || 'Sync ClickUp';
+      }
+      showToast(error.message, 'err');
+      return;
+    }
     showToast('Modo segundo plano indisponivel; tentando sync em lotes pequenos...', 'err');
     sincronizarTodosProjetosClickupEmLotes(btn, labelOriginal).catch(function(batchError) {
       if (btn) {
