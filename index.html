@@ -6637,6 +6637,8 @@ function bonusMonthOptions() {
   var months={};
   (FECHAMENTO_MARCOS||[]).forEach(function(item){if(item.mes_fechamento)months[item.mes_fechamento]=true;});
   (FECHAMENTO_MARCOS||[]).forEach(function(item){
+    var effective = item && item.situacao === 'aprovado' ? bonusMilestoneEffectiveMonth(item) : '';
+    if(effective)months[effective]=true;
     if(item.situacao==='aprovado'&&item.mes_validacao)months[item.mes_validacao]=true;
   });
   (PROJECT_CLOSING_DECISIONS.items||[]).forEach(function(item){if(item.month)months[item.month]=true;});
@@ -6809,11 +6811,16 @@ function bonusMilestoneKey(item) {
     [item.project_key,item.projeto,item.marco,item.closed_at].join('|')
   )||'');
 }
+function bonusMilestoneEffectiveMonth(item) {
+  if (!item) return '';
+  var validationMonth = fechamentoCompetenceMonthKey(item.validation_at, item.mes_validacao);
+  return validationMonth || String(item.mes_fechamento || '');
+}
 function bonusMilestonesApprovedForMonth(month) {
   var seen={};
   return (FECHAMENTO_MARCOS||[]).filter(function(item){
     if(!item||fechamentoIsProjectClosing(item)||item.situacao!=='aprovado')return false;
-    return String(item.mes_fechamento||'')===month;
+    return bonusMilestoneEffectiveMonth(item)===month;
   }).filter(function(item){
     var key=bonusMilestoneKey(item);
     if(key&&seen[key])return false;
@@ -6892,7 +6899,10 @@ function bonusIndicationDetails(person) {
 }
 function bonusMilestoneDetails(person) {
   var rows=person.milestoneRows.map(function(item){
-    return '<tr><td>'+(item.validation_at?escapeHtml(formatarDataHoraProjeto(item.validation_at)):'-')+'</td><td><strong>'+escapeHtml(item.projeto||'-')+'</strong></td><td>'+escapeHtml(item.item_tipo||'Marco')+'</td><td>'+escapeHtml(item.marco||'-')+'</td><td>'+escapeHtml(item.justificativa||'-')+'</td><td><strong>'+fechamentoMoney(item.valor_bonus||30)+'</strong></td></tr>';
+    var competenceNote=String(item.mes_fechamento||'')!==bonusMilestoneEffectiveMonth(item)
+      ? '<div class="closing-project-meta">Closed em '+escapeHtml(bonusMonthLabel(item.mes_fechamento||''))+'</div>'
+      : '';
+    return '<tr><td>'+(item.validation_at?escapeHtml(formatarDataHoraProjeto(item.validation_at)):'-')+'</td><td><strong>'+escapeHtml(item.projeto||'-')+'</strong>'+competenceNote+'</td><td>'+escapeHtml(item.item_tipo||'Marco')+'</td><td>'+escapeHtml(item.marco||'-')+'</td><td>'+escapeHtml(item.justificativa||'-')+'</td><td><strong>'+fechamentoMoney(item.valor_bonus||30)+'</strong></td></tr>';
   }).join('');
   return rows?'<div class="dashx-table-wrap"><table class="dashx-table"><thead><tr><th>Aprovado em</th><th>Projeto</th><th>Tipo</th><th>Marco</th><th>Coment&aacute;rio</th><th>Valor</th></tr></thead><tbody>'+rows+'</tbody></table></div>':'<div class="bonus-empty">Nenhum marco aprovado neste m&ecirc;s.</div>';
 }
@@ -6941,7 +6951,7 @@ function bonusExecutivePanel(people,daily,milestones,equivalents,total,closedSta
   if(missingSeniority.length)insights.push('<div class="bonus-insight warn"><strong>Cadastro financeiro incompleto</strong><span>'+escapeHtml(missingSeniority.map(function(p){return p.name;}).join(', '))+' possuem di&aacute;rias sem senioridade configurada.</span></div>');
   if(!insights.length)insights.push('<div class="bonus-insight"><strong>Sem ocorr&ecirc;ncias para destacar</strong><span>Atualize as bases para gerar a leitura executiva.</span></div>');
   return '<section class="bonus-exec"><div class="bonus-exec-head"><div><div class="bonus-exec-kicker">Vis&atilde;o administrativa e diretoria</div><div class="bonus-exec-title">Fechamento CSI &middot; '+escapeHtml(bonusMonthLabel(BONUS_FILTER.month))+'</div><div class="bonus-exec-meta">'+active+' consultor(es) com bonifica&ccedil;&atilde;o &middot; dados consolidados do CMAX e ClickUp</div></div><div class="bonus-exec-total"><span>Total previsto</span><strong>'+consultantMoney(total)+'</strong></div></div>'+
-    '<div class="bonus-exec-grid"><div class="bonus-exec-kpi"><span>Closed na compet&ecirc;ncia</span><strong>'+Number(closedStats.total||0)+'</strong><small>dia 01 conta no m&ecirc;s anterior</small></div><div class="bonus-exec-kpi good"><span>Marcos aprovados</span><strong>'+approved+'</strong><small>compet&ecirc;ncia do Closed</small></div><div class="bonus-exec-kpi warn"><span>Aguardando valida&ccedil;&atilde;o</span><strong>'+Number(closedStats.waiting||0)+'</strong><small>pendentes de decis&atilde;o t&eacute;cnica</small></div><div class="bonus-exec-kpi warn"><span>Marcos reprovados</span><strong>'+Number(closedStats.rejected||0)+'</strong><small>n&atilde;o geram bonifica&ccedil;&atilde;o</small></div><div class="bonus-exec-kpi good"><span>Valor das di&aacute;rias</span><strong>'+consultantMoney(daily)+'</strong><small>'+cmaxEquivalentLabel(equivalents)+' equivalente(s); '+cmaxEquivalentLabel(special)+' especial(is)</small></div><div class="bonus-exec-kpi"><span>Valor dos marcos</span><strong>'+consultantMoney(milestones)+'</strong><small>'+approved+' aprovado(s)</small></div><div class="bonus-exec-kpi good"><span>Indica&ccedil;&otilde;es convertidas</span><strong>'+consultantMoney(indicationValue)+'</strong><small>'+indications+' venda(s)</small></div><div class="bonus-exec-kpi good"><span>Taxa de aprova&ccedil;&atilde;o</span><strong>'+approvalRate+'%</strong><small>'+approved+' de '+validationTotal+' valida&ccedil;&otilde;es</small></div><div class="bonus-exec-kpi"><span>M&eacute;dia por consultor ativo</span><strong>'+consultantMoney(active?total/active:0)+'</strong><small>'+active+' com valor no m&ecirc;s</small></div></div>'+
+    '<div class="bonus-exec-grid"><div class="bonus-exec-kpi"><span>Closed na compet&ecirc;ncia</span><strong>'+Number(closedStats.total||0)+'</strong><small>dia 01 conta no m&ecirc;s anterior</small></div><div class="bonus-exec-kpi good"><span>Marcos aprovados</span><strong>'+approved+'</strong><small>compet&ecirc;ncia da aprova&ccedil;&atilde;o</small></div><div class="bonus-exec-kpi warn"><span>Aguardando valida&ccedil;&atilde;o</span><strong>'+Number(closedStats.waiting||0)+'</strong><small>pendentes de decis&atilde;o t&eacute;cnica</small></div><div class="bonus-exec-kpi warn"><span>Marcos reprovados</span><strong>'+Number(closedStats.rejected||0)+'</strong><small>n&atilde;o geram bonifica&ccedil;&atilde;o</small></div><div class="bonus-exec-kpi good"><span>Valor das di&aacute;rias</span><strong>'+consultantMoney(daily)+'</strong><small>'+cmaxEquivalentLabel(equivalents)+' equivalente(s); '+cmaxEquivalentLabel(special)+' especial(is)</small></div><div class="bonus-exec-kpi"><span>Valor dos marcos</span><strong>'+consultantMoney(milestones)+'</strong><small>'+approved+' aprovado(s)</small></div><div class="bonus-exec-kpi good"><span>Indica&ccedil;&otilde;es convertidas</span><strong>'+consultantMoney(indicationValue)+'</strong><small>'+indications+' venda(s)</small></div><div class="bonus-exec-kpi good"><span>Taxa de aprova&ccedil;&atilde;o</span><strong>'+approvalRate+'%</strong><small>'+approved+' de '+validationTotal+' valida&ccedil;&otilde;es</small></div><div class="bonus-exec-kpi"><span>M&eacute;dia por consultor ativo</span><strong>'+consultantMoney(active?total/active:0)+'</strong><small>'+active+' com valor no m&ecirc;s</small></div></div>'+
     '<div class="bonus-exec-columns"><div class="bonus-exec-panel"><div class="bonus-exec-panel-title">Ranking e composi&ccedil;&atilde;o do fechamento</div>'+(rankRows||'<div class="bonus-empty">Nenhum valor encontrado.</div>')+'</div><div class="bonus-exec-panel"><div class="bonus-exec-panel-title">Insights gerenciais</div>'+insights.join('')+'</div></div></section>';
 }
 function bonusAdminRejectedTable(people) {
