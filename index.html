@@ -4015,40 +4015,118 @@ window.recarregarPainelManual = function() {
   loadAll('manual');
   return true;
 };
-window.sincronizarTodosProjetosClickup = function(btn) {
-  var labelOriginal = btn ? btn.textContent : '';
-  if (btn) {
-    btn.disabled = true;
-    btn.textContent = 'Sincronizando...';
-  }
-  showToast('Sincronizando todos os projetos do ClickUp...', 'ok');
-  chamarAppsScriptJsonp('syncAll', {
-    force: '1'
-  }, 180000).then(function(resp) {
-    var processados = Array.isArray(resp && resp.processed) ? resp.processed.length : 0;
-    var erros = Array.isArray(resp && resp.errors) ? resp.errors.length : 0;
-    resetarCachesDerivadosPainel({ limparCachePainel: true });
-    if (btn) btn.textContent = 'Atualizando painel...';
-    return sleep(2200).then(function() {
-      loadAll('manual');
-      if (btn) {
-        btn.disabled = false;
-        btn.textContent = labelOriginal || 'Sync ClickUp';
-      }
-      if (erros > 0) {
-        showToast('Sync geral concluida: ' + processados + ' ok, ' + erros + ' com erro', 'err');
-      } else {
-        showToast('Sync geral concluida: ' + processados + ' projeto(s) atualizados', 'ok');
-      }
-    });
-  }).catch(function(error) {
+var CLICKUP_PROJECT_SYNC_POLL_TIMER = null;
+function clickupProjectSyncLabel(status) {
+  var total = Number(status && status.total || 0);
+  var processed = Number(status && status.processed || 0);
+  var errors = Number(status && status.errors || 0);
+  return processed + (total ? ('/' + total) : '') + (errors ? (' - ' + errors + ' erro(s)') : '');
+}
+function finalizarSyncClickupGeral(btn, labelOriginal, status) {
+  resetarCachesDerivadosPainel({ limparCachePainel: true });
+  if (btn) btn.textContent = 'Atualizando painel...';
+  return sleep(2200).then(function() {
+    loadAll('manual');
     if (btn) {
       btn.disabled = false;
       btn.textContent = labelOriginal || 'Sync ClickUp';
     }
-    showToast('Erro no sync geral do ClickUp: ' + (error && error.message || 'tente novamente'), 'err');
+    var errors = Number(status && status.errors || 0);
+    var label = clickupProjectSyncLabel(status);
+    showToast(errors ? ('Sync ClickUp concluido com alertas: ' + label) : ('Sync ClickUp concluido: ' + label), errors ? 'err' : 'ok');
   });
-  return true;
+}
+function pollSyncClickupGeral(btn, labelOriginal, immediate) {
+  if (CLICKUP_PROJECT_SYNC_POLL_TIMER) {
+    clearTimeout(CLICKUP_PROJECT_SYNC_POLL_TIMER);
+    CLICKUP_PROJECT_SYNC_POLL_TIMER = null;
+  }
+  function poll() {
+    chamarAppsScriptJsonp('getProjectSyncBackgroundStatus', {
+      auth_token: authTokenParam()
+    }, 20000).then(function(status) {
+      if (!status || status.ok === false) throw new Error((status && (status.error || status.message)) || 'Status do sync indisponivel');
+      var label = clickupProjectSyncLabel(status);
+      if (status.active) {
+        if (btn) btn.textContent = 'Sync ' + label;
+        showToast('Sync ClickUp em andamento: ' + label, 'ok');
+        CLICKUP_PROJECT_SYNC_POLL_TIMER = setTimeout(poll, 7000);
+        return;
+      }
+      if (status.error) throw new Error(status.error);
+      finalizarSyncClickupGeral(btn, labelOriginal, status);
+    }).catch(function(error) {
+      if (btn) {
+        btn.disabled = false;
+        btn.textContent = labelOriginal || 'Sync ClickUp';
+      }
+      showToast('Erro no status do sync ClickUp: ' + (error && error.message || 'tente novamente'), 'err');
+    });
+  }
+  CLICKUP_PROJECT_SYNC_POLL_TIMER = setTimeout(poll, immediate ? 1200 : 7000);
+}
+function sincronizarTodosProjetosClickupEmLotes(btn, labelOriginal) {
+  var offset = 0;
+  var processed = 0;
+  var errors = 0;
+  var total = 0;
+  var limit = 3;
+  function runBatch() {
+    if (btn) btn.textContent = total ? ('Sync ' + processed + '/' + total) : ('Sync lote ' + (offset + 1));
+    return chamarAppsScriptJsonp('syncAll', {
+      force: '1',
+      offset: offset,
+      limit: limit
+    }, 160000).then(function(resp) {
+      if (!resp || resp.ok === false && !Array.isArray(resp.errors)) throw new Error((resp && (resp.error || resp.message)) || 'Falha no lote do sync');
+      var batchProcessed = Array.isArray(resp.processed) ? resp.processed.length : 0;
+      var batchErrors = Array.isArray(resp.errors) ? resp.errors.length : 0;
+      processed += batchProcessed;
+      errors += batchErrors;
+      total = Number(resp.total || total || 0);
+      offset = Number(resp.next_offset || (offset + limit));
+      showToast('Sync ClickUp lote: ' + processed + (total ? ('/' + total) : '') + (errors ? (' - ' + errors + ' erro(s)') : ''), batchErrors ? 'err' : 'ok');
+      if (resp.done) {
+        return finalizarSyncClickupGeral(btn, labelOriginal, {
+          processed: processed,
+          total: total,
+          errors: errors
+        });
+      }
+      return sleep(1200).then(runBatch);
+    });
+  }
+  return runBatch();
+}
+window.sincronizarTodosProjetosClickup = function(btn) {
+  if (!AUTH_STATE.user || AUTH_STATE.user.role !== 'admin') {
+    showToast('Somente admin pode sincronizar ClickUp', 'err');
+    return false;
+  }
+  var labelOriginal = btn ? btn.textContent : '';
+  if (btn) {
+    btn.disabled = true;
+    btn.textContent = 'Iniciando...';
+  }
+  showToast('Iniciando sync ClickUp em segundo plano...', 'ok');
+  chamarAppsScriptJsonp('startProjectSyncBackground', {
+    auth_token: authTokenParam(),
+    force: '1'
+  }, 30000).then(function(resp) {
+    if (!resp || resp.ok === false) throw new Error((resp && (resp.error || resp.message)) || 'Nao foi possivel iniciar o sync em segundo plano');
+    showToast('Sync ClickUp iniciado. Pode acompanhar o progresso no botao.', 'ok');
+    pollSyncClickupGeral(btn, labelOriginal, true);
+  }).catch(function(error) {
+    showToast('Modo segundo plano indisponivel; tentando sync em lotes pequenos...', 'err');
+    sincronizarTodosProjetosClickupEmLotes(btn, labelOriginal).catch(function(batchError) {
+      if (btn) {
+        btn.disabled = false;
+        btn.textContent = labelOriginal || 'Sync ClickUp';
+      }
+      showToast('Erro no sync geral do ClickUp: ' + (batchError && batchError.message || error && error.message || 'tente novamente'), 'err');
+    });
+  });
+  return false;
 };
 function sleep(ms) {
   return new Promise(function(resolve){ setTimeout(resolve, ms || 0); });
