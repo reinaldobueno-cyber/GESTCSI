@@ -97,9 +97,18 @@ function doGet(e) {
     if (action === 'syncAll') {
       var allResult = syncAllProjects({
         force: String(params.force || '') === '1',
-        limit: toInt_(params.limit, null)
+        limit: toInt_(params.limit, null),
+        offset: toInt_(params.offset, 0)
       });
       return jsonOutput_(allResult, params.callback);
+    }
+    if (action === 'startProjectSyncBackground') {
+      requireAdmin_(params);
+      return jsonOutput_(startProjectSyncBackground_(params), params.callback);
+    }
+    if (action === 'getProjectSyncBackgroundStatus') {
+      requireAdmin_(params);
+      return jsonOutput_(getProjectSyncBackgroundStatus_(), params.callback);
     }
     if (action === 'startProjectClosingSync') {
       requireAdmin_(params);
@@ -275,7 +284,7 @@ function doGet(e) {
     var payload = {
       ok: true,
       service: 'clickup-sync',
-      message: 'Use action=getMonthlyProjects|syncProject|syncAll|processDirty|validateConfig|getClickUpInventory|getClickUpMilestoneClosing|startClickUpMilestoneClosingBackground|syncClickUpUserActivity|startClickUpUserActivityBackground|getClickUpUserActivity|getCmaxDailyEvents|getCmaxDailyHistoryStatus|syncCmaxDailyEvents|startCmaxDailyHistoryBackground|logPanelUpdate|getPanelUpdateHistory|login|me|listUsers|createUser|setUserEnabled|logProjectFollowup|getProjectFollowups|setProjectFollowupStatus|setProjectKanbanStage|deleteProjectFollowup'
+      message: 'Use action=getMonthlyProjects|syncProject|syncAll|startProjectSyncBackground|getProjectSyncBackgroundStatus|processDirty|validateConfig|getClickUpInventory|getClickUpMilestoneClosing|startClickUpMilestoneClosingBackground|syncClickUpUserActivity|startClickUpUserActivityBackground|getClickUpUserActivity|getCmaxDailyEvents|getCmaxDailyHistoryStatus|syncCmaxDailyEvents|startCmaxDailyHistoryBackground|logPanelUpdate|getPanelUpdateHistory|login|me|listUsers|createUser|setUserEnabled|logProjectFollowup|getProjectFollowups|setProjectFollowupStatus|setProjectKanbanStage|deleteProjectFollowup'
     };
     return jsonOutput_(payload, params.callback);
   } catch (error) {
@@ -310,12 +319,13 @@ function syncAllProjects(options) {
   var mappings = loadProjectMappings_().filter(function(item) {
     return item.enabled && MONTHS.indexOf(sanitizeMonth_(item.mes)) >= 0;
   });
+  var offset = Math.max(0, Number(options.offset || 0));
   var limit = options.limit || mappings.length;
   var force = !!options.force;
   var processed = [];
   var errors = [];
 
-  mappings.slice(0, limit).forEach(function(mapping) {
+  mappings.slice(offset, offset + limit).forEach(function(mapping) {
     try {
       processed.push(syncProjectMapping_(mapping, { force: force }));
     } catch (error) {
@@ -329,10 +339,94 @@ function syncAllProjects(options) {
 
   return {
     ok: errors.length === 0,
-    total: Math.min(limit, mappings.length),
+    total: mappings.length,
+    batch_total: Math.min(limit, Math.max(0, mappings.length - offset)),
+    offset: offset,
+    next_offset: Math.min(mappings.length, offset + limit),
+    done: offset + limit >= mappings.length,
     processed: processed,
     errors: errors
   };
+}
+
+function startProjectSyncBackground_(params) {
+  params = params || {};
+  var props = PropertiesService.getScriptProperties();
+  var total = loadProjectMappings_().filter(function(item) {
+    return item.enabled && MONTHS.indexOf(sanitizeMonth_(item.mes)) >= 0;
+  }).length;
+  props.setProperty('CLICKUP_PROJECT_SYNC_ACTIVE', '1');
+  props.setProperty('CLICKUP_PROJECT_SYNC_OFFSET', '0');
+  props.setProperty('CLICKUP_PROJECT_SYNC_TOTAL', String(total));
+  props.setProperty('CLICKUP_PROJECT_SYNC_PROCESSED', '0');
+  props.setProperty('CLICKUP_PROJECT_SYNC_ERRORS', '0');
+  props.setProperty('CLICKUP_PROJECT_SYNC_STARTED_AT', new Date().toISOString());
+  props.setProperty('CLICKUP_PROJECT_SYNC_UPDATED_AT', new Date().toISOString());
+  props.deleteProperty('CLICKUP_PROJECT_SYNC_ERROR');
+  props.deleteProperty('CLICKUP_PROJECT_SYNC_COMPLETED_AT');
+  scheduleProjectSyncBackground_(1000);
+  return getProjectSyncBackgroundStatus_();
+}
+
+function continueProjectSyncBackgroundTrigger() {
+  var props = PropertiesService.getScriptProperties();
+  if (props.getProperty('CLICKUP_PROJECT_SYNC_ACTIVE') !== '1') {
+    clearProjectSyncBackgroundTriggers_();
+    return;
+  }
+  try {
+    var offset = toInt_(props.getProperty('CLICKUP_PROJECT_SYNC_OFFSET'), 0);
+    var result = syncAllProjects({ force: true, offset: offset, limit: 5 });
+    var processed = toInt_(props.getProperty('CLICKUP_PROJECT_SYNC_PROCESSED'), 0) + result.processed.length;
+    var errors = toInt_(props.getProperty('CLICKUP_PROJECT_SYNC_ERRORS'), 0) + result.errors.length;
+    props.setProperty('CLICKUP_PROJECT_SYNC_OFFSET', String(result.next_offset));
+    props.setProperty('CLICKUP_PROJECT_SYNC_PROCESSED', String(processed));
+    props.setProperty('CLICKUP_PROJECT_SYNC_ERRORS', String(errors));
+    props.setProperty('CLICKUP_PROJECT_SYNC_UPDATED_AT', new Date().toISOString());
+    props.deleteProperty('CLICKUP_PROJECT_SYNC_ERROR');
+    if (result.done) {
+      props.setProperty('CLICKUP_PROJECT_SYNC_ACTIVE', '0');
+      props.setProperty('CLICKUP_PROJECT_SYNC_COMPLETED_AT', new Date().toISOString());
+      clearProjectSyncBackgroundTriggers_();
+      return;
+    }
+    scheduleProjectSyncBackground_(15000);
+  } catch (error) {
+    props.setProperty('CLICKUP_PROJECT_SYNC_ERROR', simplifyErrorMessage_(error));
+    props.setProperty('CLICKUP_PROJECT_SYNC_ACTIVE', '0');
+    clearProjectSyncBackgroundTriggers_();
+  }
+}
+
+function getProjectSyncBackgroundStatus_() {
+  var props = PropertiesService.getScriptProperties();
+  return {
+    ok: true,
+    active: props.getProperty('CLICKUP_PROJECT_SYNC_ACTIVE') === '1',
+    total: toInt_(props.getProperty('CLICKUP_PROJECT_SYNC_TOTAL'), 0),
+    processed: toInt_(props.getProperty('CLICKUP_PROJECT_SYNC_PROCESSED'), 0),
+    errors: toInt_(props.getProperty('CLICKUP_PROJECT_SYNC_ERRORS'), 0),
+    started_at: props.getProperty('CLICKUP_PROJECT_SYNC_STARTED_AT') || '',
+    updated_at: props.getProperty('CLICKUP_PROJECT_SYNC_UPDATED_AT') || '',
+    completed_at: props.getProperty('CLICKUP_PROJECT_SYNC_COMPLETED_AT') || '',
+    error: props.getProperty('CLICKUP_PROJECT_SYNC_ERROR') || ''
+  };
+}
+
+function scheduleProjectSyncBackground_(delayMs) {
+  clearProjectSyncBackgroundTriggers_();
+  ScriptApp.newTrigger('continueProjectSyncBackgroundTrigger')
+    .timeBased()
+    .after(Math.max(1000, Number(delayMs || 15000)))
+    .create();
+}
+
+function clearProjectSyncBackgroundTriggers_() {
+  ScriptApp.getProjectTriggers().forEach(function(trigger) {
+    if (trigger.getHandlerFunction() === 'continueProjectSyncBackgroundTrigger') {
+      ScriptApp.deleteTrigger(trigger);
+    }
+  });
 }
 
 function syncProjectByKey(projectKey) {
