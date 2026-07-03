@@ -9673,6 +9673,9 @@ function dashOperation(list, analyses) {
       cancelledTotal += 1;
       return;
     }
+    if (!dashProjectExpectsClickUpMonitoring(a.projeto)) {
+      return;
+    }
     if (d === null || d === undefined || isNaN(d)) {
       agingByConsultor[nomeConsultor].semClickUp += 1;
       untrackedTotal += 1;
@@ -10727,7 +10730,7 @@ function initDash() {
   var tracked = Number(operation.trackedTotal || 0);
   var untracked = Number(operation.untrackedTotal || 0);
   var cancelled = Number(operation.cancelledTotal || 0);
-  var auditable = Math.max(0, total - cancelled);
+  var auditable = Math.max(0, tracked + untracked);
   var trackedPct = auditable ? Math.round((tracked / auditable) * 100) : null;
   var stale15 = Number(operation.bins['16–30'] || 0) + Number(operation.bins['31–45'] || 0) + Number(operation.bins['45+'] || 0);
   var projectClosingRows = projectClosingList();
