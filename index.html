@@ -4036,11 +4036,31 @@ window.sincronizarTodosProjetosClickup = function(btn) {
     btn.textContent = 'Sincronizando...';
   }
   showToast('Sincronizando todos os projetos do ClickUp...', 'ok');
-  chamarAppsScriptJsonp('syncAll', {
-    force: '1'
-  }, 180000).then(function(resp) {
-    var processados = Array.isArray(resp && resp.processed) ? resp.processed.length : 0;
-    var erros = Array.isArray(resp && resp.errors) ? resp.errors.length : 0;
+  var processadosTotal = 0;
+  var errosTotal = 0;
+  var batchSize = 8;
+  function rodarLoteSync(offset) {
+    if (btn) btn.textContent = offset ? ('Sync ' + offset + '...') : 'Sincronizando...';
+    return chamarAppsScriptJsonp('syncAll', {
+      force: '1',
+      limit: String(batchSize),
+      offset: String(offset || 0)
+    }, 120000).then(function(resp) {
+      var processados = Array.isArray(resp && resp.processed) ? resp.processed.length : 0;
+      var erros = Array.isArray(resp && resp.errors) ? resp.errors.length : 0;
+      processadosTotal += processados;
+      errosTotal += erros;
+      var nextOffset = Number(resp && resp.next_offset || 0);
+      var totalDisponivel = Number(resp && (resp.total_available || resp.total) || 0);
+      if (btn && totalDisponivel) btn.textContent = 'Sync ' + Math.min(nextOffset, totalDisponivel) + '/' + totalDisponivel;
+      var temMais = !!(resp && (resp.has_more || resp.done === false));
+      if (temMais && nextOffset > offset) {
+        return sleep(600).then(function(){ return rodarLoteSync(nextOffset); });
+      }
+      return resp || {};
+    });
+  }
+  rodarLoteSync(0).then(function(resp) {
     resetarCachesDerivadosPainel({ limparCachePainel: true });
     if (btn) btn.textContent = 'Atualizando painel...';
     return sleep(2200).then(function() {
@@ -4049,10 +4069,10 @@ window.sincronizarTodosProjetosClickup = function(btn) {
         btn.disabled = false;
         btn.textContent = labelOriginal || 'Sync ClickUp';
       }
-      if (erros > 0) {
-        showToast('Sync geral concluida: ' + processados + ' ok, ' + erros + ' com erro', 'err');
+      if (errosTotal > 0) {
+        showToast('Sync geral concluida: ' + processadosTotal + ' ok, ' + errosTotal + ' com erro', 'err');
       } else {
-        showToast('Sync geral concluida: ' + processados + ' projeto(s) atualizados', 'ok');
+        showToast('Sync geral concluida: ' + processadosTotal + ' projeto(s) atualizados', 'ok');
       }
     });
   }).catch(function(error) {
@@ -5086,7 +5106,7 @@ function salvarAcompanhamentoProjeto(btn) {
     cliente:item.cliente,
     consultor:item.consultor,
     project_key:item.projectKey,
-    link_projeto:p.projeto_link || p.link_projeto || '',
+    link_projeto:dashProjectLink(p),
     consideracao:consideracao,
     proxima_acao:proxima,
     responsavel:responsavel,
@@ -5105,7 +5125,7 @@ function salvarAcompanhamentoProjeto(btn) {
       cliente: item.cliente,
       consultor: item.consultor,
       project_key: item.projectKey,
-      link_projeto: p.projeto_link || p.link_projeto || '',
+      link_projeto: dashProjectLink(p),
       consideracao: consideracao,
       proxima_acao: proxima,
       responsavel: responsavel,
@@ -5226,7 +5246,7 @@ function acompProjectInfoPopup(projectKey) {
   if (!item) return false;
   var p = item.projeto || {};
   var followups = (acompFollowupsByProjectMap()[item.projectKey] || []).slice().reverse().slice(0, 8);
-  var link = p.projeto_link || p.link_projeto || '';
+  var link = dashProjectLink(p);
   var resumo = montarResumoClickup ? montarResumoClickup(p) : null;
   var cells = [
     ['M&ecirc;s entrada', item.mes],
@@ -8769,7 +8789,8 @@ function buildRows(list, pfx) {
     var projectAccordionH = buildProjectAccordion(p, id, barHtml, prazoH, gerH, followupsH, logH, obsH);
     var projectKeyAttr = escapeHtml(projectMonthKey(p));
     out += '<div class="prow '+info.rc+'" id="'+id+'" data-project-key="'+projectKeyAttr+'" onclick="togRow(\''+id+'\')">';
-    var projetoLinkBtn = p.projeto_link ? '<a class=\"project-link project-link-btn\" href=\"'+p.projeto_link+'\" target=\"_blank\" rel=\"noopener noreferrer\" onclick=\"event.stopPropagation()\">Abrir Projeto</a>' : '';
+    var linkProjeto = dashProjectLink(p);
+    var projetoLinkBtn = linkProjeto ? '<a class=\"project-link project-link-btn\" href=\"'+escapeHtml(linkProjeto)+'\" target=\"_blank\" rel=\"noopener noreferrer\" onclick=\"event.stopPropagation()\">Abrir Projeto</a>' : '';
     var seqBadge = p._monthSeq ? '<span class="month-seq-badge">'+p._monthSeq+'&ordf; venda do m&ecirc;s</span>' : '';
     out += '<div class="pcell"><div class="pname-row"><div class="pname">'+p.cliente+'</div>'+projetoLinkBtn+'</div><div class="psub">'+(p.consultor||'\u2014')+' &bull; '+p.mes+seqBadge+'</div></div>';
     out += '<div class="pcell"><span class="tag '+info.cls+'">'+sl(p.status)+'</span></div>';
@@ -8949,7 +8970,8 @@ function dashClickUpAgingDays(p) {
   return d ? Math.max(0, diffD(d, new Date())) : null;
 }
 function dashProjectLink(p) {
-  return String(dashValue(p, ['projeto_link','link_projeto','url_projeto','link']) || '').trim();
+  var raw = String(dashValue(p, ['projeto_link','link_projeto','project_url','url_projeto','link_do_projeto','link','projetoLink','LINK DO PROJETO']) || '').trim();
+  return typeof normalizarUrlProjeto === 'function' ? normalizarUrlProjeto(raw) : raw;
 }
 function dashProjectSyncStatus(p) {
   var raw = String(dashValue(p, ['sync_status_clickup','sync_status']) || '').trim().toLowerCase();
@@ -14073,7 +14095,7 @@ function persistirResumosManuais() {
 }
 function chaveResumoManualProjeto(proj, modo) {
   var p = proj || {};
-  var link = normalizarUrlProjeto(p.projeto_link || p.link_projeto || p.link || p.url_projeto || '');
+  var link = dashProjectLink(p);
   if (modo !== 'cliente' && link) return 'link:' + String(link || '').toLowerCase();
   return 'cliente:' + String(p.mes || '').toUpperCase().trim() + '|' + normalizeClienteKey(p.cliente || '');
 }
@@ -14451,8 +14473,9 @@ window.removerResumoClickupProjeto = function(key) {
 function buildResumoActions(p) {
   var chave = montarProjectKeyClickup(p) || String(p && p._key || '').trim() || chaveResumoManualProjeto(p, 'cliente');
   var chaveSyncAttr = encodeURIComponent(String(chave || ''));
-  var abrirHtml = p && p.projeto_link
-    ? '<a class="project-link project-link-btn" href="'+p.projeto_link+'" target="_blank" rel="noopener noreferrer" onclick="event.stopPropagation()">Abrir Projeto</a>'
+  var linkProjeto = dashProjectLink(p || {});
+  var abrirHtml = linkProjeto
+    ? '<a class="project-link project-link-btn" href="'+escapeHtml(linkProjeto)+'" target="_blank" rel="noopener noreferrer" onclick="event.stopPropagation()">Abrir Projeto</a>'
     : '<span style="color:var(--muted)">Sem link</span>';
   var botoes = [
     abrirHtml,
@@ -14880,7 +14903,7 @@ function normalizarProjetoPlanilha(p) {
   var progresso = numeroProjeto(valorPorAlias(projeto, ['progresso','progresso_percentual','percentual_progresso','progress']));
   var dataUltimaAtualizacao = valorPorAlias(projeto, ['data_ultima_atualizacao','ultima_atualizacao_real','ultima_atualizacao','last_update']);
   var diasSemAtualizacao = numeroProjeto(valorPorAlias(projeto, ['dias_sem_atualizacao','dias_sem_update','dias_sem_movimento']));
-  var linkProjeto = valorPorAlias(projeto, ['link_projeto','projeto_link','url_projeto','link','LINK DO PROJETO']);
+  var linkProjeto = valorPorAlias(projeto, ['link_projeto','projeto_link','project_url','url_projeto','link_do_projeto','link','LINK DO PROJETO']);
 
   projeto.cliente = String(cliente || '').trim();
   projeto.consultor = dashPortfolioConsultantName(consultor);
@@ -14921,8 +14944,9 @@ function applyProjectLinks(projetos) {
     var byMes = linksCliente.find(function(x){ return (x.mes_origem || '') === String(p.mes || '').toUpperCase(); });
     var byMap = (byMes || linksCliente[0] || {}).link || '';
     p.mes_origem = (byMes || linksCliente[0] || {}).mes_origem || p.mes_origem || '';
-    p.projeto_link = normalizarUrlProjeto(byParser || byMap || p.link_projeto);
+    p.projeto_link = normalizarUrlProjeto(byParser || byMap || p.link_projeto || p.project_url || p.url_projeto || p.link_do_projeto || p.link);
     p.link_projeto = p.projeto_link || p.link_projeto || '';
+    if (p.projeto_link && !p.project_url) p.project_url = p.projeto_link;
     if (_linkDebugCount < 8 && p.cliente) {
       console.log('[LINK DEBUG] Projeto final:', {
         cliente: p.cliente,
@@ -15014,7 +15038,7 @@ function carregarBaseProjetos(projetosRaw) {
   var linksValidosPorAba = {};
   abasLidas.forEach(function(m){
     projetosPorAba[m] = base.filter(function(p){ return String(p.mes || '').toUpperCase() === m; }).length;
-    linksValidosPorAba[m] = base.filter(function(p){ return String(p.mes || '').toUpperCase() === m && !!p.projeto_link; }).length;
+    linksValidosPorAba[m] = base.filter(function(p){ return String(p.mes || '').toUpperCase() === m && !!dashProjectLink(p); }).length;
   });
   console.log('[BASE] Projetos por aba:', projetosPorAba);
   console.log('[BASE] Links válidos por aba:', linksValidosPorAba);
@@ -15036,7 +15060,7 @@ function runProjectLinkAudit(projetos) {
     var key = normalizeClienteKey(p.cliente);
     var linksPlanilha = _projectLinkMap[key] || [];
     var linkPlanilha = linksPlanilha.length ? linksPlanilha[0].link : '';
-    var linkFinal = p.projeto_link || '';
+    var linkFinal = dashProjectLink(p) || '';
     if (!linkFinal && linkPlanilha) comLinkPlanilhaSemBotao.push({cliente: p.cliente, mes: p.mes || '-', links_planilha: linksPlanilha.map(function(x){ return x.mes_origem+': '+x.link; }).join(' | ')});
     if (!linkFinal && !linkPlanilha) semLinkDeFato.push({cliente: p.cliente, status: p.status || '-', consultor: p.consultor || '-'});
   });
@@ -15066,7 +15090,7 @@ function executarAuditoriaResumoProjetos(projetos, filtro) {
       consultor: p.consultor || '-',
       tem_estrutura: temEstrutura ? 'SIM' : 'NÃO',
       fonte_items: 'planilha',
-      link_projeto: p.projeto_link ? 'SIM' : 'NÃO',
+      link_projeto: dashProjectLink(p) ? 'SIM' : 'NÃO',
       fases: '-',
       tasks: '-',
       marcos: '-',
