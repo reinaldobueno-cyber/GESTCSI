@@ -2376,7 +2376,7 @@ button.dashx-mini-chip:hover{background:#f3f8f3;border-color:#b9c9b8;}
 .dashx-status-period-total strong{font-size:26px;line-height:1;color:#18251d;font-weight:950;}
 .dashx-status-plot{display:grid;grid-template-columns:42px 1fr;gap:14px;align-items:end;margin-top:18px;}
 .dashx-status-axis{height:320px;display:flex;flex-direction:column;justify-content:space-between;align-items:flex-end;color:#7b887f;font-size:10px;font-weight:900;padding:2px 0 26px;}
-.dashx-status-chart{position:relative;display:grid;grid-template-columns:repeat(6,minmax(112px,1fr));gap:24px;align-items:end;min-height:348px;padding:0 4px;}
+.dashx-status-chart{position:relative;display:grid;grid-template-columns:repeat(6,minmax(84px,1fr));gap:14px;align-items:end;min-height:348px;padding:0 4px;}
 .dashx-status-chart:before{content:"";position:absolute;left:0;right:0;top:0;bottom:26px;background:repeating-linear-gradient(to top,transparent 0,transparent 79px,#edf2ed 80px);pointer-events:none;}
 .dashx-status-col{position:relative;z-index:1;display:grid;grid-template-rows:36px 320px 26px;gap:8px;align-items:end;justify-items:center;min-width:0;}
 .dashx-status-total{display:flex;align-items:center;justify-content:center;height:32px;color:#17231c;font-size:18px;font-weight:950;line-height:1;text-align:center;letter-spacing:0;}
@@ -2461,7 +2461,7 @@ button.dashx-mini-chip:hover{background:#f3f8f3;border-color:#b9c9b8;}
   .dashx-status-period-total{justify-items:start;}
   .dashx-status-plot{grid-template-columns:30px 1fr;gap:8px;overflow-x:auto;padding-bottom:4px;}
   .dashx-status-axis{height:240px;padding-bottom:24px;font-size:9px;}
-  .dashx-status-chart{grid-template-columns:repeat(6,92px);gap:12px;min-height:268px;}
+  .dashx-status-chart{gap:10px;min-width:max-content;min-height:268px;}
   .dashx-status-chart:before{bottom:24px;background:repeating-linear-gradient(to top,transparent 0,transparent 59px,#edf2ed 60px);}
   .dashx-status-col{grid-template-rows:32px 240px 22px;}
   .dashx-status-total{height:30px;font-size:16px;}
@@ -10250,6 +10250,8 @@ function dashRenderStatusStack(items) {
   var overallCounts = {};
   order.forEach(function(key){ overallCounts[key] = 0; });
   var overallTotal = 0;
+  var monthCount = Math.max(1, items.length);
+  var monthColumns = 'repeat('+monthCount+',minmax(84px,1fr))';
   var rows = items.map(function(item){
     var total = Number(item.total || 0);
     overallTotal += total;
@@ -10270,7 +10272,7 @@ function dashRenderStatusStack(items) {
   }).join('');
   var overall = '<div class="dashx-status-summary"><div class="dashx-status-summary-head"><div class="dashx-status-summary-title"><span>Composição total do período</span><strong>Projetos por status</strong></div><div class="dashx-status-summary-total">'+overallTotal+' projetos</div></div><div class="dashx-status-overall-track">'+overallSegs+'</div></div>';
   var legend = '<div class="dashx-chart-legend">'+order.map(function(key){ return '<span class="dashx-legend-item"><span class="dashx-legend-swatch" style="background:'+colors[key]+'"></span>'+labels[key]+' <b>'+Number(overallCounts[key] || 0)+'</b></span>'; }).join('')+'</div>';
-  return '<div class="dashx-chart-card dashx-status-card"><div class="dashx-chart-head"><div><div class="dashx-chart-title">Status dos projetos por período '+towerInfoButton('projectRisk')+'</div><div class="dashx-chart-sub">Distribuição mensal da carteira por status. Clique em um bloco colorido para auditar a lista.</div></div><div class="dashx-status-period-total"><span>Total no período</span><strong>'+overallTotal+'</strong></div></div><div class="dashx-status-plot">'+axis+'<div class="dashx-status-chart">'+rows+'</div></div>'+overall+legend+'</div>';
+  return '<div class="dashx-chart-card dashx-status-card"><div class="dashx-chart-head"><div><div class="dashx-chart-title">Status dos projetos por período '+towerInfoButton('projectRisk')+'</div><div class="dashx-chart-sub">Distribuição mensal da carteira por status. Clique em um bloco colorido para auditar a lista.</div></div><div class="dashx-status-period-total"><span>Total no período</span><strong>'+overallTotal+'</strong></div></div><div class="dashx-status-plot">'+axis+'<div class="dashx-status-chart" style="grid-template-columns:'+monthColumns+'">'+rows+'</div></div>'+overall+legend+'</div>';
 }
 function dashRenderActionNow(analyses, operation) {
   var criticos = (analyses || []).filter(function(a){ return a.actionToday || a.risco; }).sort(function(a, b){
