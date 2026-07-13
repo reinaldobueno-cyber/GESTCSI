@@ -3750,13 +3750,13 @@ var UPDATE_DEVICE_KEY = 'gestcsi_update_device_id_v1';
 var UPDATE_ACTOR_KEY = 'gestcsi_update_actor_v1';
 var LAST_UPDATE_KEY = 'gestcsi_last_update_label_v1';
 var PANEL_CACHE_KEY = 'gestcsi_panel_cache_v2';
-var PANEL_APP_VERSION = '2026-07-06-portfolio-total-v1';
+var PANEL_APP_VERSION = '2026-07-13-full-year-portfolio-v1';
 var THEME_MODE_KEY = 'gestcsi_theme_mode_v1';
 var AUTH_SESSION_KEY = 'gestcsi_auth_session_v1';
 var AUTH_STATE = { token:'', user:null };
 var PANEL_STARTED = false;
 var PANEL_CACHE_MIN_PROJECTS = 80;
-var PANEL_MIN_2026_PROJECTS = 174;
+var PANEL_MIN_2026_PROJECTS = 181;
 function painelMinimoCarteiraAtual() {
   var now = new Date();
   return now.getFullYear() === 2026 ? PANEL_MIN_2026_PROJECTS : PANEL_CACHE_MIN_PROJECTS;
@@ -14690,10 +14690,6 @@ function linhaProjetoMensalValida(ro) {
 }
 function carregarProjetosDiretoPlanilha() {
   var abas = Object.keys(ABAS_GID_FIXAS).map(function(m){ return {title:m, gid:ABAS_GID_FIXAS[m]}; });
-  var agora = new Date();
-  if (agora.getFullYear() === 2026) {
-    abas = abas.filter(function(aba){ return ORDEM_MESES.indexOf(aba.title) <= agora.getMonth(); });
-  }
   var projetos = [];
   var falhas = [];
   function carregarAba(aba, tentativa) {
@@ -15425,12 +15421,7 @@ function loadAll(tipoAtualizacao) {
       }
     }
     function mesesCarteiraAtual() {
-      var meses = Object.keys(ABAS_GID_FIXAS);
-      var agora = new Date();
-      if (agora.getFullYear() === 2026) {
-        meses = meses.filter(function(mes){ return ORDEM_MESES.indexOf(mes) <= agora.getMonth(); });
-      }
-      return meses;
+      return Object.keys(ABAS_GID_FIXAS);
     }
     function buscarAppsScriptPorMes(motivoOrigem) {
       var meses = mesesCarteiraAtual();
