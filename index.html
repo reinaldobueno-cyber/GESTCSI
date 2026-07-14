@@ -3358,6 +3358,9 @@ body.theme-dark *{
 .closing-kpi.action:hover{transform:translateY(-1px);border-color:#d9a93c;box-shadow:0 10px 24px rgba(20,32,24,.08)}
 .closing-kpi.action:focus-visible{outline:3px solid rgba(217,169,60,.25);outline-offset:2px}
 .closing-kpi.warn{border-color:#e7c982;background:#fff8e8}
+.closing-kpi.good{border-color:rgba(45,110,78,.22);background:rgba(45,110,78,.06)}
+.closing-kpi.bad{border-color:rgba(192,57,43,.24);background:rgba(192,57,43,.06)}
+.closing-kpi.bonus{border-color:rgba(26,82,118,.20);background:rgba(26,82,118,.05)}
 .closing-kpi span{display:block;font-size:9px;font-weight:900;text-transform:uppercase;letter-spacing:.08em;color:var(--muted)}
 .closing-kpi strong{display:block;font-size:25px;margin-top:5px;color:var(--text)}
 .closing-status{display:inline-flex;border-radius:999px;padding:4px 8px;font-size:9px;font-weight:900;text-transform:uppercase}
@@ -3402,6 +3405,132 @@ body.theme-dark *{
 .closing-project-meta{font-size:9px;color:var(--muted);margin-top:4px;line-height:1.5}
 .closing-project-comment{font-size:10px;color:var(--text2);line-height:1.45}
 .closing-attention-note{display:inline-flex;align-items:center;gap:6px;margin-top:8px;padding:5px 8px;border-radius:999px;background:#f7e7be;color:#8a5b13;border:1px solid #e3c57f;font-size:9px;font-weight:900;text-transform:uppercase;letter-spacing:.05em}
+body.theme-dark #projfech-content .closing-title{color:#F8FAFC}
+body.theme-dark #projfech-content .closing-sub{color:#A7B3C7}
+body.theme-dark #projfech-content .dashx-inline-note{
+  background:linear-gradient(180deg,rgba(15,23,42,.96),rgba(11,18,32,.96))!important;
+  border-color:rgba(100,116,139,.30)!important;
+  color:#CBD5E1!important;
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.04)!important;
+}
+body.theme-dark #projfech-content .dashx-inline-note strong{color:#F8FAFC!important}
+body.theme-dark #projfech-content .closing-filter-block{
+  background:linear-gradient(180deg,rgba(15,23,42,.90),rgba(11,18,32,.96))!important;
+  border-color:rgba(100,116,139,.30)!important;
+  box-shadow:0 14px 32px rgba(2,6,23,.18),inset 0 1px 0 rgba(255,255,255,.04)!important;
+}
+body.theme-dark #projfech-content .closing-filter-footer{border-top-color:rgba(100,116,139,.24)!important}
+body.theme-dark #projfech-content .closing-project-meta{color:#94A3B8!important}
+body.theme-dark #projfech-content .closing-kpis{gap:12px}
+body.theme-dark #projfech-content .closing-kpi{
+  position:relative;
+  overflow:hidden;
+  min-height:74px;
+  background:linear-gradient(180deg,#111827 0%,#0D1526 100%)!important;
+  border-color:rgba(100,116,139,.30)!important;
+  box-shadow:0 14px 30px rgba(2,6,23,.22),inset 0 1px 0 rgba(255,255,255,.04)!important;
+}
+body.theme-dark #projfech-content .closing-kpi:before{
+  content:'';
+  position:absolute;
+  left:0;
+  right:0;
+  top:0;
+  height:3px;
+  background:rgba(148,163,184,.28);
+}
+body.theme-dark #projfech-content .closing-kpi.warn{
+  background:linear-gradient(180deg,rgba(30,41,59,.98),rgba(15,23,42,.98))!important;
+  border-color:rgba(245,158,11,.36)!important;
+}
+body.theme-dark #projfech-content .closing-kpi.warn:before{background:#F59E0B}
+body.theme-dark #projfech-content .closing-kpi.good{border-color:rgba(34,197,94,.30)!important}
+body.theme-dark #projfech-content .closing-kpi.good:before{background:#22C55E}
+body.theme-dark #projfech-content .closing-kpi.bad{border-color:rgba(248,113,113,.32)!important}
+body.theme-dark #projfech-content .closing-kpi.bad:before{background:#F87171}
+body.theme-dark #projfech-content .closing-kpi.bonus{border-color:rgba(56,189,248,.28)!important}
+body.theme-dark #projfech-content .closing-kpi.bonus:before{background:#38BDF8}
+body.theme-dark #projfech-content .closing-kpi span{color:#9AA8BC!important;letter-spacing:.08em}
+body.theme-dark #projfech-content .closing-kpi strong{color:#F8FAFC!important;font-weight:950}
+body.theme-dark #projfech-content .closing-kpi.warn strong{color:#FDE68A!important}
+body.theme-dark #projfech-content .closing-kpi.good strong{color:#86EFAC!important}
+body.theme-dark #projfech-content .closing-kpi.bad strong{color:#FCA5A5!important}
+body.theme-dark #projfech-content .closing-kpi.bonus strong{color:#BAE6FD!important}
+body.theme-dark #projfech-content .bonus-section-title{
+  color:#E5E7EB!important;
+  font-size:12px;
+  letter-spacing:.02em;
+  text-transform:none;
+  margin:20px 0 10px;
+}
+body.theme-dark #projfech-content .dashx-table-wrap{
+  background:#0B1220!important;
+  border-color:rgba(148,163,184,.44)!important;
+  border-radius:14px!important;
+  box-shadow:0 18px 42px rgba(2,6,23,.26),inset 0 1px 0 rgba(255,255,255,.04)!important;
+}
+body.theme-dark #projfech-content .dashx-table{background:transparent!important}
+body.theme-dark #projfech-content .dashx-table thead{
+  background:#1A2536!important;
+  border-color:rgba(148,163,184,.28)!important;
+}
+body.theme-dark #projfech-content .dashx-table th{
+  background:#1A2536!important;
+  color:#B8C2D4!important;
+  font-size:10px;
+  letter-spacing:.08em;
+}
+body.theme-dark #projfech-content .dashx-table td{
+  background:#0F172A!important;
+  border-color:rgba(148,163,184,.18)!important;
+  color:#E5E7EB!important;
+}
+body.theme-dark #projfech-content .dashx-table tbody tr:hover td{background:#142035!important}
+body.theme-dark #projfech-content .dashx-table td strong{color:#F8FAFC!important}
+body.theme-dark #projfech-content .dashx-score-pill.warn{
+  background:rgba(245,158,11,.14)!important;
+  border:1px solid rgba(245,158,11,.30)!important;
+  color:#FCD34D!important;
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.05)!important;
+}
+body.theme-dark #projfech-content .dashx-table-chip{
+  background:rgba(34,197,94,.10)!important;
+  border-color:rgba(34,197,94,.24)!important;
+  color:#86EFAC!important;
+}
+body.theme-dark #projfech-content .project-link-btn{
+  background:#1B2A3F!important;
+  border-color:rgba(148,163,184,.34)!important;
+  color:#E2E8F0!important;
+  border-radius:8px!important;
+  min-height:24px;
+}
+body.theme-dark #projfech-content .project-link-btn:hover{
+  background:rgba(34,197,94,.16)!important;
+  border-color:rgba(34,197,94,.42)!important;
+  color:#86EFAC!important;
+}
+body.theme-dark #projfech-content .project-link-btn.warn{
+  background:rgba(245,158,11,.10)!important;
+  border-color:rgba(245,158,11,.28)!important;
+  color:#FCD34D!important;
+}
+body.theme-dark #projfech-content .project-link-btn.warn:hover{
+  background:rgba(245,158,11,.18)!important;
+  border-color:rgba(245,158,11,.44)!important;
+  color:#FDE68A!important;
+}
+body.theme-dark #projfech-content .btn-syncall{
+  background:linear-gradient(180deg,#2563EB,#1D4ED8)!important;
+  border:1px solid rgba(147,197,253,.24)!important;
+  box-shadow:0 10px 22px rgba(37,99,235,.22)!important;
+  border-radius:9px!important;
+}
+body.theme-dark #projfech-content .btn-syncall:disabled{
+  background:linear-gradient(180deg,#315CBE,#24489A)!important;
+  color:#DCE7FF!important;
+  opacity:1!important;
+}
 @media(max-width:1100px){.closing-summary-grid{grid-template-columns:1fr}}
 @media(max-width:900px){.closing-kpis{grid-template-columns:repeat(2,1fr)}.closing-head{flex-direction:column}.closing-project-card{grid-template-columns:1fr}.closing-consultant-head{align-items:flex-start;flex-direction:column}.closing-consultant-metric{text-align:left}}
 </style>
@@ -5448,9 +5577,9 @@ var FECHAMENTO_LOADING = false;
 var FECHAMENTO_SESSION_REFRESHED = false;
 var FECHAMENTO_POLL_TIMER = null;
 var FECHAMENTO_FILTER = { month:'', consultor:'todos', projetoBusca:'', situacao:'todos' };
-var FECHAMENTO_CACHE_VERSION = 'closing-appscript-primary-v6-competencia-dia-01';
+var FECHAMENTO_CACHE_VERSION = 'closing-appscript-primary-v7-phase-delivery';
 var FECHAMENTO_MILESTONE_BONUS_VALUE = 30;
-var PROJECT_CLOSING_RULE_VERSION = 'breakoff-entrega-id-aprovar-v6';
+var PROJECT_CLOSING_RULE_VERSION = 'breakoff-entrega-id-aprovar-v7';
 var PROJECT_CLOSING_LOOKUP = {term:'', loading:false, result:null, error:''};
 var PROJECT_CLOSING_DECISIONS = {items:[], loaded:false, loading:false, backendReady:null, error:''};
 var PROJECT_CLOSING_DECISION_TARGET = null;
@@ -6104,7 +6233,7 @@ function initProjectClosing() {
   box.innerHTML = '<div class="closing-head"><div><div class="closing-title">Fechamento de projeto</div><div class="closing-sub">Controle separado dos marcos e sem corte de ano. Aqui entram somente projetos que atendem às três condições do ClickUp.</div></div></div>'+
     '<div class="dashx-inline-note" style="margin-bottom:12px"><strong>Fluxo:</strong> APROVAR envia o projeto para Em avaliação. Aprovar muda a Fase 8 para APROVADO GESTÃO; Reprovar muda para REPROVADO GESTÃO. Somente a aprovação final gera R$ 80 no relatório. O controle da Lais aparece apenas como divergência.</div>'+
     syncBox+backendWarning+
-    '<div class="closing-kpis"><div class="closing-kpi warn"><span>Em avaliação</span><strong>'+pending.length+'</strong></div><div class="closing-kpi"><span>Aprovados</span><strong>'+approved.length+'</strong></div><div class="closing-kpi warn"><span>Reprovados</span><strong>'+rejected.length+'</strong></div><div class="closing-kpi warn"><span>Divergências controle</span><strong>'+divergences.length+'</strong></div><div class="closing-kpi"><span>Bônus aprovado</span><strong>'+fechamentoMoney(approved.length * 80)+'</strong></div></div>'+
+    '<div class="closing-kpis"><div class="closing-kpi warn"><span>Em avaliação</span><strong>'+pending.length+'</strong></div><div class="closing-kpi good"><span>Aprovados</span><strong>'+approved.length+'</strong></div><div class="closing-kpi bad"><span>Reprovados</span><strong>'+rejected.length+'</strong></div><div class="closing-kpi warn"><span>Divergências controle</span><strong>'+divergences.length+'</strong></div><div class="closing-kpi bonus"><span>Bônus aprovado</span><strong>'+fechamentoMoney(approved.length * 80)+'</strong></div></div>'+
     '<div class="bonus-section"><div class="bonus-section-title">Gerenciador de fechamento de projeto</div>'+table+'</div>';
 }
 function fechamentoProjectFromItem(item) {
@@ -6502,7 +6631,7 @@ function fechamentoRunSync(action, label, btn, extraParams) {
   return false;
 }
 function fechamentoStartSync(btn) {
-  return fechamentoRunSync('startClickUpMilestoneClosingBackground', 'Atualizar Closed', btn, { force_history: '1' });
+  return fechamentoRunSync('startClickUpMilestoneClosingBackground', 'Atualizar Closed', btn);
 }
 function fechamentoSyncRejected(btn) {
   return fechamentoRunSync('syncClickUpRejectedMilestones', 'Buscar Reprovados', btn);
