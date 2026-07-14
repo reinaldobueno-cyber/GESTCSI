@@ -2391,6 +2391,23 @@ function summarizeClickUpProjectClosingDebug_(task) {
   return result.length > 600 ? result.slice(0, 600) + '...' : result;
 }
 
+function clickUpMilestoneClosingValidatedRecovery_(taskId) {
+  var recoveries = {
+    '86aguzfdc': { validation_at: '2026-06-30T13:19:00.000Z', justificativa: 'Validado no fechamento enviado em JUN/2026; preservado contra retorno para Closed.' },
+    '86aguzf0z': { validation_at: '2026-06-30T13:20:00.000Z', justificativa: 'Validado no fechamento enviado em JUN/2026; preservado contra retorno para Closed.' },
+    '86ag9bqbt': { validation_at: '2026-06-30T20:31:00.000Z', justificativa: 'Validado no fechamento enviado em JUN/2026; preservado contra retorno para Closed.' }
+  };
+  var recovery = recoveries[String(taskId || '').trim()];
+  if (!recovery) return null;
+  return Object.assign({
+    status_atual: 'aprovado gestão',
+    situacao: 'aprovado',
+    mes_fechamento: '2026-06',
+    mes_validacao: '2026-06',
+    valor_bonus: CLICKUP_MILESTONE_BONUS_VALUE
+  }, recovery);
+}
+
 function upsertClickUpMilestoneClosing_(mapping, normalized, options) {
   options = options || {};
   if (options.preserve_closed_history === undefined) options.preserve_closed_history = true;
@@ -2408,6 +2425,11 @@ function upsertClickUpMilestoneClosing_(mapping, normalized, options) {
     var hasDeliveryMarker = isProjectClosingMilestone_(milestone);
     var isProjectClosing = hasDeliveryMarker && isProjectClosingApprovalStatus_(status);
     if (isProjectClosing) situation = 'aprovado';
+    var validatedRecovery = clickUpMilestoneClosingValidatedRecovery_(taskId);
+    if (validatedRecovery) {
+      situation = validatedRecovery.situacao;
+      status = validatedRecovery.status_atual;
+    }
     var previousSituation = sanitizeText_(previous && previous.situacao);
     var preserveValidatedHistory = previous &&
       (previousSituation === 'aprovado' || previousSituation === 'reprovado') &&
@@ -2464,7 +2486,7 @@ function upsertClickUpMilestoneClosing_(mapping, normalized, options) {
     if (!milestoneConsultant || /ADMINISTRATIVO|ADMINISTRADOR|MULTSOFT|SUPORTE/.test(normalizeKey_(milestoneConsultant))) {
       milestoneConsultant = portfolioConsultant || milestoneConsultant;
     }
-    current[taskId] = {
+    var row = {
       task_id: taskId,
       item_tipo: 'Marco',
       project_key: mapping.project_key || '',
@@ -2493,6 +2515,14 @@ function upsertClickUpMilestoneClosing_(mapping, normalized, options) {
       marcador_entrega: hasDeliveryMarker ? 'sim' : '',
       fechamento_projeto: isProjectClosing ? 'sim' : ''
     };
+    if (validatedRecovery) {
+      Object.keys(validatedRecovery).forEach(function(key) {
+        if (key === 'justificativa' && row.justificativa) return;
+        row[key] = validatedRecovery[key];
+      });
+      row.justificativa_por = row.justificativa_por || 'Fechamento JUN/2026';
+    }
+    current[taskId] = row;
   });
   if (!options.defer_write) writeClickUpMilestoneClosingCurrent_(sheet, headers, current);
   return current;
