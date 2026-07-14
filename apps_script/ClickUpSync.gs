@@ -30,7 +30,8 @@ var CLICKUP_DEFAULT_WORKSPACE_ID = '9007083069';
 var CLICKUP_MILESTONE_BONUS_VALUE = 30;
 var CLICKUP_PROJECT_CLOSING_BONUS_VALUE = 80;
 var CLICKUP_PROJECT_CLOSING_BONUS_START = '2026-06-15';
-var CLICKUP_PROJECT_CLOSING_RULE_VERSION = 'breakoff-entrega-aprovar-v5';
+var CLICKUP_PROJECT_CLOSING_RULE_VERSION = 'breakoff-entrega-id-aprovar-v7';
+var CLICKUP_PROJECT_DELIVERY_CUSTOM_ITEM_IDS = ['1001'];
 var CLICKUP_MILESTONE_AUDIT_TASK_IDS = [];
 var CLICKUP_MILESTONE_CLOSING_SCHEMA_VERSION = 'strict-milestones-v2';
 var MONTHS = ['JAN', 'FEV', 'MAR', 'ABR', 'MAI', 'JUN', 'JUL', 'AGO', 'SET', 'OUT', 'NOV', 'DEZ'];
@@ -116,7 +117,7 @@ function doGet(e) {
     }
     if (action === 'getProjectClosingSyncStatus') {
       requireUser_(params);
-      return jsonOutput_(getProjectClosingSyncBackgroundStatus_(), params.callback);
+      return jsonOutput_(advanceProjectClosingSyncBackgroundFromStatus_(), params.callback);
     }
     if (action === 'stopProjectClosingSync') {
       requireAdmin_(params);
@@ -284,7 +285,7 @@ function doGet(e) {
     var payload = {
       ok: true,
       service: 'clickup-sync',
-      message: 'Use action=getMonthlyProjects|syncProject|syncAll|startProjectSyncBackground|getProjectSyncBackgroundStatus|processDirty|validateConfig|getClickUpInventory|getClickUpMilestoneClosing|startClickUpMilestoneClosingBackground|syncClickUpUserActivity|startClickUpUserActivityBackground|getClickUpUserActivity|getCmaxDailyEvents|getCmaxDailyHistoryStatus|syncCmaxDailyEvents|startCmaxDailyHistoryBackground|logPanelUpdate|getPanelUpdateHistory|login|me|listUsers|createUser|setUserEnabled|logProjectFollowup|getProjectFollowups|setProjectFollowupStatus|setProjectKanbanStage|deleteProjectFollowup'
+      message: 'Use action=getMonthlyProjects|syncProject|syncAll|processDirty|validateConfig|getClickUpInventory|getClickUpMilestoneClosing|startClickUpMilestoneClosingBackground|syncClickUpUserActivity|startClickUpUserActivityBackground|getClickUpUserActivity|getCmaxDailyEvents|getCmaxDailyHistoryStatus|syncCmaxDailyEvents|startCmaxDailyHistoryBackground|logPanelUpdate|getPanelUpdateHistory|login|me|listUsers|createUser|setUserEnabled|logProjectFollowup|getProjectFollowups|setProjectFollowupStatus|setProjectKanbanStage|deleteProjectFollowup'
     };
     return jsonOutput_(payload, params.callback);
   } catch (error) {
@@ -317,7 +318,7 @@ function doPost(e) {
 function syncAllProjects(options) {
   options = options || {};
   var mappings = loadProjectSyncMappings_();
-  var offset = Math.max(0, Number(options.offset || 0));
+  var offset = Math.max(0, toInt_(options.offset, 0) || 0);
   var limit = options.limit || mappings.length;
   var force = !!options.force;
   var processed = [];
@@ -325,7 +326,10 @@ function syncAllProjects(options) {
 
   mappings.slice(offset, offset + limit).forEach(function(mapping) {
     try {
-      processed.push(syncProjectMapping_(mapping, { force: force }));
+      processed.push(syncProjectMapping_(mapping, {
+        force: force,
+        deadline_ms: new Date().getTime() + Math.max(15000, Math.min(toInt_(options.project_timeout_ms, 45000), 90000))
+      }));
     } catch (error) {
       errors.push({
         project_key: mapping.project_key,
@@ -337,10 +341,12 @@ function syncAllProjects(options) {
 
   return {
     ok: errors.length === 0,
+    offset: offset,
     total: mappings.length,
     batch_total: Math.min(limit, Math.max(0, mappings.length - offset)),
-    offset: offset,
+    total_available: mappings.length,
     next_offset: Math.min(mappings.length, offset + limit),
+    has_more: offset + limit < mappings.length,
     done: offset + limit >= mappings.length,
     processed: processed,
     errors: errors
@@ -350,6 +356,13 @@ function syncAllProjects(options) {
 function startProjectSyncBackground_(params) {
   params = params || {};
   var props = PropertiesService.getScriptProperties();
+  if (props.getProperty('CLICKUP_PROJECT_SYNC_ACTIVE') === '1') {
+    props.setProperty('CLICKUP_PROJECT_SYNC_UPDATED_AT', new Date().toISOString());
+    scheduleProjectSyncBackground_(1000);
+    var activeStatus = getProjectSyncBackgroundStatus_();
+    activeStatus.already_active = true;
+    return activeStatus;
+  }
   props.setProperty('CLICKUP_PROJECT_SYNC_ACTIVE', '1');
   props.setProperty('CLICKUP_PROJECT_SYNC_OFFSET', '0');
   props.setProperty('CLICKUP_PROJECT_SYNC_TOTAL', '0');
@@ -402,8 +415,13 @@ function continueProjectSyncBackgroundStep_() {
   }
   try {
     var offset = toInt_(props.getProperty('CLICKUP_PROJECT_SYNC_OFFSET'), 0);
-    var batchSize = Math.max(1, Math.min(toInt_(getScriptProperty_('CLICKUP_PROJECT_SYNC_BATCH_SIZE', '2'), 2), 5));
-    var result = syncAllProjects({ force: true, offset: offset, limit: batchSize });
+    var batchSize = Math.max(1, Math.min(toInt_(getScriptProperty_('CLICKUP_PROJECT_SYNC_BATCH_SIZE', '2'), 2), 2));
+    var result = syncAllProjects({
+      force: true,
+      offset: offset,
+      limit: batchSize,
+      project_timeout_ms: toInt_(getScriptProperty_('CLICKUP_PROJECT_SYNC_PROJECT_TIMEOUT_MS', '30000'), 30000)
+    });
     var attempted = Number(result.batch_total || 0) || (result.processed.length + result.errors.length);
     var processed = toInt_(props.getProperty('CLICKUP_PROJECT_SYNC_PROCESSED'), 0) + attempted;
     var errors = toInt_(props.getProperty('CLICKUP_PROJECT_SYNC_ERRORS'), 0) + result.errors.length;
@@ -1060,7 +1078,7 @@ function isValidMonthlyClient_(cliente) {
 function syncProjectMapping_(mapping, options) {
   options = options || {};
   mapping = reconcileProjectMappingWithMonthlyLink_(mapping);
-  var normalized = buildNormalizedProjectFromClickUp_(mapping);
+  var normalized = buildNormalizedProjectFromClickUp_(mapping, options);
   var hasMonthlySheet = MONTHS.indexOf(sanitizeMonth_(mapping.mes)) >= 0;
   if (hasMonthlySheet) writeProjectSummaryToMonthlySheet_(mapping, normalized);
   if (!options.skip_milestone_closing) upsertClickUpMilestoneClosing_(mapping, normalized);
@@ -1112,8 +1130,9 @@ function reconcileProjectMappingWithMonthlyLink_(mapping) {
   })) || mapping;
 }
 
-function buildNormalizedProjectFromClickUp_(mapping) {
-  var payload = fetchProjectTasks_(mapping);
+function buildNormalizedProjectFromClickUp_(mapping, options) {
+  options = options || {};
+  var payload = fetchProjectTasks_(mapping, options);
   var tasks = payload.tasks || [];
   var phaseMap = {};
   var byId = {};
@@ -1150,7 +1169,39 @@ function buildNormalizedProjectFromClickUp_(mapping) {
   var normalizedMilestones = [];
 
   tasks.forEach(function(task) {
-    if (isPhaseTask_(task, byId)) return;
+    if (isPhaseTask_(task, byId)) {
+      var phase = phaseMap[String(task.id)];
+      if (phase && isProjectClosingDeliveryItem_(task, phase.nome, phase)) {
+        var phaseMilestone = {
+          id: String(task.id),
+          tipo: 'marco',
+          nome: sanitizeText_(task.name),
+          fase_nome: phase.nome,
+          parent_id: String(task.parent || ''),
+          status_original: task.status && (task.status.status || task.status.type || task.status.label) || '',
+          fase_status_original: phase.status_original || '',
+          custom_item_id: String(task.custom_item_id || ''),
+          custom_item_name: clickUpTaskCustomItemName_(task),
+          marcador_entrega: isProjectDeliveryTask_(task) ? 'sim' : '',
+          responsaveis: (task.assignees || []).map(function(user) {
+            return sanitizeText_(user && (user.username || user.name || user.email));
+          }).filter(function(name) { return !!name; }).join(', '),
+          task_url: sanitizeText_(task.url || task.permalink || task.link || task.html_url) ||
+            ('https://app.clickup.com/t/' + String(task.id || '')),
+          date_closed: task.date_closed ? fromMillisIso_(task.date_closed) : '',
+          updated_at: task.date_updated ? fromMillisIso_(task.date_updated) : '',
+          due_date: task.due_date ? fromMillisIso_(task.due_date) : ''
+        };
+        if (hasProjectClosingApprovalSignalByTaskOrPhase_(task, phaseMilestone.status_original, phase)) {
+          phaseMilestone.status_original = 'APROVAR';
+        }
+        phaseMilestone.concluido = isClosedStatus_(phaseMilestone.status_original);
+        normalizedMilestones.push(phaseMilestone);
+        if (phaseMilestone.concluido) phase.marcos_concluidos += 1;
+        else phase.marcos_pendentes += 1;
+      }
+      return;
+    }
     var phaseInfo = resolvePhaseForTask_(task, byId, phaseMap);
     var phase = phaseInfo.phase;
     var countInSummary = shouldCountTaskInSummary_(task, phaseInfo, byId);
@@ -1374,9 +1425,7 @@ function startProjectClosingSyncBackground_() {
   var props = PropertiesService.getScriptProperties();
   var alreadyActive = props.getProperty('PROJECT_CLOSING_SYNC_ACTIVE') === '1';
   if (!alreadyActive) {
-    var total = loadProjectMappings_().filter(function(item) {
-      return item.enabled && MONTHS.indexOf(sanitizeMonth_(item.mes)) >= 0;
-    }).length;
+    var total = loadProjectClosingSyncMappings_().length;
     props.setProperty('PROJECT_CLOSING_SYNC_ACTIVE', '1');
     props.setProperty('PROJECT_CLOSING_SYNC_CURSOR', '0');
     props.setProperty('PROJECT_CLOSING_SYNC_TOTAL', String(total));
@@ -1393,23 +1442,52 @@ function startProjectClosingSyncBackground_() {
 }
 
 function continueProjectClosingSyncBackgroundTrigger() {
+  continueProjectClosingSyncBackgroundStepWithLock_();
+}
+
+function advanceProjectClosingSyncBackgroundFromStatus_() {
+  return continueProjectClosingSyncBackgroundStepWithLock_({ status_poll: true });
+}
+
+function continueProjectClosingSyncBackgroundStepWithLock_(options) {
+  options = options || {};
   var props = PropertiesService.getScriptProperties();
   if (props.getProperty('PROJECT_CLOSING_SYNC_ACTIVE') !== '1') {
     clearProjectClosingSyncBackgroundTriggers_();
-    return;
+    return getProjectClosingSyncBackgroundStatus_();
+  }
+  var lock = LockService.getScriptLock();
+  if (!lock.tryLock(options.status_poll ? 1000 : 5000)) {
+    var busy = getProjectClosingSyncBackgroundStatus_();
+    busy.busy = true;
+    return busy;
   }
   try {
-    var mappings = loadProjectMappings_().filter(function(item) {
-      return item.enabled && MONTHS.indexOf(sanitizeMonth_(item.mes)) >= 0;
-    });
+    return continueProjectClosingSyncBackgroundStep_();
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+function continueProjectClosingSyncBackgroundStep_() {
+  var props = PropertiesService.getScriptProperties();
+  var mappings = loadProjectClosingSyncMappings_();
+  try {
     var cursor = Math.max(0, toInt_(props.getProperty('PROJECT_CLOSING_SYNC_CURSOR'), 0));
-    var batchSize = Math.max(1, Math.min(toInt_(getScriptProperty_('PROJECT_CLOSING_SYNC_BATCH_SIZE', '3'), 3), 5));
+    var batchSize = Math.max(1, Math.min(toInt_(getScriptProperty_('PROJECT_CLOSING_SYNC_BATCH_SIZE', '2'), 2), 3));
     var batch = mappings.slice(cursor, cursor + batchSize);
     var processed = toInt_(props.getProperty('PROJECT_CLOSING_SYNC_PROCESSED'), 0);
     var errors = toInt_(props.getProperty('PROJECT_CLOSING_SYNC_ERRORS'), 0);
     batch.forEach(function(mapping) {
       try {
-        syncProjectMapping_(mapping, { force: true, skip_milestone_closing: true });
+        syncProjectMapping_(mapping, {
+          force: true,
+          skip_milestone_closing: true,
+          deadline_ms: new Date().getTime() + Math.max(30000, Math.min(
+            toInt_(getScriptProperty_('PROJECT_CLOSING_SYNC_PROJECT_TIMEOUT_MS', '45000'), 45000),
+            90000
+          ))
+        });
         processed += 1;
       } catch (error) {
         errors += 1;
@@ -1421,19 +1499,49 @@ function continueProjectClosingSyncBackgroundTrigger() {
     props.setProperty('PROJECT_CLOSING_SYNC_CURSOR', String(cursor));
     props.setProperty('PROJECT_CLOSING_SYNC_PROCESSED', String(processed));
     props.setProperty('PROJECT_CLOSING_SYNC_ERRORS', String(errors));
+    props.setProperty('PROJECT_CLOSING_SYNC_TOTAL', String(mappings.length));
     props.setProperty('PROJECT_CLOSING_SYNC_UPDATED_AT', new Date().toISOString());
     if (!batch.length || cursor >= mappings.length) {
       props.setProperty('PROJECT_CLOSING_SYNC_ACTIVE', '0');
       props.setProperty('PROJECT_CLOSING_SYNC_COMPLETED_AT', new Date().toISOString());
       clearProjectClosingSyncBackgroundTriggers_();
-      return;
+      return getProjectClosingSyncBackgroundStatus_();
     }
     scheduleProjectClosingSyncBackground_(3000);
+    return getProjectClosingSyncBackgroundStatus_();
   } catch (error) {
     props.setProperty('PROJECT_CLOSING_SYNC_ERROR', simplifyErrorMessage_(error));
     props.setProperty('PROJECT_CLOSING_SYNC_ACTIVE', '0');
     clearProjectClosingSyncBackgroundTriggers_();
+    return getProjectClosingSyncBackgroundStatus_();
   }
+}
+
+function loadProjectClosingSyncMappings_() {
+  var out = [];
+  var seen = {};
+
+  function sourceKey(mapping) {
+    if (!mapping) return '';
+    if (mapping.list_id) return 'list|' + mapping.list_id;
+    if (mapping.view_id) return 'view|' + mapping.view_id;
+    if (mapping.folder_id) return 'folder|' + mapping.folder_id;
+    if (mapping.space_id) return 'space|' + mapping.space_id + '|' + normalizeKey_(mapping.cliente);
+    return normalizeProjectKey_(mapping.project_key || buildProjectKey_(mapping.mes, mapping.cliente));
+  }
+
+  function add(mapping) {
+    if (!mapping || !mapping.enabled) return;
+    if (!(mapping.list_id || mapping.view_id || mapping.folder_id || mapping.space_id || mapping.project_url)) return;
+    var key = sourceKey(mapping);
+    if (!key || seen[key]) return;
+    seen[key] = true;
+    out.push(mapping);
+  }
+
+  loadProjectSyncMappings_().forEach(add);
+  loadClickUpMilestoneClosingMappings_().forEach(add);
+  return out;
 }
 
 function getProjectClosingSyncBackgroundStatus_() {
@@ -2301,9 +2409,18 @@ function upsertClickUpMilestoneClosing_(mapping, normalized, options) {
     var isProjectClosing = hasDeliveryMarker && isProjectClosingApprovalStatus_(status);
     if (isProjectClosing) situation = 'aprovado';
     var previousSituation = sanitizeText_(previous && previous.situacao);
-    var returnedToClosed = (situation === 'aguardando' &&
+    var preserveValidatedHistory = previous &&
+      (previousSituation === 'aprovado' || previousSituation === 'reprovado') &&
+      situation === 'aguardando' &&
+      options.preserve_closed_history !== false &&
+      options.allow_validation_downgrade !== true;
+    if (preserveValidatedHistory) {
+      situation = previousSituation;
+      status = sanitizeText_(previous && previous.status_atual) || status;
+    }
+    var returnedToClosed = !preserveValidatedHistory && ((situation === 'aguardando' &&
       (previousSituation === 'aprovado' || previousSituation === 'reprovado')) ||
-      (situation === 'outro' && hasClosedDate && !previous);
+      (situation === 'outro' && hasClosedDate && !previous));
     var recoveredClosedHistory = false;
     if (situation === 'outro' && hasClosedDate && options.preserve_closed_history) {
       situation = 'aguardando';
@@ -2739,6 +2856,9 @@ function startClickUpMilestoneClosingBackground_(params) {
   params = params || {};
   var props = PropertiesService.getScriptProperties();
   var forceHistory = String(params.force_history || params.force_full || '') === '1';
+  var monthCount = clickUpMilestoneClosingDistinctMonths_().length;
+  var fullProjectScan = monthCount <= 1 ||
+    String(params.full_project_scan || params.force_project_scan || '') === '1';
   migrateClickUpMilestoneClosingSchema_();
   if (forceHistory) {
     props.deleteProperty('CLICKUP_MILESTONE_HISTORY_REBUILT');
@@ -2761,15 +2881,16 @@ function startClickUpMilestoneClosingBackground_(params) {
   props.setProperty('CLICKUP_MILESTONE_CLOSING_PROCESSED', '0');
   props.setProperty('CLICKUP_MILESTONE_CLOSING_ERRORS', '0');
   props.setProperty('CLICKUP_MILESTONE_CLOSING_DETECTED', '0');
+  props.setProperty('CLICKUP_MILESTONE_CLOSING_SKIP_PROJECT_SCAN', fullProjectScan ? '0' : '1');
   // Mesmo uma reconstrução completa precisa começar pelo incremental recente:
   // é nessa fase que capturamos retornos de Aprovado/Reprovado para Closed.
-  props.setProperty('CLICKUP_MILESTONE_CLOSING_PHASE', 'recent');
+  props.setProperty('CLICKUP_MILESTONE_CLOSING_PHASE', 'project_approvals');
   props.setProperty('CLICKUP_MILESTONE_CLOSING_STARTED_AT', new Date().toISOString());
   props.deleteProperty('CLICKUP_MILESTONE_CLOSING_ERROR');
-  if (forceHistory || clickUpMilestoneClosingDistinctMonths_().length <= 1) {
+  if (fullProjectScan) {
     props.deleteProperty('CLICKUP_MILESTONE_HISTORY_REBUILT');
   }
-  props.setProperty('CLICKUP_MILESTONE_CLOSING_TOTAL', forceHistory ? String(loadClickUpMilestoneClosingMappings_().length) : '0');
+  props.setProperty('CLICKUP_MILESTONE_CLOSING_TOTAL', fullProjectScan ? String(loadClickUpMilestoneClosingMappings_().length) : '0');
   props.setProperty('CLICKUP_MILESTONE_CLOSING_UPDATED_AT', new Date().toISOString());
   scheduleClickUpMilestoneClosingBackground_(1000);
   return {
@@ -2891,6 +3012,16 @@ function continueClickUpMilestoneClosingBackgroundWorker_() {
     return;
   }
   var phase = props.getProperty('CLICKUP_MILESTONE_CLOSING_PHASE') || 'recent';
+  if (phase === 'project_approvals') {
+    var approvals = syncClickUpProjectClosingApprovalCoverage_();
+    props.setProperty('CLICKUP_MILESTONE_CLOSING_DETECTED', String(approvals.detected || 0));
+    props.setProperty('CLICKUP_MILESTONE_CLOSING_ERRORS', String(approvals.errors || 0));
+    props.setProperty('CLICKUP_MILESTONE_CLOSING_PHASE', 'recent');
+    props.setProperty('CLICKUP_MILESTONE_CLOSING_UPDATED_AT', new Date().toISOString());
+    if (approvals.last_error) props.setProperty('CLICKUP_MILESTONE_CLOSING_ERROR', approvals.last_error);
+    scheduleClickUpMilestoneClosingBackground_(1000);
+    return;
+  }
   if (phase === 'recent') {
     var recent = syncClickUpRecentMilestoneCoverage_({
       authoritative: true,
@@ -2927,10 +3058,24 @@ function continueClickUpMilestoneClosingBackgroundWorker_() {
     props.setProperty('CLICKUP_MILESTONE_CLOSING_ERRORS', String(
       toInt_(props.getProperty('CLICKUP_MILESTONE_CLOSING_ERRORS'), 0) + Number(monthly.errors || 0)
     ));
-    props.setProperty('CLICKUP_MILESTONE_CLOSING_PHASE', 'projects');
     props.setProperty('CLICKUP_MILESTONE_CLOSING_UPDATED_AT', new Date().toISOString());
     if (monthly.last_error) props.setProperty('CLICKUP_MILESTONE_CLOSING_ERROR', monthly.last_error);
+    if (props.getProperty('CLICKUP_MILESTONE_CLOSING_SKIP_PROJECT_SCAN') === '1') {
+      props.setProperty('CLICKUP_MILESTONE_CLOSING_ACTIVE', '0');
+      props.setProperty('CLICKUP_MILESTONE_CLOSING_PHASE', 'complete_fast');
+      props.setProperty('CLICKUP_MILESTONE_CLOSING_COMPLETED_AT', new Date().toISOString());
+      clearClickUpMilestoneClosingBackgroundTriggers_();
+      return;
+    }
+    props.setProperty('CLICKUP_MILESTONE_CLOSING_PHASE', 'projects');
     scheduleClickUpMilestoneClosingBackground_(5000);
+    return;
+  }
+  if (props.getProperty('CLICKUP_MILESTONE_CLOSING_SKIP_PROJECT_SCAN') !== '0') {
+    props.setProperty('CLICKUP_MILESTONE_CLOSING_ACTIVE', '0');
+    props.setProperty('CLICKUP_MILESTONE_CLOSING_PHASE', 'complete_fast');
+    props.setProperty('CLICKUP_MILESTONE_CLOSING_COMPLETED_AT', new Date().toISOString());
+    clearClickUpMilestoneClosingBackgroundTriggers_();
     return;
   }
   var offset = toInt_(props.getProperty('CLICKUP_MILESTONE_CLOSING_OFFSET'), 0);
@@ -3017,6 +3162,60 @@ function syncClickUpMilestoneClosingBatch_(offset, limit) {
     next_offset: offset + batch.length,
     done: reachedEnd
   };
+}
+
+function clickUpProjectClosingApprovalStatusAliases_() {
+  return ['APROVAR', 'Aprovar', 'aprovar'];
+}
+
+function fetchClickUpProjectClosingApprovalTasks_(options) {
+  options = options || {};
+  var workspaceId = getClickUpWorkspaceId_();
+  if (!workspaceId) throw new Error('CLICKUP_TEAM_ID nao configurado.');
+  var maxPages = Math.max(1, Math.min(toInt_(options.max_pages, 4), 10));
+  var tasks = [];
+  clickUpProjectClosingApprovalStatusAliases_().forEach(function(status) {
+    for (var page = 0; page < maxPages; page++) {
+      var response = clickupRequest_('get', '/team/' + workspaceId + '/task?' + [
+        'include_closed=true',
+        'subtasks=true',
+        'custom_items[]=1',
+        'page=' + page,
+        'statuses[]=' + encodeURIComponent(status)
+      ].join('&'));
+      var batch = response.tasks || [];
+      tasks = tasks.concat(batch.filter(function(task) {
+        return isProjectClosingDeliveryItem_(task, sanitizeText_(task && task.list && task.list.name), null);
+      }));
+      if (batch.length < 100) break;
+      Utilities.sleep(250);
+    }
+  });
+  return dedupeTasks_(tasks);
+}
+
+function syncClickUpProjectClosingApprovalCoverage_() {
+  var mappings = loadClickUpMilestoneClosingMappings_();
+  var errors = 0;
+  var lastError = '';
+  var tasks = [];
+  try {
+    tasks = fetchClickUpProjectClosingApprovalTasks_({ max_pages: 4 });
+  } catch (error) {
+    errors += 1;
+    lastError = 'Aprovar fechamento projeto: ' + simplifyErrorMessage_(error);
+  }
+  var entries = tasks.map(function(task) {
+    var mapping = findProjectMappingForTask_(task, mappings) || fallbackProjectMappingForTask_(task);
+    return { mapping: mapping, normalized: buildNormalizedMilestoneCoverageProject_(mapping, task) };
+  });
+  upsertClickUpMilestoneClosingEntries_(entries, {
+    fetch_comments: false,
+    authoritative: false,
+    validation_comments_only: true,
+    preserve_closed_history: true
+  });
+  return { detected: entries.length, errors: errors, last_error: lastError };
 }
 
 function syncClickUpMilestoneClosingFromMonthlySheets_() {
@@ -5605,7 +5804,7 @@ function writeProjectSummaryToMonthlySheet_(mapping, normalized) {
   values.marcos_pendentes = normalized.resumo.marcos_pendentes;
   values.fases_total = normalized.resumo.fases_total;
   values.progresso = normalized.resumo.progresso;
-  values.data_ultima_atualizacao = normalized.resumo.data_ultima_atualizacao || '';
+  values.data_ultima_atualizacao = normalized.resumo.data_ultima_atualizacao || normalized.synced_at || '';
   values.dias_sem_atualizacao = diffDaysFromIso_(normalized.resumo.data_ultima_atualizacao);
   values.link_projeto = normalized.project_url || '';
   values.view_id = normalized.view_id || '';
@@ -5675,7 +5874,8 @@ function findProjectRowForMapping_(sheet, mapping) {
   var targetProjectUrl = sanitizeText_(mapping && mapping.project_url);
 
   for (var i = 1; i < values.length; i++) {
-    var item = rowToMonthlyProject_(header, values[i], sanitizeMonth_(mapping && mapping.mes), i + 1);
+    var item = monthlyProjectFromRow_(sanitizeMonth_(mapping && mapping.mes), header, values[i], i + 1);
+    if (!item) continue;
     var rowUrl = sanitizeText_(item.link_projeto || item.projeto_link);
     var rowListId = normalizeClickUpId_(item.list_id) || extractClickUpIdFromUrl_(rowUrl, 'list');
     var rowViewId = normalizeClickUpId_(item.view_id) || extractClickUpIdFromUrl_(rowUrl, 'view');
@@ -7266,12 +7466,19 @@ function clickUpTaskCustomItemName_(task) {
   );
 }
 
+function isClickUpProjectDeliveryCustomItemId_(task) {
+  var id = String(task && task.custom_item_id || '').trim();
+  return id && CLICKUP_PROJECT_DELIVERY_CUSTOM_ITEM_IDS.indexOf(id) >= 0;
+}
+
 function isProjectDeliveryTask_(task) {
   var key = normalizeKey_(
     (task && (task.custom_item_name || task.item_tipo_clickup)) ||
     clickUpTaskCustomItemName_(task)
   );
-  return key === 'ENTREGA' || key === 'ENTREGA DE PROJETO';
+  return isClickUpProjectDeliveryCustomItemId_(task) ||
+    key === 'ENTREGA' ||
+    key === 'ENTREGA DE PROJETO';
 }
 
 function isProjectDeliveryClosingCandidate_(task) {
