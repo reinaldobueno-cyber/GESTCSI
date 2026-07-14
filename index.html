@@ -5652,7 +5652,7 @@ var FECHAMENTO_LOADING = false;
 var FECHAMENTO_SESSION_REFRESHED = false;
 var FECHAMENTO_POLL_TIMER = null;
 var FECHAMENTO_FILTER = { month:'', consultor:'todos', projetoBusca:'', situacao:'todos' };
-var FECHAMENTO_CACHE_VERSION = 'closing-appscript-primary-v8-preserve-validation';
+var FECHAMENTO_CACHE_VERSION = 'closing-appscript-primary-v9-validation-month-rejections';
 var FECHAMENTO_MILESTONE_BONUS_VALUE = 30;
 var PROJECT_CLOSING_RULE_VERSION = 'breakoff-entrega-id-aprovar-v7';
 var PROJECT_CLOSING_LOOKUP = {term:'', loading:false, result:null, error:''};
@@ -7061,6 +7061,11 @@ function bonusMilestoneEffectiveMonth(item) {
   var validationMonth = fechamentoCompetenceMonthKey(item.validation_at, item.mes_validacao);
   return validationMonth || String(item.mes_fechamento || '');
 }
+function bonusRejectedMilestoneEffectiveMonth(item) {
+  if (!item) return '';
+  var validationMonth = fechamentoMonthKey(item.mes_validacao, item.validation_at);
+  return validationMonth || String(item.mes_fechamento || '');
+}
 function bonusMilestonesApprovedForMonth(month) {
   var seen={};
   return (FECHAMENTO_MARCOS||[]).filter(function(item){
@@ -7078,7 +7083,10 @@ function bonusDataset() {
   var daily=(CMAX_DAILY_STATE.events||[]).filter(function(item){return String(item.mes||'')===month&&cmaxCountsDaily(item);});
   var monthMilestones=(FECHAMENTO_MARCOS||[]).filter(function(item){return String(item.mes_fechamento||'')===month&&!fechamentoIsProjectClosing(item);});
   var milestones=bonusMilestonesApprovedForMonth(month);
-  var rejectedMilestones=monthMilestones.filter(function(item){return item.situacao==='reprovado';});
+  var rejectedMilestones=(FECHAMENTO_MARCOS||[]).filter(function(item){
+    if(!item||fechamentoIsProjectClosing(item)||item.situacao!=='reprovado')return false;
+    return bonusRejectedMilestoneEffectiveMonth(item)===month;
+  });
   var effectiveProjectDecisions=projectClosingList().filter(function(entry){return entry.decision&&(entry.category==='aprovado'||entry.category==='reprovado');}).map(function(entry){return entry.decision;});
   var projectDecisionRows=effectiveProjectDecisions.filter(function(item){return String(item.month||'')===month;}).map(projectClosingDecisionBonusRow);
   var approvedProjects=projectDecisionRows.filter(function(item){return item.situacao==='aprovado';});
