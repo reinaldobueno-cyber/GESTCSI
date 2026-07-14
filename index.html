@@ -5783,12 +5783,14 @@ function fechamentoMergeClosingRows(primaryRows, historyRows) {
       byKey[key] = item;
       return;
     }
-    if (preferIncoming) {
-      byKey[key] = Object.assign({}, current, item);
-      return;
-    }
     var currentRank = fechamentoSituacaoRank(current);
     var nextRank = fechamentoSituacaoRank(item);
+    if (preferIncoming) {
+      byKey[key] = currentRank > nextRank
+        ? Object.assign({}, item, current)
+        : Object.assign({}, current, item);
+      return;
+    }
     if (currentRank > nextRank) return;
     if (nextRank > currentRank) {
       byKey[key] = Object.assign({}, current, item);
@@ -6545,7 +6547,12 @@ function fechamentoLoadAppsScriptClosing(metaExtra) {
       return { rows: [], errors: [((error && error.message) || 'Histórico mensal indisponível')] };
     }).then(function(history) {
       var historicalRows = fechamentoNormalizeRows((history && history.rows) || []);
-      FECHAMENTO_MARCOS = fechamentoMergeClosingRows(consolidatedRows, historicalRows);
+      var mergedRows = fechamentoMergeClosingRows(consolidatedRows, historicalRows);
+      var currentRows = FECHAMENTO_MARCOS || [];
+      if (FECHAMENTO_LOADED && currentRows.length > 0 && mergedRows.length < Math.floor(currentRows.length * 0.8)) {
+        throw new Error('Leitura parcial do fechamento bloqueada para preservar os dados ja carregados.');
+      }
+      FECHAMENTO_MARCOS = mergedRows;
       var historyErrors = (history && history.errors || []).filter(Boolean);
       FECHAMENTO_META = Object.assign({
         ok: true,
