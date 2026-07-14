@@ -5652,7 +5652,7 @@ var FECHAMENTO_LOADING = false;
 var FECHAMENTO_SESSION_REFRESHED = false;
 var FECHAMENTO_POLL_TIMER = null;
 var FECHAMENTO_FILTER = { month:'', consultor:'todos', projetoBusca:'', situacao:'todos' };
-var FECHAMENTO_CACHE_VERSION = 'closing-appscript-primary-v9-validation-month-rejections';
+var FECHAMENTO_CACHE_VERSION = 'closing-appscript-primary-v10-june-validation-recovery';
 var FECHAMENTO_MILESTONE_BONUS_VALUE = 30;
 var PROJECT_CLOSING_RULE_VERSION = 'breakoff-entrega-id-aprovar-v7';
 var PROJECT_CLOSING_LOOKUP = {term:'', loading:false, result:null, error:''};
@@ -5744,6 +5744,22 @@ function fechamentoConsultantName(value) {
   });
   return names[0] || String(value || '').split(/\s*,\s*/)[0] || 'Sem consultor';
 }
+function fechamentoValidatedRecovery(item) {
+  var taskId = String(item && (item.task_id || item.id || item.item_id) || '').trim();
+  var map = {
+    '86aguzfdc': { validation_at:'2026-06-30T13:19:00.000Z', justificativa:'Validado no fechamento enviado em JUN/2026; preservado contra retorno para Closed.' },
+    '86aguzf0z': { validation_at:'2026-06-30T13:20:00.000Z', justificativa:'Validado no fechamento enviado em JUN/2026; preservado contra retorno para Closed.' },
+    '86ag9bqbt': { validation_at:'2026-06-30T20:31:00.000Z', justificativa:'Validado no fechamento enviado em JUN/2026; preservado contra retorno para Closed.' }
+  };
+  if (!map[taskId]) return null;
+  return Object.assign({
+    status_atual:'aprovado gestão',
+    situacao:'aprovado',
+    mes_fechamento:'2026-06',
+    mes_validacao:'2026-06',
+    valor_bonus:FECHAMENTO_MILESTONE_BONUS_VALUE
+  }, map[taskId]);
+}
 function fechamentoNormalizeRows(rows) {
   return (rows || []).map(function(item) {
     item.mes_fechamento = fechamentoCompetenceMonthKey(item.closed_at || item.date_closed || item.data_closed || item.data_fechamento, item.mes_fechamento);
@@ -5751,6 +5767,8 @@ function fechamentoNormalizeRows(rows) {
     item.consultor = fechamentoConsultantName(item.consultor || item.responsaveis);
     var statusSituation = fechamentoSituacaoPorStatus(item.status_atual || item.status || item.status_original || '');
     if (statusSituation !== 'outro') item.situacao = statusSituation;
+    var recovery = fechamentoValidatedRecovery(item);
+    if (recovery) Object.assign(item, recovery);
     item.valor_bonus = Number(item.valor_bonus || 0);
     if (item.situacao === 'aprovado' && item.valor_bonus <= 0) {
       item.valor_bonus = fechamentoIsProjectClosing(item) ? 80 : FECHAMENTO_MILESTONE_BONUS_VALUE;
