@@ -3893,13 +3893,13 @@ var UPDATE_DEVICE_KEY = 'gestcsi_update_device_id_v1';
 var UPDATE_ACTOR_KEY = 'gestcsi_update_actor_v1';
 var LAST_UPDATE_KEY = 'gestcsi_last_update_label_v1';
 var PANEL_CACHE_KEY = 'gestcsi_panel_cache_v2';
-var PANEL_APP_VERSION = '2026-07-13-full-year-portfolio-v1';
+var PANEL_APP_VERSION = '2026-07-16-portfolio-186-v1';
 var THEME_MODE_KEY = 'gestcsi_theme_mode_v1';
 var AUTH_SESSION_KEY = 'gestcsi_auth_session_v1';
 var AUTH_STATE = { token:'', user:null };
 var PANEL_STARTED = false;
 var PANEL_CACHE_MIN_PROJECTS = 80;
-var PANEL_MIN_2026_PROJECTS = 181;
+var PANEL_MIN_2026_PROJECTS = 186;
 function painelMinimoCarteiraAtual() {
   var now = new Date();
   return now.getFullYear() === 2026 ? PANEL_MIN_2026_PROJECTS : PANEL_CACHE_MIN_PROJECTS;
@@ -4158,13 +4158,7 @@ window.recarregarPainelManual = function() {
   loadAll('manual');
   return true;
 };
-window.sincronizarTodosProjetosClickup = function(btn) {
-  var labelOriginal = btn ? btn.textContent : '';
-  if (btn) {
-    btn.disabled = true;
-    btn.textContent = 'Sincronizando...';
-  }
-  showToast('Sincronizando todos os projetos do ClickUp...', 'ok');
+function sincronizarTodosProjetosClickupPorLotes_(btn, labelOriginal) {
   var processadosTotal = 0;
   var errosTotal = 0;
   var batchSize = 8;
@@ -4189,7 +4183,61 @@ window.sincronizarTodosProjetosClickup = function(btn) {
       return resp || {};
     });
   }
-  rodarLoteSync(0).then(function(resp) {
+  return rodarLoteSync(0).then(function() {
+    return { processed: processadosTotal, errors: errosTotal };
+  });
+}
+function sincronizarTodosProjetosClickupBackground_(btn) {
+  var maxPolls = 80;
+  var polls = 0;
+  function statusLabel(status) {
+    var total = Number(status && status.total || 0);
+    var processed = Number(status && (status.processed || status.offset) || 0);
+    if (!total) return 'Preparando sync...';
+    return 'Sync ' + Math.min(processed, total) + '/' + total;
+  }
+  function poll() {
+    polls += 1;
+    return chamarAppsScriptJsonp('getProjectSyncBackgroundStatus', {
+      auth_token: authTokenParam()
+    }, 45000).then(function(status) {
+      if (btn) btn.textContent = statusLabel(status);
+      if (status && status.error) throw new Error(status.error);
+      if (status && status.active && polls < maxPolls) {
+        return sleep(6000).then(poll);
+      }
+      return status || {};
+    });
+  }
+  return chamarAppsScriptJsonp('startProjectSyncBackground', {
+    auth_token: authTokenParam(),
+    force: '1'
+  }, 30000).then(function(status) {
+    if (btn) btn.textContent = statusLabel(status);
+    if (status && status.error) throw new Error(status.error);
+    return poll();
+  }).then(function(status) {
+    if (status && status.active) throw new Error('Sync ainda em andamento. Atualize novamente em instantes.');
+    return {
+      processed: Number(status && status.processed || 0),
+      errors: Number(status && status.errors || 0),
+      total: Number(status && status.total || 0)
+    };
+  });
+}
+window.sincronizarTodosProjetosClickup = function(btn) {
+  var labelOriginal = btn ? btn.textContent : '';
+  if (btn) {
+    btn.disabled = true;
+    btn.textContent = 'Sincronizando...';
+  }
+  showToast('Sincronizando todos os projetos do ClickUp...', 'ok');
+  var syncInfo = { processed: 0, errors: 0, total: 0 };
+  sincronizarTodosProjetosClickupBackground_(btn).catch(function(error) {
+    console.warn('[SYNC CLICKUP] Sync em segundo plano indisponivel; usando lotes diretos:', error);
+    return sincronizarTodosProjetosClickupPorLotes_(btn, labelOriginal);
+  }).then(function(info) {
+    syncInfo = info || syncInfo;
     resetarCachesDerivadosPainel({ limparCachePainel: true });
     if (btn) btn.textContent = 'Atualizando painel...';
     return sleep(2200).then(function() {
@@ -4198,10 +4246,13 @@ window.sincronizarTodosProjetosClickup = function(btn) {
         btn.disabled = false;
         btn.textContent = labelOriginal || 'Sync ClickUp';
       }
+      var processadosTotal = Number(syncInfo.processed || 0);
+      var errosTotal = Number(syncInfo.errors || 0);
+      var totalSync = Number(syncInfo.total || processadosTotal || 0);
       if (errosTotal > 0) {
-        showToast('Sync geral concluida: ' + processadosTotal + ' ok, ' + errosTotal + ' com erro', 'err');
+        showToast('Sync geral concluida: ' + processadosTotal + '/' + totalSync + ' ok, ' + errosTotal + ' com erro', 'err');
       } else {
-        showToast('Sync geral concluida: ' + processadosTotal + ' projeto(s) atualizados', 'ok');
+        showToast('Sync geral concluida: ' + (totalSync || processadosTotal) + ' projeto(s) atualizados', 'ok');
       }
     });
   }).catch(function(error) {
@@ -5577,7 +5628,7 @@ var FECHAMENTO_LOADING = false;
 var FECHAMENTO_SESSION_REFRESHED = false;
 var FECHAMENTO_POLL_TIMER = null;
 var FECHAMENTO_FILTER = { month:'', consultor:'todos', projetoBusca:'', situacao:'todos' };
-var FECHAMENTO_CACHE_VERSION = 'closing-appscript-primary-v7-phase-delivery';
+var FECHAMENTO_CACHE_VERSION = 'closing-appscript-primary-v10-june-validation-recovery';
 var FECHAMENTO_MILESTONE_BONUS_VALUE = 30;
 var PROJECT_CLOSING_RULE_VERSION = 'breakoff-entrega-id-aprovar-v7';
 var PROJECT_CLOSING_LOOKUP = {term:'', loading:false, result:null, error:''};
@@ -5669,6 +5720,22 @@ function fechamentoConsultantName(value) {
   });
   return names[0] || String(value || '').split(/\s*,\s*/)[0] || 'Sem consultor';
 }
+function fechamentoValidatedRecovery(item) {
+  var taskId = String(item && (item.task_id || item.id || item.item_id) || '').trim();
+  var map = {
+    '86aguzfdc': { validation_at:'2026-06-30T13:19:00.000Z', justificativa:'Validado no fechamento enviado em JUN/2026; preservado contra retorno para Closed.' },
+    '86aguzf0z': { validation_at:'2026-06-30T13:20:00.000Z', justificativa:'Validado no fechamento enviado em JUN/2026; preservado contra retorno para Closed.' },
+    '86ag9bqbt': { validation_at:'2026-06-30T20:31:00.000Z', justificativa:'Validado no fechamento enviado em JUN/2026; preservado contra retorno para Closed.' }
+  };
+  if (!map[taskId]) return null;
+  return Object.assign({
+    status_atual:'aprovado gestão',
+    situacao:'aprovado',
+    mes_fechamento:'2026-06',
+    mes_validacao:'2026-06',
+    valor_bonus:FECHAMENTO_MILESTONE_BONUS_VALUE
+  }, map[taskId]);
+}
 function fechamentoNormalizeRows(rows) {
   return (rows || []).map(function(item) {
     item.mes_fechamento = fechamentoCompetenceMonthKey(item.closed_at || item.date_closed || item.data_closed || item.data_fechamento, item.mes_fechamento);
@@ -5676,6 +5743,8 @@ function fechamentoNormalizeRows(rows) {
     item.consultor = fechamentoConsultantName(item.consultor || item.responsaveis);
     var statusSituation = fechamentoSituacaoPorStatus(item.status_atual || item.status || item.status_original || '');
     if (statusSituation !== 'outro') item.situacao = statusSituation;
+    var recovery = fechamentoValidatedRecovery(item);
+    if (recovery) Object.assign(item, recovery);
     item.valor_bonus = Number(item.valor_bonus || 0);
     if (item.situacao === 'aprovado' && item.valor_bonus <= 0) {
       item.valor_bonus = fechamentoIsProjectClosing(item) ? 80 : FECHAMENTO_MILESTONE_BONUS_VALUE;
@@ -5708,12 +5777,14 @@ function fechamentoMergeClosingRows(primaryRows, historyRows) {
       byKey[key] = item;
       return;
     }
-    if (preferIncoming) {
-      byKey[key] = Object.assign({}, current, item);
-      return;
-    }
     var currentRank = fechamentoSituacaoRank(current);
     var nextRank = fechamentoSituacaoRank(item);
+    if (preferIncoming) {
+      byKey[key] = currentRank > nextRank
+        ? Object.assign({}, item, current)
+        : Object.assign({}, current, item);
+      return;
+    }
     if (currentRank > nextRank) return;
     if (nextRank > currentRank) {
       byKey[key] = Object.assign({}, current, item);
@@ -6470,7 +6541,12 @@ function fechamentoLoadAppsScriptClosing(metaExtra) {
       return { rows: [], errors: [((error && error.message) || 'Histórico mensal indisponível')] };
     }).then(function(history) {
       var historicalRows = fechamentoNormalizeRows((history && history.rows) || []);
-      FECHAMENTO_MARCOS = fechamentoMergeClosingRows(consolidatedRows, historicalRows);
+      var mergedRows = fechamentoMergeClosingRows(consolidatedRows, historicalRows);
+      var currentRows = FECHAMENTO_MARCOS || [];
+      if (FECHAMENTO_LOADED && currentRows.length > 0 && mergedRows.length < Math.floor(currentRows.length * 0.8)) {
+        throw new Error('Leitura parcial do fechamento bloqueada para preservar os dados ja carregados.');
+      }
+      FECHAMENTO_MARCOS = mergedRows;
       var historyErrors = (history && history.errors || []).filter(Boolean);
       FECHAMENTO_META = Object.assign({
         ok: true,
@@ -7010,6 +7086,9 @@ function bonusMilestoneOverrideMonth(item) {
 function bonusMilestoneEffectiveMonth(item) {
   return bonusMilestoneOverrideMonth(item)||String(item&&item.mes_fechamento||'');
 }
+function bonusRejectedMilestoneEffectiveMonth(item) {
+  return String(item && (item.mes_validacao || item.mes_fechamento) || '');
+}
 function bonusMilestonesApprovedForMonth(month) {
   var seen={};
   return (FECHAMENTO_MARCOS||[]).filter(function(item){
@@ -7027,7 +7106,10 @@ function bonusDataset() {
   var daily=(CMAX_DAILY_STATE.events||[]).filter(function(item){return String(item.mes||'')===month&&cmaxCountsDaily(item);});
   var monthMilestones=(FECHAMENTO_MARCOS||[]).filter(function(item){return String(item.mes_fechamento||'')===month&&!fechamentoIsProjectClosing(item);});
   var milestones=bonusMilestonesApprovedForMonth(month);
-  var rejectedMilestones=monthMilestones.filter(function(item){return item.situacao==='reprovado';});
+  var rejectedMilestones=(FECHAMENTO_MARCOS||[]).filter(function(item){
+    if(!item||fechamentoIsProjectClosing(item)||item.situacao!=='reprovado')return false;
+    return bonusRejectedMilestoneEffectiveMonth(item)===month;
+  });
   var effectiveProjectDecisions=projectClosingList().filter(function(entry){return entry.decision&&(entry.category==='aprovado'||entry.category==='reprovado');}).map(function(entry){return entry.decision;});
   var projectDecisionRows=effectiveProjectDecisions.filter(function(item){return String(item.month||'')===month;}).map(projectClosingDecisionBonusRow);
   var approvedProjects=projectDecisionRows.filter(function(item){return item.situacao==='aprovado';});
