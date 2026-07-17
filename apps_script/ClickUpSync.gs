@@ -30,7 +30,7 @@ var CLICKUP_DEFAULT_WORKSPACE_ID = '9007083069';
 var CLICKUP_MILESTONE_BONUS_VALUE = 30;
 var CLICKUP_PROJECT_CLOSING_BONUS_VALUE = 80;
 var CLICKUP_PROJECT_CLOSING_BONUS_START = '2026-06-15';
-var CLICKUP_PROJECT_CLOSING_RULE_VERSION = 'breakoff-entrega-id-aprovar-v8';
+var CLICKUP_PROJECT_CLOSING_RULE_VERSION = 'breakoff-entrega-id-aprovar-v9';
 var CLICKUP_PROJECT_DELIVERY_CUSTOM_ITEM_IDS = ['1001'];
 var CLICKUP_MILESTONE_AUDIT_TASK_IDS = [];
 var CLICKUP_MILESTONE_CLOSING_SCHEMA_VERSION = 'strict-milestones-v2';
@@ -2949,7 +2949,17 @@ function getProjectClosingCandidates_(params) {
 function diagnoseProjectClosingCandidateCounts_() {
   var started = new Date();
   var errors = [];
-  var direct = projectClosingDirectApprovalCandidates_(errors);
+  var direct = [];
+  var scan = { raw_tasks: 0, status_tasks: 0, delivery_tasks: 0, closing_tasks: 0, since: '' };
+  try {
+    var mappings = loadProjectClosingCandidateMappings_();
+    scan = fetchClickUpProjectClosingApprovalTaskScan_({ max_pages: 6, recent_pages: 8 });
+    direct = (scan.tasks || []).map(function(task) {
+      return projectClosingCandidateFromTask_(task, mappings);
+    });
+  } catch (error) {
+    errors.push({ project_name: 'Busca direta APROVAR', error: simplifyErrorMessage_(error) });
+  }
   var saved = projectClosingSavedBreakOffCandidates_();
   var allSeen = {};
   var unique = [];
@@ -2979,6 +2989,11 @@ function diagnoseProjectClosingCandidateCounts_() {
     ok: true,
     project_closing_rule_version: CLICKUP_PROJECT_CLOSING_RULE_VERSION,
     source: 'clickup_project_closing_direct_approval',
+    direct_raw_tasks_scanned: scan.raw_tasks || 0,
+    direct_aprovar_status_tasks: scan.status_tasks || 0,
+    direct_aprovar_delivery_tasks: scan.delivery_tasks || 0,
+    direct_aprovar_breakoff_tasks: scan.closing_tasks || 0,
+    direct_recent_since: scan.since || '',
     direct_approval_candidates: direct.length,
     saved_breakoff_candidates: saved.length,
     unique_candidates: unique.length,
@@ -3529,30 +3544,53 @@ function enrichProjectClosingApprovalTasksWithPhases_(tasks) {
   return tasks;
 }
 
-function fetchClickUpProjectClosingApprovalTasks_(options) {
+function fetchClickUpProjectClosingApprovalTaskScan_(options) {
   options = options || {};
   var workspaceId = getClickUpWorkspaceId_();
   if (!workspaceId) throw new Error('CLICKUP_TEAM_ID nao configurado.');
-  var maxPages = Math.max(1, Math.min(toInt_(options.max_pages, 4), 10));
-  var tasks = [];
-  clickUpProjectClosingApprovalStatusAliases_().forEach(function(status) {
-    for (var page = 0; page < maxPages; page++) {
+  var maxPages = Math.max(1, Math.min(toInt_(options.max_pages, 6), 20));
+  var recentPages = Math.max(1, Math.min(toInt_(options.recent_pages, 8), 20));
+  var since = Math.max(0, Number(options.since_ms || (new Date().getTime() - 90 * 24 * 60 * 60 * 1000)));
+  var raw = [];
+  var queryVariants = [[], ['custom_items[]=1']];
+
+  function fetchQuery(parts, pages) {
+    pages = Math.max(1, Number(pages || maxPages));
+    for (var page = 0; page < pages; page++) {
       var response = clickupRequest_('get', '/team/' + workspaceId + '/task?' + [
         'include_closed=true',
         'subtasks=true',
-        'custom_items[]=1',
-        'page=' + page,
-        'statuses[]=' + encodeURIComponent(status)
-      ].join('&'));
+        'page=' + page
+      ].concat(parts).join('&'));
       var batch = response.tasks || [];
-      tasks = tasks.concat(batch.filter(function(task) {
-        return isProjectDeliveryClosingCandidate_(task);
-      }));
+      raw = raw.concat(batch);
       if (batch.length < 100) break;
       Utilities.sleep(250);
     }
+  }
+
+  clickUpProjectClosingApprovalStatusAliases_().forEach(function(status) {
+    queryVariants.forEach(function(extra) {
+      fetchQuery(extra.concat(['statuses[]=' + encodeURIComponent(status)]), maxPages);
+    });
   });
-  return enrichProjectClosingApprovalTasksWithPhases_(tasks).filter(function(task) {
+
+  queryVariants.forEach(function(extra) {
+    fetchQuery(extra.concat([
+      'date_updated_gt=' + since,
+      'order_by=updated',
+      'reverse=true'
+    ]), recentPages);
+  });
+
+  raw = dedupeTasks_(raw);
+  var statusTasks = raw.filter(function(task) {
+    return isProjectClosingApprovalStatus_(clickUpTaskStatusText_(task));
+  });
+  var deliveryTasks = statusTasks.filter(function(task) {
+    return isProjectDeliveryClosingCandidate_(task);
+  });
+  var closingTasks = enrichProjectClosingApprovalTasksWithPhases_(deliveryTasks).filter(function(task) {
     var phaseName = sanitizeText_(task && task._project_closing_phase_name) ||
       sanitizeText_(task && task.list && task.list.name);
     return isProjectClosingDeliveryItem_(task, phaseName, {
@@ -3562,6 +3600,18 @@ function fetchClickUpProjectClosingApprovalTasks_(options) {
       custom_item_name: clickUpTaskCustomItemName_(task)
     });
   });
+  return {
+    tasks: closingTasks,
+    raw_tasks: raw.length,
+    status_tasks: statusTasks.length,
+    delivery_tasks: deliveryTasks.length,
+    closing_tasks: closingTasks.length,
+    since: new Date(since).toISOString()
+  };
+}
+
+function fetchClickUpProjectClosingApprovalTasks_(options) {
+  return fetchClickUpProjectClosingApprovalTaskScan_(options || {}).tasks;
 }
 
 function syncClickUpProjectClosingApprovalCoverage_() {
