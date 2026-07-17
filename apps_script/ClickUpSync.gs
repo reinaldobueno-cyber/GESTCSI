@@ -2805,49 +2805,111 @@ function projectClosingCandidatesFromMapping_(mapping, options) {
   });
 }
 
+function projectClosingSavedBreakOffCandidates_() {
+  var seen = {};
+  var out = [];
+  MONTHS.forEach(function(month) {
+    try {
+      getMonthlyProjectsFromSheet_(month).forEach(function(project) {
+        var payload = parseJsonObject_(project && project.clickup_json);
+        if (!payload) return;
+        var projectKey = sanitizeText_(payload.project_key) ||
+          buildProjectKey_(month, project.cliente) + '|ROW|' + String(project._sheet_row || '');
+        var source = []
+          .concat(Array.isArray(payload.fases) ? payload.fases : [])
+          .concat(Array.isArray(payload.marcos) ? payload.marcos : [])
+          .concat(Array.isArray(payload.tasks) ? payload.tasks : []);
+        source.forEach(function(item) {
+          var itemId = sanitizeText_(item && (item.id || item.task_id));
+          var key = itemId || projectKey;
+          if (!key || seen[key]) return;
+          var isBreakOff = isProjectBreakOffText_(item && (item.fase_nome || item.fase || item.phase)) ||
+            isProjectBreakOffText_(item && (item.nome || item.marco || item.name));
+          if (!isBreakOff || !isProjectDeliveryClosingCandidate_(item)) return;
+          seen[key] = true;
+          out.push({
+            project_key: projectKey,
+            project_name: sanitizeText_(payload.cliente || project.cliente) || 'Projeto ClickUp',
+            consultant: sanitizeText_(payload.consultor || project.consultor),
+            item_id: itemId,
+            item_name: sanitizeText_(item && (item.nome || item.marco || item.name)) || 'Fase 8 - Break Off',
+            item_status: sanitizeText_(item && (item.status_original || item.status || item.status_atual)),
+            phase_name: sanitizeText_(item && (item.fase_nome || item.fase || item.phase || item.nome || item.name)),
+            phase_status: sanitizeText_(item && item.fase_status_original),
+            item_url: sanitizeText_(item && (item.task_url || item.url || item.link)) ||
+              sanitizeText_(payload.project_url || project.projeto_link || project.link_projeto),
+            list_id: sanitizeText_(payload.list_id || project.list_id),
+            folder_id: sanitizeText_(payload.folder_id),
+            space_id: sanitizeText_(payload.space_id),
+            marcador_entrega: 'sim',
+            updated_at: sanitizeText_(item && item.updated_at),
+            project_closing_rule_version: CLICKUP_PROJECT_CLOSING_RULE_VERSION
+          });
+        });
+      });
+    } catch (error) {}
+  });
+  return out;
+}
+
+function refreshProjectClosingCandidatesByTaskId_(candidates) {
+  var byId = {};
+  fetchClickUpTasksByIds_((candidates || []).map(function(item) {
+    return item && item.item_id;
+  })).forEach(function(task) {
+    byId[normalizeClickUpId_(task && task.id)] = task;
+  });
+  return (candidates || []).map(function(candidate) {
+    var task = byId[normalizeClickUpId_(candidate && candidate.item_id)];
+    if (!task) return candidate;
+    var status = clickUpTaskStatusText_(task);
+    var itemName = sanitizeText_(task.name) || candidate.item_name;
+    return Object.assign({}, candidate, {
+      item_name: itemName,
+      item_status: status || candidate.item_status,
+      item_url: sanitizeText_(task.url || task.permalink || task.link || task.html_url) || candidate.item_url,
+      updated_at: task.date_updated ? fromMillisIso_(task.date_updated) : candidate.updated_at,
+      marcador_entrega: isProjectDeliveryTask_(task) ? 'sim' : candidate.marcador_entrega
+    });
+  });
+}
+
 function getProjectClosingCandidates_(params) {
   requireUser_(params || {});
   var started = new Date();
-  var mappings = loadProjectClosingCandidateMappings_();
+  var savedCandidates = projectClosingSavedBreakOffCandidates_();
   var offset = Math.max(0, toInt_((params || {}).offset, 0));
-  var limit = Math.max(1, Math.min(toInt_((params || {}).limit, 4), 8));
-  var timeoutMs = Math.max(8000, Math.min(toInt_((params || {}).timeout_ms, 25000), 45000));
-  var deadline = new Date().getTime() + timeoutMs;
-  var batch = mappings.slice(offset, offset + limit);
+  var limit = Math.max(1, Math.min(toInt_((params || {}).limit, 50), 100));
+  var batch = savedCandidates.slice(offset, offset + limit);
   var seen = {};
   var errors = [];
-  var items = [];
-  batch.forEach(function(mapping) {
-    try {
-      projectClosingCandidatesFromMapping_(mapping, {
-        force: true,
-        deadline_ms: deadline
-      }).forEach(function(item) {
-        var key = sanitizeText_(item && item.item_id) || sanitizeText_(item && item.project_key);
-        if (!key || seen[key]) return;
-        seen[key] = true;
-        items.push(item);
-      });
-    } catch (error) {
-      errors.push({
-        project_key: sanitizeText_(mapping && mapping.project_key),
-        project_name: sanitizeText_(mapping && mapping.cliente),
-        error: simplifyErrorMessage_(error)
-      });
-    }
+  var refreshed = [];
+  try {
+    refreshed = refreshProjectClosingCandidatesByTaskId_(batch);
+  } catch (error) {
+    errors.push({ project_name: 'Atualizacao direta por ID', error: simplifyErrorMessage_(error) });
+    refreshed = batch;
+  }
+  var items = refreshed.filter(function(item) {
+    if (!isProjectClosingApprovalStatus_(item && item.item_status) &&
+        !isProjectClosingApprovalStatus_(item && item.phase_status)) return false;
+    var key = sanitizeText_(item && item.item_id) || sanitizeText_(item && item.project_key);
+    if (!key || seen[key]) return false;
+    seen[key] = true;
+    return true;
   });
-  var nextOffset = Math.min(mappings.length, offset + batch.length);
+  var nextOffset = Math.min(savedCandidates.length, offset + batch.length);
   return {
     ok: true,
-    source: 'clickup_project_closing_project_batch',
+    source: 'clickup_project_closing_saved_ids',
     project_closing_rule_version: CLICKUP_PROJECT_CLOSING_RULE_VERSION,
     offset: offset,
     limit: limit,
     processed: nextOffset,
-    total: mappings.length,
+    total: savedCandidates.length,
     next_offset: nextOffset,
-    has_more: nextOffset < mappings.length,
-    done: nextOffset >= mappings.length,
+    has_more: nextOffset < savedCandidates.length,
+    done: nextOffset >= savedCandidates.length,
     scanned: batch.length,
     errors: errors.length,
     error_details: errors.slice(0, 20),

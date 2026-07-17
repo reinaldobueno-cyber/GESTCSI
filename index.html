@@ -6177,7 +6177,7 @@ function projectClosingLoadCandidates(force) {
     return chamarAppsScriptJsonp('getProjectClosingCandidates', {
       auth_token: authTokenParam(),
       offset: String(offset || 0),
-      limit: '4',
+      limit: '50',
       timeout_ms: '25000'
     }, 35000).then(function(resp) {
       if (PROJECT_CLOSING_CANDIDATES.scanToken !== scanToken) return null;
