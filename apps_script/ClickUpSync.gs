@@ -152,6 +152,9 @@ function doGet(e) {
     if (action === 'getProjectClosingDecisions') {
       return jsonOutput_(getProjectClosingDecisions_(params), params.callback);
     }
+    if (action === 'getProjectClosingCandidates') {
+      return jsonOutput_(getProjectClosingCandidates_(params), params.callback);
+    }
     if (action === 'setProjectClosingDecision') {
       return jsonOutput_(setProjectClosingDecision_(params), params.callback);
     }
@@ -2696,6 +2699,64 @@ function getProjectClosingDecisions_(params) {
     };
   }).filter(function(item) { return item.project_key && item.decision; });
   return { ok: true, items: items };
+}
+
+function projectClosingCandidateFromTask_(task, mappings) {
+  var mapping = findProjectMappingForTask_(task, mappings) || fallbackProjectMappingForTask_(task);
+  var normalized = buildNormalizedMilestoneCoverageProject_(mapping, task);
+  var milestone = normalized.marcos && normalized.marcos[0] || {};
+  var projectKey = sanitizeText_(mapping.project_key || '') ||
+    normalizeProjectKey_(buildProjectKey_(mapping.mes || '', mapping.cliente || '')) ||
+    ('CLICKUP|' + sanitizeText_(milestone.id || task && task.id));
+  var projectName = sanitizeText_(mapping.cliente || normalized.cliente) ||
+    sanitizeText_(task && task.folder && task.folder.name) ||
+    sanitizeText_(task && task.project && task.project.name) ||
+    sanitizeText_(task && task.list && task.list.name) ||
+    'Projeto nao mapeado';
+  var consultant = sanitizeText_(mapping.consultor || normalized.consultor || milestone.responsaveis);
+  return {
+    project_key: projectKey,
+    project_name: projectName,
+    consultant: consultant,
+    item_id: sanitizeText_(milestone.id || task && task.id),
+    item_name: sanitizeText_(milestone.nome || task && task.name || 'Fase 8 - Break Off'),
+    item_status: sanitizeText_(milestone.status_original || task && task.status && (task.status.status || task.status.label)),
+    phase_name: sanitizeText_(milestone.fase_nome || task && task._project_closing_phase_name),
+    phase_status: sanitizeText_(milestone.fase_status_original || task && task._project_closing_phase_status),
+    item_url: sanitizeText_(milestone.task_url || task && (task.url || task.permalink || task.link || task.html_url)) ||
+      ('https://app.clickup.com/t/' + sanitizeText_(milestone.id || task && task.id)),
+    list_id: sanitizeText_(mapping.list_id || task && task.list && task.list.id),
+    folder_id: sanitizeText_(mapping.folder_id || task && task.folder && task.folder.id),
+    space_id: sanitizeText_(mapping.space_id || task && task.space && task.space.id),
+    marcador_entrega: 'sim',
+    updated_at: sanitizeText_(milestone.updated_at) || (task && task.date_updated ? fromMillisIso_(task.date_updated) : ''),
+    project_closing_rule_version: CLICKUP_PROJECT_CLOSING_RULE_VERSION
+  };
+}
+
+function getProjectClosingCandidates_(params) {
+  requireUser_(params || {});
+  var started = new Date();
+  var maxPages = Math.max(1, Math.min(toInt_((params || {}).max_pages, 10), 10));
+  var mappings = loadProjectSyncMappings_();
+  var tasks = fetchClickUpProjectClosingApprovalTasks_({ max_pages: maxPages });
+  var seen = {};
+  var items = tasks.map(function(task) {
+    return projectClosingCandidateFromTask_(task, mappings);
+  }).filter(function(item) {
+    if (!item.item_id) return false;
+    if (seen[item.item_id]) return false;
+    seen[item.item_id] = true;
+    return true;
+  });
+  return {
+    ok: true,
+    source: 'clickup_direct_project_closing',
+    project_closing_rule_version: CLICKUP_PROJECT_CLOSING_RULE_VERSION,
+    total: items.length,
+    items: items,
+    generated_at: started.toISOString()
+  };
 }
 
 function setProjectClosingDecision_(params) {
@@ -5723,6 +5784,7 @@ function projectMappingFromConfigItem_(item) {
     enabled: normalizeBoolean_(item.enabled, true),
     mes: mes,
     cliente: cliente,
+    consultor: sanitizeText_(item.consultor || item.consultora || item.responsavel),
     project_key: String(item.project_key || buildProjectKey_(mes, cliente)),
     project_url: projectUrl,
     view_id: viewId,

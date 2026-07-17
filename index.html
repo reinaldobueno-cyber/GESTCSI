@@ -4609,6 +4609,7 @@ function goTab(id, btn) {
   if (id === 'projfech') {
     fechamentoLoad(false);
     projectClosingLoadDecisions(false);
+    projectClosingLoadCandidates(false);
     initProjectClosing();
   }
   if (id === 'bonus') {
@@ -5674,6 +5675,7 @@ var PROJECT_CLOSING_LOOKUP = {term:'', loading:false, result:null, error:''};
 var PROJECT_CLOSING_DECISIONS = {items:[], loaded:false, loading:false, backendReady:null, error:''};
 var PROJECT_CLOSING_DECISION_TARGET = null;
 var PROJECT_CLOSING_SYNC = {active:false, processed:0, total:0, errors:0, error:'', timer:null};
+var PROJECT_CLOSING_CANDIDATES = {items:[], loaded:false, loading:false, backendReady:null, error:'', generated_at:''};
 var FECHAMENTO_EXPANDED = {};
 try { FECHAMENTO_EXPANDED = JSON.parse(storageGet('gestcsi_fechamento_expanded_v1', '{}')) || {}; } catch(e) { FECHAMENTO_EXPANDED = {}; }
 function fechamentoToggleConsultant(name) {
@@ -6106,72 +6108,75 @@ function projectClosingLoadDecisions(force) {
     return null;
   });
 }
-function projectClosingStartSync(button) {
-  if (button) { button.disabled = true; button.textContent = 'Agendando...'; }
-  return chamarAppsScriptJsonp('startProjectClosingSync', {auth_token:authTokenParam()}, 20000).then(function(resp) {
-    if (resp && resp.service === 'clickup-sync') throw new Error('Apps Script desatualizado. Implante uma nova versão do Web App.');
-    if (!resp || resp.ok === false) throw new Error((resp && (resp.error || resp.message)) || 'Falha ao iniciar sincronização.');
-    PROJECT_CLOSING_SYNC.active = true;
-    PROJECT_CLOSING_SYNC.processed = Number(resp.processed || 0);
-    PROJECT_CLOSING_SYNC.total = Number(resp.total || 0);
-    PROJECT_CLOSING_SYNC.errors = Number(resp.errors || 0);
+function projectClosingLoadCandidates(force) {
+  if (!authTokenParam() || PROJECT_CLOSING_CANDIDATES.loading || (PROJECT_CLOSING_CANDIDATES.loaded && !force)) return Promise.resolve(null);
+  PROJECT_CLOSING_CANDIDATES.loading = true;
+  PROJECT_CLOSING_CANDIDATES.error = '';
+  initProjectClosing();
+  return chamarAppsScriptJsonp('getProjectClosingCandidates', {auth_token:authTokenParam()}, 60000).then(function(resp) {
+    if (resp && resp.service === 'clickup-sync' && !Array.isArray(resp.items)) {
+      PROJECT_CLOSING_CANDIDATES.backendReady = false;
+      throw new Error('Apps Script desatualizado. Implante uma nova versão do Web App.');
+    }
+    if (!resp || resp.ok === false || !Array.isArray(resp.items)) throw new Error((resp && (resp.error || resp.message)) || 'Falha ao buscar fechamentos de projeto.');
+    PROJECT_CLOSING_CANDIDATES.items = resp.items;
+    PROJECT_CLOSING_CANDIDATES.loaded = true;
+    PROJECT_CLOSING_CANDIDATES.loading = false;
+    PROJECT_CLOSING_CANDIDATES.backendReady = true;
+    PROJECT_CLOSING_CANDIDATES.generated_at = resp.generated_at || '';
+    PROJECT_CLOSING_CANDIDATES.error = '';
+    PROJECT_CLOSING_SYNC.active = false;
+    PROJECT_CLOSING_SYNC.processed = resp.total || resp.items.length;
+    PROJECT_CLOSING_SYNC.total = resp.total || resp.items.length;
+    PROJECT_CLOSING_SYNC.errors = 0;
     PROJECT_CLOSING_SYNC.error = '';
     initProjectClosing();
-    projectClosingPollSync();
-    showToast('Sincronização iniciada em segundo plano. Você pode continuar usando o painel.', 'ok');
+    initBonus();
+    return resp;
+  }).catch(function(error) {
+    PROJECT_CLOSING_CANDIDATES.loading = false;
+    PROJECT_CLOSING_CANDIDATES.error = (error && error.message) || 'Falha ao buscar fechamentos de projeto.';
+    PROJECT_CLOSING_SYNC.active = false;
+    PROJECT_CLOSING_SYNC.error = PROJECT_CLOSING_CANDIDATES.error;
+    initProjectClosing();
+    showToast(PROJECT_CLOSING_CANDIDATES.error, 'err');
+    return null;
+  });
+}
+function projectClosingStartSync(button) {
+  if (button) { button.disabled = true; button.textContent = 'Buscando...'; }
+  PROJECT_CLOSING_SYNC.active = true;
+  PROJECT_CLOSING_SYNC.error = '';
+  return projectClosingLoadCandidates(true).then(function(resp) {
+    if (button) { button.disabled = false; button.textContent = 'Buscar no ClickUp'; }
+    if (resp && resp.ok !== false) showToast('Fech. Projeto atualizado: '+Number(resp.total || 0)+' item(ns) em APROVAR.', 'ok');
     return resp;
   }).catch(function(error) {
     PROJECT_CLOSING_SYNC.active = false;
     PROJECT_CLOSING_SYNC.error = (error && error.message) || 'Falha ao iniciar sincronização.';
-    if (button) { button.disabled = false; button.textContent = 'Sincronizar projetos'; }
+    if (button) { button.disabled = false; button.textContent = 'Buscar no ClickUp'; }
     initProjectClosing();
     showToast(PROJECT_CLOSING_SYNC.error, 'err');
   });
 }
 function projectClosingPollSync() {
-  if (PROJECT_CLOSING_SYNC.timer) clearTimeout(PROJECT_CLOSING_SYNC.timer);
-  chamarAppsScriptJsonp('getProjectClosingSyncStatus', {auth_token:authTokenParam()}, 15000).then(function(resp) {
-    if (resp && resp.service === 'clickup-sync') throw new Error('Apps Script desatualizado. Implante uma nova versão do Web App.');
-    if (!resp || resp.ok === false) throw new Error((resp && (resp.error || resp.message)) || 'Falha ao consultar sincronização.');
-    PROJECT_CLOSING_SYNC.active = !!resp.active;
-    PROJECT_CLOSING_SYNC.processed = Number(resp.processed || 0);
-    PROJECT_CLOSING_SYNC.total = Number(resp.total || 0);
-    PROJECT_CLOSING_SYNC.errors = Number(resp.errors || 0);
-    PROJECT_CLOSING_SYNC.error = resp.error || '';
-    initProjectClosing();
-    if (resp.active) {
-      PROJECT_CLOSING_SYNC.timer = setTimeout(projectClosingPollSync, 5000);
-      return;
-    }
-    resetarCachesDerivadosPainel({limparCachePainel:true});
-    PROJECT_CLOSING_DECISIONS.loaded = false;
-    loadAll('manual');
-    projectClosingLoadDecisions(true);
-    showToast('Sincronização concluída: '+PROJECT_CLOSING_SYNC.processed+' projeto(s), '+PROJECT_CLOSING_SYNC.errors+' erro(s).', PROJECT_CLOSING_SYNC.errors ? 'warn' : 'ok');
-  }).catch(function(error) {
-    PROJECT_CLOSING_SYNC.error = (error && error.message) || 'Falha ao acompanhar sincronização.';
-    PROJECT_CLOSING_SYNC.timer = setTimeout(projectClosingPollSync, 10000);
-    initProjectClosing();
-  });
+  return projectClosingLoadCandidates(true);
 }
 function projectClosingStopSync(button) {
-  if (button) { button.disabled = true; button.textContent = 'Parando...'; }
-  return chamarAppsScriptJsonp('stopProjectClosingSync', {auth_token:authTokenParam()}, 15000).then(function(resp) {
-    if (!resp || resp.ok === false) throw new Error((resp && (resp.error || resp.message)) || 'Falha ao parar sincronização.');
-    if (PROJECT_CLOSING_SYNC.timer) clearTimeout(PROJECT_CLOSING_SYNC.timer);
-    PROJECT_CLOSING_SYNC.active = false;
-    PROJECT_CLOSING_SYNC.error = 'Sincronização interrompida pelo usuário.';
-    initProjectClosing();
-    showToast('Sincronização de projetos interrompida.', 'ok');
-  }).catch(function(error) {
-    if (button) { button.disabled = false; button.textContent = 'Parar'; }
-    showToast((error && error.message) || 'Falha ao parar sincronização.', 'err');
-  });
+  if (PROJECT_CLOSING_SYNC.timer) clearTimeout(PROJECT_CLOSING_SYNC.timer);
+  PROJECT_CLOSING_SYNC.active = false;
+  PROJECT_CLOSING_CANDIDATES.loading = false;
+  if (button) { button.disabled = false; button.textContent = 'Parar'; }
+  initProjectClosing();
+  showToast('Busca de Fech. Projeto interrompida na tela.', 'ok');
+  return false;
 }
-function projectClosingDecisionFor(project) {
+function projectClosingDecisionFor(project, itemId) {
   var key = String(project && project.project_key || montarProjectKeyClickup(project) || '').trim();
+  var itemKey = String(itemId || project && project.item_id || '').trim();
   return (PROJECT_CLOSING_DECISIONS.items || []).filter(function(item) {
-    return String(item && item.project_key || '').trim() === key;
+    return (key && String(item && item.project_key || '').trim() === key) ||
+      (itemKey && String(item && item.item_id || '').trim() === itemKey);
   })[0] || null;
 }
 function projectClosingOpenDecision(projectKey, decision) {
@@ -6231,6 +6236,93 @@ function projectClosingSaveDecision(button) {
     showToast((error && error.message) || 'Falha ao salvar decisão.', 'err');
   });
 }
+function projectClosingFindPanelProjectByCandidate(candidate) {
+  var key = String(candidate && candidate.project_key || '').trim();
+  var nameKey = normalizeClienteKey(candidate && candidate.project_name || '');
+  return (DATA.projetos || []).filter(function(project) {
+    var projectKey = String(project && (project.project_key || montarProjectKeyClickup(project)) || '').trim();
+    return (key && projectKey === key) ||
+      (nameKey && normalizeClienteKey(project && project.cliente) === nameKey);
+  })[0] || null;
+}
+function projectClosingProjectFromCandidate(candidate) {
+  candidate = candidate || {};
+  var existing = projectClosingFindPanelProjectByCandidate(candidate) || {};
+  return Object.assign({}, existing, {
+    project_key: String(candidate.project_key || existing.project_key || montarProjectKeyClickup(existing) || '').trim(),
+    cliente: candidate.project_name || existing.cliente || 'Projeto ClickUp',
+    consultor: candidate.consultant || existing.consultor || 'Sem consultor',
+    status: existing.status || '',
+    projeto_link: candidate.item_url || existing.projeto_link || existing.link_projeto || '',
+    link_projeto: candidate.item_url || existing.link_projeto || existing.projeto_link || '',
+    item_id: candidate.item_id || ''
+  });
+}
+function projectClosingInfoFromCandidate(candidate) {
+  candidate = candidate || {};
+  var item = {
+    id: candidate.item_id || '',
+    task_id: candidate.item_id || '',
+    nome: candidate.item_name || 'Fase 8 - Break Off',
+    fase_nome: candidate.phase_name || 'Fase 8 - Break Off',
+    status_original: candidate.item_status || 'APROVAR',
+    fase_status_original: candidate.phase_status || '',
+    marcador_entrega: 'sim',
+    custom_item_id: '1001',
+    custom_item_name: 'Entrega',
+    task_url: candidate.item_url || '',
+    updated_at: candidate.updated_at || ''
+  };
+  return {
+    hasMarker: true,
+    approved: true,
+    pending: true,
+    rows: [],
+    jsonItems: [item],
+    flaggedItems: [item],
+    status: candidate.item_status || candidate.phase_status || 'APROVAR',
+    link: candidate.item_url || '',
+    source: 'ClickUp direto'
+  };
+}
+function projectClosingProjectFromDecision(decision) {
+  decision = decision || {};
+  var existing = projectClosingFindPanelProjectByCandidate({
+    project_key: decision.project_key,
+    project_name: decision.project_name
+  }) || {};
+  return Object.assign({}, existing, {
+    project_key: decision.project_key || existing.project_key || montarProjectKeyClickup(existing) || '',
+    cliente: decision.project_name || existing.cliente || 'Projeto ClickUp',
+    consultor: decision.consultant || existing.consultor || 'Sem consultor',
+    status: existing.status || '',
+    item_id: decision.item_id || ''
+  });
+}
+function projectClosingInfoFromDecision(decision) {
+  decision = decision || {};
+  var approved = decision.decision === 'approved';
+  return {
+    hasMarker: true,
+    approved: approved,
+    pending: false,
+    rows: [],
+    jsonItems: [{
+      id: decision.item_id || '',
+      task_id: decision.item_id || '',
+      nome: decision.item_name || 'Fase 8 - Break Off',
+      fase_nome: 'Fase 8 - Break Off',
+      status_original: decision.clickup_status || (approved ? 'APROVADO GESTAO' : 'REPROVADO GESTAO'),
+      marcador_entrega: 'sim',
+      custom_item_id: '1001',
+      custom_item_name: 'Entrega'
+    }],
+    flaggedItems: [],
+    status: decision.clickup_status || (approved ? 'APROVADO GESTAO' : 'REPROVADO GESTAO'),
+    link: '',
+    source: 'Decisão Fech. Projeto'
+  };
+}
 function projectClosingInfo(p) {
   var projectKey = String((p && p.project_key) || '').trim();
   var projectName = normalizeClienteKey((p && p.cliente) || '');
@@ -6282,16 +6374,29 @@ function projectClosingClickUpDecision(project, info) {
   };
 }
 function projectClosingList() {
-  return ordenarProjetosPainel(projetosVisiveisParaUsuario(Array.isArray(DATA.projetos) ? DATA.projetos.slice() : []).filter(function(p) {
-    return dashProjectHasClickUpTrace(p);
-  })).map(function(p) {
-    var info = projectClosingInfo(p);
-    var decision = projectClosingClickUpDecision(p, info) || projectClosingDecisionFor(p);
-    var category = 'fora';
+  var entries = [];
+  var seen = {};
+  (PROJECT_CLOSING_CANDIDATES.items || []).forEach(function(candidate) {
+    var project = projectClosingProjectFromCandidate(candidate);
+    var info = projectClosingInfoFromCandidate(candidate);
+    var decision = projectClosingDecisionFor(project, candidate.item_id);
+    var category = 'pendente';
     if (decision && decision.decision === 'approved') category = 'aprovado';
     else if (decision && decision.decision === 'rejected') category = 'reprovado';
-    else if (info.approved) category = 'pendente';
-    return {project:p, info:info, decision:decision, category:category};
+    var key = String(candidate.item_id || project.project_key || '').trim();
+    if (key) seen[key] = true;
+    entries.push({project:project, info:info, decision:decision, category:category});
+  });
+  (PROJECT_CLOSING_DECISIONS.items || []).forEach(function(decision) {
+    var key = String(decision.item_id || decision.project_key || '').trim();
+    if (key && seen[key]) return;
+    var project = projectClosingProjectFromDecision(decision);
+    var info = projectClosingInfoFromDecision(decision);
+    var category = decision.decision === 'approved' ? 'aprovado' : (decision.decision === 'rejected' ? 'reprovado' : 'fora');
+    entries.push({project:project, info:info, decision:decision, category:category});
+  });
+  return entries.sort(function(a, b) {
+    return String(a && a.project && a.project.cliente || '').localeCompare(String(b && b.project && b.project.cliente || ''));
   });
 }
 function projectClosingControlAlert(entry) {
@@ -6335,13 +6440,15 @@ function initProjectClosing() {
     }).join('') || '<tr class="empty-row"><td colspan="8">Nenhum projeto nesta regra.</td></tr>';
   }
   var table = '<div class="dashx-table-wrap"><table class="dashx-table"><thead><tr><th>Projeto</th><th>Consultor</th><th>Controle Lais</th><th>Status Fase 8</th><th>Decisão do fechamento</th><th>Divergência controle</th><th>Fonte</th><th>Ação</th></tr></thead><tbody>'+rows(pending.concat(approved).concat(rejected))+'</tbody></table></div>';
-  var syncLabel = PROJECT_CLOSING_SYNC.active ? ('Sincronizando '+PROJECT_CLOSING_SYNC.processed+'/'+PROJECT_CLOSING_SYNC.total) : 'Sincronizar projetos';
-  var syncProgress = PROJECT_CLOSING_SYNC.active || PROJECT_CLOSING_SYNC.error ? '<div class="closing-project-meta" style="margin-right:auto">'+(PROJECT_CLOSING_SYNC.active ? ('Processamento em segundo plano · '+PROJECT_CLOSING_SYNC.processed+' de '+PROJECT_CLOSING_SYNC.total+' · '+PROJECT_CLOSING_SYNC.errors+' erro(s)') : escapeHtml(PROJECT_CLOSING_SYNC.error))+'</div>' : '';
-  var stopSyncButton = PROJECT_CLOSING_SYNC.active ? '<button class="project-link-btn warn" onclick="return projectClosingStopSync(this)">Parar</button>' : '';
-  var syncBox = AUTH_STATE.user && AUTH_STATE.user.role === 'admin' ? '<div class="closing-filter-block"><div class="closing-filter-footer" style="margin-top:0">'+syncProgress+stopSyncButton+'<button class="btn-syncall" '+(PROJECT_CLOSING_SYNC.active?'disabled':'')+' onclick="return projectClosingStartSync(this)">'+syncLabel+'</button></div></div>' : '';
-  var backendWarning = PROJECT_CLOSING_DECISIONS.backendReady === false ? '<div class="dashx-inline-note" style="margin-bottom:12px"><strong>Apps Script desatualizado:</strong> implante uma nova versão do Web App para habilitar Aprovar e Reprovar.</div>' : '';
+  var syncLabel = PROJECT_CLOSING_CANDIDATES.loading || PROJECT_CLOSING_SYNC.active ? 'Buscando...' : 'Buscar no ClickUp';
+  var syncProgress = PROJECT_CLOSING_CANDIDATES.loading || PROJECT_CLOSING_SYNC.active || PROJECT_CLOSING_CANDIDATES.error || PROJECT_CLOSING_SYNC.error
+    ? '<div class="closing-project-meta" style="margin-right:auto">'+(PROJECT_CLOSING_CANDIDATES.loading || PROJECT_CLOSING_SYNC.active ? 'Consulta direta em andamento · somente Break Off + Entrega + APROVAR' : escapeHtml(PROJECT_CLOSING_CANDIDATES.error || PROJECT_CLOSING_SYNC.error))+'</div>'
+    : (PROJECT_CLOSING_CANDIDATES.generated_at ? '<div class="closing-project-meta" style="margin-right:auto">Última busca direta: '+escapeHtml(formatarDataHoraProjeto(PROJECT_CLOSING_CANDIDATES.generated_at))+'</div>' : '');
+  var stopSyncButton = PROJECT_CLOSING_CANDIDATES.loading || PROJECT_CLOSING_SYNC.active ? '<button class="project-link-btn warn" onclick="return projectClosingStopSync(this)">Parar</button>' : '';
+  var syncBox = AUTH_STATE.user && AUTH_STATE.user.role === 'admin' ? '<div class="closing-filter-block"><div class="closing-filter-footer" style="margin-top:0">'+syncProgress+stopSyncButton+'<button class="btn-syncall" '+(PROJECT_CLOSING_SYNC.active || PROJECT_CLOSING_CANDIDATES.loading?'disabled':'')+' onclick="return projectClosingStartSync(this)">'+syncLabel+'</button></div></div>' : '';
+  var backendWarning = PROJECT_CLOSING_DECISIONS.backendReady === false || PROJECT_CLOSING_CANDIDATES.backendReady === false ? '<div class="dashx-inline-note" style="margin-bottom:12px"><strong>Apps Script desatualizado:</strong> implante uma nova versão do Web App para habilitar a busca direta de Fech. Projeto.</div>' : '';
   box.innerHTML = '<div class="closing-head"><div><div class="closing-title">Fechamento de projeto</div><div class="closing-sub">Controle separado dos marcos e sem corte de ano. Aqui entram somente projetos que atendem às três condições do ClickUp.</div></div></div>'+
-    '<div class="dashx-inline-note" style="margin-bottom:12px"><strong>Fluxo:</strong> APROVAR envia o projeto para Em avaliação. Aprovar muda a Fase 8 para APROVADO GESTÃO; Reprovar muda para REPROVADO GESTÃO. Somente a aprovação final gera R$ 80 no relatório. O controle da Lais aparece apenas como divergência.</div>'+
+    '<div class="dashx-inline-note" style="margin-bottom:12px"><strong>Fonte desta guia:</strong> busca direta no ClickUp por Break Off/Fase 8 com flag Entrega e status APROVAR. Não usa nem reprocessa a base de Fechamento de Marcos. Aprovar muda a Fase 8 para APROVADO GESTÃO; Reprovar muda para REPROVADO GESTÃO.</div>'+
     syncBox+backendWarning+
     '<div class="closing-kpis"><div class="closing-kpi warn"><span>Em avaliação</span><strong>'+pending.length+'</strong></div><div class="closing-kpi good"><span>Aprovados</span><strong>'+approved.length+'</strong></div><div class="closing-kpi bad"><span>Reprovados</span><strong>'+rejected.length+'</strong></div><div class="closing-kpi warn"><span>Divergências controle</span><strong>'+divergences.length+'</strong></div><div class="closing-kpi bonus"><span>Bônus aprovado</span><strong>'+fechamentoMoney(approved.length * 80)+'</strong></div></div>'+
     '<div class="bonus-section"><div class="bonus-section-title">Gerenciador de fechamento de projeto</div>'+table+'</div>';
@@ -6942,6 +7049,7 @@ function bonusLoad() {
   initBonus();
   fechamentoLoad(false);
   projectClosingLoadDecisions(false);
+  projectClosingLoadCandidates(false);
   consultantCompensationLoad(false);
   bonusLoadIndications(false);
   if(CMAX_DAILY_STATE.month!==month) {
@@ -6953,7 +7061,7 @@ function bonusLoad() {
 }
 function bonusRefresh(btn) {
   if(btn){btn.disabled=true;btn.textContent='Atualizando...';}
-  Promise.all([fechamentoLoad(true),projectClosingLoadDecisions(true),bonusLoadIndications(true)]).then(function(){
+  Promise.all([fechamentoLoad(true),projectClosingLoadDecisions(true),projectClosingLoadCandidates(true),bonusLoadIndications(true)]).then(function(){
     carregarDiariasCmax(true);
     setTimeout(function(){
       initBonus();
