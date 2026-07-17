@@ -6119,6 +6119,45 @@ function projectClosingMergeCandidates(items) {
   });
   PROJECT_CLOSING_CANDIDATES.items = merged;
 }
+function projectClosingCandidatesFromSavedJson() {
+  var seen = {};
+  var out = [];
+  (DATA.projetos || []).forEach(function(project) {
+    projectClosingDeliveryItemsFromJson(project).forEach(function(item) {
+      var itemId = String(item && (item.id || item.task_id || '')).trim();
+      var projectKey = String(project && (project.project_key || montarProjectKeyClickup(project)) || '').trim();
+      var key = itemId || projectKey;
+      if (!key || seen[key]) return;
+      seen[key] = true;
+      out.push({
+        project_key: projectKey,
+        project_name: project && project.cliente || 'Projeto ClickUp',
+        consultant: project && project.consultor || '',
+        item_id: itemId,
+        item_name: item && (item.nome || item.marco || item.name) || 'Fase 8 - Break Off',
+        item_status: item && (item.status_original || item.status || item.status_atual || item.fase_status_original) || 'APROVAR',
+        phase_name: item && (item.fase_nome || item.fase || item.phase || item.nome || item.name) || 'Fase 8 - Break Off',
+        phase_status: item && item.fase_status_original || '',
+        item_url: item && (item.task_url || item.url || item.link) || project && (project.projeto_link || project.link_projeto) || '',
+        marcador_entrega: 'sim',
+        updated_at: item && item.updated_at || '',
+        source: 'clickup_json_planilha'
+      });
+    });
+  });
+  return out;
+}
+function projectClosingAllCandidates() {
+  var seen = {};
+  var out = [];
+  projectClosingCandidatesFromSavedJson().concat(PROJECT_CLOSING_CANDIDATES.items || []).forEach(function(item) {
+    var key = String(item && (item.item_id || item.project_key || '')).trim();
+    if (!key || seen[key]) return;
+    seen[key] = true;
+    out.push(item);
+  });
+  return out;
+}
 function projectClosingLoadCandidates(force) {
   if (!authTokenParam() || PROJECT_CLOSING_CANDIDATES.loading || (PROJECT_CLOSING_CANDIDATES.loaded && !force)) return Promise.resolve(null);
   var scanToken = Date.now();
@@ -6423,7 +6462,7 @@ function projectClosingClickUpDecision(project, info) {
 function projectClosingList() {
   var entries = [];
   var seen = {};
-  (PROJECT_CLOSING_CANDIDATES.items || []).forEach(function(candidate) {
+  projectClosingAllCandidates().forEach(function(candidate) {
     var project = projectClosingProjectFromCandidate(candidate);
     var info = projectClosingInfoFromCandidate(candidate);
     var decision = projectClosingDecisionFor(project, candidate.item_id);
@@ -6488,11 +6527,11 @@ function initProjectClosing() {
   }
   var table = '<div class="dashx-table-wrap"><table class="dashx-table"><thead><tr><th>Projeto</th><th>Consultor</th><th>Controle Lais</th><th>Status Fase 8</th><th>Decisão do fechamento</th><th>Divergência controle</th><th>Fonte</th><th>Ação</th></tr></thead><tbody>'+rows(pending.concat(approved).concat(rejected))+'</tbody></table></div>';
   var syncLabel = PROJECT_CLOSING_CANDIDATES.loading || PROJECT_CLOSING_SYNC.active ? 'Buscando...' : 'Buscar no ClickUp';
-  var progressText = 'Consulta direta em andamento · '+Number(PROJECT_CLOSING_SYNC.processed || 0)+'/'+Number(PROJECT_CLOSING_SYNC.total || 0)+' projetos varridos · '+Number((PROJECT_CLOSING_CANDIDATES.items || []).length)+' candidato(s)';
+  var progressText = 'Consulta direta em andamento · '+Number(PROJECT_CLOSING_SYNC.processed || 0)+'/'+Number(PROJECT_CLOSING_SYNC.total || 0)+' projetos varridos · '+Number(projectClosingAllCandidates().length)+' candidato(s)';
   if (PROJECT_CLOSING_SYNC.errors) progressText += ' · '+Number(PROJECT_CLOSING_SYNC.errors)+' projeto(s) com erro';
   var syncProgress = PROJECT_CLOSING_CANDIDATES.loading || PROJECT_CLOSING_SYNC.active || PROJECT_CLOSING_CANDIDATES.error || PROJECT_CLOSING_SYNC.error
     ? '<div class="closing-project-meta" style="margin-right:auto">'+(PROJECT_CLOSING_CANDIDATES.loading || PROJECT_CLOSING_SYNC.active ? escapeHtml(progressText) : escapeHtml(PROJECT_CLOSING_CANDIDATES.error || PROJECT_CLOSING_SYNC.error))+'</div>'
-    : (PROJECT_CLOSING_CANDIDATES.generated_at ? '<div class="closing-project-meta" style="margin-right:auto">Última busca direta: '+escapeHtml(formatarDataHoraProjeto(PROJECT_CLOSING_CANDIDATES.generated_at))+' · '+Number((PROJECT_CLOSING_CANDIDATES.items || []).length)+' candidato(s)</div>' : '');
+    : (PROJECT_CLOSING_CANDIDATES.generated_at ? '<div class="closing-project-meta" style="margin-right:auto">Última busca direta: '+escapeHtml(formatarDataHoraProjeto(PROJECT_CLOSING_CANDIDATES.generated_at))+' · '+Number(projectClosingAllCandidates().length)+' candidato(s)</div>' : '<div class="closing-project-meta" style="margin-right:auto">Base salva: '+Number(projectClosingAllCandidates().length)+' candidato(s)</div>');
   var stopSyncButton = PROJECT_CLOSING_CANDIDATES.loading || PROJECT_CLOSING_SYNC.active ? '<button class="project-link-btn warn" onclick="return projectClosingStopSync(this)">Parar</button>' : '';
   var syncBox = AUTH_STATE.user && AUTH_STATE.user.role === 'admin' ? '<div class="closing-filter-block"><div class="closing-filter-footer" style="margin-top:0">'+syncProgress+stopSyncButton+'<button class="btn-syncall" '+(PROJECT_CLOSING_SYNC.active || PROJECT_CLOSING_CANDIDATES.loading?'disabled':'')+' onclick="return projectClosingStartSync(this)">'+syncLabel+'</button></div></div>' : '';
   var backendWarning = PROJECT_CLOSING_DECISIONS.backendReady === false || PROJECT_CLOSING_CANDIDATES.backendReady === false ? '<div class="dashx-inline-note" style="margin-bottom:12px"><strong>Apps Script desatualizado:</strong> implante uma nova versão do Web App para habilitar a busca direta de Fech. Projeto.</div>' : '';
