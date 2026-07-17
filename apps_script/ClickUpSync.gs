@@ -2734,26 +2734,123 @@ function projectClosingCandidateFromTask_(task, mappings) {
   };
 }
 
+function projectClosingCandidateSourceKey_(mapping) {
+  if (!mapping) return '';
+  if (mapping.list_id) return 'list|' + mapping.list_id;
+  if (mapping.view_id) return 'view|' + mapping.view_id;
+  if (mapping.folder_id) return 'folder|' + mapping.folder_id;
+  if (mapping.space_id) return 'space|' + mapping.space_id + '|' + normalizeKey_(mapping.cliente);
+  return normalizeProjectKey_(mapping.project_key || buildProjectKey_(mapping.mes, mapping.cliente));
+}
+
+function loadProjectClosingCandidateMappings_() {
+  var seen = {};
+  var out = [];
+  loadProjectSyncMappings_().forEach(function(mapping) {
+    if (!mapping || !mapping.enabled) return;
+    if (!(mapping.list_id || mapping.view_id || mapping.folder_id || mapping.space_id || mapping.project_url)) return;
+    var key = projectClosingCandidateSourceKey_(mapping);
+    if (!key || seen[key]) return;
+    seen[key] = true;
+    out.push(mapping);
+  });
+  return out;
+}
+
+function projectClosingCandidateFromNormalizedItem_(mapping, normalized, item) {
+  var projectKey = sanitizeText_(normalized && normalized.project_key || mapping && mapping.project_key || '') ||
+    normalizeProjectKey_(buildProjectKey_(mapping && mapping.mes || '', mapping && mapping.cliente || '')) ||
+    ('CLICKUP|' + sanitizeText_(item && item.id));
+  var projectName = sanitizeText_(normalized && normalized.cliente || mapping && mapping.cliente) ||
+    'Projeto ClickUp';
+  var consultant = sanitizeText_(normalized && normalized.consultor || mapping && mapping.consultor || item && item.responsaveis);
+  var itemId = sanitizeText_(item && item.id);
+  return {
+    project_key: projectKey,
+    project_name: projectName,
+    consultant: consultant,
+    item_id: itemId,
+    item_name: sanitizeText_(item && item.nome) || 'Fase 8 - Break Off',
+    item_status: sanitizeText_(item && item.status_original) || 'APROVAR',
+    phase_name: sanitizeText_(item && item.fase_nome) || sanitizeText_(item && item.nome),
+    phase_status: sanitizeText_(item && item.fase_status_original),
+    item_url: sanitizeText_(item && item.task_url) || (itemId ? ('https://app.clickup.com/t/' + itemId) : ''),
+    list_id: sanitizeText_(mapping && mapping.list_id || normalized && normalized.list_id),
+    folder_id: sanitizeText_(mapping && mapping.folder_id),
+    space_id: sanitizeText_(mapping && mapping.space_id),
+    marcador_entrega: 'sim',
+    updated_at: sanitizeText_(item && item.updated_at),
+    project_closing_rule_version: CLICKUP_PROJECT_CLOSING_RULE_VERSION
+  };
+}
+
+function projectClosingCandidatesFromMapping_(mapping, options) {
+  var normalized = buildNormalizedProjectFromClickUp_(mapping, options || {});
+  var seen = {};
+  var source = []
+    .concat(normalized && normalized.marcos || [])
+    .concat(normalized && normalized.tasks || []);
+  return source.filter(function(item) {
+    if (!item || !item.id || seen[item.id]) return false;
+    if (!isProjectClosingDeliveryItem_(item, item.fase_nome || item.nome, {
+      status_original: item.fase_status_original || item.status_original,
+      marcador_entrega: item.marcador_entrega,
+      custom_item_id: item.custom_item_id,
+      custom_item_name: item.custom_item_name
+    })) return false;
+    seen[item.id] = true;
+    return true;
+  }).map(function(item) {
+    return projectClosingCandidateFromNormalizedItem_(mapping, normalized, item);
+  });
+}
+
 function getProjectClosingCandidates_(params) {
   requireUser_(params || {});
   var started = new Date();
-  var maxPages = Math.max(1, Math.min(toInt_((params || {}).max_pages, 10), 10));
-  var mappings = loadProjectSyncMappings_();
-  var tasks = fetchClickUpProjectClosingApprovalTasks_({ max_pages: maxPages });
+  var mappings = loadProjectClosingCandidateMappings_();
+  var offset = Math.max(0, toInt_((params || {}).offset, 0));
+  var limit = Math.max(1, Math.min(toInt_((params || {}).limit, 4), 8));
+  var timeoutMs = Math.max(8000, Math.min(toInt_((params || {}).timeout_ms, 25000), 45000));
+  var deadline = new Date().getTime() + timeoutMs;
+  var batch = mappings.slice(offset, offset + limit);
   var seen = {};
-  var items = tasks.map(function(task) {
-    return projectClosingCandidateFromTask_(task, mappings);
-  }).filter(function(item) {
-    if (!item.item_id) return false;
-    if (seen[item.item_id]) return false;
-    seen[item.item_id] = true;
-    return true;
+  var errors = [];
+  var items = [];
+  batch.forEach(function(mapping) {
+    try {
+      projectClosingCandidatesFromMapping_(mapping, {
+        force: true,
+        deadline_ms: deadline
+      }).forEach(function(item) {
+        var key = sanitizeText_(item && item.item_id) || sanitizeText_(item && item.project_key);
+        if (!key || seen[key]) return;
+        seen[key] = true;
+        items.push(item);
+      });
+    } catch (error) {
+      errors.push({
+        project_key: sanitizeText_(mapping && mapping.project_key),
+        project_name: sanitizeText_(mapping && mapping.cliente),
+        error: simplifyErrorMessage_(error)
+      });
+    }
   });
+  var nextOffset = Math.min(mappings.length, offset + batch.length);
   return {
     ok: true,
-    source: 'clickup_direct_project_closing',
+    source: 'clickup_project_closing_project_batch',
     project_closing_rule_version: CLICKUP_PROJECT_CLOSING_RULE_VERSION,
-    total: items.length,
+    offset: offset,
+    limit: limit,
+    processed: nextOffset,
+    total: mappings.length,
+    next_offset: nextOffset,
+    has_more: nextOffset < mappings.length,
+    done: nextOffset >= mappings.length,
+    scanned: batch.length,
+    errors: errors.length,
+    error_details: errors.slice(0, 20),
     items: items,
     generated_at: started.toISOString()
   };
