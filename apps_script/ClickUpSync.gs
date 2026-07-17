@@ -30,7 +30,7 @@ var CLICKUP_DEFAULT_WORKSPACE_ID = '9007083069';
 var CLICKUP_MILESTONE_BONUS_VALUE = 30;
 var CLICKUP_PROJECT_CLOSING_BONUS_VALUE = 80;
 var CLICKUP_PROJECT_CLOSING_BONUS_START = '2026-06-15';
-var CLICKUP_PROJECT_CLOSING_RULE_VERSION = 'breakoff-entrega-id-aprovar-v9';
+var CLICKUP_PROJECT_CLOSING_RULE_VERSION = 'breakoff-entrega-id-aprovar-v10';
 var CLICKUP_PROJECT_DELIVERY_CUSTOM_ITEM_IDS = ['1001'];
 var CLICKUP_MILESTONE_AUDIT_TASK_IDS = [];
 var CLICKUP_MILESTONE_CLOSING_SCHEMA_VERSION = 'strict-milestones-v2';
@@ -2899,26 +2899,25 @@ function getProjectClosingCandidates_(params) {
   var errors = [];
   var allCandidates = projectClosingDirectApprovalCandidates_(errors)
     .concat(projectClosingSavedBreakOffCandidates_());
-  var savedCandidates = [];
+  var uniqueCandidates = [];
   var allSeen = {};
   allCandidates.forEach(function(item) {
     var key = sanitizeText_(item && item.item_id) || sanitizeText_(item && item.project_key);
     if (!key || allSeen[key]) return;
     allSeen[key] = true;
-    savedCandidates.push(item);
+    uniqueCandidates.push(item);
   });
   var offset = Math.max(0, toInt_((params || {}).offset, 0));
   var limit = Math.max(1, Math.min(toInt_((params || {}).limit, 50), 100));
-  var batch = savedCandidates.slice(offset, offset + limit);
   var seen = {};
   var refreshed = [];
   try {
-    refreshed = refreshProjectClosingCandidatesByTaskId_(batch);
+    refreshed = refreshProjectClosingCandidatesByTaskId_(uniqueCandidates);
   } catch (error) {
     errors.push({ project_name: 'Atualizacao direta por ID', error: simplifyErrorMessage_(error) });
-    refreshed = batch;
+    refreshed = uniqueCandidates;
   }
-  var items = refreshed.filter(function(item) {
+  var eligible = refreshed.filter(function(item) {
     if (!isProjectClosingApprovalStatus_(item && item.item_status) &&
         !isProjectClosingApprovalStatus_(item && item.phase_status)) return false;
     var key = sanitizeText_(item && item.item_id) || sanitizeText_(item && item.project_key);
@@ -2926,7 +2925,8 @@ function getProjectClosingCandidates_(params) {
     seen[key] = true;
     return true;
   });
-  var nextOffset = Math.min(savedCandidates.length, offset + batch.length);
+  var items = eligible.slice(offset, offset + limit);
+  var nextOffset = Math.min(eligible.length, offset + items.length);
   return {
     ok: true,
     source: 'clickup_project_closing_direct_approval',
@@ -2934,11 +2934,11 @@ function getProjectClosingCandidates_(params) {
     offset: offset,
     limit: limit,
     processed: nextOffset,
-    total: savedCandidates.length,
+    total: eligible.length,
+    scanned: uniqueCandidates.length,
     next_offset: nextOffset,
-    has_more: nextOffset < savedCandidates.length,
-    done: nextOffset >= savedCandidates.length,
-    scanned: batch.length,
+    has_more: nextOffset < eligible.length,
+    done: nextOffset >= eligible.length,
     errors: errors.length,
     error_details: errors.slice(0, 20),
     items: items,

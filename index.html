@@ -6178,8 +6178,8 @@ function projectClosingLoadCandidates(force) {
       auth_token: authTokenParam(),
       offset: String(offset || 0),
       limit: '50',
-      timeout_ms: '25000'
-    }, 35000).then(function(resp) {
+      timeout_ms: '150000'
+    }, 180000).then(function(resp) {
       if (PROJECT_CLOSING_CANDIDATES.scanToken !== scanToken) return null;
       if (resp && resp.service === 'clickup-sync' && !Array.isArray(resp.items)) {
         PROJECT_CLOSING_CANDIDATES.backendReady = false;
