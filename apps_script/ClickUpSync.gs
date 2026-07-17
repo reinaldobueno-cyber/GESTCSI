@@ -32,6 +32,9 @@ var CLICKUP_PROJECT_CLOSING_BONUS_VALUE = 80;
 var CLICKUP_PROJECT_CLOSING_BONUS_START = '2026-06-15';
 var CLICKUP_PROJECT_CLOSING_RULE_VERSION = 'breakoff-entrega-id-aprovar-v7';
 var CLICKUP_PROJECT_DELIVERY_CUSTOM_ITEM_IDS = ['1001'];
+var CLICKUP_PROJECT_LINK_OVERRIDES = {
+  'REGINA FATIMA GARCIA FERREIRA': 'https://app.clickup.com/9007083069/v/l/8cdubhx-142713'
+};
 var CLICKUP_MILESTONE_AUDIT_TASK_IDS = [];
 var CLICKUP_MILESTONE_CLOSING_SCHEMA_VERSION = 'strict-milestones-v2';
 var MONTHS = ['JAN', 'FEV', 'MAR', 'ABR', 'MAI', 'JUN', 'JUL', 'AGO', 'SET', 'OUT', 'NOV', 'DEZ'];
@@ -2805,6 +2808,71 @@ function projectClosingCandidatesFromMapping_(mapping, options) {
   });
 }
 
+function getClickUpProjectLinkOverride_(cliente) {
+  var key = normalizeKey_(cliente);
+  return getClickUpProjectLinkOverrides_()[key] || '';
+}
+
+function getClickUpProjectLinkOverrides_() {
+  var out = {};
+  Object.keys(CLICKUP_PROJECT_LINK_OVERRIDES || {}).forEach(function(name) {
+    var key = normalizeKey_(name);
+    var value = sanitizeText_(CLICKUP_PROJECT_LINK_OVERRIDES[name]);
+    if (key && value) out[key] = value;
+  });
+  var raw = sanitizeText_(getScriptProperty_('CLICKUP_PROJECT_LINK_OVERRIDES_JSON', ''));
+  if (!raw) return out;
+  try {
+    var parsed = JSON.parse(raw);
+    Object.keys(parsed || {}).forEach(function(name) {
+      var key = normalizeKey_(name);
+      var value = sanitizeText_(parsed[name]);
+      if (key && value) out[key] = value;
+    });
+  } catch (error) {}
+  return out;
+}
+
+function applyClickUpProjectLinkOverride_(project) {
+  var overrideUrl = getClickUpProjectLinkOverride_(project && project.cliente);
+  if (!overrideUrl) return project;
+  var copy = {};
+  Object.keys(project || {}).forEach(function(key) { copy[key] = project[key]; });
+  copy.project_url = overrideUrl;
+  copy.link_projeto = overrideUrl;
+  copy.projeto_link = overrideUrl;
+  copy.view_id = extractClickUpIdFromUrl_(overrideUrl, 'view');
+  copy.list_id = extractClickUpIdFromUrl_(overrideUrl, 'list');
+  copy.folder_id = '';
+  copy.space_id = '';
+  return copy;
+}
+
+function projectClosingOverrideCandidates_() {
+  var out = [];
+  var seen = {};
+  MONTHS.forEach(function(month) {
+    try {
+      getMonthlyProjectsFromSheet_(month).forEach(function(project) {
+        if (!getClickUpProjectLinkOverride_(project && project.cliente)) return;
+        var mapping = projectMappingFromConfigItem_(Object.assign({}, applyClickUpProjectLinkOverride_(project), {
+          enabled: true,
+          mes: month,
+          project_key: buildProjectKey_(month, project.cliente) + '|ROW|' + String(project._sheet_row || '')
+        }));
+        if (!mapping || !(mapping.list_id || mapping.view_id || mapping.folder_id || mapping.space_id)) return;
+        projectClosingCandidatesFromMapping_(mapping, { force: true }).forEach(function(item) {
+          var key = sanitizeText_(item && item.item_id) || sanitizeText_(item && item.project_key);
+          if (!key || seen[key]) return;
+          seen[key] = true;
+          out.push(item);
+        });
+      });
+    } catch (error) {}
+  });
+  return out;
+}
+
 function projectClosingSavedBreakOffCandidates_() {
   var seen = {};
   var out = [];
@@ -2877,7 +2945,7 @@ function refreshProjectClosingCandidatesByTaskId_(candidates) {
 function getProjectClosingCandidates_(params) {
   requireUser_(params || {});
   var started = new Date();
-  var savedCandidates = projectClosingSavedBreakOffCandidates_();
+  var savedCandidates = projectClosingSavedBreakOffCandidates_().concat(projectClosingOverrideCandidates_());
   var offset = Math.max(0, toInt_((params || {}).offset, 0));
   var limit = Math.max(1, Math.min(toInt_((params || {}).limit, 50), 100));
   var batch = savedCandidates.slice(offset, offset + limit);
@@ -5811,6 +5879,7 @@ function loadProjectSyncMappings_() {
 
   function addProject(project) {
     if (!project || !monthlyProjectExpectsClickUpSummary_(project)) return;
+    project = applyClickUpProjectLinkOverride_(project);
     var rowKey = [sanitizeMonth_(project.mes), String(project._sheet_row || ''), normalizeKey_(project.cliente)].join('|');
     if (seenRows[rowKey]) return;
     var match = findDiagnosticMappingForProject_(project, configMappings);
@@ -5848,6 +5917,7 @@ function loadMonthlyProjectLinkMappings_() {
   MONTHS.forEach(function(month) {
     try {
       getMonthlyProjectsFromSheet_(month).forEach(function(project) {
+        project = applyClickUpProjectLinkOverride_(project);
         var projectUrl = sanitizeText_(project && (project.link_projeto || project.projeto_link));
         if (!projectUrl || !isRecognizedClickUpSourceUrl_(projectUrl)) return;
         var rowKey = String(project._sheet_row || '').trim();
