@@ -3879,16 +3879,30 @@ var UPDATE_DEVICE_KEY = 'gestcsi_update_device_id_v1';
 var UPDATE_ACTOR_KEY = 'gestcsi_update_actor_v1';
 var LAST_UPDATE_KEY = 'gestcsi_last_update_label_v1';
 var PANEL_CACHE_KEY = 'gestcsi_panel_cache_v2';
-var PANEL_APP_VERSION = '2026-07-16-portfolio-186-v1';
+var PANEL_APP_VERSION = '2026-07-17-dynamic-portfolio-total-v1';
+var PANEL_EXPECTED_TOTAL_KEY = 'gestcsi_portfolio_expected_total_v1';
 var THEME_MODE_KEY = 'gestcsi_theme_mode_v1';
 var AUTH_SESSION_KEY = 'gestcsi_auth_session_v1';
 var AUTH_STATE = { token:'', user:null };
 var PANEL_STARTED = false;
 var PANEL_CACHE_MIN_PROJECTS = 80;
 var PANEL_MIN_2026_PROJECTS = 186;
-function painelMinimoCarteiraAtual() {
+function painelMinimoCarteiraBase() {
   var now = new Date();
   return now.getFullYear() === 2026 ? PANEL_MIN_2026_PROJECTS : PANEL_CACHE_MIN_PROJECTS;
+}
+function painelMinimoCarteiraAtual() {
+  var salvo = Number(storageGet(PANEL_EXPECTED_TOTAL_KEY, '0')) || 0;
+  return Math.max(painelMinimoCarteiraBase(), salvo);
+}
+function painelRegistrarTotalCarteira(total, fonte) {
+  var valor = Number(total || 0);
+  var atual = painelMinimoCarteiraAtual();
+  if (valor > atual) {
+    storageSet(PANEL_EXPECTED_TOTAL_KEY, String(valor));
+    console.warn('[CARTEIRA] Novo total esperado aprendido:', valor, 'fonte:', fonte || '-');
+  }
+  return painelMinimoCarteiraAtual();
 }
 function painelCarteiraCompleta(list) {
   return Array.isArray(list) && list.length >= painelMinimoCarteiraAtual();
@@ -4112,6 +4126,7 @@ function persistirPainelCache(projetos, info) {
     console.warn('[CACHE] Cache parcial nao salvo:', lista.length, 'mínimo:', painelMinimoCarteiraAtual());
     return false;
   }
+  painelRegistrarTotalCarteira(lista.length, info && info.fonte || 'cache');
   var atual = carregarPainelCache();
   if (atual && atual.projetos && atual.projetos.length > lista.length) {
     console.warn('[CACHE] Carga menor ignorada para preservar cache mais completo:', lista.length, 'vs', atual.projetos.length);
@@ -15593,16 +15608,23 @@ function loadAll(tipoAtualizacao) {
         return chamarAppsScriptJsonp('getMonthlyProjects', {mes:mes}, 18000).then(function(respMes){
           var rows = respMes && Array.isArray(respMes.projetos) ? respMes.projetos : [];
           console.log('[INIT] Apps Script '+mes+': '+rows.length+' projeto(s).');
-          return rows;
+          return {mes: mes, ok: true, rows: rows};
         }).catch(function(errorMes){
           console.warn('[INIT] Apps Script falhou no mês '+mes+':', errorMes);
-          return [];
+          return {mes: mes, ok: false, rows: []};
         });
       })).then(function(partes){
         var apiProjetos = [];
-        partes.forEach(function(rows){ apiProjetos = apiProjetos.concat(rows || []); });
+        var falhasMes = [];
+        partes.forEach(function(parte){
+          if (!parte || !parte.ok) falhasMes.push(parte && parte.mes || '?');
+          apiProjetos = apiProjetos.concat(parte && parte.rows || []);
+        });
+        if (!falhasMes.length && apiProjetos.length >= PANEL_CACHE_MIN_PROJECTS) {
+          painelRegistrarTotalCarteira(apiProjetos.length, 'apps_script_monthly');
+        }
         var combinados = fallbackProjetos.length ? mesclarComPlanilha(apiProjetos) : apiProjetos;
-        console.log('[INIT] Apps Script mensal combinado: '+combinados.length+' projeto(s); API '+apiProjetos.length+', fallback '+fallbackProjetos.length+'.');
+        console.log('[INIT] Apps Script mensal combinado: '+combinados.length+' projeto(s); API '+apiProjetos.length+', fallback '+fallbackProjetos.length+', falhas '+(falhasMes.join(', ') || 'nenhuma')+'.');
         if (painelCarteiraCompleta(combinados)) {
           _finalizarLoad(combinados, isRefresh, fallbackProjetos.length ? 'apps_script_monthly_merged' : 'apps_script_monthly', window._lastUpdateTrigger);
           return true;
@@ -15630,12 +15652,22 @@ function loadAll(tipoAtualizacao) {
             buscarAppsScriptPorMes('apps_script_all_parcial');
             return;
           }
+          if (combinados.length > painelMinimoCarteiraAtual()) {
+            console.warn('[INIT] Apps Script ALL sugeriu novo total ('+combinados.length+'). Confirmando mês a mês antes de salvar.');
+            buscarAppsScriptPorMes('apps_script_all_new_total');
+            return;
+          }
           _finalizarLoad(combinados, isRefresh, 'sheet_direct_merged', window._lastUpdateTrigger);
           return;
         }
         if (!painelCarteiraCompleta(resp.projetos)) {
           console.warn('[INIT] Apps Script ALL retornou base parcial ('+qtd+'). Tentando mês a mês.');
           buscarAppsScriptPorMes('apps_script_all_parcial_sem_fallback');
+          return;
+        }
+        if (qtd > painelMinimoCarteiraAtual()) {
+          console.warn('[INIT] Apps Script ALL sugeriu novo total ('+qtd+'). Confirmando mês a mês antes de salvar.');
+          buscarAppsScriptPorMes('apps_script_all_new_total_sem_fallback');
           return;
         }
         _finalizarLoad(resp.projetos, isRefresh, 'apps_script', window._lastUpdateTrigger);
@@ -15660,6 +15692,11 @@ function loadAll(tipoAtualizacao) {
         if (!painelCarteiraCompleta(projetosDiretos)) {
           console.warn('[INIT] Leitura direta abaixo do minimo esperado ('+projetosDiretos.length+'/'+painelMinimoCarteiraAtual()+'). Tentando fallback sem substituir base completa.');
           buscarViaAppsScript(projetosDiretos, 'sheet_direct_partial');
+          return;
+        }
+        if (new Date().getFullYear() === 2026) {
+          console.log('[INIT] Leitura direta plausivel ('+projetosDiretos.length+'), confirmando total atual via Apps Script antes de salvar cache.');
+          buscarViaAppsScript(projetosDiretos, 'sheet_direct_verify');
           return;
         }
         console.log('[INIT] Leitura direta completa pela planilha mensal; esta e a fonte oficial da carteira.');
