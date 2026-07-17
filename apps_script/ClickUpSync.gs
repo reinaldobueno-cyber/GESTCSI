@@ -30,11 +30,8 @@ var CLICKUP_DEFAULT_WORKSPACE_ID = '9007083069';
 var CLICKUP_MILESTONE_BONUS_VALUE = 30;
 var CLICKUP_PROJECT_CLOSING_BONUS_VALUE = 80;
 var CLICKUP_PROJECT_CLOSING_BONUS_START = '2026-06-15';
-var CLICKUP_PROJECT_CLOSING_RULE_VERSION = 'breakoff-entrega-id-aprovar-v7';
+var CLICKUP_PROJECT_CLOSING_RULE_VERSION = 'breakoff-entrega-id-aprovar-v8';
 var CLICKUP_PROJECT_DELIVERY_CUSTOM_ITEM_IDS = ['1001'];
-var CLICKUP_PROJECT_LINK_OVERRIDES = {
-  'REGINA FATIMA GARCIA FERREIRA': 'https://app.clickup.com/9007083069/v/l/8cdubhx-142713'
-};
 var CLICKUP_MILESTONE_AUDIT_TASK_IDS = [];
 var CLICKUP_MILESTONE_CLOSING_SCHEMA_VERSION = 'strict-milestones-v2';
 var MONTHS = ['JAN', 'FEV', 'MAR', 'ABR', 'MAI', 'JUN', 'JUL', 'AGO', 'SET', 'OUT', 'NOV', 'DEZ'];
@@ -2808,71 +2805,6 @@ function projectClosingCandidatesFromMapping_(mapping, options) {
   });
 }
 
-function getClickUpProjectLinkOverride_(cliente) {
-  var key = normalizeKey_(cliente);
-  return getClickUpProjectLinkOverrides_()[key] || '';
-}
-
-function getClickUpProjectLinkOverrides_() {
-  var out = {};
-  Object.keys(CLICKUP_PROJECT_LINK_OVERRIDES || {}).forEach(function(name) {
-    var key = normalizeKey_(name);
-    var value = sanitizeText_(CLICKUP_PROJECT_LINK_OVERRIDES[name]);
-    if (key && value) out[key] = value;
-  });
-  var raw = sanitizeText_(getScriptProperty_('CLICKUP_PROJECT_LINK_OVERRIDES_JSON', ''));
-  if (!raw) return out;
-  try {
-    var parsed = JSON.parse(raw);
-    Object.keys(parsed || {}).forEach(function(name) {
-      var key = normalizeKey_(name);
-      var value = sanitizeText_(parsed[name]);
-      if (key && value) out[key] = value;
-    });
-  } catch (error) {}
-  return out;
-}
-
-function applyClickUpProjectLinkOverride_(project) {
-  var overrideUrl = getClickUpProjectLinkOverride_(project && project.cliente);
-  if (!overrideUrl) return project;
-  var copy = {};
-  Object.keys(project || {}).forEach(function(key) { copy[key] = project[key]; });
-  copy.project_url = overrideUrl;
-  copy.link_projeto = overrideUrl;
-  copy.projeto_link = overrideUrl;
-  copy.view_id = extractClickUpIdFromUrl_(overrideUrl, 'view');
-  copy.list_id = extractClickUpIdFromUrl_(overrideUrl, 'list');
-  copy.folder_id = '';
-  copy.space_id = '';
-  return copy;
-}
-
-function projectClosingOverrideCandidates_() {
-  var out = [];
-  var seen = {};
-  MONTHS.forEach(function(month) {
-    try {
-      getMonthlyProjectsFromSheet_(month).forEach(function(project) {
-        if (!getClickUpProjectLinkOverride_(project && project.cliente)) return;
-        var mapping = projectMappingFromConfigItem_(Object.assign({}, applyClickUpProjectLinkOverride_(project), {
-          enabled: true,
-          mes: month,
-          project_key: buildProjectKey_(month, project.cliente) + '|ROW|' + String(project._sheet_row || '')
-        }));
-        if (!mapping || !(mapping.list_id || mapping.view_id || mapping.folder_id || mapping.space_id)) return;
-        projectClosingCandidatesFromMapping_(mapping, { force: true }).forEach(function(item) {
-          var key = sanitizeText_(item && item.item_id) || sanitizeText_(item && item.project_key);
-          if (!key || seen[key]) return;
-          seen[key] = true;
-          out.push(item);
-        });
-      });
-    } catch (error) {}
-  });
-  return out;
-}
-
 function projectClosingSavedBreakOffCandidates_() {
   var seen = {};
   var out = [];
@@ -2942,15 +2874,40 @@ function refreshProjectClosingCandidatesByTaskId_(candidates) {
   });
 }
 
+function projectClosingDirectApprovalCandidates_(errors) {
+  var out = [];
+  try {
+    var mappings = loadProjectClosingCandidateMappings_();
+    fetchClickUpProjectClosingApprovalTasks_({ max_pages: 6 }).forEach(function(task) {
+      out.push(projectClosingCandidateFromTask_(task, mappings));
+    });
+  } catch (error) {
+    (errors || []).push({
+      project_name: 'Busca direta APROVAR',
+      error: simplifyErrorMessage_(error)
+    });
+  }
+  return out;
+}
+
 function getProjectClosingCandidates_(params) {
   requireUser_(params || {});
   var started = new Date();
-  var savedCandidates = projectClosingSavedBreakOffCandidates_().concat(projectClosingOverrideCandidates_());
+  var errors = [];
+  var allCandidates = projectClosingDirectApprovalCandidates_(errors)
+    .concat(projectClosingSavedBreakOffCandidates_());
+  var savedCandidates = [];
+  var allSeen = {};
+  allCandidates.forEach(function(item) {
+    var key = sanitizeText_(item && item.item_id) || sanitizeText_(item && item.project_key);
+    if (!key || allSeen[key]) return;
+    allSeen[key] = true;
+    savedCandidates.push(item);
+  });
   var offset = Math.max(0, toInt_((params || {}).offset, 0));
   var limit = Math.max(1, Math.min(toInt_((params || {}).limit, 50), 100));
   var batch = savedCandidates.slice(offset, offset + limit);
   var seen = {};
-  var errors = [];
   var refreshed = [];
   try {
     refreshed = refreshProjectClosingCandidatesByTaskId_(batch);
@@ -2969,7 +2926,7 @@ function getProjectClosingCandidates_(params) {
   var nextOffset = Math.min(savedCandidates.length, offset + batch.length);
   return {
     ok: true,
-    source: 'clickup_project_closing_saved_ids',
+    source: 'clickup_project_closing_direct_approval',
     project_closing_rule_version: CLICKUP_PROJECT_CLOSING_RULE_VERSION,
     offset: offset,
     limit: limit,
@@ -3486,6 +3443,46 @@ function clickUpProjectClosingApprovalStatusAliases_() {
   return ['APROVAR', 'Aprovar', 'aprovar'];
 }
 
+function enrichProjectClosingApprovalTasksWithPhases_(tasks) {
+  tasks = dedupeTasks_(tasks || []);
+  var parentIds = [];
+  var seen = {};
+  tasks.forEach(function(task) {
+    var parentId = normalizeClickUpId_(task && task.parent);
+    if (!parentId || seen[parentId]) return;
+    seen[parentId] = true;
+    parentIds.push(parentId);
+  });
+  var parentsById = {};
+  try {
+    fetchClickUpTasksByIds_(parentIds).forEach(function(parent) {
+      if (parent && parent.id) parentsById[normalizeClickUpId_(parent.id)] = parent;
+    });
+  } catch (error) {}
+  var grandParentIds = [];
+  Object.keys(parentsById).forEach(function(id) {
+    var parentId = normalizeClickUpId_(parentsById[id] && parentsById[id].parent);
+    if (!parentId || seen[parentId]) return;
+    seen[parentId] = true;
+    grandParentIds.push(parentId);
+  });
+  try {
+    fetchClickUpTasksByIds_(grandParentIds).forEach(function(parent) {
+      if (parent && parent.id) parentsById[normalizeClickUpId_(parent.id)] = parent;
+    });
+  } catch (error) {}
+  tasks.forEach(function(task) {
+    var parent = parentsById[normalizeClickUpId_(task && task.parent)] || null;
+    var grandParent = parent ? parentsById[normalizeClickUpId_(parent.parent)] || null : null;
+    var phase = isProjectBreakOffText_(parent && parent.name) ? parent :
+      (isProjectBreakOffText_(grandParent && grandParent.name) ? grandParent : parent);
+    if (!phase) return;
+    task._project_closing_phase_name = sanitizeText_(phase.name);
+    task._project_closing_phase_status = clickUpTaskStatusText_(phase);
+  });
+  return tasks;
+}
+
 function fetchClickUpProjectClosingApprovalTasks_(options) {
   options = options || {};
   var workspaceId = getClickUpWorkspaceId_();
@@ -3503,13 +3500,22 @@ function fetchClickUpProjectClosingApprovalTasks_(options) {
       ].join('&'));
       var batch = response.tasks || [];
       tasks = tasks.concat(batch.filter(function(task) {
-        return isProjectClosingDeliveryItem_(task, sanitizeText_(task && task.list && task.list.name), null);
+        return isProjectDeliveryClosingCandidate_(task);
       }));
       if (batch.length < 100) break;
       Utilities.sleep(250);
     }
   });
-  return dedupeTasks_(tasks);
+  return enrichProjectClosingApprovalTasksWithPhases_(tasks).filter(function(task) {
+    var phaseName = sanitizeText_(task && task._project_closing_phase_name) ||
+      sanitizeText_(task && task.list && task.list.name);
+    return isProjectClosingDeliveryItem_(task, phaseName, {
+      status_original: sanitizeText_(task && task._project_closing_phase_status),
+      marcador_entrega: isProjectDeliveryTask_(task) ? 'sim' : '',
+      custom_item_id: String(task && task.custom_item_id || ''),
+      custom_item_name: clickUpTaskCustomItemName_(task)
+    });
+  });
 }
 
 function syncClickUpProjectClosingApprovalCoverage_() {
@@ -5879,7 +5885,6 @@ function loadProjectSyncMappings_() {
 
   function addProject(project) {
     if (!project || !monthlyProjectExpectsClickUpSummary_(project)) return;
-    project = applyClickUpProjectLinkOverride_(project);
     var rowKey = [sanitizeMonth_(project.mes), String(project._sheet_row || ''), normalizeKey_(project.cliente)].join('|');
     if (seenRows[rowKey]) return;
     var match = findDiagnosticMappingForProject_(project, configMappings);
@@ -5917,7 +5922,6 @@ function loadMonthlyProjectLinkMappings_() {
   MONTHS.forEach(function(month) {
     try {
       getMonthlyProjectsFromSheet_(month).forEach(function(project) {
-        project = applyClickUpProjectLinkOverride_(project);
         var projectUrl = sanitizeText_(project && (project.link_projeto || project.projeto_link));
         if (!projectUrl || !isRecognizedClickUpSourceUrl_(projectUrl)) return;
         var rowKey = String(project._sheet_row || '').trim();
