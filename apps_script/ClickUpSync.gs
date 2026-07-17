@@ -155,6 +155,9 @@ function doGet(e) {
     if (action === 'getProjectClosingCandidates') {
       return jsonOutput_(getProjectClosingCandidates_(params), params.callback);
     }
+    if (action === 'diagnoseProjectClosingCandidateCounts') {
+      return jsonOutput_(diagnoseProjectClosingCandidateCounts_(), params.callback);
+    }
     if (action === 'setProjectClosingDecision') {
       return jsonOutput_(setProjectClosingDecision_(params), params.callback);
     }
@@ -2939,6 +2942,49 @@ function getProjectClosingCandidates_(params) {
     errors: errors.length,
     error_details: errors.slice(0, 20),
     items: items,
+    generated_at: started.toISOString()
+  };
+}
+
+function diagnoseProjectClosingCandidateCounts_() {
+  var started = new Date();
+  var errors = [];
+  var direct = projectClosingDirectApprovalCandidates_(errors);
+  var saved = projectClosingSavedBreakOffCandidates_();
+  var allSeen = {};
+  var unique = [];
+  direct.concat(saved).forEach(function(item) {
+    var key = sanitizeText_(item && item.item_id) || sanitizeText_(item && item.project_key);
+    if (!key || allSeen[key]) return;
+    allSeen[key] = true;
+    unique.push(item);
+  });
+  var refreshed = [];
+  try {
+    refreshed = refreshProjectClosingCandidatesByTaskId_(unique);
+  } catch (error) {
+    errors.push({ project_name: 'Atualizacao direta por ID', error: simplifyErrorMessage_(error) });
+    refreshed = unique;
+  }
+  var eligibleSeen = {};
+  var eligible = refreshed.filter(function(item) {
+    if (!isProjectClosingApprovalStatus_(item && item.item_status) &&
+        !isProjectClosingApprovalStatus_(item && item.phase_status)) return false;
+    var key = sanitizeText_(item && item.item_id) || sanitizeText_(item && item.project_key);
+    if (!key || eligibleSeen[key]) return false;
+    eligibleSeen[key] = true;
+    return true;
+  });
+  return {
+    ok: true,
+    project_closing_rule_version: CLICKUP_PROJECT_CLOSING_RULE_VERSION,
+    source: 'clickup_project_closing_direct_approval',
+    direct_approval_candidates: direct.length,
+    saved_breakoff_candidates: saved.length,
+    unique_candidates: unique.length,
+    eligible_after_status_refresh: eligible.length,
+    errors: errors.length,
+    error_details: errors.slice(0, 5),
     generated_at: started.toISOString()
   };
 }
