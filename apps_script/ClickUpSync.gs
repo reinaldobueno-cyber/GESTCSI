@@ -2722,9 +2722,89 @@ function getProjectClosingDecisionSheet_() {
   ensureHeaders_(sheet, [
     'project_key', 'project_name', 'consultant', 'item_id', 'item_name',
     'decision', 'notes', 'decided_at', 'decided_by', 'month', 'bonus_value',
-    'clickup_status', 'clickup_updated_at'
+    'clickup_status', 'clickup_updated_at', 'project_month', 'item_url'
   ]);
   return sheet;
+}
+
+function projectClosingCandidateHeaders_() {
+  return [
+    'candidate_key', 'project_key', 'project_name', 'consultant', 'item_id',
+    'item_name', 'item_status', 'phase_name', 'phase_status', 'item_url',
+    'list_id', 'folder_id', 'space_id', 'marcador_entrega', 'updated_at',
+    'project_month', 'detected_at', 'source', 'project_closing_rule_version'
+  ];
+}
+
+function getProjectClosingCandidateSheet_() {
+  var sheet = getOrCreateSheet_('CLICKUP_PROJECT_CLOSING_CANDIDATES');
+  ensureHeaders_(sheet, projectClosingCandidateHeaders_());
+  return sheet;
+}
+
+function projectClosingCandidateKey_(item) {
+  return sanitizeText_(item && item.item_id) || sanitizeText_(item && item.project_key);
+}
+
+function projectClosingCandidateMonth_(mapping, fallback) {
+  var month = sanitizeMonth_(mapping && mapping.mes || fallback);
+  if (MONTHS.indexOf(month) >= 0) return month;
+  return sanitizeText_(mapping && (mapping.project_month || mapping.month) || fallback);
+}
+
+function normalizeProjectClosingCandidateRow_(item) {
+  item = item || {};
+  var key = sanitizeText_(item.candidate_key) || projectClosingCandidateKey_(item);
+  return {
+    candidate_key: key,
+    project_key: sanitizeText_(item.project_key),
+    project_name: sanitizeText_(item.project_name),
+    consultant: clickUpConsultantCanonicalName_(item.consultant),
+    item_id: sanitizeText_(item.item_id),
+    item_name: sanitizeText_(item.item_name),
+    item_status: sanitizeText_(item.item_status),
+    phase_name: sanitizeText_(item.phase_name),
+    phase_status: sanitizeText_(item.phase_status),
+    item_url: sanitizeText_(item.item_url),
+    list_id: sanitizeText_(item.list_id),
+    folder_id: sanitizeText_(item.folder_id),
+    space_id: sanitizeText_(item.space_id),
+    marcador_entrega: sanitizeText_(item.marcador_entrega),
+    updated_at: projectClosingDecisionDateText_(item.updated_at),
+    project_month: projectClosingCandidateMonth_(null, item.project_month),
+    detected_at: projectClosingDecisionDateText_(item.detected_at),
+    source: sanitizeText_(item.source),
+    project_closing_rule_version: sanitizeText_(item.project_closing_rule_version)
+  };
+}
+
+function getProjectClosingCandidateRows_() {
+  var sheet = getProjectClosingCandidateSheet_();
+  var values = sheet.getDataRange().getValues();
+  var header = values[0] || [];
+  return values.slice(1).map(function(row) {
+    return normalizeProjectClosingCandidateRow_(rowToObject_(header, row));
+  }).filter(function(item) {
+    return !!projectClosingCandidateKey_(item);
+  });
+}
+
+function writeProjectClosingCandidateRows_(items, source, detectedAt) {
+  var seen = {};
+  var normalized = (items || []).map(function(item) {
+    return normalizeProjectClosingCandidateRow_(Object.assign({}, item || {}, {
+      candidate_key: projectClosingCandidateKey_(item),
+      detected_at: detectedAt || item && item.detected_at || new Date(),
+      source: source || item && item.source || 'clickup_project_closing_direct_approval'
+    }));
+  }).filter(function(item) {
+    var key = projectClosingCandidateKey_(item);
+    if (!key || seen[key]) return false;
+    seen[key] = true;
+    return true;
+  });
+  writeObjectsToSheet_(getProjectClosingCandidateSheet_(), normalized, projectClosingCandidateHeaders_());
+  return normalized;
 }
 
 function projectClosingDecisionDateText_(value) {
@@ -2750,9 +2830,11 @@ function getProjectClosingDecisions_(params) {
       decided_at: projectClosingDecisionDateText_(item.decided_at),
       decided_by: sanitizeText_(item.decided_by),
       month: sanitizeText_(item.month),
+      project_month: projectClosingCandidateMonth_(null, item.project_month),
       bonus_value: Number(item.bonus_value || 0),
       clickup_status: sanitizeText_(item.clickup_status),
-      clickup_updated_at: projectClosingDecisionDateText_(item.clickup_updated_at)
+      clickup_updated_at: projectClosingDecisionDateText_(item.clickup_updated_at),
+      item_url: sanitizeText_(item.item_url)
     };
   }).filter(function(item) { return item.project_key && item.decision; });
   return { ok: true, items: items };
@@ -2787,6 +2869,7 @@ function projectClosingCandidateFromTask_(task, mappings) {
     space_id: sanitizeText_(mapping.space_id || task && task.space && task.space.id),
     marcador_entrega: 'sim',
     updated_at: sanitizeText_(milestone.updated_at) || (task && task.date_updated ? fromMillisIso_(task.date_updated) : ''),
+    project_month: projectClosingCandidateMonth_(mapping, ''),
     project_closing_rule_version: CLICKUP_PROJECT_CLOSING_RULE_VERSION
   };
 }
@@ -2837,6 +2920,7 @@ function projectClosingCandidateFromNormalizedItem_(mapping, normalized, item) {
     space_id: sanitizeText_(mapping && mapping.space_id),
     marcador_entrega: 'sim',
     updated_at: sanitizeText_(item && item.updated_at),
+    project_month: projectClosingCandidateMonth_(mapping, normalized && normalized.mes),
     project_closing_rule_version: CLICKUP_PROJECT_CLOSING_RULE_VERSION
   };
 }
@@ -2900,6 +2984,7 @@ function projectClosingSavedBreakOffCandidates_() {
             space_id: sanitizeText_(payload.space_id),
             marcador_entrega: 'sim',
             updated_at: sanitizeText_(item && item.updated_at),
+            project_month: month,
             project_closing_rule_version: CLICKUP_PROJECT_CLOSING_RULE_VERSION
           });
         });
@@ -2950,6 +3035,34 @@ function projectClosingDirectApprovalCandidates_(errors) {
 function getProjectClosingCandidates_(params) {
   requireUser_(params || {});
   var started = new Date();
+  var offset = Math.max(0, toInt_((params || {}).offset, 0));
+  var limit = Math.max(1, Math.min(toInt_((params || {}).limit, 50), 100));
+  var refresh = String((params || {}).refresh || (params || {}).force || '') === '1';
+  if (!refresh || offset > 0) {
+    var saved = getProjectClosingCandidateRows_();
+    if (saved.length || !refresh) {
+      var savedItems = saved.slice(offset, offset + limit);
+      var savedNextOffset = Math.min(saved.length, offset + savedItems.length);
+      return {
+        ok: true,
+        source: 'clickup_project_closing_shared_snapshot',
+        saved: true,
+        project_closing_rule_version: CLICKUP_PROJECT_CLOSING_RULE_VERSION,
+        offset: offset,
+        limit: limit,
+        processed: savedNextOffset,
+        total: saved.length,
+        scanned: saved.length,
+        next_offset: savedNextOffset,
+        has_more: savedNextOffset < saved.length,
+        done: savedNextOffset >= saved.length,
+        errors: 0,
+        error_details: [],
+        items: savedItems,
+        generated_at: saved[0] && saved[0].detected_at || ''
+      };
+    }
+  }
   var errors = [];
   var allCandidates = projectClosingDirectApprovalCandidates_(errors)
     .concat(projectClosingSavedBreakOffCandidates_());
@@ -2961,8 +3074,6 @@ function getProjectClosingCandidates_(params) {
     allSeen[key] = true;
     uniqueCandidates.push(item);
   });
-  var offset = Math.max(0, toInt_((params || {}).offset, 0));
-  var limit = Math.max(1, Math.min(toInt_((params || {}).limit, 50), 100));
   var seen = {};
   var refreshed = [];
   try {
@@ -2979,6 +3090,7 @@ function getProjectClosingCandidates_(params) {
     seen[key] = true;
     return true;
   });
+  eligible = writeProjectClosingCandidateRows_(eligible, 'clickup_project_closing_direct_approval', started);
   var items = eligible.slice(offset, offset + limit);
   var nextOffset = Math.min(eligible.length, offset + items.length);
   return {
@@ -3085,9 +3197,11 @@ function setProjectClosingDecision_(params) {
     decided_at: now,
     decided_by: admin.name || admin.username,
     month: month,
+    project_month: projectClosingCandidateMonth_(null, params.project_month),
     bonus_value: decision === 'approved' ? CLICKUP_PROJECT_CLOSING_BONUS_VALUE : 0,
     clickup_status: clickupUpdate.status,
-    clickup_updated_at: now
+    clickup_updated_at: now,
+    item_url: sanitizeText_(params.item_url)
   };
   upsertProjectClosingDecisionRow_(item);
   item.decided_at = now.toISOString();
@@ -3101,9 +3215,13 @@ function upsertProjectClosingDecisionRow_(item) {
   var values = sheet.getDataRange().getValues();
   var header = values[0] || [];
   var keyIndex = header.indexOf('project_key');
+  var itemIndex = header.indexOf('item_id');
   var targetRow = 0;
   for (var i = 1; i < values.length; i++) {
-    if (sanitizeText_(values[i][keyIndex]) === sanitizeText_(item.project_key)) {
+    var rowProjectKey = keyIndex >= 0 ? sanitizeText_(values[i][keyIndex]) : '';
+    var rowItemId = itemIndex >= 0 ? sanitizeText_(values[i][itemIndex]) : '';
+    if ((item.item_id && rowItemId === sanitizeText_(item.item_id)) ||
+        (!item.item_id && rowProjectKey === sanitizeText_(item.project_key))) {
       targetRow = i + 1;
       break;
     }
@@ -3141,9 +3259,11 @@ function reconcileProjectClosingDecisionFromNormalized_(mapping, normalized) {
     decided_at: decidedAt,
     decided_by: 'ClickUp',
     month: Utilities.formatDate(decidedAt, Session.getScriptTimeZone(), 'yyyy-MM'),
+    project_month: projectClosingCandidateMonth_(mapping, ''),
     bonus_value: approved ? CLICKUP_PROJECT_CLOSING_BONUS_VALUE : 0,
     clickup_status: finalItem.status_original || '',
-    clickup_updated_at: decidedAt
+    clickup_updated_at: decidedAt,
+    item_url: finalItem.task_url || ''
   });
 }
 

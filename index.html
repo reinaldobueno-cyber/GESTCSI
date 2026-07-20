@@ -6152,6 +6152,7 @@ function projectClosingCandidatesFromSavedJson() {
         item_url: item && (item.task_url || item.url || item.link) || project && (project.projeto_link || project.link_projeto) || '',
         marcador_entrega: 'sim',
         updated_at: item && item.updated_at || '',
+        project_month: project && project.mes || '',
         source: 'clickup_json_planilha'
       });
     });
@@ -6161,7 +6162,7 @@ function projectClosingCandidatesFromSavedJson() {
 function projectClosingAllCandidates() {
   var seen = {};
   var out = [];
-  projectClosingCandidatesFromSavedJson().concat(PROJECT_CLOSING_CANDIDATES.items || []).forEach(function(item) {
+  (PROJECT_CLOSING_CANDIDATES.items || []).concat(projectClosingCandidatesFromSavedJson()).forEach(function(item) {
     var key = String(item && (item.item_id || item.project_key || '')).trim();
     if (!key || seen[key]) return;
     seen[key] = true;
@@ -6177,7 +6178,7 @@ function projectClosingLoadCandidates(force) {
   PROJECT_CLOSING_CANDIDATES.loaded = false;
   PROJECT_CLOSING_CANDIDATES.error = '';
   PROJECT_CLOSING_CANDIDATES.items = [];
-  PROJECT_CLOSING_SYNC.active = true;
+  PROJECT_CLOSING_SYNC.active = !!force;
   PROJECT_CLOSING_SYNC.processed = 0;
   PROJECT_CLOSING_SYNC.total = 0;
   PROJECT_CLOSING_SYNC.errors = 0;
@@ -6189,6 +6190,7 @@ function projectClosingLoadCandidates(force) {
       auth_token: authTokenParam(),
       offset: String(offset || 0),
       limit: '50',
+      refresh: force ? '1' : '0',
       timeout_ms: '150000'
     }, 180000).then(function(resp) {
       if (PROJECT_CLOSING_CANDIDATES.scanToken !== scanToken) return null;
@@ -6246,7 +6248,7 @@ function projectClosingStartSync(button) {
   PROJECT_CLOSING_SYNC.error = '';
   return projectClosingLoadCandidates(true).then(function(resp) {
     if (button) { button.disabled = false; button.textContent = 'Buscar no ClickUp'; }
-    if (resp && resp.ok !== false) showToast('Fech. Projeto atualizado: '+Number(resp.total || 0)+' item(ns) em APROVAR.', 'ok');
+    if (resp && resp.ok !== false) showToast('Busca gravada para todos: '+Number(resp.total || 0)+' item(ns) em APROVAR.', 'ok');
     return resp;
   }).catch(function(error) {
     PROJECT_CLOSING_SYNC.active = false;
@@ -6316,11 +6318,17 @@ function projectClosingSaveDecision(button) {
     item_id: item.id || item.task_id || '',
     item_name: item.nome || item.marco || 'Fase 8 - Break Off',
     decision: target.decision,
+    project_month: project.mes || '',
+    item_url: item.task_url || project.projeto_link || project.link_projeto || '',
     notes: notes
   }, 20000).then(function(resp) {
     if (resp && resp.service === 'clickup-sync' && !resp.item) throw new Error('Apps Script desatualizado. Implante uma nova versão do Web App.');
     if (!resp || resp.ok === false || !resp.item) throw new Error((resp && (resp.error || resp.message)) || 'Falha ao salvar decisão.');
-    PROJECT_CLOSING_DECISIONS.items = (PROJECT_CLOSING_DECISIONS.items || []).filter(function(current) { return current.project_key !== resp.item.project_key; }).concat([resp.item]);
+    PROJECT_CLOSING_DECISIONS.items = (PROJECT_CLOSING_DECISIONS.items || []).filter(function(current) {
+      var sameItem = resp.item.item_id && current.item_id === resp.item.item_id;
+      var sameProject = !resp.item.item_id && current.project_key === resp.item.project_key;
+      return !(sameItem || sameProject);
+    }).concat([resp.item]);
     PROJECT_CLOSING_DECISIONS.loaded = true;
     dashCloseAuditModal();
     initProjectClosing();
@@ -6349,6 +6357,7 @@ function projectClosingProjectFromCandidate(candidate) {
     project_key: String(candidate.project_key || existing.project_key || montarProjectKeyClickup(existing) || '').trim(),
     cliente: candidate.project_name || existing.cliente || 'Projeto ClickUp',
     consultor: consultantCanonicalName(candidate.consultant || existing.consultor || 'Sem consultor'),
+    mes: candidate.project_month || existing.mes || '',
     status: existing.status || '',
     projeto_link: candidate.item_url || existing.projeto_link || existing.link_projeto || '',
     link_projeto: candidate.item_url || existing.link_projeto || existing.projeto_link || '',
@@ -6392,7 +6401,10 @@ function projectClosingProjectFromDecision(decision) {
     project_key: decision.project_key || existing.project_key || montarProjectKeyClickup(existing) || '',
     cliente: decision.project_name || existing.cliente || 'Projeto ClickUp',
     consultor: consultantCanonicalName(decision.consultant || existing.consultor || 'Sem consultor'),
+    mes: decision.project_month || existing.mes || '',
     status: existing.status || '',
+    projeto_link: decision.item_url || existing.projeto_link || existing.link_projeto || '',
+    link_projeto: decision.item_url || existing.link_projeto || existing.projeto_link || '',
     item_id: decision.item_id || ''
   });
 }
@@ -6416,7 +6428,7 @@ function projectClosingInfoFromDecision(decision) {
     }],
     flaggedItems: [],
     status: decision.clickup_status || (approved ? 'APROVADO GESTAO' : 'REPROVADO GESTAO'),
-    link: '',
+    link: decision.item_url || '',
     source: 'Decisão Fech. Projeto'
   };
 }
@@ -6466,8 +6478,10 @@ function projectClosingClickUpDecision(project, info) {
     decided_at: decidedAt,
     decided_by: 'ClickUp',
     month: String(decidedAt).slice(0, 7),
+    project_month: project.mes || '',
     bonus_value: status === 'aprovado gestao' ? 80 : 0,
-    clickup_status: item.status_original || item.status || item.status_atual || ''
+    clickup_status: item.status_original || item.status || item.status_atual || '',
+    item_url: item.task_url || item.url || item.link || project.projeto_link || project.link_projeto || ''
   };
 }
 function projectClosingList() {
@@ -6493,8 +6507,34 @@ function projectClosingList() {
     entries.push({project:project, info:info, decision:decision, category:category});
   });
   return entries.sort(function(a, b) {
-    return String(a && a.project && a.project.cliente || '').localeCompare(String(b && b.project && b.project.cliente || ''));
+    var monthCompare = projectClosingEntryMonthSortKey(a).localeCompare(projectClosingEntryMonthSortKey(b));
+    return monthCompare || String(a && a.project && a.project.cliente || '').localeCompare(String(b && b.project && b.project.cliente || ''));
   });
+}
+function projectClosingEntryMonthKey(entry) {
+  var project = entry && entry.project || {};
+  var decision = entry && entry.decision || {};
+  var key = String(project.mes || decision.project_month || '').toUpperCase().trim();
+  if (!key) {
+    var parts = String(project.project_key || '').split('|');
+    key = String(parts[0] || '').toUpperCase().trim();
+  }
+  if (ORDEM_MESES.indexOf(key) >= 0) return key;
+  if (/^\d{4}-\d{1,2}$/.test(key)) return key.replace(/^(\d{4})-(\d{1})$/, '$1-0$2');
+  return '';
+}
+function projectClosingEntryMonthSortKey(entry) {
+  var key = projectClosingEntryMonthKey(entry);
+  var idx = ORDEM_MESES.indexOf(key);
+  if (idx >= 0) return String(idx + 1).padStart(2, '0');
+  if (/^\d{4}-\d{2}$/.test(key)) return 'Y'+key;
+  return 'ZZ';
+}
+function projectClosingEntryMonthLabel(entry) {
+  var key = projectClosingEntryMonthKey(entry);
+  if (ORDEM_MESES.indexOf(key) >= 0) return key;
+  if (/^\d{4}-\d{2}$/.test(key)) return bonusMonthLabel(key);
+  return 'Sem mês de entrada';
 }
 function initProjectClosing() {
   var box = document.getElementById('projfech-content');
@@ -6517,16 +6557,33 @@ function initProjectClosing() {
       var key = encodeURIComponent(String(p.project_key || montarProjectKeyClickup(p) || ''));
       var decisionMeta = decision.decided_at ? '<div class="closing-project-meta">'+escapeHtml(decision.decided_by || '-')+' · '+escapeHtml(formatarDataHoraProjeto(decision.decided_at))+(decision.clickup_status ? '<br>ClickUp: '+escapeHtml(decision.clickup_status) : '')+(decision.notes ? '<br>'+escapeHtml(decision.notes) : '')+'</div>' : '';
       var decisionActions = AUTH_STATE.user && AUTH_STATE.user.role === 'admin' ? '<div class="project-actions"><button type="button" class="project-link-btn" data-project-key="'+key+'" onclick="return projectClosingOpenDecision(decodeURIComponent(this.dataset.projectKey||\'\'),\'approved\')">Aprovar</button><button type="button" class="project-link-btn warn" data-project-key="'+key+'" onclick="return projectClosingOpenDecision(decodeURIComponent(this.dataset.projectKey||\'\'),\'rejected\')">Reprovar</button></div>' : '';
-      return '<tr><td><strong>'+escapeHtml(p.cliente || '-')+'</strong></td><td>'+escapeHtml(p.consultor || '-')+'</td><td>'+escapeHtml(info.status || '-')+'</td><td>'+escapeHtml(state)+decisionMeta+'</td><td>'+escapeHtml(info.source || '-')+'</td><td><div class="project-actions">'+dashProjectActionCell(p)+'</div>'+decisionActions+'</td></tr>';
-    }).join('') || '<tr class="empty-row"><td colspan="6">Nenhum projeto nesta regra.</td></tr>';
+      return '<tr><td><strong>'+escapeHtml(p.cliente || '-')+'</strong></td><td>'+escapeHtml(p.consultor || '-')+'</td><td>'+escapeHtml(projectClosingEntryMonthLabel(entry))+'</td><td>'+escapeHtml(info.status || '-')+'</td><td>'+escapeHtml(state)+decisionMeta+'</td><td>'+escapeHtml(info.source || '-')+'</td><td><div class="project-actions">'+dashProjectActionCell(p)+'</div>'+decisionActions+'</td></tr>';
+    }).join('') || '<tr class="empty-row"><td colspan="7">Nenhum projeto nesta regra.</td></tr>';
   }
-  var table = '<div class="dashx-table-wrap"><table class="dashx-table"><thead><tr><th>Projeto</th><th>Consultor</th><th>Status Fase 8</th><th>Decisão do fechamento</th><th>Fonte</th><th>Ação</th></tr></thead><tbody>'+rows(pending.concat(approved).concat(rejected))+'</tbody></table></div>';
+  var displayEntries = pending.concat(approved).concat(rejected);
+  var groups = {};
+  displayEntries.forEach(function(entry) {
+    var key = projectClosingEntryMonthKey(entry) || 'SEM_MES';
+    if (!groups[key]) groups[key] = [];
+    groups[key].push(entry);
+  });
+  var groupKeys = Object.keys(groups).sort(function(a, b) {
+    return projectClosingEntryMonthSortKey(groups[a][0]).localeCompare(projectClosingEntryMonthSortKey(groups[b][0]));
+  });
+  var table = groupKeys.map(function(key) {
+    var list = groups[key] || [];
+    var label = projectClosingEntryMonthLabel(list[0]);
+    return '<div class="bonus-section-title" style="margin-top:14px">Mês de entrada: '+escapeHtml(label)+' · '+list.length+' projeto(s)</div>'+
+      '<div class="dashx-table-wrap"><table class="dashx-table"><thead><tr><th>Projeto</th><th>Consultor</th><th>Mês entrada</th><th>Status Fase 8</th><th>Decisão do fechamento</th><th>Fonte</th><th>Ação</th></tr></thead><tbody>'+rows(list)+'</tbody></table></div>';
+  }).join('') || '<div class="dashx-table-wrap"><table class="dashx-table"><thead><tr><th>Projeto</th><th>Consultor</th><th>Mês entrada</th><th>Status Fase 8</th><th>Decisão do fechamento</th><th>Fonte</th><th>Ação</th></tr></thead><tbody>'+rows([])+'</tbody></table></div>';
   var syncLabel = PROJECT_CLOSING_CANDIDATES.loading || PROJECT_CLOSING_SYNC.active ? 'Buscando...' : 'Buscar no ClickUp';
-  var progressText = 'Consulta direta em andamento · '+Number(PROJECT_CLOSING_SYNC.processed || 0)+'/'+Number(PROJECT_CLOSING_SYNC.total || 0)+' projetos varridos · '+Number(projectClosingAllCandidates().length)+' candidato(s)';
+  var progressText = PROJECT_CLOSING_SYNC.active
+    ? 'Consulta direta em andamento · '+Number(PROJECT_CLOSING_SYNC.processed || 0)+'/'+Number(PROJECT_CLOSING_SYNC.total || 0)+' projetos varridos · '+Number(projectClosingAllCandidates().length)+' candidato(s)'
+    : 'Carregando base compartilhada · '+Number(projectClosingAllCandidates().length)+' candidato(s)';
   if (PROJECT_CLOSING_SYNC.errors) progressText += ' · '+Number(PROJECT_CLOSING_SYNC.errors)+' projeto(s) com erro';
   var syncProgress = PROJECT_CLOSING_CANDIDATES.loading || PROJECT_CLOSING_SYNC.active || PROJECT_CLOSING_CANDIDATES.error || PROJECT_CLOSING_SYNC.error
     ? '<div class="closing-project-meta" style="margin-right:auto">'+(PROJECT_CLOSING_CANDIDATES.loading || PROJECT_CLOSING_SYNC.active ? escapeHtml(progressText) : escapeHtml(PROJECT_CLOSING_CANDIDATES.error || PROJECT_CLOSING_SYNC.error))+'</div>'
-    : (PROJECT_CLOSING_CANDIDATES.generated_at ? '<div class="closing-project-meta" style="margin-right:auto">Última busca direta: '+escapeHtml(formatarDataHoraProjeto(PROJECT_CLOSING_CANDIDATES.generated_at))+' · '+Number(projectClosingAllCandidates().length)+' candidato(s)</div>' : '<div class="closing-project-meta" style="margin-right:auto">Base salva: '+Number(projectClosingAllCandidates().length)+' candidato(s)</div>');
+    : (PROJECT_CLOSING_CANDIDATES.generated_at ? '<div class="closing-project-meta" style="margin-right:auto">Base compartilhada: '+escapeHtml(formatarDataHoraProjeto(PROJECT_CLOSING_CANDIDATES.generated_at))+' · '+Number(projectClosingAllCandidates().length)+' candidato(s)</div>' : '<div class="closing-project-meta" style="margin-right:auto">Base compartilhada: '+Number(projectClosingAllCandidates().length)+' candidato(s)</div>');
   var stopSyncButton = PROJECT_CLOSING_CANDIDATES.loading || PROJECT_CLOSING_SYNC.active ? '<button class="project-link-btn warn" onclick="return projectClosingStopSync(this)">Parar</button>' : '';
   var syncBox = AUTH_STATE.user && AUTH_STATE.user.role === 'admin' ? '<div class="closing-filter-block"><div class="closing-filter-footer" style="margin-top:0">'+syncProgress+stopSyncButton+'<button class="btn-syncall" '+(PROJECT_CLOSING_SYNC.active || PROJECT_CLOSING_CANDIDATES.loading?'disabled':'')+' onclick="return projectClosingStartSync(this)">'+syncLabel+'</button></div></div>' : '';
   var backendWarning = PROJECT_CLOSING_DECISIONS.backendReady === false || PROJECT_CLOSING_CANDIDATES.backendReady === false ? '<div class="dashx-inline-note" style="margin-bottom:12px"><strong>Apps Script desatualizado:</strong> implante uma nova versão do Web App para habilitar a busca direta de Fech. Projeto.</div>' : '';
@@ -7270,8 +7327,19 @@ function projectClosingDecisionBonusRow(item) {
     validation_at:item.decided_at||'',
     mes_fechamento:item.month||'',
     valor_bonus:item.decision==='approved'?Number(item.bonus_value||80):0,
+    link:item.item_url||'',
     fechamento_projeto:'sim'
   };
+}
+function projectClosingDecisionsForBonus() {
+  var map = {};
+  (PROJECT_CLOSING_DECISIONS.items || []).forEach(function(item) {
+    if (!item || (item.decision !== 'approved' && item.decision !== 'rejected')) return;
+    var key = String(item.item_id || item.project_key || '').trim();
+    if (!key) return;
+    map[key] = item;
+  });
+  return Object.keys(map).map(function(key) { return map[key]; });
 }
 function bonusMilestoneKey(item) {
   return String(item&&(
@@ -7311,7 +7379,7 @@ function bonusDataset() {
     if(!item||fechamentoIsProjectClosing(item)||item.situacao!=='reprovado')return false;
     return bonusRejectedMilestoneEffectiveMonth(item)===month;
   });
-  var effectiveProjectDecisions=projectClosingList().filter(function(entry){return entry.decision&&(entry.category==='aprovado'||entry.category==='reprovado');}).map(function(entry){return entry.decision;});
+  var effectiveProjectDecisions=projectClosingDecisionsForBonus();
   var projectDecisionRows=effectiveProjectDecisions.filter(function(item){return String(item.month||'')===month;}).map(projectClosingDecisionBonusRow);
   var approvedProjects=projectDecisionRows.filter(function(item){return item.situacao==='aprovado';});
   var rejectedProjects=projectDecisionRows.filter(function(item){return item.situacao==='reprovado';});
@@ -7470,6 +7538,7 @@ function initBonus() {
   var allNames=bonusCanonicalNames(
     (CMAX_DAILY_STATE.events||[]).map(function(item){return item.consultor;})
       .concat((FECHAMENTO_MARCOS||[]).map(function(item){return fechamentoEffectiveConsultant(item);}))
+      .concat((PROJECT_CLOSING_DECISIONS.items||[]).map(function(item){return item.consultant;}))
       .concat((BONUS_INDICATION_STATE.items||[]).map(function(item){return item.consultant_name;}))
       .concat(Object.keys(CONSULTANT_COMP_STATE.items||{}).map(function(key){return CONSULTANT_COMP_STATE.items[key].consultant_name;}))
   );
