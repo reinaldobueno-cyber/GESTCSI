@@ -2318,6 +2318,7 @@ function diagnoseProjectClosing_(params) {
   var tasks = fetchAllListTasks_(listId, { deadline: new Date().getTime() + 25000 });
   var phaseMap = {};
   var byId = {};
+  var persistTasks = [];
   tasks.forEach(function(task) { byId[String(task.id)] = task; });
   tasks.forEach(function(task) {
     if (isPhaseTask_(task, byId)) {
@@ -2343,6 +2344,11 @@ function diagnoseProjectClosing_(params) {
     var marker = clickUpTaskCustomItemName_(task);
     var phaseStatus = sanitizeText_(phaseInfo.phase && phaseInfo.phase.status_original);
     var approvalSignal = hasProjectClosingApprovalSignalByTaskOrPhase_(task, status, phaseInfo.phase);
+    task._project_closing_phase_name = phaseName || sanitizeText_(task && task.name);
+    task._project_closing_phase_status = phaseStatus;
+    if (isProjectClosingDeliveryTrackedItem_(task, task._project_closing_phase_name, phaseInfo.phase)) {
+      persistTasks.push(task);
+    }
     breakOffItems.push({
       id: String(task.id || ''),
       nome: sanitizeText_(task.name),
@@ -2360,6 +2366,7 @@ function diagnoseProjectClosing_(params) {
       link: sanitizeText_(task.url || task.permalink || task.link || task.html_url) || ('https://app.clickup.com/t/' + String(task.id || ''))
     });
   });
+  var persisted = persistProjectClosingDiagnosis_(persistTasks, listId);
   return {
     ok: true,
     project_closing_rule_version: CLICKUP_PROJECT_CLOSING_RULE_VERSION,
@@ -2367,8 +2374,37 @@ function diagnoseProjectClosing_(params) {
     tasks_total: tasks.length,
     breakoff_total: breakOffItems.length,
     aprovados_total: breakOffItems.filter(function(item) { return item.entra_regra; }).length,
+    persisted_count: persisted.count,
+    persist_error: persisted.error,
     items: breakOffItems
   };
+}
+
+function persistProjectClosingDiagnosis_(tasks, listId) {
+  tasks = dedupeTasks_(tasks || []);
+  if (!tasks.length) return { count: 0, error: '' };
+  try {
+    var mappings = loadProjectClosingSyncMappings_();
+    var listMapping = (mappings || []).filter(function(mapping) {
+      return normalizeClickUpId_(mapping && mapping.list_id) === normalizeClickUpId_(listId);
+    })[0] || null;
+    var entries = tasks.map(function(task) {
+      var mapping = findProjectMappingForTask_(task, mappings) || listMapping || fallbackProjectMappingForTask_(task);
+      return { mapping: mapping, normalized: buildNormalizedMilestoneCoverageProject_(mapping, task) };
+    });
+    upsertClickUpMilestoneClosingEntries_(entries, {
+      fetch_comments: false,
+      authoritative: false,
+      validation_comments_only: true,
+      preserve_closed_history: true
+    });
+    entries.forEach(function(entry) {
+      reconcileProjectClosingDecisionFromNormalized_(entry.mapping, entry.normalized);
+    });
+    return { count: entries.length, error: '' };
+  } catch (error) {
+    return { count: 0, error: simplifyErrorMessage_(error) };
+  }
 }
 
 function summarizeClickUpProjectClosingDebug_(task) {
@@ -2428,9 +2464,10 @@ function upsertClickUpMilestoneClosing_(mapping, normalized, options) {
     var status = sanitizeText_(milestone.status_original);
     var hasClosedDate = !!sanitizeText_(milestone.date_closed);
     var situation = clickUpMilestoneSituation_(status);
-    var hasDeliveryMarker = isProjectClosingMilestone_(milestone);
-    var isProjectClosing = hasDeliveryMarker && isProjectClosingApprovalStatus_(status);
-    if (isProjectClosing) situation = 'aprovado';
+    var hasDeliveryMarker = isProjectDeliveryClosingCandidate_(milestone);
+    var isProjectClosing = isProjectClosingDeliveryTrackedItem_(milestone, milestone && milestone.fase_nome);
+    if (isProjectClosing && isProjectClosingApprovalStatus_(status)) situation = 'aguardando';
+    else if (isProjectClosing && isProjectClosingFinalStatus_(status)) situation = clickUpMilestoneSituation_(status);
     var validatedRecovery = clickUpMilestoneClosingValidatedRecovery_(taskId);
     if (validatedRecovery) {
       situation = validatedRecovery.situacao;
@@ -2494,7 +2531,7 @@ function upsertClickUpMilestoneClosing_(mapping, normalized, options) {
     }
     var row = {
       task_id: taskId,
-      item_tipo: 'Marco',
+      item_tipo: isProjectClosing ? 'Fechamento de Projeto' : (hasDeliveryMarker ? 'Entrega de Projeto' : 'Marco'),
       project_key: mapping.project_key || '',
       projeto: mapping.cliente || normalized.cliente || '',
       consultor: milestoneConsultant || 'Sem consultor',
@@ -2596,6 +2633,13 @@ function normalizeClickUpMonthReference_(value, fallbackDate) {
   return clickUpMonthReference_(fallbackDate || value);
 }
 
+function clickUpConsultantCanonicalName_(value) {
+  var text = sanitizeText_(value);
+  var key = normalizeKey_(text);
+  if (key === 'LUCAS' || key === 'LUCAS PEREIRA DA SILVA') return 'Lucas Pereira da Silva';
+  return text;
+}
+
 function clickUpMilestoneConsultant_(value) {
   var seen = {};
   var names = sanitizeText_(value).split(/\s*,\s*/).filter(function(name) {
@@ -2604,7 +2648,7 @@ function clickUpMilestoneConsultant_(value) {
     seen[key] = true;
     return true;
   });
-  return names[0] || sanitizeText_(value).split(/\s*,\s*/)[0] || 'Sem consultor';
+  return clickUpConsultantCanonicalName_(names[0] || sanitizeText_(value).split(/\s*,\s*/)[0]) || 'Sem consultor';
 }
 
 function parseJsonArray_(value) {
@@ -2656,11 +2700,20 @@ function parseLatestClickUpTaskComment_(response) {
 }
 
 function isProjectClosingMilestone_(milestone) {
-  return isProjectClosingDeliveryItem_(milestone, milestone && milestone.fase_nome);
+  return isProjectClosingDeliveryTrackedItem_(milestone, milestone && milestone.fase_nome);
 }
 
 function isProjectClosingApprovalStatus_(status) {
   return normalizeKey_(status) === 'APROVAR';
+}
+
+function isProjectClosingFinalStatus_(status) {
+  var key = normalizeKey_(status);
+  return key === 'APROVADO GESTAO' || key === 'REPROVADO GESTAO';
+}
+
+function isProjectClosingTrackedStatus_(status) {
+  return isProjectClosingApprovalStatus_(status) || isProjectClosingFinalStatus_(status);
 }
 
 function getProjectClosingDecisionSheet_() {
@@ -4369,6 +4422,10 @@ function buildNormalizedMilestoneCoverageProject_(mapping, task) {
     return { cliente: mapping.cliente || '', consultor: '', marcos: [] };
   }
   var status = task && task.status && (task.status.status || task.status.type || task.status.label) || '';
+  var phaseStatus = sanitizeText_(task && task._project_closing_phase_status);
+  if (isProjectClosingTrackedStatus_(phaseStatus) && !isProjectClosingTrackedStatus_(status)) {
+    status = phaseStatus;
+  }
   var responsible = (task && task.assignees || []).map(function(user) {
     return sanitizeText_(user && (user.username || user.name || user.email));
   }).filter(function(name) { return !!name; }).join(', ');
@@ -4378,10 +4435,13 @@ function buildNormalizedMilestoneCoverageProject_(mapping, task) {
     marcos: [{
       id: String(task && task.id || ''),
       nome: sanitizeText_(task && task.name),
-      fase_nome: sanitizeText_(task && task.list && task.list.name),
+      fase_nome: sanitizeText_(task && (task._project_closing_phase_name || task.fase_nome)) ||
+        sanitizeText_(task && task.list && task.list.name),
       status_original: status,
+      fase_status_original: phaseStatus,
       custom_item_id: String(task && task.custom_item_id || ''),
       custom_item_name: clickUpTaskCustomItemName_(task),
+      marcador_entrega: isProjectDeliveryTask_(task) ? 'sim' : '',
       responsaveis: responsible,
       task_url: sanitizeText_(task && (task.url || task.permalink || task.link || task.html_url)) ||
         ('https://app.clickup.com/t/' + String(task && task.id || '')),
@@ -7892,12 +7952,35 @@ function isClickUpProjectDeliveryCustomItemId_(task) {
   return id && CLICKUP_PROJECT_DELIVERY_CUSTOM_ITEM_IDS.indexOf(id) >= 0;
 }
 
+function clickUpCustomFieldLooksTruthy_(field) {
+  if (!field) return false;
+  var candidates = [field.value, field.display_value, field.text, field.value_text, field.checked];
+  return candidates.some(function(value) {
+    if (value === true) return true;
+    if (value === false || value === null || value === undefined || value === '') return false;
+    if (typeof value === 'number') return value !== 0;
+    if (Array.isArray(value)) return value.length > 0;
+    var text = normalizeKey_(value);
+    return ['SIM', 'TRUE', 'YES', '1', 'MARCADO', 'CHECKED', 'ENTREGA', 'ENTREGA DE PROJETO'].indexOf(text) >= 0;
+  });
+}
+
+function clickUpTaskHasDeliveryFlagField_(task) {
+  var fields = task && Array.isArray(task.custom_fields) ? task.custom_fields : [];
+  return fields.some(function(field) {
+    var name = normalizeKey_(field && (field.name || field.label || field.type_config && field.type_config.name));
+    if (name.indexOf('ENTREGA') < 0) return false;
+    return clickUpCustomFieldLooksTruthy_(field);
+  });
+}
+
 function isProjectDeliveryTask_(task) {
   var key = normalizeKey_(
     (task && (task.custom_item_name || task.item_tipo_clickup)) ||
     clickUpTaskCustomItemName_(task)
   );
   return isClickUpProjectDeliveryCustomItemId_(task) ||
+    clickUpTaskHasDeliveryFlagField_(task) ||
     key === 'ENTREGA' ||
     key === 'ENTREGA DE PROJETO';
 }
@@ -7918,6 +8001,16 @@ function isProjectClosingDeliveryItem_(item, phaseName, phase) {
   var status = sanitizeText_(item && (item.status_original || item.status && (item.status.status || item.status.type || item.status.label)));
   return isBreakOff && isProjectDeliveryClosingCandidate_(item) &&
     hasProjectClosingApprovalSignalByTaskOrPhase_(item, status, phase);
+}
+
+function isProjectClosingDeliveryTrackedItem_(item, phaseName, phase) {
+  var isBreakOff = isProjectBreakOffText_(phaseName) ||
+    isProjectBreakOffText_(item && (item.fase_nome || item.fase || item.phase)) ||
+    isProjectBreakOffText_(item && (item.name || item.nome));
+  var status = sanitizeText_(item && (item.status_original || item.status && (item.status.status || item.status.type || item.status.label)));
+  var phaseStatus = sanitizeText_(phase && phase.status_original);
+  return isBreakOff && isProjectDeliveryClosingCandidate_(item) &&
+    (isProjectClosingTrackedStatus_(status) || isProjectClosingTrackedStatus_(phaseStatus));
 }
 
 function isClosingTrackedTask_(task) {
