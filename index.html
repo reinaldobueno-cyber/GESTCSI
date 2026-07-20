@@ -5677,6 +5677,7 @@ var PROJECT_CLOSING_DECISION_TARGET = null;
 var PROJECT_CLOSING_SYNC = {active:false, processed:0, total:0, errors:0, error:'', timer:null};
 var PROJECT_CLOSING_CANDIDATES = {items:[], loaded:false, loading:false, backendReady:null, error:'', generated_at:'', scanToken:0};
 var PROJECT_CLOSING_CANDIDATES_CACHE_KEY = 'gestcsi_project_closing_candidates_v1';
+var PROJECT_CLOSING_BOOTSTRAPPED = false;
 var FECHAMENTO_EXPANDED = {};
 try { FECHAMENTO_EXPANDED = JSON.parse(storageGet('gestcsi_fechamento_expanded_v1', '{}')) || {}; } catch(e) { FECHAMENTO_EXPANDED = {}; }
 function fechamentoToggleConsultant(name) {
@@ -6157,6 +6158,15 @@ function projectClosingSaveCandidatesCache() {
     }));
   } catch(e) {}
 }
+function projectClosingBootstrapSharedQueue() {
+  if (!authTokenParam()) return;
+  if (!PROJECT_CLOSING_BOOTSTRAPPED) {
+    PROJECT_CLOSING_BOOTSTRAPPED = true;
+    if (projectClosingRestoreCandidatesCache()) initDash();
+  }
+  projectClosingLoadDecisions(false);
+  projectClosingLoadCandidates(false, true);
+}
 function projectClosingCandidatesFromSavedJson() {
   var seen = {};
   var out = [];
@@ -6197,10 +6207,11 @@ function projectClosingAllCandidates() {
   });
   return out;
 }
-function projectClosingLoadCandidates(force) {
-  if (!authTokenParam() || PROJECT_CLOSING_CANDIDATES.loading || (PROJECT_CLOSING_CANDIDATES.loaded && !force)) return Promise.resolve(null);
+function projectClosingLoadCandidates(force, reloadShared) {
+  if (!authTokenParam() || PROJECT_CLOSING_CANDIDATES.loading || (PROJECT_CLOSING_CANDIDATES.loaded && !force && !reloadShared)) return Promise.resolve(null);
   if (!force && !(PROJECT_CLOSING_CANDIDATES.items || []).length && projectClosingRestoreCandidatesCache()) {
     initProjectClosing();
+    initDash();
   }
   var scanToken = Date.now();
   PROJECT_CLOSING_CANDIDATES.scanToken = scanToken;
@@ -6239,6 +6250,7 @@ function projectClosingLoadCandidates(force) {
       PROJECT_CLOSING_SYNC.error = '';
       initProjectClosing();
       initBonus();
+      initDash();
       if (resp.has_more && PROJECT_CLOSING_CANDIDATES.loading && PROJECT_CLOSING_CANDIDATES.scanToken === scanToken) {
         return new Promise(function(resolve) {
           setTimeout(function() {
@@ -6253,6 +6265,7 @@ function projectClosingLoadCandidates(force) {
       projectClosingSaveCandidatesCache();
       initProjectClosing();
       initBonus();
+      initDash();
       return {
         ok: true,
         total: PROJECT_CLOSING_CANDIDATES.items.length,
@@ -6269,6 +6282,7 @@ function projectClosingLoadCandidates(force) {
     PROJECT_CLOSING_SYNC.active = false;
     PROJECT_CLOSING_SYNC.error = PROJECT_CLOSING_CANDIDATES.error;
     initProjectClosing();
+    initDash();
     showToast(PROJECT_CLOSING_CANDIDATES.error, 'err');
     return null;
   });
@@ -16196,15 +16210,18 @@ function _finalizarLoad(projetos, isRefresh, motivo, tipoAtualizacao) {
     } else {
       activePeriod='all'; fS='all'; fC='all'; fM='all'; _openId=null;
     }
+    projectClosingRestoreCandidatesCache();
     renderAll();
     goTab(pageId, snbAtivo);
   } else {
     activePeriod='all'; fS='all'; fC='all'; fM='all'; _openId=null;
+    projectClosingRestoreCandidatesCache();
     renderAll();
     var snbDash = document.querySelector('.snb');
     if (snbDash) goTab('dash', snbDash);
   }
 
+  projectClosingBootstrapSharedQueue();
   window._jaCarregou = true;
   window._cargaFinalizada = true;
 }
@@ -16232,9 +16249,11 @@ function inicializarPainel() {
         var baseCache = carregarBaseProjetos(lerDadosPlanilhaConsolidados(cacheInicial.projetos).projetos);
         DATA.projetos = baseCache.projetos;
         activePeriod='all'; fS='all'; fC='all'; fM='all'; _openId=null;
+        projectClosingRestoreCandidatesCache();
         renderAll();
         var snbDash = document.querySelector('.snb');
         if (snbDash) goTab('dash', snbDash);
+        projectClosingBootstrapSharedQueue();
         if (ndLocal) ndLocal.textContent = (cacheInicial.label || 'Ultima carga salva') + ' (cache)';
         console.log('[INIT] Cache local renderizado:', DATA.projetos.length);
       } catch (eCache) {
