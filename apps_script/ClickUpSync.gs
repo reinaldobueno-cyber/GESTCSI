@@ -2637,6 +2637,7 @@ function clickUpConsultantCanonicalName_(value) {
   var text = sanitizeText_(value);
   var key = normalizeKey_(text);
   if (key === 'LUCAS' || key === 'LUCAS PEREIRA DA SILVA') return 'Lucas Pereira da Silva';
+  if (key === 'SERGIO' || key === 'SERGIO CASTRO') return 'SÉRGIO';
   return text;
 }
 
@@ -2741,7 +2742,7 @@ function getProjectClosingDecisions_(params) {
     return {
       project_key: sanitizeText_(item.project_key),
       project_name: sanitizeText_(item.project_name),
-      consultant: sanitizeText_(item.consultant),
+      consultant: clickUpConsultantCanonicalName_(item.consultant),
       item_id: sanitizeText_(item.item_id),
       item_name: sanitizeText_(item.item_name),
       decision: sanitizeText_(item.decision).toLowerCase(),
@@ -2769,7 +2770,7 @@ function projectClosingCandidateFromTask_(task, mappings) {
     sanitizeText_(task && task.project && task.project.name) ||
     sanitizeText_(task && task.list && task.list.name) ||
     'Projeto nao mapeado';
-  var consultant = sanitizeText_(mapping.consultor || normalized.consultor || milestone.responsaveis);
+  var consultant = clickUpConsultantCanonicalName_(mapping.consultor || normalized.consultor || milestone.responsaveis);
   return {
     project_key: projectKey,
     project_name: projectName,
@@ -2819,7 +2820,7 @@ function projectClosingCandidateFromNormalizedItem_(mapping, normalized, item) {
     ('CLICKUP|' + sanitizeText_(item && item.id));
   var projectName = sanitizeText_(normalized && normalized.cliente || mapping && mapping.cliente) ||
     'Projeto ClickUp';
-  var consultant = sanitizeText_(normalized && normalized.consultor || mapping && mapping.consultor || item && item.responsaveis);
+  var consultant = clickUpConsultantCanonicalName_(normalized && normalized.consultor || mapping && mapping.consultor || item && item.responsaveis);
   var itemId = sanitizeText_(item && item.id);
   return {
     project_key: projectKey,
@@ -3076,7 +3077,7 @@ function setProjectClosingDecision_(params) {
   var item = {
     project_key: projectKey,
     project_name: sanitizeText_(params.project_name),
-    consultant: sanitizeText_(params.consultant),
+    consultant: clickUpConsultantCanonicalName_(params.consultant),
     item_id: itemId,
     item_name: sanitizeText_(params.item_name),
     decision: decision,
@@ -3132,7 +3133,7 @@ function reconcileProjectClosingDecisionFromNormalized_(mapping, normalized) {
   upsertProjectClosingDecisionRow_({
     project_key: mapping.project_key,
     project_name: normalized.cliente || mapping.cliente,
-    consultant: normalized.consultor || mapping.consultor,
+    consultant: clickUpConsultantCanonicalName_(normalized.consultor || mapping.consultor),
     item_id: finalItem.id || '',
     item_name: finalItem.nome || 'Fase 8 - Break Off',
     decision: approved ? 'approved' : 'rejected',

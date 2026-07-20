@@ -6348,7 +6348,7 @@ function projectClosingProjectFromCandidate(candidate) {
   return Object.assign({}, existing, {
     project_key: String(candidate.project_key || existing.project_key || montarProjectKeyClickup(existing) || '').trim(),
     cliente: candidate.project_name || existing.cliente || 'Projeto ClickUp',
-    consultor: candidate.consultant || existing.consultor || 'Sem consultor',
+    consultor: consultantCanonicalName(candidate.consultant || existing.consultor || 'Sem consultor'),
     status: existing.status || '',
     projeto_link: candidate.item_url || existing.projeto_link || existing.link_projeto || '',
     link_projeto: candidate.item_url || existing.link_projeto || existing.projeto_link || '',
@@ -6391,7 +6391,7 @@ function projectClosingProjectFromDecision(decision) {
   return Object.assign({}, existing, {
     project_key: decision.project_key || existing.project_key || montarProjectKeyClickup(existing) || '',
     cliente: decision.project_name || existing.cliente || 'Projeto ClickUp',
-    consultor: decision.consultant || existing.consultor || 'Sem consultor',
+    consultor: consultantCanonicalName(decision.consultant || existing.consultor || 'Sem consultor'),
     status: existing.status || '',
     item_id: decision.item_id || ''
   });
@@ -7261,7 +7261,7 @@ function projectClosingDecisionBonusRow(item) {
   return {
     project_key:item.project_key||'',
     projeto:item.project_name||'-',
-    consultor:item.consultant||'',
+    consultor:consultantCanonicalName(item.consultant||''),
     item_tipo:'Fechamento de projeto',
     marco:item.item_name||'Fase 8 - Break Off',
     situacao:item.decision==='approved'?'aprovado':'reprovado',
@@ -13718,6 +13718,7 @@ function consultantCanonicalName(name) {
   if(key==='YASMIN.SOUSA@MULTIBOVINOS.COM.BR')return 'Yasmin Sousa';
   if(key==='WAND'||key.indexOf('WANDERLEY')>=0||key.indexOf('WANDERLEI')>=0)return 'Wanderley Cabral';
   if(key==='LUCAS'||key==='LUCAS PEREIRA DA SILVA')return 'Lucas Pereira da Silva';
+  if(key==='SERGIO'||key==='SERGIO CASTRO')return 'SÉRGIO';
   if(value.indexOf('@')>0){
     return value.split('@')[0].split(/[._-]+/).filter(Boolean).map(function(part){
       return part.charAt(0).toUpperCase()+part.slice(1).toLowerCase();
