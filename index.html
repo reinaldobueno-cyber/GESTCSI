@@ -5676,6 +5676,7 @@ var PROJECT_CLOSING_DECISIONS = {items:[], loaded:false, loading:false, backendR
 var PROJECT_CLOSING_DECISION_TARGET = null;
 var PROJECT_CLOSING_SYNC = {active:false, processed:0, total:0, errors:0, error:'', timer:null};
 var PROJECT_CLOSING_CANDIDATES = {items:[], loaded:false, loading:false, backendReady:null, error:'', generated_at:'', scanToken:0};
+var PROJECT_CLOSING_CANDIDATES_CACHE_KEY = 'gestcsi_project_closing_candidates_v1';
 var FECHAMENTO_EXPANDED = {};
 try { FECHAMENTO_EXPANDED = JSON.parse(storageGet('gestcsi_fechamento_expanded_v1', '{}')) || {}; } catch(e) { FECHAMENTO_EXPANDED = {}; }
 function fechamentoToggleConsultant(name) {
@@ -6076,6 +6077,8 @@ function projectClosingSearch() {
     if (Number(resp.persisted_count || 0) > 0) {
       fechamentoLoad(true);
       projectClosingLoadDecisions(true);
+      PROJECT_CLOSING_CANDIDATES.loaded = false;
+      projectClosingLoadCandidates(false);
       showToast('Busca direta gravada na base compartilhada.', 'ok');
     } else if (resp.persist_error) {
       showToast('Busca concluída, mas a gravação compartilhada falhou.', 'warn');
@@ -6130,6 +6133,30 @@ function projectClosingMergeCandidates(items) {
   });
   PROJECT_CLOSING_CANDIDATES.items = merged;
 }
+function projectClosingRestoreCandidatesCache() {
+  try {
+    var cached = JSON.parse(storageGet(PROJECT_CLOSING_CANDIDATES_CACHE_KEY, 'null'));
+    if (!cached || !Array.isArray(cached.items) || !cached.items.length) return false;
+    PROJECT_CLOSING_CANDIDATES.items = cached.items;
+    PROJECT_CLOSING_CANDIDATES.generated_at = cached.generated_at || PROJECT_CLOSING_CANDIDATES.generated_at || '';
+    PROJECT_CLOSING_CANDIDATES.loaded = true;
+    PROJECT_CLOSING_CANDIDATES.backendReady = PROJECT_CLOSING_CANDIDATES.backendReady !== false;
+    return true;
+  } catch(e) {
+    return false;
+  }
+}
+function projectClosingSaveCandidatesCache() {
+  try {
+    var items = PROJECT_CLOSING_CANDIDATES.items || [];
+    if (!items.length) return;
+    storageSet(PROJECT_CLOSING_CANDIDATES_CACHE_KEY, JSON.stringify({
+      generated_at: PROJECT_CLOSING_CANDIDATES.generated_at || new Date().toISOString(),
+      saved_at: new Date().toISOString(),
+      items: items
+    }));
+  } catch(e) {}
+}
 function projectClosingCandidatesFromSavedJson() {
   var seen = {};
   var out = [];
@@ -6172,12 +6199,15 @@ function projectClosingAllCandidates() {
 }
 function projectClosingLoadCandidates(force) {
   if (!authTokenParam() || PROJECT_CLOSING_CANDIDATES.loading || (PROJECT_CLOSING_CANDIDATES.loaded && !force)) return Promise.resolve(null);
+  if (!force && !(PROJECT_CLOSING_CANDIDATES.items || []).length && projectClosingRestoreCandidatesCache()) {
+    initProjectClosing();
+  }
   var scanToken = Date.now();
   PROJECT_CLOSING_CANDIDATES.scanToken = scanToken;
   PROJECT_CLOSING_CANDIDATES.loading = true;
   PROJECT_CLOSING_CANDIDATES.loaded = false;
   PROJECT_CLOSING_CANDIDATES.error = '';
-  PROJECT_CLOSING_CANDIDATES.items = [];
+  if (force) PROJECT_CLOSING_CANDIDATES.items = [];
   PROJECT_CLOSING_SYNC.active = !!force;
   PROJECT_CLOSING_SYNC.processed = 0;
   PROJECT_CLOSING_SYNC.total = 0;
@@ -6220,6 +6250,7 @@ function projectClosingLoadCandidates(force) {
       PROJECT_CLOSING_CANDIDATES.loading = false;
       PROJECT_CLOSING_SYNC.active = false;
       PROJECT_CLOSING_SYNC.processed = PROJECT_CLOSING_SYNC.total || PROJECT_CLOSING_SYNC.processed;
+      projectClosingSaveCandidatesCache();
       initProjectClosing();
       initBonus();
       return {

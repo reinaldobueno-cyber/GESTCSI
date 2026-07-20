@@ -2401,6 +2401,14 @@ function persistProjectClosingDiagnosis_(tasks, listId) {
     entries.forEach(function(entry) {
       reconcileProjectClosingDecisionFromNormalized_(entry.mapping, entry.normalized);
     });
+    var candidates = tasks.map(function(task, index) {
+      var entry = entries[index] || {};
+      return projectClosingCandidateFromTask_(task, [entry.mapping || listMapping || fallbackProjectMappingForTask_(task)]);
+    }).filter(function(item) {
+      return isProjectClosingApprovalStatus_(item && item.item_status) ||
+        isProjectClosingApprovalStatus_(item && item.phase_status);
+    });
+    upsertProjectClosingCandidateRows_(candidates, 'clickup_project_closing_direct_lookup', new Date());
     return { count: entries.length, error: '' };
   } catch (error) {
     return { count: 0, error: simplifyErrorMessage_(error) };
@@ -2805,6 +2813,26 @@ function writeProjectClosingCandidateRows_(items, source, detectedAt) {
   });
   writeObjectsToSheet_(getProjectClosingCandidateSheet_(), normalized, projectClosingCandidateHeaders_());
   return normalized;
+}
+
+function upsertProjectClosingCandidateRows_(items, source, detectedAt) {
+  var byKey = {};
+  getProjectClosingCandidateRows_().forEach(function(item) {
+    var key = projectClosingCandidateKey_(item);
+    if (key) byKey[key] = item;
+  });
+  (items || []).forEach(function(item) {
+    var normalized = normalizeProjectClosingCandidateRow_(Object.assign({}, item || {}, {
+      candidate_key: projectClosingCandidateKey_(item),
+      detected_at: detectedAt || item && item.detected_at || new Date(),
+      source: source || item && item.source || 'clickup_project_closing_direct_lookup'
+    }));
+    var key = projectClosingCandidateKey_(normalized);
+    if (key) byKey[key] = Object.assign({}, byKey[key] || {}, normalized);
+  });
+  return writeProjectClosingCandidateRows_(Object.keys(byKey).map(function(key) {
+    return byKey[key];
+  }), '', '');
 }
 
 function projectClosingDecisionDateText_(value) {
