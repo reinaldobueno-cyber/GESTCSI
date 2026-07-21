@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>PMO - Multsoft</title>
+<title>Gest&atilde;o CSI - Multsoft</title>
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Manrope:wght@500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
 <style>
@@ -3519,6 +3519,42 @@ body.theme-dark #projfech-content .btn-syncall:disabled{
 }
 @media(max-width:1100px){.closing-summary-grid{grid-template-columns:1fr}}
 @media(max-width:900px){.closing-kpis{grid-template-columns:repeat(2,1fr)}.closing-head{flex-direction:column}.closing-project-card{grid-template-columns:1fr}.closing-consultant-head{align-items:flex-start;flex-direction:column}.closing-consultant-metric{text-align:left}}
+
+/* Identidade visual e rodap? institucional */
+.nav-brand-image{
+  display:block;
+  width:104px;
+  height:42px;
+  object-fit:contain;
+  flex:0 0 auto;
+}
+.site-footer{
+  min-height:46px;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  padding:12px 20px;
+  border-top:1px solid rgba(93,117,90,.28);
+  background:linear-gradient(135deg,#71866f 0%,#536b52 100%);
+  color:#fff;
+  font-size:11px;
+  font-weight:800;
+  letter-spacing:.04em;
+  text-align:center;
+  box-shadow:0 -8px 24px rgba(66,82,64,.08);
+}
+body.theme-dark .nav-brand-image{filter:brightness(1.08) contrast(1.03);}
+body.theme-dark .site-footer{
+  border-top-color:rgba(148,163,184,.18);
+  background:linear-gradient(135deg,#22352a 0%,#17251d 100%);
+  color:#e7f2e9;
+}
+@media(max-width:800px){
+  .nav-brand{gap:8px!important;}
+  .nav-brand-image{width:76px;height:34px;}
+  .nav-title{max-width:120px;line-height:1.15;letter-spacing:.035em!important;}
+  .site-footer{min-height:42px;padding:10px 12px;font-size:10px;}
+}
 </style>
 </head>
 <body>
@@ -3539,14 +3575,14 @@ body.theme-dark #projfech-content .btn-syncall:disabled{
 <div id="refresh-bar"></div>
 <div id="load-overlay" style="display:none">
   <div class="ld-logo">M</div>
-  <div class="ld-title">PAINEL DE GEST&Atilde;O - MULTSOFT</div>
+  <div class="ld-title">GEST&Atilde;O CSI - MULTSOFT</div>
   <div class="ld-spin"></div>
   <div id="load-text">Carregando dados...</div>
 </div>
 <nav>
   <div class="nav-brand">
-    <div class="nav-logo">M</div>
-    <div class="nav-title">PAINEL DE GEST&Atilde;O - <em>MULTSOFT</em></div>
+    <img class="nav-brand-image" src="assets/multsoft-mb-ima.png" alt="Multsoft, MB e IMA">
+    <div class="nav-title">GEST&Atilde;O CSI - <em>MULTSOFT</em></div>
   </div>
   <div class="nav-right">
     <span class="nav-date" id="nav-date">Carregando...</span>
@@ -3656,6 +3692,8 @@ body.theme-dark #projfech-content .btn-syncall:disabled{
   </div>
 </div>
 <div class="page" id="page-exec"><div id="exec-content" style="padding:4px 0"></div></div>
+
+<footer class="site-footer">Gest&atilde;o CSI - Criado por Reinaldo Bueno</footer>
 
 <div class="toast" id="toast">
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
