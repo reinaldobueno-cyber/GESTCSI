@@ -3380,6 +3380,11 @@ body.theme-dark *{
 .closing-consultant-arrow{width:24px;height:24px;border:1px solid var(--border);border-radius:999px;background:var(--surf);display:inline-flex;align-items:center;justify-content:center;font-size:12px;font-weight:900;color:var(--green);transition:transform .16s ease}
 .closing-consultant-card.is-collapsed .closing-consultant-arrow{transform:rotate(-90deg)}
 .closing-consultant-name{display:block;font-size:15px;font-weight:900;color:var(--text);text-transform:uppercase;letter-spacing:.04em;margin-bottom:8px}
+.closing-consultant-name-line{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.closing-consultant-name-line .closing-consultant-name{margin-bottom:0}
+.closing-new-badge{display:inline-flex;align-items:center;gap:4px;min-height:22px;padding:2px 7px;border-radius:999px;background:#b42318;color:#fff;font-size:10px;font-weight:900;line-height:1;box-shadow:0 0 0 3px rgba(180,35,24,.10)}
+.closing-new-badge .closing-new-bell{font-size:12px;line-height:1}
+.closing-consultant-card.has-new{border-color:rgba(180,35,24,.42);box-shadow:0 3px 14px rgba(180,35,24,.08)}
 .closing-consultant-title-row{display:flex;align-items:center;gap:9px;flex-wrap:wrap}
 .closing-consultant-metrics{display:flex;gap:18px;flex-wrap:wrap}
 .closing-consultant-metric{text-align:right}.closing-consultant-metric strong{display:block;font-size:18px;color:var(--text)}.closing-consultant-metric span{font-size:8px;font-weight:900;color:var(--muted);text-transform:uppercase}
@@ -5720,9 +5725,62 @@ var PROJECT_CLOSING_CANDIDATES_CACHE_KEY = 'gestcsi_project_closing_candidates_v
 var PROJECT_CLOSING_BOOTSTRAPPED = false;
 var FECHAMENTO_EXPANDED = {};
 try { FECHAMENTO_EXPANDED = JSON.parse(storageGet('gestcsi_fechamento_expanded_v1', '{}')) || {}; } catch(e) { FECHAMENTO_EXPANDED = {}; }
+var FECHAMENTO_NEW_TRACKER_KEY = 'gestcsi_fechamento_new_tracker_v1';
+var FECHAMENTO_NEW_TRACKER = {initialized:false, known:{}, unread:{}};
+try {
+  FECHAMENTO_NEW_TRACKER = JSON.parse(storageGet(FECHAMENTO_NEW_TRACKER_KEY, 'null')) || FECHAMENTO_NEW_TRACKER;
+  FECHAMENTO_NEW_TRACKER.known = FECHAMENTO_NEW_TRACKER.known || {};
+  FECHAMENTO_NEW_TRACKER.unread = FECHAMENTO_NEW_TRACKER.unread || {};
+} catch(e) { FECHAMENTO_NEW_TRACKER = {initialized:false, known:{}, unread:{}}; }
+function fechamentoSaveNewTracker() {
+  storageSet(FECHAMENTO_NEW_TRACKER_KEY, JSON.stringify(FECHAMENTO_NEW_TRACKER));
+}
+function fechamentoTrackNewRows() {
+  var rows = FECHAMENTO_MARCOS || [];
+  var firstSnapshot = !FECHAMENTO_NEW_TRACKER.initialized;
+  var changed = firstSnapshot;
+  rows.forEach(function(item) {
+    var rowKey = fechamentoRowKey(item);
+    if (!rowKey) return;
+    var consultant = fechamentoEffectiveConsultant(item);
+    var consultantKey = consultantCompKey(consultant) || normalizeClienteKey(consultant);
+    var previousConsultantKey = FECHAMENTO_NEW_TRACKER.known[rowKey];
+    if (!previousConsultantKey) {
+      FECHAMENTO_NEW_TRACKER.known[rowKey] = consultantKey;
+      if (!firstSnapshot) FECHAMENTO_NEW_TRACKER.unread[rowKey] = consultantKey;
+      changed = true;
+    } else if (previousConsultantKey === true) {
+      FECHAMENTO_NEW_TRACKER.known[rowKey] = consultantKey;
+      changed = true;
+    } else if (previousConsultantKey !== consultantKey) {
+      FECHAMENTO_NEW_TRACKER.known[rowKey] = consultantKey;
+      FECHAMENTO_NEW_TRACKER.unread[rowKey] = consultantKey;
+      changed = true;
+    }
+  });
+  FECHAMENTO_NEW_TRACKER.initialized = true;
+  if (changed) fechamentoSaveNewTracker();
+}
+function fechamentoUnreadCount(name) {
+  var consultantKey = consultantCompKey(name) || normalizeClienteKey(name);
+  return Object.keys(FECHAMENTO_NEW_TRACKER.unread).filter(function(rowKey) {
+    return FECHAMENTO_NEW_TRACKER.unread[rowKey] === consultantKey;
+  }).length;
+}
+function fechamentoMarkConsultantRead(name) {
+  var consultantKey = consultantCompKey(name) || normalizeClienteKey(name);
+  var changed = false;
+  Object.keys(FECHAMENTO_NEW_TRACKER.unread).forEach(function(rowKey) {
+    if (FECHAMENTO_NEW_TRACKER.unread[rowKey] !== consultantKey) return;
+    delete FECHAMENTO_NEW_TRACKER.unread[rowKey];
+    changed = true;
+  });
+  if (changed) fechamentoSaveNewTracker();
+}
 function fechamentoToggleConsultant(name) {
   var key = consultantCompKey(name) || normalizeClienteKey(name);
   FECHAMENTO_EXPANDED[key] = !FECHAMENTO_EXPANDED[key];
+  if (FECHAMENTO_EXPANDED[key]) fechamentoMarkConsultantRead(name);
   storageSet('gestcsi_fechamento_expanded_v1', JSON.stringify(FECHAMENTO_EXPANDED));
   initFechamento();
   return false;
@@ -7101,6 +7159,7 @@ function initFechamento() {
     box.innerHTML = '<div class="empty">Carregando fechamento de marcos...</div>';
     return;
   }
+  if (FECHAMENTO_LOADED) fechamentoTrackNewRows();
   var months = {};
   var consultants = {};
   (FECHAMENTO_MARCOS || []).forEach(function(item) {
@@ -7166,6 +7225,8 @@ function initFechamento() {
     var consultantRejected = consultantRows.filter(function(item){ return item.situacao === 'reprovado'; }).length;
     var consultantWaiting = consultantRows.filter(function(item){ return item.situacao === 'aguardando'; }).length;
     var consultantBonus = consultantRows.reduce(function(sum,item){ return sum + Number(item.valor_bonus || 0); },0);
+    var consultantNew = fechamentoUnreadCount(consultant);
+    var newBadge = consultantNew ? '<span class="closing-new-badge" title="'+consultantNew+' marco(s) novo(s) desde a última visualização"><span class="closing-new-bell" aria-hidden="true">&#128276;</span><span>'+consultantNew+'</span></span>' : '';
     var projectCards = consultantRows.map(function(item) {
       var status = String(item.situacao || 'outro');
       var comment = item.justificativa
@@ -7179,7 +7240,7 @@ function initFechamento() {
         '<div><span class="closing-status '+escapeHtml(status)+'">'+escapeHtml(item.status_atual || status)+'</span><div class="closing-project-comment" style="margin-top:7px">'+comment+'<div class="closing-project-meta">'+ownerNote+'</div></div></div>'+
         '<div><strong>'+fechamentoMoney(item.valor_bonus)+'</strong><div style="margin-top:8px"><a class="project-link-btn" href="'+escapeHtml(item.link || '#')+'" target="_blank" rel="noopener">Abrir marco</a></div></div></div>';
     }).join('');
-    return '<section class="closing-consultant-card '+(collapsed?'is-collapsed':'')+'"><div class="closing-consultant-head"><div class="closing-consultant-title-row"><button class="closing-consultant-toggle" onclick="return fechamentoToggleConsultant(decodeURIComponent(\''+encodeURIComponent(consultant)+'\'))"><span class="closing-consultant-arrow">&#9662;</span><span><span class="closing-consultant-name">'+escapeHtml(consultant)+'</span><span class="closing-project-meta">Marcos que entraram em Closed no período selecionado</span></span></button></div><div class="closing-consultant-metrics"><div class="closing-consultant-metric"><strong>'+consultantRows.length+'</strong><span>Marcos</span></div><div class="closing-consultant-metric"><strong>'+consultantWaiting+'</strong><span>Aguardando</span></div><div class="closing-consultant-metric"><strong>'+consultantApproved+' / '+consultantRejected+'</strong><span>Aprov. / Reprov.</span></div><div class="closing-consultant-metric"><strong>'+fechamentoMoney(consultantBonus)+'</strong><span>Bônus</span></div></div></div><div class="closing-project-list">'+projectCards+'</div></section>';
+    return '<section class="closing-consultant-card '+(collapsed?'is-collapsed ':'')+(consultantNew?'has-new':'')+'"><div class="closing-consultant-head"><div class="closing-consultant-title-row"><button class="closing-consultant-toggle" onclick="return fechamentoToggleConsultant(decodeURIComponent(\''+encodeURIComponent(consultant)+'\'))"><span class="closing-consultant-arrow">&#9662;</span><span><span class="closing-consultant-name-line"><span class="closing-consultant-name">'+escapeHtml(consultant)+'</span>'+newBadge+'</span><span class="closing-project-meta">Marcos que entraram em Closed no período selecionado</span></span></button></div><div class="closing-consultant-metrics"><div class="closing-consultant-metric"><strong>'+consultantRows.length+'</strong><span>Marcos</span></div><div class="closing-consultant-metric"><strong>'+consultantWaiting+'</strong><span>Aguardando</span></div><div class="closing-consultant-metric"><strong>'+consultantApproved+' / '+consultantRejected+'</strong><span>Aprov. / Reprov.</span></div><div class="closing-consultant-metric"><strong>'+fechamentoMoney(consultantBonus)+'</strong><span>Bônus</span></div></div></div><div class="closing-project-list">'+projectCards+'</div></section>';
   }).join('') || '<div class="empty">Nenhum marco encontrado neste recorte. Atualize os Closed ou consulte as validações.</div>';
   var error = FECHAMENTO_META.error ? '<div class="dashx-focus-note" style="margin-bottom:12px"><strong>'+escapeHtml(FECHAMENTO_META.error)+'</strong></div>' : '';
   var bg = FECHAMENTO_META.background_sync || {};
