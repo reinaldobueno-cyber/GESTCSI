@@ -16035,8 +16035,9 @@ function loadAll(tipoAtualizacao) {
             return;
           }
           if (combinados.length > painelMinimoCarteiraAtual()) {
-            console.warn('[INIT] Apps Script ALL sugeriu novo total ('+combinados.length+'). Confirmando mês a mês antes de salvar.');
-            buscarAppsScriptPorMes('apps_script_all_new_total');
+            painelRegistrarTotalCarteira(combinados.length, 'apps_script_all_merged');
+            console.warn('[INIT] Apps Script ALL confirmou novo total completo ('+combinados.length+'). Salvando automaticamente.');
+            _finalizarLoad(combinados, isRefresh, 'apps_script_all_new_total', window._lastUpdateTrigger);
             return;
           }
           _finalizarLoad(combinados, isRefresh, 'sheet_direct_merged', window._lastUpdateTrigger);
@@ -16048,8 +16049,9 @@ function loadAll(tipoAtualizacao) {
           return;
         }
         if (qtd > painelMinimoCarteiraAtual()) {
-          console.warn('[INIT] Apps Script ALL sugeriu novo total ('+qtd+'). Confirmando mês a mês antes de salvar.');
-          buscarAppsScriptPorMes('apps_script_all_new_total_sem_fallback');
+          painelRegistrarTotalCarteira(qtd, 'apps_script_all');
+          console.warn('[INIT] Apps Script ALL confirmou novo total completo ('+qtd+'). Salvando automaticamente.');
+          _finalizarLoad(resp.projetos, isRefresh, 'apps_script_all_new_total', window._lastUpdateTrigger);
           return;
         }
         _finalizarLoad(resp.projetos, isRefresh, 'apps_script', window._lastUpdateTrigger);
@@ -16329,7 +16331,7 @@ function inicializarPainel() {
       if (window._cargaFinalizada) return;
       console.error('[INIT] Watchdog acionado: carga principal não finalizou.');
       _finalizarLoad([], false, 'watchdog', 'auto');
-    }, 15000);
+    }, 60000);
   } catch (error) {
     console.error('[INIT] Erro ao inicializar painel:', error);
     var nd = document.getElementById('nav-date');
