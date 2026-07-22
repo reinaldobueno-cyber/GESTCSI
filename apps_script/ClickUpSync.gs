@@ -1741,6 +1741,46 @@ function fetchClickUpTasksByIds_(taskIds) {
   return tasks;
 }
 
+function fetchClickUpValidationSituationForMonth_(situation, month) {
+  var token = getScriptProperty_('CLICKUP_TOKEN');
+  var workspaceId = getClickUpWorkspaceId_();
+  if (!token) throw new Error('Missing CLICKUP_TOKEN script property');
+  if (!workspaceId) throw new Error('CLICKUP_TEAM_ID nao configurado.');
+  var since = new Date(month + '-01T00:00:00').getTime();
+  var requests = [];
+  clickUpMilestoneStatusAliases_(situation).forEach(function(status) {
+    [true, false].forEach(function(customItemsOnly) {
+      var query = [
+        'include_closed=true',
+        'subtasks=true',
+        'date_updated_gt=' + since,
+        'order_by=updated',
+        'reverse=true',
+        'page=0',
+        'statuses[]=' + encodeURIComponent(status)
+      ];
+      if (customItemsOnly) query.splice(2, 0, 'custom_items[]=1');
+      requests.push({
+        url: CLICKUP_API_BASE + '/team/' + workspaceId + '/task?' + query.join('&'),
+        method: 'get',
+        muteHttpExceptions: true,
+        headers: { Authorization: token, Accept: 'application/json', 'Content-Type': 'application/json' }
+      });
+    });
+  });
+  var tasks = [];
+  UrlFetchApp.fetchAll(requests).forEach(function(response) {
+    if (response.getResponseCode() < 200 || response.getResponseCode() >= 300) return;
+    try {
+      tasks = tasks.concat(JSON.parse(response.getContentText() || '{}').tasks || []);
+    } catch (error) {}
+  });
+  return dedupeTasks_(tasks).filter(function(task) {
+    return clickUpMilestoneStatusMatchesSituation_(clickUpTaskStatusText_(task), situation) &&
+      normalizeClickUpMonthReference_(task && task.date_updated ? fromMillisIso_(task.date_updated) : '') === month;
+  });
+}
+
 function fetchClickUpValidationMilestoneTasks_() {
   var token = getScriptProperty_('CLICKUP_TOKEN');
   var workspaceId = getClickUpWorkspaceId_();
@@ -3920,31 +3960,10 @@ function syncClickUpValidationSituation_(params, situation) {
     var headers = getClickUpMilestoneClosingHeaders_();
     var current = loadClickUpMilestoneClosingCurrent_(sheet);
     var mappings = loadClickUpMilestoneClosingMappings_();
-    var deadlineMs = startedAt + 240000;
-    var reconcile = clickUpMilestoneReconcileBatchIds_(current, month, situation, 140);
-
-    var tasks = fetchClickUpMilestonesBySituationOptimized_(situation, reconcile.ids, {
-      month: month,
-      max_pages: 4,
-      direct_limit: 140,
-      deadline_ms: deadlineMs,
-      current: current
-    });
-
-    var monthStartMs = new Date(month + '-01T00:00:00').getTime();
-    if (monthStartMs) {
-      try {
-        tasks = tasks.concat(fetchClickUpRecentMilestoneCoverageTasks_(monthStartMs, { max_pages: 3 }));
-      } catch (recentError) {
-        Logger.log('[' + situation + '] Busca recente parcial: ' + simplifyErrorMessage_(recentError));
-      }
-    }
-
-    tasks = dedupeTasks_(tasks).filter(function(task) {
+    var trackedIds = Object.keys(current);
+    var tasks = fetchClickUpValidationSituationForMonth_(situation, month).filter(function(task) {
       var taskId = String(task && task.id || '');
-      var existing = current[taskId] || {};
-      return clickUpMilestoneStatusMatchesSituation_(clickUpTaskStatusText_(task), situation) &&
-        clickUpMilestoneTaskMatchesMonth_(task, existing, month, true);
+      return !!current[taskId];
     });
     Logger.log('📊 [' + situation + '] Marcos para processar: ' + tasks.length);
 
@@ -3997,10 +4016,10 @@ function syncClickUpValidationSituation_(params, situation) {
     result.changed = changed;
     result.elapsed_ms = new Date().getTime() - startedAt;
     result.sync_type = situation;
-    result.reconcile_processed = reconcile.ids.length;
-    result.reconcile_total = reconcile.total;
-    result.reconcile_next_offset = reconcile.next_offset;
-    result.reconcile_done = reconcile.done;
+    result.reconcile_processed = trackedIds.length;
+    result.reconcile_total = trackedIds.length;
+    result.reconcile_next_offset = 0;
+    result.reconcile_done = true;
     Logger.log('📊 [' + situation + '] Finalizado. Confirmados=' + tasks.length + ' Mudancas=' + changed);
     return result;
   } finally {
