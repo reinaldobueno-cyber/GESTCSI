@@ -7079,7 +7079,7 @@ function bonusMilestoneOverrideMonth(item) {
   return '';
 }
 function bonusMilestoneEffectiveMonth(item) {
-  return bonusMilestoneOverrideMonth(item)||String(item&&item.mes_fechamento||'');
+  return String(item && (item.mes_validacao || item.mes_fechamento) || '');
 }
 function bonusRejectedMilestoneEffectiveMonth(item) {
   return String(item && (item.mes_validacao || item.mes_fechamento) || '');
