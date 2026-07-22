@@ -5725,7 +5725,7 @@ var PROJECT_CLOSING_CANDIDATES_CACHE_KEY = 'gestcsi_project_closing_candidates_v
 var PROJECT_CLOSING_BOOTSTRAPPED = false;
 var FECHAMENTO_EXPANDED = {};
 try { FECHAMENTO_EXPANDED = JSON.parse(storageGet('gestcsi_fechamento_expanded_v1', '{}')) || {}; } catch(e) { FECHAMENTO_EXPANDED = {}; }
-var FECHAMENTO_NEW_TRACKER_KEY = 'gestcsi_fechamento_new_tracker_v1';
+var FECHAMENTO_NEW_TRACKER_KEY = 'gestcsi_fechamento_new_tracker_v2';
 var FECHAMENTO_NEW_TRACKER = {initialized:false, known:{}, unread:{}};
 try {
   FECHAMENTO_NEW_TRACKER = JSON.parse(storageGet(FECHAMENTO_NEW_TRACKER_KEY, 'null')) || FECHAMENTO_NEW_TRACKER;
@@ -5747,7 +5747,7 @@ function fechamentoTrackNewRows() {
     var previousConsultantKey = FECHAMENTO_NEW_TRACKER.known[rowKey];
     if (!previousConsultantKey) {
       FECHAMENTO_NEW_TRACKER.known[rowKey] = consultantKey;
-      if (!firstSnapshot) FECHAMENTO_NEW_TRACKER.unread[rowKey] = consultantKey;
+      FECHAMENTO_NEW_TRACKER.unread[rowKey] = consultantKey;
       changed = true;
     } else if (previousConsultantKey === true) {
       FECHAMENTO_NEW_TRACKER.known[rowKey] = consultantKey;
