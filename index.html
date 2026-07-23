@@ -5725,9 +5725,11 @@ var PROJECT_CLOSING_CANDIDATES_CACHE_KEY = 'gestcsi_project_closing_candidates_v
 var PROJECT_CLOSING_BOOTSTRAPPED = false;
 var FECHAMENTO_EXPANDED = {};
 try { FECHAMENTO_EXPANDED = JSON.parse(storageGet('gestcsi_fechamento_expanded_v1', '{}')) || {}; } catch(e) { FECHAMENTO_EXPANDED = {}; }
-var FECHAMENTO_NEW_TRACKER_KEY = 'gestcsi_fechamento_new_tracker_v2';
+var FECHAMENTO_NEW_TRACKER_KEY = 'gestcsi_fechamento_new_tracker_v3';
+var FECHAMENTO_NEW_TRACKER_LEGACY = null;
 var FECHAMENTO_NEW_TRACKER = {initialized:false, known:{}, unread:{}};
 try {
+  FECHAMENTO_NEW_TRACKER_LEGACY = JSON.parse(storageGet('gestcsi_fechamento_new_tracker_v2', 'null'));
   FECHAMENTO_NEW_TRACKER = JSON.parse(storageGet(FECHAMENTO_NEW_TRACKER_KEY, 'null')) || FECHAMENTO_NEW_TRACKER;
   FECHAMENTO_NEW_TRACKER.known = FECHAMENTO_NEW_TRACKER.known || {};
   FECHAMENTO_NEW_TRACKER.unread = FECHAMENTO_NEW_TRACKER.unread || {};
@@ -5735,13 +5737,45 @@ try {
 function fechamentoSaveNewTracker() {
   storageSet(FECHAMENTO_NEW_TRACKER_KEY, JSON.stringify(FECHAMENTO_NEW_TRACKER));
 }
+function fechamentoNotificationRowKey(item) {
+  var project = normalizeClienteKey(item && (item.projeto || item.cliente));
+  var milestone = normalizeClienteKey(item && (item.marco || item.nome));
+  var phase = normalizeClienteKey(item && item.fase);
+  var month = fechamentoMonthKey(item && item.mes_fechamento, item && item.closed_at);
+  return project && milestone ? [project, milestone, phase, month].join('|') : fechamentoRowKey(item);
+}
 function fechamentoTrackNewRows() {
   var rows = FECHAMENTO_MARCOS || [];
   var firstSnapshot = !FECHAMENTO_NEW_TRACKER.initialized;
   var changed = firstSnapshot;
+  var currentKeys = {};
+  if (firstSnapshot) {
+    var legacyUnread = FECHAMENTO_NEW_TRACKER_LEGACY && FECHAMENTO_NEW_TRACKER_LEGACY.unread || {};
+    var legacyUnreadKeys = Object.keys(legacyUnread);
+    var polluted = legacyUnreadKeys.length > rows.length;
+    var newestItem = null;
+    rows.forEach(function(item) {
+      var stableKey = fechamentoNotificationRowKey(item);
+      if (!stableKey) return;
+      var consultant = fechamentoEffectiveConsultant(item);
+      var consultantKey = consultantCompKey(consultant) || normalizeClienteKey(consultant);
+      currentKeys[stableKey] = true;
+      FECHAMENTO_NEW_TRACKER.known[stableKey] = consultantKey;
+      if (!polluted && legacyUnread[fechamentoRowKey(item)]) FECHAMENTO_NEW_TRACKER.unread[stableKey] = consultantKey;
+      if (!newestItem || String(item.closed_at || '').localeCompare(String(newestItem.closed_at || '')) > 0) newestItem = item;
+    });
+    if (polluted && newestItem) {
+      var newestKey = fechamentoNotificationRowKey(newestItem);
+      FECHAMENTO_NEW_TRACKER.unread[newestKey] = consultantCompKey(fechamentoEffectiveConsultant(newestItem)) || normalizeClienteKey(fechamentoEffectiveConsultant(newestItem));
+    }
+    FECHAMENTO_NEW_TRACKER.initialized = true;
+    fechamentoSaveNewTracker();
+    return;
+  }
   rows.forEach(function(item) {
-    var rowKey = fechamentoRowKey(item);
+    var rowKey = fechamentoNotificationRowKey(item);
     if (!rowKey) return;
+    currentKeys[rowKey] = true;
     var consultant = fechamentoEffectiveConsultant(item);
     var consultantKey = consultantCompKey(consultant) || normalizeClienteKey(consultant);
     var previousConsultantKey = FECHAMENTO_NEW_TRACKER.known[rowKey];
@@ -5758,7 +5792,11 @@ function fechamentoTrackNewRows() {
       changed = true;
     }
   });
-  FECHAMENTO_NEW_TRACKER.initialized = true;
+  Object.keys(FECHAMENTO_NEW_TRACKER.unread).forEach(function(rowKey) {
+    if (currentKeys[rowKey]) return;
+    delete FECHAMENTO_NEW_TRACKER.unread[rowKey];
+    changed = true;
+  });
   if (changed) fechamentoSaveNewTracker();
 }
 function fechamentoUnreadCount(name) {
