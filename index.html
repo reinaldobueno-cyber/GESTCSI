@@ -5725,7 +5725,7 @@ var PROJECT_CLOSING_CANDIDATES_CACHE_KEY = 'gestcsi_project_closing_candidates_v
 var PROJECT_CLOSING_BOOTSTRAPPED = false;
 var FECHAMENTO_EXPANDED = {};
 try { FECHAMENTO_EXPANDED = JSON.parse(storageGet('gestcsi_fechamento_expanded_v1', '{}')) || {}; } catch(e) { FECHAMENTO_EXPANDED = {}; }
-var FECHAMENTO_NEW_TRACKER_KEY = 'gestcsi_fechamento_new_tracker_v3';
+var FECHAMENTO_NEW_TRACKER_KEY = 'gestcsi_fechamento_new_tracker_v4';
 var FECHAMENTO_NEW_TRACKER_LEGACY = null;
 var FECHAMENTO_NEW_TRACKER = {initialized:false, known:{}, unread:{}};
 try {
@@ -5750,10 +5750,8 @@ function fechamentoTrackNewRows() {
   var changed = firstSnapshot;
   var currentKeys = {};
   if (firstSnapshot) {
-    var legacyUnread = FECHAMENTO_NEW_TRACKER_LEGACY && FECHAMENTO_NEW_TRACKER_LEGACY.unread || {};
-    var legacyUnreadKeys = Object.keys(legacyUnread);
-    var polluted = legacyUnreadKeys.length > rows.length;
-    var newestItem = null;
+    FECHAMENTO_NEW_TRACKER.known = {};
+    FECHAMENTO_NEW_TRACKER.unread = {};
     rows.forEach(function(item) {
       var stableKey = fechamentoNotificationRowKey(item);
       if (!stableKey) return;
@@ -5761,13 +5759,7 @@ function fechamentoTrackNewRows() {
       var consultantKey = consultantCompKey(consultant) || normalizeClienteKey(consultant);
       currentKeys[stableKey] = true;
       FECHAMENTO_NEW_TRACKER.known[stableKey] = consultantKey;
-      if (!polluted && legacyUnread[fechamentoRowKey(item)]) FECHAMENTO_NEW_TRACKER.unread[stableKey] = consultantKey;
-      if (!newestItem || String(item.closed_at || '').localeCompare(String(newestItem.closed_at || '')) > 0) newestItem = item;
     });
-    if (polluted && newestItem) {
-      var newestKey = fechamentoNotificationRowKey(newestItem);
-      FECHAMENTO_NEW_TRACKER.unread[newestKey] = consultantCompKey(fechamentoEffectiveConsultant(newestItem)) || normalizeClienteKey(fechamentoEffectiveConsultant(newestItem));
-    }
     FECHAMENTO_NEW_TRACKER.initialized = true;
     fechamentoSaveNewTracker();
     return;
@@ -5788,7 +5780,7 @@ function fechamentoTrackNewRows() {
       changed = true;
     } else if (previousConsultantKey !== consultantKey) {
       FECHAMENTO_NEW_TRACKER.known[rowKey] = consultantKey;
-      FECHAMENTO_NEW_TRACKER.unread[rowKey] = consultantKey;
+      if (FECHAMENTO_NEW_TRACKER.unread[rowKey]) FECHAMENTO_NEW_TRACKER.unread[rowKey] = consultantKey;
       changed = true;
     }
   });
@@ -6789,7 +6781,9 @@ function fechamentoProjectFromItem(item) {
 }
 function fechamentoEffectiveConsultant(item) {
   var own = consultantCanonicalName((item && (item.consultor || item.responsaveis)) || '');
-  if (own && fechamentoSearchKey(own).search(/administrativo|administrador|multsoft|suporte/) < 0) return own;
+  var ownKey = fechamentoSearchKey(own);
+  var placeholder = !ownKey || /^(sem consultor|nao identificado|nao informado|indefinido|-)$/.test(ownKey);
+  if (!placeholder && ownKey.search(/administrativo|administrador|multsoft|suporte/) < 0) return own;
   return fechamentoPortfolioConsultant(item) || own || 'Sem consultor';
 }
 function fechamentoPortfolioConsultant(item) {

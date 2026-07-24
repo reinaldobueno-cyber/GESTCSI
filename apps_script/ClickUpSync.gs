@@ -4449,10 +4449,7 @@ function syncClickUpValidationSituation_(params, situation) {
     var current = loadClickUpMilestoneClosingCurrent_(sheet);
     var mappings = loadClickUpMilestoneClosingMappings_();
     var trackedIds = Object.keys(current);
-    var tasks = fetchClickUpValidationSituationForMonth_(situation, month).filter(function(task) {
-      var taskId = String(task && task.id || '');
-      return !!current[taskId];
-    });
+    var tasks = fetchClickUpValidationSituationForMonth_(situation, month);
     Logger.log('📊 [' + situation + '] Marcos para processar: ' + tasks.length);
 
     var matchingIds = tasks.filter(function(task) {
