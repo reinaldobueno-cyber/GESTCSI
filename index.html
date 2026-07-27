@@ -5750,6 +5750,22 @@ function fechamentoNotificationRowKey(item) {
   var taskId = String(item && (item.task_id || item.id) || '').trim();
   return taskId ? 'task|'+taskId : fechamentoLegacyNotificationRowKey(item);
 }
+function fechamentoNotificationClosedSignature(item) {
+  return [
+    String(item && item.closed_at || '').trim(),
+    String(item && item.mes_fechamento || '').trim(),
+    String(item && item.situacao || '').trim()
+  ].join('|');
+}
+function fechamentoNotificationKnownState(value) {
+  if (value && typeof value === 'object') {
+    return {
+      consultant: String(value.consultant || ''),
+      closed: String(value.closed || '')
+    };
+  }
+  return {consultant:String(value || ''), closed:''};
+}
 function fechamentoTrackNewRows() {
   var rows = FECHAMENTO_MARCOS || [];
   var firstSnapshot = !FECHAMENTO_NEW_TRACKER.initialized;
@@ -5767,7 +5783,10 @@ function fechamentoTrackNewRows() {
       var consultant = fechamentoEffectiveConsultant(item);
       var consultantKey = consultantCompKey(consultant) || normalizeClienteKey(consultant);
       currentKeys[stableKey] = true;
-      FECHAMENTO_NEW_TRACKER.known[stableKey] = consultantKey;
+      FECHAMENTO_NEW_TRACKER.known[stableKey] = {
+        consultant: consultantKey,
+        closed: fechamentoNotificationClosedSignature(item)
+      };
       var legacyKey = fechamentoLegacyNotificationRowKey(item);
       if (previousKnown && !previousKnown[legacyKey]) FECHAMENTO_NEW_TRACKER.unread[stableKey] = consultantKey;
     });
@@ -5781,16 +5800,22 @@ function fechamentoTrackNewRows() {
     currentKeys[rowKey] = true;
     var consultant = fechamentoEffectiveConsultant(item);
     var consultantKey = consultantCompKey(consultant) || normalizeClienteKey(consultant);
-    var previousConsultantKey = FECHAMENTO_NEW_TRACKER.known[rowKey];
-    if (!previousConsultantKey) {
-      FECHAMENTO_NEW_TRACKER.known[rowKey] = consultantKey;
+    var closedSignature = fechamentoNotificationClosedSignature(item);
+    var previousValue = FECHAMENTO_NEW_TRACKER.known[rowKey];
+    var previousState = fechamentoNotificationKnownState(previousValue);
+    if (!previousValue) {
+      FECHAMENTO_NEW_TRACKER.known[rowKey] = {consultant:consultantKey, closed:closedSignature};
       FECHAMENTO_NEW_TRACKER.unread[rowKey] = consultantKey;
       changed = true;
-    } else if (previousConsultantKey === true) {
-      FECHAMENTO_NEW_TRACKER.known[rowKey] = consultantKey;
+    } else if (!previousState.closed) {
+      FECHAMENTO_NEW_TRACKER.known[rowKey] = {consultant:consultantKey, closed:closedSignature};
       changed = true;
-    } else if (previousConsultantKey !== consultantKey) {
-      FECHAMENTO_NEW_TRACKER.known[rowKey] = consultantKey;
+    } else if (previousState.closed !== closedSignature) {
+      FECHAMENTO_NEW_TRACKER.known[rowKey] = {consultant:consultantKey, closed:closedSignature};
+      FECHAMENTO_NEW_TRACKER.unread[rowKey] = consultantKey;
+      changed = true;
+    } else if (previousState.consultant !== consultantKey) {
+      FECHAMENTO_NEW_TRACKER.known[rowKey] = {consultant:consultantKey, closed:closedSignature};
       if (FECHAMENTO_NEW_TRACKER.unread[rowKey]) FECHAMENTO_NEW_TRACKER.unread[rowKey] = consultantKey;
       changed = true;
     }
