@@ -4074,6 +4074,17 @@ function normalizarPessoaPainel(value) {
     .replace(/[^a-z0-9]+/g, ' ')
     .trim();
 }
+function projectConsultants(project) {
+  var seen = {};
+  return [project && (project.consultor || project.consultor_1), project && (project.consultor2 || project.consultor_2)]
+    .map(function(value){ return String(value || '').trim(); })
+    .filter(function(value){ var key=normalizarPessoaPainel(value); if(!key||seen[key]) return false; seen[key]=true; return true; });
+}
+function projectConsultantsLabel(project) { return projectConsultants(project).join(' / ') || 'Sem consultor'; }
+function projectHasConsultant(project, consultant) {
+  var target=normalizarPessoaPainel(consultant);
+  return !!target && projectConsultants(project).some(function(name){ return normalizarPessoaPainel(name)===target; });
+}
 function usuarioTemVisaoGeral() {
   return !!AUTH_STATE.user;
 }
@@ -9767,7 +9778,7 @@ function dashProjectStageInfo(p) {
 }
 function dashProjectsFiltered() {
   return filteredProj().filter(function(p){
-    if (DASH_FILTERS.consultor !== 'all' && String((p && p.consultor) || '') !== DASH_FILTERS.consultor) return false;
+    if (DASH_FILTERS.consultor !== 'all' && !projectHasConsultant(p, DASH_FILTERS.consultor)) return false;
     if (DASH_FILTERS.vendedor !== 'all' && String((p && p.vendedor) || '') !== DASH_FILTERS.vendedor) return false;
     if (DASH_FILTERS.status !== 'all' && dashStatusKey(p && p.status) !== DASH_FILTERS.status) return false;
     if (DASH_FILTERS.tipo !== 'all' && dashTipoKey(p && p.tipo) !== DASH_FILTERS.tipo) return false;
@@ -10576,7 +10587,7 @@ function dashProjectActionCell(p) {
 }
 function dashFilterListByDashboard(list) {
   return (list || []).filter(function(p){
-    if (DASH_FILTERS.consultor !== 'all' && String((p && p.consultor) || '') !== DASH_FILTERS.consultor) return false;
+    if (DASH_FILTERS.consultor !== 'all' && !projectHasConsultant(p, DASH_FILTERS.consultor)) return false;
     if (DASH_FILTERS.vendedor !== 'all' && String((p && p.vendedor) || '') !== DASH_FILTERS.vendedor) return false;
     if (DASH_FILTERS.status !== 'all' && dashStatusKey(p && p.status) !== DASH_FILTERS.status) return false;
     if (DASH_FILTERS.tipo !== 'all' && dashTipoKey(p && p.tipo) !== DASH_FILTERS.tipo) return false;
@@ -11536,7 +11547,7 @@ function initAll() {
     '<div class="kpi kpi-btn o '+(fS==='excedido'?'active':'')+'" data-project-status="excedido" onclick="setProjectStatusFilter(\'excedido\')"><div class="kpi-l">Di&aacute;rias Excedidas</div><div class="kpi-v">'+exc+'</div><div class="kpi-hint">Clique para visualizar</div></div>';
   hideSidebarBadge('n-all');
   var cons=[],cm={};
-  p.forEach(function(x){if(x.consultor&&!cm[x.consultor]){cm[x.consultor]=1;cons.push(x.consultor);}});cons.sort();
+  p.forEach(function(x){projectConsultants(x).forEach(function(name){if(!cm[name]){cm[name]=1;cons.push(name);}});});cons.sort();
   var meses=[],mm={};
   p.forEach(function(x){if(x.mes&&!mm[x.mes]){mm[x.mes]=1;meses.push(x.mes);}});
   meses = ordenarMesesPainel(meses);
@@ -11582,7 +11593,7 @@ function applyF(){
     return s.indexOf('andamento')<0 && s.indexOf('parado')<0 && s.indexOf('atras')<0 && s.indexOf('aguardando')<0 && s.indexOf('conclu')<0 && s.indexOf('cancel')<0;
   });
   else if(fS==='excedido')p=p.filter(function(x){return x.diarias_rest!==null&&x.diarias_rest<0;});
-  if(fC!=='all')p=p.filter(function(x){return x.consultor===fC;});
+  if(fC!=='all')p=p.filter(function(x){return projectHasConsultant(x,fC);});
   if(fM!=='all')p=p.filter(function(x){return x.mes===fM;});
   if(fQ)p=p.filter(function(x){return String(x.cliente||'').toLowerCase().indexOf(fQ)>=0;});
   if (!_pendingProjectOpen) _openId=null;
@@ -11605,9 +11616,8 @@ function applyF(){
 // ---- By Consultant ----
 function initCons(){
   var base=filteredProj();
-  var p=base.filter(function(x){return x.consultor;});
   var cs={};
-  p.forEach(function(x){if(!cs[x.consultor])cs[x.consultor]={t:0,a:0,v:0,and:0,atr:0,ag:0,par:0,con:0,dc:0,dr:0,proj:[]};var c=cs[x.consultor];c.t++;c.proj.push(x);if(x.tipo==='AVULSO')c.a++;else if(x.tipo==='VENDA'||x.tipo==='VENDA NOVA')c.v++;if(projectMatchesStatusFilter(x,'andamento'))c.and++;if(projectMatchesStatusFilter(x,'atrasado'))c.atr++;if(projectMatchesStatusFilter(x,'aguardando'))c.ag++;if(projectMatchesStatusFilter(x,'parado'))c.par++;if(projectMatchesStatusFilter(x,'concluido'))c.con++;c.dc+=x.diarias_cont||0;c.dr+=x.diarias_real||0;});
+  base.forEach(function(x){projectConsultants(x).forEach(function(name){if(!cs[name])cs[name]={t:0,a:0,v:0,and:0,atr:0,ag:0,par:0,con:0,dc:0,dr:0,proj:[]};var c=cs[name];c.t++;c.proj.push(x);if(x.tipo==='AVULSO')c.a++;else if(x.tipo==='VENDA'||x.tipo==='VENDA NOVA')c.v++;if(projectMatchesStatusFilter(x,'andamento'))c.and++;if(projectMatchesStatusFilter(x,'atrasado'))c.atr++;if(projectMatchesStatusFilter(x,'aguardando'))c.ag++;if(projectMatchesStatusFilter(x,'parado'))c.par++;if(projectMatchesStatusFilter(x,'concluido'))c.con++;c.dc+=x.diarias_cont||0;c.dr+=x.diarias_real||0;});});
   window._cs=cs;
   document.getElementById('kpis-cons').innerHTML=kpi('Consultores',Object.keys(cs).length)+kpi('Total',base.length)+kpi('Atrasados',base.filter(function(x){return x.status.indexOf('Atrasado')>=0;}).length,'r')+kpi('Di&aacute;rias Excedidas',base.filter(function(x){return x.diarias_rest!==null&&x.diarias_rest<0;}).length,'o');
   var html='';
@@ -15349,22 +15359,23 @@ function mapearProjetoMensalPorIndice(row, abaTitle) {
     tipo: valorCelulaGviz(row, 4),
     vendedor: valorCelulaGviz(row, 5),
     consultor: valorCelulaGviz(row, 7),
-    formato: valorCelulaGviz(row, 8),
-    cidade: valorCelulaGviz(row, 9),
-    data_estimada: valorCelulaGviz(row, 10),
-    kickoff: valorCelulaGviz(row, 11),
-    data_kick: valorCelulaGviz(row, 12),
-    clickup: valorCelulaGviz(row, 13),
-    data_inicio: valorCelulaGviz(row, 14),
-    diarias_cont: valorCelulaGviz(row, 15),
-    diarias_real: valorCelulaGviz(row, 16),
-    diarias_rest: valorCelulaGviz(row, 17),
-    acompanhamento: valorCelulaGviz(row, 18),
-    data_enc: valorCelulaGviz(row, 19),
-    avaliacao_consultor: valorCelulaGviz(row, 20),
-    status: valorCelulaGviz(row, 21),
-    projeto_link: valorCelulaGviz(row, 22),
-    link_projeto: valorCelulaGviz(row, 22)
+    consultor2: valorCelulaGviz(row, 8),
+    formato: valorCelulaGviz(row, 9),
+    cidade: valorCelulaGviz(row, 10),
+    data_estimada: valorCelulaGviz(row, 11),
+    kickoff: valorCelulaGviz(row, 12),
+    data_kick: valorCelulaGviz(row, 13),
+    clickup: valorCelulaGviz(row, 14),
+    data_inicio: valorCelulaGviz(row, 15),
+    diarias_cont: valorCelulaGviz(row, 16),
+    diarias_real: valorCelulaGviz(row, 17),
+    diarias_rest: valorCelulaGviz(row, 18),
+    acompanhamento: valorCelulaGviz(row, 19),
+    data_enc: valorCelulaGviz(row, 20),
+    avaliacao_consultor: valorCelulaGviz(row, 21),
+    status: valorCelulaGviz(row, 22),
+    projeto_link: valorCelulaGviz(row, 23),
+    link_projeto: valorCelulaGviz(row, 23)
   };
 }
 function linhaProjetoMensalValida(ro) {
@@ -15552,7 +15563,7 @@ function loadProjectLinksFromSheet() {
     console.log('[LOAD DEBUG] Abas lidas:', _abasMensaisLidas);
 
     return Promise.all(abas.map(function(aba){
-      var url = 'https://docs.google.com/spreadsheets/d/' + SHEET_ID + '/gviz/tq?gid=' + aba.gid + '&_ts=' + Date.now() + '&tq=' + encodeURIComponent('select B, W');
+      var url = 'https://docs.google.com/spreadsheets/d/' + SHEET_ID + '/gviz/tq?gid=' + aba.gid + '&_ts=' + Date.now() + '&tq=' + encodeURIComponent('select B, X');
       return loadGvizTableJsonp(url, 12000).then(function(table){
         var rows = (table && table.rows) || [];
         mergeRowsIntoMap(rows, aba.title, map);
@@ -15584,8 +15595,8 @@ function loadProjectLinksFromSheet() {
 
 function obterLinkProjeto(row, projeto) {
   var valor =
-    (projeto && (projeto.projeto_link || projeto.link_projeto || projeto.link || projeto.url_projeto || projeto.projetoLink || projeto['LINK DO PROJETO'] || projeto.col_w || projeto.W)) ||
-    (row && (row.projeto_link || row.link_projeto || row.link || row.url_projeto || row.projetoLink || row['LINK DO PROJETO'] || row.col_w || row.W || row[22])) ||
+    (projeto && (projeto.projeto_link || projeto.link_projeto || projeto.link || projeto.url_projeto || projeto.projetoLink || projeto['LINK DO PROJETO'] || projeto.col_x || projeto.X)) ||
+    (row && (row.projeto_link || row.link_projeto || row.link || row.url_projeto || row.projetoLink || row['LINK DO PROJETO'] || row.col_x || row.X || row[23])) ||
     '';
   return String(valor || '').trim();
 }
@@ -15636,7 +15647,8 @@ function dashPortfolioConsultantName(value) {
 function normalizarProjetoPlanilha(p) {
   var projeto = Object.assign({}, p || {});
   var cliente = valorPorAlias(projeto, ['cliente','nome_cliente']);
-  var consultor = valorPorAlias(projeto, ['consultor','consultora','assignee','responsavel']);
+  var consultor = valorPorAlias(projeto, ['consultor','consultor_1','consultora','assignee','responsavel']);
+  var consultor2 = valorPorAlias(projeto, ['consultor2','consultor_2','segundo_consultor']);
   var mes = valorPorAlias(projeto, ['mes','mes_origem']);
   var status = valorPorAlias(projeto, ['status','status_projeto']);
   var tipo = valorPorAlias(projeto, ['tipo','tipo_projeto']);
@@ -15655,6 +15667,7 @@ function normalizarProjetoPlanilha(p) {
 
   projeto.cliente = String(cliente || '').trim();
   projeto.consultor = dashPortfolioConsultantName(consultor);
+  projeto.consultor2 = consultor2 ? dashPortfolioConsultantName(consultor2) : '';
   projeto.mes = String(mes || '').toUpperCase().trim();
   projeto.status_original = String(status || '').trim();
   projeto.status = projeto.status_original;
@@ -15698,7 +15711,7 @@ function applyProjectLinks(projetos) {
     if (_linkDebugCount < 8 && p.cliente) {
       console.log('[LINK DEBUG] Projeto final:', {
         cliente: p.cliente,
-        bruto_row_22: (p._row && p._row[22]) ? p._row[22] : '',
+        bruto_row_23: (p._row && p._row[23]) ? p._row[23] : '',
         bruto_obj: {projeto_link: p.projeto_link, link_projeto: p.link_projeto, link: p.link, url_projeto: p.url_projeto},
         link_final: p.projeto_link || '(vazio)'
       });

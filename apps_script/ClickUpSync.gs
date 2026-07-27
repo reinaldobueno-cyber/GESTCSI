@@ -981,23 +981,24 @@ function monthlyProjectFromRow_(month, header, row, rowNumber) {
     adicionais: pick(['adicionais'], 3),
     tipo: pick(['tipo', 'tipo_projeto'], 4),
     vendedor: pick(['vendedor'], 5),
-    consultor: pick(['consultor', 'consultora', 'responsavel'], 7),
-    formato: pick(['formato', 'modalidade'], 8),
-    cidade: pick(['cidade'], 9),
-    data_estimada: pick(['data_estimada', 'previsao', 'mes_estimado'], 10),
-    kickoff: pick(['kickoff', 'kick_off'], 11),
-    data_kick: pick(['data_kick', 'data_kickoff'], 12),
-    clickup: pick(['clickup'], 13),
-    data_inicio: pick(['data_inicio', 'primeiro_treinamento'], 14),
-    diarias_cont: pick(['diarias_cont', 'diarias_contratadas', 'diarias_total'], 15),
-    diarias_real: pick(['diarias_real', 'diarias_realizadas', 'diarias_consumidas'], 16),
-    diarias_rest: pick(['diarias_rest', 'diarias_restantes', 'saldo_diarias'], 17),
-    acompanhamento: pick(['acompanhamento', 'observacao_acompanhamento'], 18),
-    data_enc: pick(['data_enc', 'data_encerramento'], 19),
-    avaliacao_consultor: pick(['avaliacao_consultor'], 20),
-    status: pick(['status', 'status_projeto'], 21),
-    projeto_link: pick(['projeto_link', 'link_projeto', 'link_do_projeto', 'url_projeto'], 22),
-    link_projeto: pick(['link_projeto', 'projeto_link', 'link_do_projeto', 'url_projeto'], 22),
+    consultor: pick(['consultor', 'consultor_1', 'consultora', 'responsavel'], 7),
+    consultor2: pick(['consultor_2', 'consultor2', 'segundo_consultor'], 8),
+    formato: pick(['formato', 'modalidade'], 9),
+    cidade: pick(['cidade'], 10),
+    data_estimada: pick(['data_estimada', 'previsao', 'mes_estimado'], 11),
+    kickoff: pick(['kickoff', 'kick_off'], 12),
+    data_kick: pick(['data_kick', 'data_kickoff'], 13),
+    clickup: pick(['clickup'], 14),
+    data_inicio: pick(['data_inicio', 'primeiro_treinamento'], 15),
+    diarias_cont: pick(['diarias_cont', 'diarias_contratadas', 'diarias_total'], 16),
+    diarias_real: pick(['diarias_real', 'diarias_realizadas', 'diarias_consumidas'], 17),
+    diarias_rest: pick(['diarias_rest', 'diarias_restantes', 'saldo_diarias'], 18),
+    acompanhamento: pick(['acompanhamento', 'observacao_acompanhamento'], 19),
+    data_enc: pick(['data_enc', 'data_encerramento'], 20),
+    avaliacao_consultor: pick(['avaliacao_consultor'], 21),
+    status: pick(['status', 'status_projeto'], 22),
+    projeto_link: pick(['projeto_link', 'link_projeto', 'link_do_projeto', 'url_projeto'], 23),
+    link_projeto: pick(['link_projeto', 'projeto_link', 'link_do_projeto', 'url_projeto'], 23),
     tasks_concluidas: pick(['tasks_concluidas'], null),
     tasks_pendentes: pick(['tasks_pendentes'], null),
     marcos_concluidos: pick(['marcos_concluidos'], null),
@@ -1032,7 +1033,8 @@ function canonicalMonthlyHeader_(name) {
     adicionais: ['ADICIONAIS'],
     tipo: ['TIPO', 'TIPO PROJETO'],
     vendedor: ['VENDEDOR'],
-    consultor: ['CONSULTOR', 'CONSULTORA', 'RESPONSAVEL'],
+    consultor: ['CONSULTOR', 'CONSULTOR 1', 'CONSULTORA', 'RESPONSAVEL'],
+    consultor2: ['CONSULTOR 2', 'SEGUNDO CONSULTOR'],
     formato: ['FORMATO', 'MODALIDADE'],
     cidade: ['CIDADE'],
     data_estimada: ['DATA ESTIMADA', 'PREVISAO', 'MES ESTIMADO'],
@@ -6890,7 +6892,8 @@ function userMatchesConsultor_(user, consultor) {
 
 function canUserAccessProjectItem_(user, item) {
   if (userHasFullProjectAccess_(user)) return true;
-  return userMatchesConsultor_(user, item && item.consultor);
+  return userMatchesConsultor_(user, item && item.consultor) ||
+    userMatchesConsultor_(user, item && (item.consultor2 || item.consultor_2));
 }
 
 function findUserRow_(username) {
