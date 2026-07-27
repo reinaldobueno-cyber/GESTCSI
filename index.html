@@ -5358,9 +5358,32 @@ window.acompCommitProjectSelection = acompCommitProjectSelection;
 function acompProjectSelectChanged() {
   var select = document.getElementById('acom-form-project');
   if (!select) return;
+  acompUpdateConsultantSelect();
   if (select.value) acompCommitProjectSelection();
 }
 window.acompProjectSelectChanged = acompProjectSelectChanged;
+function acompUpdateConsultantSelect() {
+  var projectSelect = document.getElementById('acom-form-project');
+  var consultantSelect = document.getElementById('acom-form-consultant');
+  if (!consultantSelect) return;
+  var projectKey = (projectSelect && projectSelect.value) || '';
+  var item = (ACOMP_FORM_PROJECTS || []).filter(function(x){ return x.projectKey === projectKey; })[0];
+  var consultants = projectConsultants(item);
+  if (!item || !consultants.length) {
+    consultantSelect.innerHTML = '<option value="">Selecione o projeto primeiro</option>';
+    consultantSelect.disabled = true;
+    return;
+  }
+  var placeholder = consultants.length > 1
+    ? '<option value="">Selecione quem receber&aacute; este acompanhamento</option>'
+    : '';
+  consultantSelect.innerHTML = placeholder + consultants.map(function(name){
+    return '<option value="'+escapeHtml(name)+'">'+escapeHtml(name)+'</option>';
+  }).join('');
+  consultantSelect.disabled = false;
+  if (consultants.length === 1) consultantSelect.value = consultants[0];
+}
+window.acompUpdateConsultantSelect = acompUpdateConsultantSelect;
 function salvarAcompanhamentoProjeto(btn) {
   if (!authTokenParam()) { showToast('Entre no painel para salvar acompanhamento', 'err'); return false; }
   var form = document.getElementById('acom-form');
@@ -5371,8 +5394,10 @@ function salvarAcompanhamentoProjeto(btn) {
   var consideracao = String((document.getElementById('acom-form-text') || {}).value || '').trim();
   var proxima = String((document.getElementById('acom-form-next') || {}).value || '').trim();
   var responsavel = String((document.getElementById('acom-form-owner') || {}).value || getUpdateActor() || '').trim();
+  var consultorAcompanhamento = String((document.getElementById('acom-form-consultant') || {}).value || '').trim();
   var stage = String((document.getElementById('acom-form-stage') || {}).value || 'pending');
   if (!item) { showToast('Selecione um projeto para registrar', 'err'); return false; }
+  if (!consultorAcompanhamento) { showToast('Selecione o consultor deste acompanhamento', 'err'); return false; }
   if (!consideracao && !proxima) { showToast('Informe uma considera&ccedil;&atilde;o ou pr&oacute;xima a&ccedil;&atilde;o', 'err'); return false; }
   if (btn) { btn.disabled = true; btn.textContent = 'Salvando...'; }
   var p = item.projeto || {};
@@ -5381,7 +5406,7 @@ function salvarAcompanhamentoProjeto(btn) {
     data_acompanhamento:data,
     mes:item.mes,
     cliente:item.cliente,
-    consultor:item.consultor,
+    consultor:consultorAcompanhamento,
     project_key:item.projectKey,
     link_projeto:dashProjectLink(p),
     consideracao:consideracao,
@@ -5400,7 +5425,7 @@ function salvarAcompanhamentoProjeto(btn) {
       data_acompanhamento: data,
       mes: item.mes,
       cliente: item.cliente,
-      consultor: item.consultor,
+      consultor: consultorAcompanhamento,
       project_key: item.projectKey,
       link_projeto: dashProjectLink(p),
       consideracao: consideracao,
@@ -5417,7 +5442,7 @@ function salvarAcompanhamentoProjeto(btn) {
     var cycleKey = acompKanbanCycleKey(acompCicloAtual());
     acompAddFollowupLocal(savedFollowup);
     acompSetKanbanStageLocal(item.projectKey, cycleKey, stage);
-    acompPersistKanbanStage(item.projectKey, cycleKey, stage, item.consultor).then(function(kanbanResp){
+    acompPersistKanbanStage(item.projectKey, cycleKey, stage, consultorAcompanhamento).then(function(kanbanResp){
       if (kanbanResp && kanbanResp.kanban_states) ACOMP_REMOTE_KANBAN_STAGES = kanbanResp.kanban_states;
       initAcomp();
     }).catch(function(error){
@@ -5703,6 +5728,7 @@ function initAcomp() {
       '</div>'+
       '<div class="acom-panel"><div class="acom-panel-head"><div><div class="acom-panel-title">Registrar no site</div><div class="acom-panel-note">'+syncNote+'</div></div></div><div class="acom-panel-body"><form id="acom-form" class="acom-form" onsubmit="return salvarAcompanhamentoProjeto(this.querySelector(\'.acom-save\'))">'+
         '<div class="acom-field"><label for="acom-form-project-search">Projeto</label><input id="acom-form-project-search" type="search" placeholder="Digite para filtrar cliente, consultor ou m&ecirc;s" autocomplete="off" oninput="acompFilterProjectSelect()"><select id="acom-form-project" required onchange="acompProjectSelectChanged()" onclick="acompCommitProjectSelection()" onkeyup="if(event.key===\'Enter\') acompCommitProjectSelection()"><option value="">Selecione o projeto</option>'+acompProjectOptions(list)+'</select><div id="acom-form-project-help" class="acom-field-help">Digite para filtrar. A lista abaixo permanece agrupada por m&ecirc;s de entrada e data da venda.</div></div>'+
+        '<div class="acom-field"><label for="acom-form-consultant">Consultor deste acompanhamento</label><select id="acom-form-consultant" required disabled><option value="">Selecione o projeto primeiro</option></select><div class="acom-field-help">Em projetos compartilhados, salve um registro para cada consultor.</div></div>'+
         '<div class="acom-field"><label for="acom-form-date">Data</label><input id="acom-form-date" type="date" value="'+acompTodayIso()+'" required></div>'+
     '<div class="acom-field"><label for="acom-form-owner">Respons&aacute;vel</label><input id="acom-form-owner" type="text" value="'+escapeHtml((AUTH_STATE.user && (AUTH_STATE.user.name || AUTH_STATE.user.username)) || getUpdateActor() || 'PMO')+'" readonly></div>'+
         '<div class="acom-field"><label for="acom-form-stage">Etapa no kanban</label><select id="acom-form-stage"><option value="done" selected>Acompanhamento mensal conclu&iacute;do</option><option value="doing">Em processo de interfer&ecirc;ncia</option><option value="pending">Acompanhamento pendente</option></select></div>'+
