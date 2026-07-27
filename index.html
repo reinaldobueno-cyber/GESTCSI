@@ -5725,13 +5725,13 @@ var PROJECT_CLOSING_CANDIDATES_CACHE_KEY = 'gestcsi_project_closing_candidates_v
 var PROJECT_CLOSING_BOOTSTRAPPED = false;
 var FECHAMENTO_EXPANDED = {};
 try { FECHAMENTO_EXPANDED = JSON.parse(storageGet('gestcsi_fechamento_expanded_v1', '{}')) || {}; } catch(e) { FECHAMENTO_EXPANDED = {}; }
-var FECHAMENTO_NEW_TRACKER_KEY = 'gestcsi_fechamento_new_tracker_v5';
+var FECHAMENTO_NEW_TRACKER_KEY = 'gestcsi_fechamento_new_tracker_v6';
 var FECHAMENTO_NEW_TRACKER_LEGACY = null;
 var FECHAMENTO_NEW_TRACKER_PREVIOUS = null;
 var FECHAMENTO_NEW_TRACKER = {initialized:false, known:{}, unread:{}};
 try {
   FECHAMENTO_NEW_TRACKER_LEGACY = JSON.parse(storageGet('gestcsi_fechamento_new_tracker_v2', 'null'));
-  FECHAMENTO_NEW_TRACKER_PREVIOUS = JSON.parse(storageGet('gestcsi_fechamento_new_tracker_v3', 'null'));
+  FECHAMENTO_NEW_TRACKER_PREVIOUS = JSON.parse(storageGet('gestcsi_fechamento_new_tracker_v5', 'null'));
   FECHAMENTO_NEW_TRACKER = JSON.parse(storageGet(FECHAMENTO_NEW_TRACKER_KEY, 'null')) || FECHAMENTO_NEW_TRACKER;
   FECHAMENTO_NEW_TRACKER.known = FECHAMENTO_NEW_TRACKER.known || {};
   FECHAMENTO_NEW_TRACKER.unread = FECHAMENTO_NEW_TRACKER.unread || {};
@@ -5766,6 +5766,11 @@ function fechamentoNotificationKnownState(value) {
   }
   return {consultant:String(value || ''), closed:''};
 }
+function fechamentoNotificationCatchUpRecentClosed(item) {
+  var closedAt = String(item && item.closed_at || '').trim();
+  return String(item && item.situacao || '') === 'aguardando' &&
+    closedAt.slice(0, 10) >= '2026-07-24';
+}
 function fechamentoTrackNewRows() {
   var rows = FECHAMENTO_MARCOS || [];
   var firstSnapshot = !FECHAMENTO_NEW_TRACKER.initialized;
@@ -5788,7 +5793,10 @@ function fechamentoTrackNewRows() {
         closed: fechamentoNotificationClosedSignature(item)
       };
       var legacyKey = fechamentoLegacyNotificationRowKey(item);
-      if (previousKnown && !previousKnown[legacyKey]) FECHAMENTO_NEW_TRACKER.unread[stableKey] = consultantKey;
+      if ((previousKnown && !previousKnown[stableKey] && !previousKnown[legacyKey]) ||
+          fechamentoNotificationCatchUpRecentClosed(item)) {
+        FECHAMENTO_NEW_TRACKER.unread[stableKey] = consultantKey;
+      }
     });
     FECHAMENTO_NEW_TRACKER.initialized = true;
     fechamentoSaveNewTracker();
@@ -5809,6 +5817,7 @@ function fechamentoTrackNewRows() {
       changed = true;
     } else if (!previousState.closed) {
       FECHAMENTO_NEW_TRACKER.known[rowKey] = {consultant:consultantKey, closed:closedSignature};
+      if (fechamentoNotificationCatchUpRecentClosed(item)) FECHAMENTO_NEW_TRACKER.unread[rowKey] = consultantKey;
       changed = true;
     } else if (previousState.closed !== closedSignature) {
       FECHAMENTO_NEW_TRACKER.known[rowKey] = {consultant:consultantKey, closed:closedSignature};
