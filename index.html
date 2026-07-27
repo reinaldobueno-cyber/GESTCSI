@@ -5013,6 +5013,7 @@ function acompProjetoView(p, followupMap) {
     projectKey:key,
     cliente:(p && p.cliente) || '-',
     consultor:(p && p.consultor) || 'Sem consultor',
+    consultor2:(p && (p.consultor2 || p.consultor_2)) || '',
     mes:String((p && p.mes) || 'SEM').toUpperCase(),
     status:(p && p.status) || '-',
     fonte:acompFonte(p, followup),
@@ -5272,7 +5273,7 @@ function acompSortProjetosFormulario(a, b) {
 function acompProjectOptionLabel(x) {
   var data = acompDataEntradaLabel(x && x.projeto);
   var prefix = (data || 'Sem data') + ' - ';
-  return prefix + ((x && x.mes) || '-') + ' - ' + ((x && x.cliente) || '-') + ' - ' + ((x && x.consultor) || '-');
+  return prefix + ((x && x.mes) || '-') + ' - ' + ((x && x.cliente) || '-') + ' - ' + projectConsultantsLabel(x);
 }
 function acompSearchText(value) {
   return String(value || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
@@ -5289,7 +5290,7 @@ function acompProjectOptions(list) {
     var options = byMonth[mes].map(function(x){
       var data = acompDataEntradaLabel(x.projeto);
       var prefix = (data || 'Sem data') + ' - ';
-      return '<option value="'+escapeHtml(x.projectKey)+'">'+escapeHtml(prefix + x.cliente+' - '+x.consultor)+'</option>';
+      return '<option value="'+escapeHtml(x.projectKey)+'">'+escapeHtml(prefix + x.cliente+' - '+projectConsultantsLabel(x))+'</option>';
     }).join('');
     return '<optgroup label="'+escapeHtml(mes+' - '+byMonth[mes].length+' projeto(s)')+'">'+options+'</optgroup>';
   }).join('');
@@ -5300,7 +5301,7 @@ function acompProjectOptionsFiltered(query) {
     if (!q) return true;
     return acompSearchText(acompProjectOptionLabel(x)).indexOf(q) >= 0 ||
       acompSearchText(x.cliente).indexOf(q) >= 0 ||
-      acompSearchText(x.consultor).indexOf(q) >= 0 ||
+      acompSearchText(projectConsultantsLabel(x)).indexOf(q) >= 0 ||
       acompSearchText(x.mes).indexOf(q) >= 0;
   });
   var selected = (document.getElementById('acom-form-project') || {}).value || '';
@@ -5314,7 +5315,7 @@ function acompProjectOptionsFiltered(query) {
     var options = byMonth[mes].map(function(x){
       var data = acompDataEntradaLabel(x.projeto);
       var prefix = (data || 'Sem data') + ' - ';
-      return '<option value="'+escapeHtml(x.projectKey)+'" '+(x.projectKey === selected ? 'selected' : '')+'>'+escapeHtml(prefix + x.cliente+' - '+x.consultor)+'</option>';
+      return '<option value="'+escapeHtml(x.projectKey)+'" '+(x.projectKey === selected ? 'selected' : '')+'>'+escapeHtml(prefix + x.cliente+' - '+projectConsultantsLabel(x))+'</option>';
     }).join('');
     return '<optgroup label="'+escapeHtml(mes+' - '+byMonth[mes].length+' projeto(s)')+'">'+options+'</optgroup>';
   }).join('');
@@ -5462,12 +5463,13 @@ function acompRenderMonths(list) {
 function acompRenderConsultores(list) {
   var map = {};
   list.forEach(function(x){
-    var key = x.consultor || '';
-    if (!key || key === 'Sem consultor') return;
-    if (!map[key]) map[key] = {nome:key, total:0};
-    map[key].total += 1;
-    ACOMP_BUCKETS.forEach(function(b){ if (map[key][b.key] == null) map[key][b.key] = 0; });
-    map[key][x.bucket] += 1;
+    projectConsultants(x).forEach(function(key) {
+      if (!key || key === 'Sem consultor') return;
+      if (!map[key]) map[key] = {nome:key, total:0};
+      map[key].total += 1;
+      ACOMP_BUCKETS.forEach(function(b){ if (map[key][b.key] == null) map[key][b.key] = 0; });
+      map[key][x.bucket] += 1;
+    });
   });
   return Object.keys(map).sort().map(function(k){
     var c = map[k];
@@ -5492,7 +5494,7 @@ function acompRenderRows(list) {
     if (x.responsavel) texto += '<div class="dashx-list-sub">Respons&aacute;vel: '+escapeHtml(x.responsavel)+'</div>';
     if (x.followupStatus) texto += '<div class="dashx-list-sub">Observa&ccedil;&atilde;o: '+acompFollowupStatusMeta(x.followupStatus).text+(x.statusComment ? ' - '+escapeHtml(x.statusComment).slice(0, 90) : '')+'</div>';
     var obsInicial = x.obsInicial ? '<div class="dashx-list-sub">Obs inicial: '+escapeHtml(x.obsInicial).slice(0, 90)+'</div>' : '';
-    return '<tr class="clickable" onclick="return acompProjectInfoPopup(\''+jsQuote(x.projectKey)+'\')" title="Clique para abrir o projeto"><td><strong>'+escapeHtml(x.cliente)+'</strong><div class="dashx-list-sub">'+escapeHtml(x.mes)+' &bull; '+escapeHtml(x.consultor)+'</div></td>'+
+    return '<tr class="clickable" onclick="return acompProjectInfoPopup(\''+jsQuote(x.projectKey)+'\')" title="Clique para abrir o projeto"><td><strong>'+escapeHtml(x.cliente)+'</strong><div class="dashx-list-sub">'+escapeHtml(x.mes)+' &bull; '+escapeHtml(projectConsultantsLabel(x))+'</div></td>'+
       '<td><span class="acom-status '+cls+'">'+meta.label+'</span></td>'+
       '<td>'+(x.dias !== null && x.dias !== undefined ? x.dias+'d' : '-')+'</td>'+
       '<td>'+escapeHtml(x.fonte)+'</td>'+
@@ -5527,7 +5529,7 @@ function acompProjectInfoPopup(projectKey) {
   var cells = [
     ['M&ecirc;s entrada', item.mes],
     ['Data venda', acompDataEntradaLabel(p) || '-'],
-    ['Consultor', item.consultor],
+    ['Consultores', projectConsultantsLabel(item)],
     ['Status', item.status],
     ['Formato', p.formato || '-'],
     ['Di&aacute;rias', ((p.diarias_real != null ? p.diarias_real : '-') + ' / ' + (p.diarias_cont != null ? p.diarias_cont : '-'))],
@@ -5560,7 +5562,7 @@ function acompProjectInfoPopup(projectKey) {
     '<div class="acom-popup-section"><div class="acom-popup-title">Observa&ccedil;&atilde;o inicial</div><div class="acom-popup-text">'+escapeHtml(item.obsInicial || p.acompanhamento || p.obs || 'Sem observa&ccedil;&atilde;o inicial.')+'</div></div>'+
     '<div class="acom-popup-section"><div class="acom-popup-title">&Uacute;ltimos acompanhamentos</div><div class="acom-popup-history">'+historico+'</div>'+(followups.length && !isAdmin ? '<div class="acom-popup-text" style="margin-top:10px">Somente usu&aacute;rio admin pode excluir acompanhamentos.</div>' : '')+'</div>'+
     '<div class="acom-popup-section"><div class="acom-popup-title">ClickUp</div><div class="acom-popup-text">'+clickup+(link ? '<div style="margin-top:8px"><a class="project-link-btn alt" href="'+escapeHtml(link)+'" target="_blank" rel="noopener noreferrer">Abrir projeto</a></div>' : '')+'</div></div>';
-  abrirModalHistorico(item.cliente, item.mes+' • '+item.consultor, [html], '');
+  abrirModalHistorico(item.cliente, item.mes+' • '+projectConsultantsLabel(item), [html], '');
   var modal = document.querySelector('#history-modal .history-body');
   if (modal) {
     modal.style.whiteSpace = 'normal';
@@ -9433,7 +9435,7 @@ function buildProjectAccordion(p, id, barHtml, prazoH, gerH, followupsH, logH, o
     '</div>'+
     '<div class="project-field-grid">'+
       projectField('Cliente', p && p.cliente)+
-      projectField('Consultor', p && p.consultor)+
+      projectField('Consultores', projectConsultantsLabel(p))+
       projectField('Tipo', p && p.tipo)+
       projectField('Formato', p && p.formato)+
       projectField('Progresso', progresso, { html:true })+
@@ -9530,7 +9532,7 @@ function buildRows(list, pfx) {
     var linkProjeto = dashProjectLink(p);
     var projetoLinkBtn = linkProjeto ? '<a class=\"project-link project-link-btn\" href=\"'+escapeHtml(linkProjeto)+'\" target=\"_blank\" rel=\"noopener noreferrer\" onclick=\"event.stopPropagation()\">Abrir Projeto</a>' : '';
     var seqBadge = p._monthSeq ? '<span class="month-seq-badge">'+p._monthSeq+'&ordf; venda do m&ecirc;s</span>' : '';
-    out += '<div class="pcell"><div class="pname-row"><div class="pname">'+p.cliente+'</div>'+projetoLinkBtn+'</div><div class="psub">'+(p.consultor||'\u2014')+' &bull; '+p.mes+seqBadge+'</div></div>';
+    out += '<div class="pcell"><div class="pname-row"><div class="pname">'+p.cliente+'</div>'+projetoLinkBtn+'</div><div class="psub">'+projectConsultantsLabel(p)+' &bull; '+p.mes+seqBadge+'</div></div>';
     out += '<div class="pcell"><span class="tag '+info.cls+'">'+sl(p.status)+'</span></div>';
     out += '<div class="pcell">'+tTag+'</div>';
     out += '<div class="pcell" style="font-size:12px;color:var(--text2)">'+(p.formato||'-')+'</div>';
