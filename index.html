@@ -4467,6 +4467,17 @@ function performanceRecord(name, startedMs, details, ok) {
   performancePersistHistory(history);
   return event;
 }
+function performanceMeasureSync(name, callback) {
+  var startedMs = performanceNowMs();
+  var ok = false;
+  try {
+    var result = callback();
+    ok = true;
+    return result;
+  } finally {
+    performanceRecord('render.' + String(name || 'etapa'), startedMs, {}, ok);
+  }
+}
 function performanceSummarize() {
   var events = performanceLoadHistory().concat(PERFORMANCE_DIAGNOSTICS.events);
   var seen = {};
@@ -8058,7 +8069,22 @@ window.alternarUsuarioPainel = alternarUsuarioPainel;
 
 function renderAll() {
   var performanceStarted = performanceNowMs();
-  buildPeriodBar(); initDash(); initControlTower(); initAcomp(); initFechamento(); initProjectClosing(); initBonus(); initAdmin(); initAll(); initCons(); initVend(); initAvul(); initLog(); initPraz(); initAlert(); initExec();
+  performanceMeasureSync('periodos', buildPeriodBar);
+  performanceMeasureSync('dashboard', initDash);
+  performanceMeasureSync('gestao', initControlTower);
+  performanceMeasureSync('acompanhamento', initAcomp);
+  performanceMeasureSync('fechamento', initFechamento);
+  performanceMeasureSync('fechamento_projeto', initProjectClosing);
+  performanceMeasureSync('bonificacao', initBonus);
+  performanceMeasureSync('administracao', initAdmin);
+  performanceMeasureSync('projetos', initAll);
+  performanceMeasureSync('consultores', initCons);
+  performanceMeasureSync('vendedores', initVend);
+  performanceMeasureSync('avulso', initAvul);
+  performanceMeasureSync('logistica', initLog);
+  performanceMeasureSync('prazos', initPraz);
+  performanceMeasureSync('alertas', initAlert);
+  performanceMeasureSync('executivo', initExec);
   consultantCompensationLoad(false);
   if (authTokenParam() && !FECHAMENTO_SESSION_REFRESHED) {
     FECHAMENTO_SESSION_REFRESHED = true;
