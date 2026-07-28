@@ -4430,6 +4430,97 @@ function getUpdateDeviceId() {
 function getUpdateActor() {
   return storageGet(UPDATE_ACTOR_KEY, '') || ('Navegador ' + getUpdateDeviceId().slice(4, 10));
 }
+var PERFORMANCE_DIAGNOSTICS_KEY = 'gestcsi_performance_diagnostics_v1';
+var PERFORMANCE_DIAGNOSTICS_LIMIT = 160;
+var PERFORMANCE_DIAGNOSTICS = {
+  session_started_at: new Date().toISOString(),
+  session_started_ms: (window.performance && performance.now) ? performance.now() : Date.now(),
+  events: []
+};
+function performanceNowMs() {
+  return (window.performance && performance.now) ? performance.now() : Date.now();
+}
+function performanceLoadHistory() {
+  try {
+    var parsed = JSON.parse(storageGet(PERFORMANCE_DIAGNOSTICS_KEY, '[]')) || [];
+    return Array.isArray(parsed) ? parsed.slice(-PERFORMANCE_DIAGNOSTICS_LIMIT) : [];
+  } catch(e) {
+    return [];
+  }
+}
+function performancePersistHistory(events) {
+  try {
+    storageSet(PERFORMANCE_DIAGNOSTICS_KEY, JSON.stringify((events || []).slice(-PERFORMANCE_DIAGNOSTICS_LIMIT)));
+  } catch(e) {}
+}
+function performanceRecord(name, startedMs, details, ok) {
+  var event = Object.assign({
+    at: new Date().toISOString(),
+    name: String(name || 'evento'),
+    duration_ms: Math.max(0, Math.round(performanceNowMs() - Number(startedMs || performanceNowMs()))),
+    ok: ok !== false
+  }, details || {});
+  PERFORMANCE_DIAGNOSTICS.events.push(event);
+  if (PERFORMANCE_DIAGNOSTICS.events.length > PERFORMANCE_DIAGNOSTICS_LIMIT) PERFORMANCE_DIAGNOSTICS.events.shift();
+  var history = performanceLoadHistory();
+  history.push(event);
+  performancePersistHistory(history);
+  return event;
+}
+function performanceSummarize() {
+  var events = performanceLoadHistory().concat(PERFORMANCE_DIAGNOSTICS.events);
+  var seen = {};
+  events = events.filter(function(event) {
+    var key = [event.at,event.name,event.duration_ms,event.source || '',event.action || ''].join('|');
+    if (seen[key]) return false;
+    seen[key] = true;
+    return true;
+  }).slice(-PERFORMANCE_DIAGNOSTICS_LIMIT);
+  var latestLoad = null;
+  var latestRender = null;
+  events.forEach(function(event) {
+    if (event.name === 'painel.carga') latestLoad = event;
+    if (event.name === 'painel.render') latestRender = event;
+  });
+  return {
+    events: events,
+    latestLoad: latestLoad,
+    latestRender: latestRender,
+    failures: events.filter(function(event){ return event.ok === false; }).length
+  };
+}
+function performanceClearDiagnostics() {
+  PERFORMANCE_DIAGNOSTICS.events = [];
+  performancePersistHistory([]);
+  performanceRefreshDiagnostic();
+  showToast('Diagnóstico de desempenho limpo', 'ok');
+  return false;
+}
+function performanceFormatDuration(ms) {
+  var value = Number(ms || 0);
+  return value >= 1000 ? (value / 1000).toFixed(value >= 10000 ? 1 : 2) + ' s' : Math.round(value) + ' ms';
+}
+function performanceDiagnosticHtml() {
+  var summary = performanceSummarize();
+  var load = summary.latestLoad || {};
+  var render = summary.latestRender || {};
+  var rows = summary.events.slice(-24).reverse().map(function(event) {
+    var detail = event.source || event.action || event.gid || '';
+    return '<tr><td>'+escapeHtml(new Date(event.at).toLocaleTimeString('pt-BR'))+'</td><td>'+escapeHtml(event.name)+'</td><td>'+escapeHtml(detail)+'</td><td class="num">'+escapeHtml(performanceFormatDuration(event.duration_ms))+'</td><td>'+(event.ok === false ? '<span class="tag tag-r">Falha</span>' : '<span class="tag tag-g">OK</span>')+'</td></tr>';
+  }).join('');
+  return '<div class="acom-panel" id="performance-diagnostics" style="margin-top:14px"><div class="acom-panel-head"><div><div class="acom-panel-title">Diagnóstico de desempenho</div><div class="acom-panel-note">Medições locais deste navegador; nenhum dado de projeto é enviado.</div></div><button class="admin-toggle" onclick="return performanceClearDiagnostics()">Limpar histórico</button></div>'+
+    '<div class="acom-panel-body"><div class="kpis" style="margin-bottom:14px">'+
+      '<div class="kpi"><div class="kpi-l">Última carga</div><div class="kpi-v">'+escapeHtml(load.duration_ms == null ? '-' : performanceFormatDuration(load.duration_ms))+'</div><div class="kpi-s">'+escapeHtml(load.source || 'Ainda não concluída')+'</div></div>'+
+      '<div class="kpi"><div class="kpi-l">Projetos</div><div class="kpi-v">'+escapeHtml(load.project_count == null ? '-' : String(load.project_count))+'</div><div class="kpi-s">'+escapeHtml(load.trigger || 'Carga atual')+'</div></div>'+
+      '<div class="kpi"><div class="kpi-l">Último render</div><div class="kpi-v">'+escapeHtml(render.duration_ms == null ? '-' : performanceFormatDuration(render.duration_ms))+'</div><div class="kpi-s">'+escapeHtml(render.project_count == null ? 'Sem medição' : render.project_count + ' projetos')+'</div></div>'+
+      '<div class="kpi '+(summary.failures ? 'r' : 'g')+'"><div class="kpi-l">Falhas recentes</div><div class="kpi-v">'+summary.failures+'</div><div class="kpi-s">Últimos '+summary.events.length+' eventos</div></div>'+
+    '</div><div class="dashx-table-wrap"><table class="dashx-table"><thead><tr><th>Horário</th><th>Etapa</th><th>Origem/ação</th><th>Duração</th><th>Resultado</th></tr></thead><tbody>'+rows+'</tbody></table></div></div></div>';
+}
+function performanceRefreshDiagnostic() {
+  var current = document.getElementById('performance-diagnostics');
+  if (current) current.outerHTML = performanceDiagnosticHtml();
+}
+window.performanceClearDiagnostics = performanceClearDiagnostics;
 function carregarHistoricoAtualizacoes() {
   try {
     return JSON.parse(storageGet(UPDATE_HISTORY_KEY, '[]')) || [];
@@ -4438,8 +4529,10 @@ function carregarHistoricoAtualizacoes() {
   }
 }
 function chamarAppsScriptJsonp(action, params, timeoutMs) {
+  var performanceStarted = performanceNowMs();
   return new Promise(function(resolve, reject){
     if (!APPS_SCRIPT_URL || APPS_SCRIPT_URL.indexOf('AK') < 0) {
+      performanceRecord('rede.apps_script', performanceStarted, {action:String(action || ''), error:'url_indisponivel'}, false);
       reject(new Error('Apps Script URL indisponivel'));
       return;
     }
@@ -4450,6 +4543,7 @@ function chamarAppsScriptJsonp(action, params, timeoutMs) {
       if (done) return;
       done = true;
       _limparJsonp(cbName);
+      performanceRecord('rede.apps_script', performanceStarted, {action:String(action || ''), error:'timeout'}, false);
       reject(new Error('Timeout ao acessar Apps Script'));
     }, timeoutMs || 10000);
 
@@ -4458,6 +4552,7 @@ function chamarAppsScriptJsonp(action, params, timeoutMs) {
       done = true;
       clearTimeout(timer);
       _limparJsonp(cbName);
+      performanceRecord('rede.apps_script', performanceStarted, {action:String(action || ''), response_ok:!(resp && resp.ok === false)}, !(resp && resp.ok === false));
       resolve(resp || {});
     };
 
@@ -4475,6 +4570,7 @@ function chamarAppsScriptJsonp(action, params, timeoutMs) {
       done = true;
       clearTimeout(timer);
       _limparJsonp(cbName);
+      performanceRecord('rede.apps_script', performanceStarted, {action:String(action || ''), error:'rede'}, false);
       reject(new Error('Erro ao acessar Apps Script'));
     };
     script.onload = function(){
@@ -4483,6 +4579,7 @@ function chamarAppsScriptJsonp(action, params, timeoutMs) {
         done = true;
         clearTimeout(timer);
         _limparJsonp(cbName);
+        performanceRecord('rede.apps_script', performanceStarted, {action:String(action || ''), error:'resposta_invalida'}, false);
         reject(new Error('Apps Script retornou uma resposta invalida'));
       }, 250);
     };
@@ -4626,6 +4723,7 @@ function goTab(id, btn) {
     showToast('Bonificação disponível somente para administradores.', 'err');
     return false;
   }
+  if (id === 'admin') performanceRefreshDiagnostic();
   document.querySelectorAll('.page').forEach(function(x){ x.classList.remove('on'); });
   document.querySelectorAll('.tab,.snb,.btn-admin-top').forEach(function(x){ x.classList.remove('on'); });
   var pg = document.getElementById('page-'+id);
@@ -7877,6 +7975,7 @@ function initAdmin() {
         '</form></div></div>'+
         '<div class="acom-panel"><div class="acom-panel-head"><div><div class="acom-panel-title">Acessos liberados</div><div class="acom-panel-note" id="admin-users-note">Carregando...</div></div></div><div class="acom-panel-body" id="admin-users-list"></div></div>'+
       '</div>'+
+      performanceDiagnosticHtml()+
     '</div>';
   carregarUsuariosPainel();
 }
@@ -7933,6 +8032,7 @@ window.criarUsuarioPainel = criarUsuarioPainel;
 window.alternarUsuarioPainel = alternarUsuarioPainel;
 
 function renderAll() {
+  var performanceStarted = performanceNowMs();
   buildPeriodBar(); initDash(); initControlTower(); initAcomp(); initFechamento(); initProjectClosing(); initBonus(); initAdmin(); initAll(); initCons(); initVend(); initAvul(); initLog(); initPraz(); initAlert(); initExec();
   consultantCompensationLoad(false);
   if (authTokenParam() && !FECHAMENTO_SESSION_REFRESHED) {
@@ -7941,6 +8041,10 @@ function renderAll() {
   } else if (!FECHAMENTO_LOADED && !FECHAMENTO_LOADING) {
     fechamentoLoad(false);
   }
+  performanceRecord('painel.render', performanceStarted, {
+    project_count: DATA && Array.isArray(DATA.projetos) ? DATA.projetos.length : 0,
+    active_page: ((document.querySelector('.page.on') || {}).id || '').replace('page-','')
+  }, true);
 }
 function abrirProjetosComFiltro(status, clienteBusca) {
   fS = status || 'all';
@@ -13054,6 +13158,7 @@ function towerInitContractsMrr(payload) {
 }
 function loadContractsMrr() {
   if (CONTRACTS_MRR.promise) return CONTRACTS_MRR.promise;
+  var performanceStarted = performanceNowMs();
   if (!window.fetch) {
     CONTRACTS_MRR.promise = Promise.resolve(CONTRACTS_MRR);
     CONTRACTS_MRR.loaded = false;
@@ -13064,11 +13169,13 @@ function loadContractsMrr() {
     .then(function(r){ if (!r.ok) throw new Error('contracts_mrr.json '+r.status); return r.json(); })
     .then(function(payload){
       towerInitContractsMrr(payload);
+      performanceRecord('dados.contratos_mrr', performanceStarted, {contract_count:CONTRACTS_MRR.active_contracts, source:CONTRACTS_MRR.source || 'contracts_mrr.json'}, true);
       console.log('[MRR] Contratos carregados:', CONTRACTS_MRR.active_contracts, CONTRACTS_MRR.total_mrr);
       if (window._jaCarregou) renderAll();
       return CONTRACTS_MRR;
     })
     .catch(function(err){
+      performanceRecord('dados.contratos_mrr', performanceStarted, {source:'contracts_mrr.json', error:String(err && err.message || err || 'erro')}, false);
       console.warn('[MRR] Nao foi possivel carregar contracts_mrr.json:', err);
       CONTRACTS_MRR.loaded = false;
       return CONTRACTS_MRR;
@@ -15308,6 +15415,9 @@ function extrairEstruturaClickupDaLinha(ro) {
   };
 }
 function loadGvizTableJsonp(url, timeoutMs) {
+  var performanceStarted = performanceNowMs();
+  var gidMatch = String(url || '').match(/[?&]gid=([^&]+)/);
+  var performanceGid = gidMatch ? decodeURIComponent(gidMatch[1]) : '';
   return new Promise(function(resolve, reject){
     var cbName = '_gviz_' + Date.now() + '_' + Math.floor(Math.random() * 10000);
     var script = document.createElement('script');
@@ -15316,6 +15426,7 @@ function loadGvizTableJsonp(url, timeoutMs) {
       if (done) return;
       done = true;
       _limparJsonp(cbName);
+      performanceRecord('rede.google_sheets', performanceStarted, {gid:performanceGid, error:'timeout'}, false);
       reject(new Error('Timeout ao ler gviz'));
     }, timeoutMs || 12000);
 
@@ -15324,6 +15435,7 @@ function loadGvizTableJsonp(url, timeoutMs) {
       done = true;
       clearTimeout(timer);
       _limparJsonp(cbName);
+      performanceRecord('rede.google_sheets', performanceStarted, {gid:performanceGid, row_count:resp && resp.table && resp.table.rows ? resp.table.rows.length : 0}, true);
       resolve((resp && resp.table) ? resp.table : null);
     };
 
@@ -15334,6 +15446,7 @@ function loadGvizTableJsonp(url, timeoutMs) {
       done = true;
       clearTimeout(timer);
       _limparJsonp(cbName);
+      performanceRecord('rede.google_sheets', performanceStarted, {gid:performanceGid, error:'rede'}, false);
       reject(new Error('Erro de rede ao ler gviz'));
     };
     document.head.appendChild(script);
@@ -15428,6 +15541,7 @@ function linhaProjetoMensalValida(ro) {
   });
 }
 function carregarProjetosDiretoPlanilha() {
+  var performanceStarted = performanceNowMs();
   var abas = Object.keys(ABAS_GID_FIXAS).map(function(m){ return {title:m, gid:ABAS_GID_FIXAS[m]}; });
   var projetos = [];
   var falhas = [];
@@ -15474,12 +15588,18 @@ function carregarProjetosDiretoPlanilha() {
     console.log('[SHEET DIRECT] Total projetos lidos:', projetos.length, 'Falhas:', falhas.join(', ') || 'nenhuma');
     painelAplicarChavesCarteira(projetos);
     projetos._falhas_abas = falhas.slice();
+    performanceRecord('dados.projetos_planilha', performanceStarted, {
+      project_count: projetos.length,
+      failed_tabs: falhas.length,
+      source: 'google_sheets'
+    }, falhas.length === 0 && projetos.length > 0);
     return projetos;
   });
 }
 
 function loadMetricasFromSheet() {
   if (_metricasPromise) return _metricasPromise;
+  var performanceStarted = performanceNowMs();
   function mapearRow(cols, row) {
     var out = {};
     (cols || []).forEach(function(c, idx){
@@ -15550,10 +15670,12 @@ function loadMetricasFromSheet() {
       });
     })).then(function(){
       _metricasProjetoMap = map;
+      performanceRecord('dados.metricas', performanceStarted, {record_count:Object.keys(map).length, source:'google_sheets'}, true);
       console.log('[METRICAS] total clientes com métricas:', Object.keys(map).length);
       return map;
     });
   }).catch(function(error){
+    performanceRecord('dados.metricas', performanceStarted, {source:'google_sheets', error:String(error && error.message || error || 'erro')}, false);
     console.error('[METRICAS] Falha ao carregar métricas da planilha:', error);
     _metricasPromise = null;
     return _metricasProjetoMap || {};
@@ -15563,6 +15685,7 @@ function loadMetricasFromSheet() {
 
 function loadProjectLinksFromSheet() {
   if (_projectLinkPromise) return _projectLinkPromise;
+  var performanceStarted = performanceNowMs();
   function mergeRowsIntoMap(rows, mesOrigem, map) {
     if (!_resumoLinksPorAba[mesOrigem]) _resumoLinksPorAba[mesOrigem] = {projetos: 0, comLink: 0};
     (rows || []).forEach(function(row){
@@ -15610,6 +15733,7 @@ function loadProjectLinksFromSheet() {
     });
     _projectLinkMap = map;
     var totalLinks = Object.keys(map).reduce(function(acc, k){ return acc + map[k].length; }, 0);
+    performanceRecord('dados.links_projetos', performanceStarted, {record_count:totalLinks, source:'google_sheets', conflicts:_projectLinkConflicts.length}, true);
     console.log('[LOAD DEBUG] Qtd total consolidada de links:', totalLinks);
     Object.keys(_resumoLinksPorAba).forEach(function(m){
       var r = _resumoLinksPorAba[m];
@@ -15617,6 +15741,7 @@ function loadProjectLinksFromSheet() {
     });
     return map;
   }).catch(function(error){
+    performanceRecord('dados.links_projetos', performanceStarted, {source:'google_sheets', error:String(error && error.message || error || 'erro')}, false);
     console.error('Erro ao consolidar dados do painel (links):', error);
     _projectLinkPromise = null;
     return _projectLinkMap || {};
@@ -16110,6 +16235,8 @@ function _limparJsonp(cb) {
 }
 
 function loadAll(tipoAtualizacao) {
+  var performanceLoadStarted = performanceNowMs();
+  window._performanceLoadStarted = performanceLoadStarted;
   console.log('[INIT] Iniciando carga principal do painel');
   var nd = document.getElementById('nav-date');
   var lo = document.getElementById('load-overlay');
@@ -16287,6 +16414,7 @@ function normalizeProjetoLink(p) {
 }
 
 function _finalizarLoad(projetos, isRefresh, motivo, tipoAtualizacao) {
+  var performanceLoadStarted = Number(window._performanceLoadStarted || PERFORMANCE_DIAGNOSTICS.session_started_ms || performanceNowMs());
   console.log('[CONSOLIDADO] Início');
   console.log('[CONSOLIDADO] Projetos lidos:', Array.isArray(projetos) ? projetos.length : 0);
   console.log('[3] Finalizando carga. Motivo:', motivo);
@@ -16448,6 +16576,12 @@ function _finalizarLoad(projetos, isRefresh, motivo, tipoAtualizacao) {
   projectClosingBootstrapSharedQueue();
   window._jaCarregou = true;
   window._cargaFinalizada = true;
+  performanceRecord('painel.carga', performanceLoadStarted, {
+    source: motivo || 'desconhecida',
+    trigger: tipoAtualizacao || 'auto',
+    project_count: DATA && Array.isArray(DATA.projetos) ? DATA.projetos.length : 0,
+    refresh: !!isRefresh
+  }, !!(DATA && Array.isArray(DATA.projetos) && DATA.projetos.length));
 }
 
 
