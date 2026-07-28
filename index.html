@@ -16276,6 +16276,14 @@ function loadAll(tipoAtualizacao) {
   var rb = document.getElementById('refresh-bar');
   var isRefresh = window._jaCarregou === true;
   window._lastUpdateTrigger = tipoAtualizacao || (isRefresh ? 'manual' : 'auto');
+  var appsScriptAllPrefetch = null;
+  if (new Date().getFullYear() === 2026 && APPS_SCRIPT_URL && APPS_SCRIPT_URL.indexOf('AK') >= 0) {
+    appsScriptAllPrefetch = chamarAppsScriptJsonp('getMonthlyProjects', {mes:'ALL'}, 25000).then(function(resp){
+      return {ok:true, response:resp};
+    }).catch(function(error){
+      return {ok:false, error:error};
+    });
+  }
 
   if (!isRefresh) {
     // Primeiro acesso: mostra overlay, nao renderiza nada ainda
@@ -16363,7 +16371,13 @@ function loadAll(tipoAtualizacao) {
     }
 
     console.log('[1B] Buscando origem via Apps Script');
-    chamarAppsScriptJsonp('getMonthlyProjects', {mes:'ALL'}, 25000).then(function(resp) {
+    var allRequest = appsScriptAllPrefetch
+      ? appsScriptAllPrefetch.then(function(result){
+          if (!result || !result.ok) throw (result && result.error) || new Error('Apps Script indisponivel');
+          return result.response;
+        })
+      : chamarAppsScriptJsonp('getMonthlyProjects', {mes:'ALL'}, 25000);
+    allRequest.then(function(resp) {
       var qtd = resp && Array.isArray(resp.projetos) ? resp.projetos.length : 0;
       console.log('[2B] Resposta Apps Script recebida. Projetos brutos:', qtd);
       if (resp && resp.projetos && resp.projetos.length > 0) {
