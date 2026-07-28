@@ -15544,6 +15544,7 @@ function carregarProjetosDiretoPlanilha() {
   var performanceStarted = performanceNowMs();
   var abas = Object.keys(ABAS_GID_FIXAS).map(function(m){ return {title:m, gid:ABAS_GID_FIXAS[m]}; });
   var projetos = [];
+  var projetosPorAba = {};
   var falhas = [];
   function carregarAba(aba, tentativa) {
     tentativa = tentativa || 1;
@@ -15567,7 +15568,7 @@ function carregarProjetosDiretoPlanilha() {
         ro._sheet_order = (ordemAba * 10000) + seqAba;
         projetosAba.push(ro);
       });
-      projetos = projetos.concat(projetosAba);
+      projetosPorAba[aba.title] = projetosAba;
       console.log('[SHEET DIRECT] '+aba.title+': '+seqAba+' projeto(s) lido(s) na tentativa '+tentativa);
     }).catch(function(e){
       if (tentativa < 3) {
@@ -15580,11 +15581,17 @@ function carregarProjetosDiretoPlanilha() {
       console.error('[SHEET DIRECT] Aba indisponível após 3 tentativas: '+aba.title, e);
     });
   }
-  var sequencia = Promise.resolve();
-  abas.forEach(function(aba){
-    sequencia = sequencia.then(function(){ return carregarAba(aba, 1); });
+  var concorrencia = 3;
+  var filas = Array.from({length:concorrencia}, function(){ return Promise.resolve(); });
+  abas.forEach(function(aba, idx){
+    var fila = idx % concorrencia;
+    filas[fila] = filas[fila].then(function(){ return carregarAba(aba, 1); });
   });
-  return sequencia.then(function(){
+  return Promise.all(filas).then(function(){
+    projetos = [];
+    abas.forEach(function(aba){
+      projetos = projetos.concat(projetosPorAba[aba.title] || []);
+    });
     console.log('[SHEET DIRECT] Total projetos lidos:', projetos.length, 'Falhas:', falhas.join(', ') || 'nenhuma');
     painelAplicarChavesCarteira(projetos);
     projetos._falhas_abas = falhas.slice();
