@@ -4723,7 +4723,10 @@ function goTab(id, btn) {
     showToast('Bonificação disponível somente para administradores.', 'err');
     return false;
   }
-  if (id === 'admin') performanceRefreshDiagnostic();
+  if (id === 'admin') {
+    performanceRefreshDiagnostic();
+    setTimeout(function(){ carregarUsuariosPainel(false); }, 0);
+  }
   document.querySelectorAll('.page').forEach(function(x){ x.classList.remove('on'); });
   document.querySelectorAll('.tab,.snb,.btn-admin-top').forEach(function(x){ x.classList.remove('on'); });
   var pg = document.getElementById('page-'+id);
@@ -7977,25 +7980,47 @@ function initAdmin() {
       '</div>'+
       performanceDiagnosticHtml()+
     '</div>';
-  carregarUsuariosPainel();
 }
-function carregarUsuariosPainel() {
+var ADMIN_USERS_CACHE = {html:'', note:'', loaded_at:0, promise:null};
+function adminUsersApplyCache() {
   var box = document.getElementById('admin-users-list');
   var note = document.getElementById('admin-users-note');
+  if (note && ADMIN_USERS_CACHE.note) note.textContent = ADMIN_USERS_CACHE.note;
+  if (box && ADMIN_USERS_CACHE.html) box.innerHTML = ADMIN_USERS_CACHE.html;
+}
+function carregarUsuariosPainel(force) {
+  var box = document.getElementById('admin-users-list');
+  var note = document.getElementById('admin-users-note');
+  var cacheFresh = ADMIN_USERS_CACHE.loaded_at && (Date.now() - ADMIN_USERS_CACHE.loaded_at < 60000);
+  if (!force && cacheFresh && ADMIN_USERS_CACHE.html) {
+    adminUsersApplyCache();
+    return Promise.resolve(true);
+  }
+  if (ADMIN_USERS_CACHE.promise) {
+    ADMIN_USERS_CACHE.promise.then(adminUsersApplyCache);
+    return ADMIN_USERS_CACHE.promise;
+  }
   if (box) box.innerHTML = '<div class="empty">Carregando usu&aacute;rios...</div>';
-  Promise.all([chamarAppsScriptJsonp('listUsers', {auth_token:authTokenParam()}, 12000), consultantCompensationLoad(false)]).then(function(results){
+  ADMIN_USERS_CACHE.promise = Promise.all([chamarAppsScriptJsonp('listUsers', {auth_token:authTokenParam()}, 12000), consultantCompensationLoad(false)]).then(function(results){
     var resp = results[0];
     if (!resp || resp.ok === false) throw new Error((resp && (resp.error || resp.message)) || 'Falha ao listar');
     var users = Array.isArray(resp.users) ? resp.users : [];
-    if (note) note.textContent = users.length + ' usuário(s)';
-    if (box) box.innerHTML = users.map(function(u){
+    ADMIN_USERS_CACHE.note = users.length + ' usuário(s)';
+    ADMIN_USERS_CACHE.html = users.map(function(u){
       return '<div class="admin-user-row"><div><div class="admin-user-name">'+escapeHtml(u.name || u.username)+'</div><div class="admin-user-meta">'+escapeHtml(u.username)+' &bull; '+escapeHtml(u.role || 'user')+' &bull; '+(u.enabled ? 'ativo' : 'desativado')+'</div></div>'+
         adminUserSeniorityControl(u)+
         '<button class="admin-toggle" onclick="return alternarUsuarioPainel(\''+jsQuote(u.username)+'\', '+(u.enabled ? 'false' : 'true')+')">'+(u.enabled ? 'Desativar' : 'Ativar')+'</button></div>';
     }).join('') || '<div class="empty">Nenhum usu&aacute;rio cadastrado.</div>';
+    ADMIN_USERS_CACHE.loaded_at = Date.now();
+    adminUsersApplyCache();
+    return true;
   }).catch(function(err){
     if (box) box.innerHTML = '<div class="empty">'+escapeHtml((err && err.message) || 'Erro ao carregar')+'</div>';
+    return false;
+  }).finally(function(){
+    ADMIN_USERS_CACHE.promise = null;
   });
+  return ADMIN_USERS_CACHE.promise;
 }
 function criarUsuarioPainel(form) {
   var err = document.getElementById('admin-create-error');
@@ -8011,7 +8036,7 @@ function criarUsuarioPainel(form) {
     if (!resp || resp.ok === false) throw new Error((resp && (resp.error || resp.message)) || 'Cadastro recusado');
     form.reset();
     showToast('Usuário cadastrado', 'ok');
-    carregarUsuariosPainel();
+    carregarUsuariosPainel(true);
   }).catch(function(error){
     if (err) err.textContent = (error && error.message) || 'Erro ao cadastrar';
   }).finally(function(){
@@ -8022,7 +8047,7 @@ function criarUsuarioPainel(form) {
 function alternarUsuarioPainel(username, enabled) {
   chamarAppsScriptJsonp('setUserEnabled', {auth_token:authTokenParam(), username:username, enabled:enabled ? '1' : '0'}, 12000).then(function(resp){
     if (!resp || resp.ok === false) throw new Error((resp && (resp.error || resp.message)) || 'Alteração recusada');
-    carregarUsuariosPainel();
+    carregarUsuariosPainel(true);
   }).catch(function(error){
     showToast((error && error.message) || 'Erro ao alterar usuário', 'err');
   });
