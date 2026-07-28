@@ -5023,6 +5023,7 @@ function acompProjetoView(p, followupMap) {
     bucketMeta:acompBucketMeta(bucket),
     texto:String((followup && (followup.consideracao || followup.proxima_acao)) || (p && p.acompanhamento) || '').trim(),
     proximaAcao:String((followup && followup.proxima_acao) || '').trim(),
+    temFollowupEnviado:!!followup,
     responsavel:String((followup && followup.responsavel) || '').trim(),
     dataAcompanhamento:String((followup && followup.data_acompanhamento) || '').trim(),
     followupStatus:String((followup && followup.followup_status) || ''),
@@ -5085,8 +5086,10 @@ function acompPendenciasDoConsultor(consultor) {
   if (!key || typeof acompBase !== 'function') return [];
   return acompBase().filter(function(item) {
     if ((consultantCompKey(item.consultor) || normalizeClienteKey(item.consultor)) !== key) return false;
-    return acompNormalizeFollowupStatus(item.followupStatus) === 'pendente' ||
-      (!!item.kanbanStage && acompNormalizeKanbanStage(item.kanbanStage, '') === 'pending');
+    var textoEnviado = String(item.proximaAcao || item.texto || '').trim();
+    return item.temFollowupEnviado &&
+      textoEnviado &&
+      acompNormalizeFollowupStatus(item.followupStatus) === 'pendente';
   }).sort(function(a,b) {
     return String(a.mes || '').localeCompare(String(b.mes || '')) ||
       String(a.cliente || '').localeCompare(String(b.cliente || ''));
@@ -5098,8 +5101,8 @@ function abrirPendenciasConsultor(consultor, ev) {
   var list = acompPendenciasDoConsultor(consultor);
   var rows = list.map(function(item) {
     var action = '<button type="button" class="project-link-btn" onclick="return acompProjectInfoPopup(\''+jsQuote(item.projectKey)+'\')">Abrir acompanhamento</button>';
-    return '<tr><td><strong>'+escapeHtml(item.cliente || '-')+'</strong><div class="dashx-list-sub">'+escapeHtml(item.mes || '-')+' &bull; '+escapeHtml(item.status || '-')+'</div></td><td>'+escapeHtml(item.proximaAcao || item.texto || 'Pendência direcionada')+'</td><td>'+action+'</td></tr>';
-  }).join('') || '<tr class="empty-row"><td colspan="3">Nenhuma pendência direcionada para este consultor.</td></tr>';
+    return '<tr><td><strong>'+escapeHtml(item.cliente || '-')+'</strong><div class="dashx-list-sub">'+escapeHtml(item.mes || '-')+' &bull; '+escapeHtml(item.status || '-')+'</div></td><td>'+escapeHtml(item.proximaAcao || item.texto)+'</td><td>'+action+'</td></tr>';
+  }).join('') || '<tr class="empty-row"><td colspan="3">Nenhuma pendência enviada para este consultor.</td></tr>';
   var html = '<div class="dashx-table-wrap"><table class="dashx-table"><thead><tr><th>Projeto</th><th>Pendência</th><th>Ação</th></tr></thead><tbody>'+rows+'</tbody></table></div>';
   dashOpenAuditModal('Pendências de acompanhamento - '+consultor, html);
   return false;
