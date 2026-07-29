@@ -7927,7 +7927,7 @@ function initFechamento() {
     function renderClosingStatusGroup(status, label, className) {
       var rows = consultantRows.filter(function(item){ return item.situacao === status; });
       if (!rows.length) return '';
-      return '<details class="closing-status-group '+className+'" open><summary><span class="closing-status-group-title">'+label+'</span><span class="closing-status-group-count">'+rows.length+'</span></summary><div class="closing-status-group-body">'+rows.map(renderClosingProjectCard).join('')+'</div></details>';
+      return '<details class="closing-status-group '+className+'"><summary><span class="closing-status-group-title">'+label+'</span><span class="closing-status-group-count">'+rows.length+'</span></summary><div class="closing-status-group-body">'+rows.map(renderClosingProjectCard).join('')+'</div></details>';
     }
     var projectCards = '<div class="closing-status-groups">'+
       renderClosingStatusGroup('aguardando', 'Aguardando validação', 'waiting')+
