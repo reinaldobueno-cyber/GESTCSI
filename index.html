@@ -3862,6 +3862,9 @@ body.theme-dark .btn-reload{
 </style>
 </head>
 <body>
+<script>
+document.body.classList.toggle('theme-dark', document.documentElement.dataset.theme === 'dark');
+</script>
 <div class="auth-backdrop" id="auth-gate">
   <div class="auth-card">
     <div class="auth-title">Entrar no painel</div>
