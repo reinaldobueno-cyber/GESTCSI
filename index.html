@@ -3247,8 +3247,9 @@ body.theme-dark .tower-kpis [style*="background:#fff"]{
 .bonus-person{display:flex;align-items:center;gap:16px}.bonus-avatar{width:58px;height:58px;border:3px solid rgba(255,255,255,.55);border-radius:50%;display:grid;place-items:center;background:rgba(255,255,255,.13);color:#fff;font-size:23px;font-weight:900}
 .bonus-person-name{font-size:22px;font-weight:900;color:#fff}.bonus-person-meta{font-size:11px;color:#d9edff;margin-top:5px}
 .bonus-report-total{text-align:right}.bonus-report-total span{display:block;font-size:10px;text-transform:uppercase;letter-spacing:.12em;font-weight:900;color:#c8e5ff}.bonus-report-total strong{display:block;font-size:30px;color:#fff;margin-top:5px}
-.bonus-activity-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;padding:20px 28px}
+.bonus-activity-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;padding:20px 28px}
 .bonus-activity{border:1px solid #dce5ef;border-radius:12px;background:#f7fafd;padding:15px 16px;min-height:88px}.bonus-activity.primary{background:#eaf6ff;border-color:#a8d7f5}
+.bonus-activity.approved{background:#edf8ef;border-color:#a8d5b4}.bonus-activity.approved strong{color:#237543}
 .bonus-activity.rejected{background:#fff5f3;border-color:#f3c5bd}.bonus-activity.rejected strong{color:#b44535}
 .bonus-activity span{display:block;color:#687b98;font-size:9px;font-weight:900;letter-spacing:.1em;text-transform:uppercase}.bonus-activity strong{display:block;color:#173b67;font-size:22px;margin-top:8px}.bonus-activity small{display:block;color:#92a3b8;font-size:10px;margin-top:5px}
 .bonus-financial{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;padding:0 28px 22px}.bonus-financial-item{border-left:4px solid #667eea;border-radius:10px;background:#f5f8fb;padding:14px 16px}.bonus-financial-item.marcos{border-left-color:#ed8936}.bonus-financial-item.indicacoes{border-left-color:#8b5cf6}.bonus-financial-item.total{border-left-color:#38a169;background:#edfbf1}.bonus-financial-item span{display:block;font-size:9px;font-weight:900;letter-spacing:.1em;text-transform:uppercase;color:#687b98}.bonus-financial-item strong{display:block;font-size:18px;color:#173b67;margin-top:7px}.bonus-financial-item.total strong{color:#237543;font-size:21px}
@@ -3259,7 +3260,8 @@ body.theme-dark .tower-kpis [style*="background:#fff"]{
 @media(max-width:1200px){.bonus-indication-form,.bonus-seniority-form{grid-template-columns:repeat(3,1fr)}}
 @media(max-width:900px){.bonus-observation-form{grid-template-columns:1fr}}
 @media(max-width:1050px){.bonus-exec-grid{grid-template-columns:repeat(2,1fr)}.bonus-exec-columns{grid-template-columns:1fr}}
-@media(max-width:900px){.bonus-activity-grid{grid-template-columns:repeat(2,1fr)}.bonus-financial{grid-template-columns:1fr}.bonus-report-head{padding:20px}.bonus-report-total strong{font-size:24px}.bonus-rank-row{grid-template-columns:24px 1fr auto}.bonus-rank-track{display:none}}
+@media(max-width:900px){.bonus-financial{grid-template-columns:1fr}.bonus-report-head{padding:20px}.bonus-report-total strong{font-size:24px}.bonus-rank-row{grid-template-columns:24px 1fr auto}.bonus-rank-track{display:none}}
+@media(max-width:560px){.bonus-activity-grid{grid-template-columns:1fr}}
 @media print{
   @page{size:A4 landscape;margin:8mm}
   html,body{background:#fff!important;color:#111!important;overflow:visible!important;font-size:10px!important}
@@ -3739,6 +3741,7 @@ body.theme-dark .bonus-observation-text{
 body.theme-dark .bonus-exec-kpi.good,
 body.theme-dark .bonus-activity.good,
 body.theme-dark .bonus-activity.primary,
+body.theme-dark .bonus-activity.approved,
 body.theme-dark .bonus-financial-item.total{
   background:#203126!important;
   border-color:#3b6b4a!important;
@@ -3759,6 +3762,8 @@ body.theme-dark .bonus-exec-kpi strong,
 body.theme-dark .bonus-activity strong,
 body.theme-dark .bonus-financial-item strong,
 body.theme-dark .bonus-observation-text{color:#eef5ef!important;}
+body.theme-dark .bonus-activity.approved strong{color:#8fc29a!important;}
+body.theme-dark .bonus-activity.rejected strong{color:#ef8d88!important;}
 body.theme-dark .bonus-exec-kpi small,
 body.theme-dark .bonus-activity small{color:#aebdb1!important;}
 body.theme-dark .bonus-exec-panel{background:#17211a!important;border-color:#2f4034!important;}
@@ -8222,7 +8227,7 @@ function bonusPersonReport(person) {
   var online=person.dailyRows.filter(function(row){return cmaxModality(cmaxModeLabel(row.item)).indexOf('ON LINE')>=0;}).length;
   var special=person.dailyRows.reduce(function(total,row){return total+(row.multiplier>1?row.equivalent:0);},0);
   return '<section class="bonus-report"><div class="bonus-report-head"><div class="bonus-person"><div class="bonus-avatar">'+escapeHtml(initial)+'</div><div><div class="bonus-person-name">'+escapeHtml(person.name)+'</div><div class="bonus-person-meta">'+escapeHtml(consultantSeniorityLabel(person.seniority))+' &middot; '+escapeHtml(bonusMonthLabel(BONUS_FILTER.month))+'</div></div></div><div class="bonus-report-total"><span>Total da bonifica&ccedil;&atilde;o</span><strong>'+consultantMoney(person.total)+'</strong></div></div>'+
-    '<div class="bonus-activity-grid"><div class="bonus-activity primary"><span>Di&aacute;rias realizadas</span><strong>'+cmaxEquivalentLabel(person.dailyEquivalent)+'</strong><small>equivalente contabilizado</small></div><div class="bonus-activity"><span>Di&aacute;rias especiais</span><strong>'+cmaxEquivalentLabel(special)+'</strong><small>fins de semana / feriados (1,5x)</small></div><div class="bonus-activity"><span>Marcos aprovados</span><strong>'+person.milestoneRows.length+'</strong><small>entregas validadas</small></div><div class="bonus-activity good"><span>Projetos aprovados</span><strong>'+(person.projectRows||[]).length+'</strong><small>fechamento de projeto</small></div><div class="bonus-activity"><span>Indica&ccedil;&otilde;es convertidas</span><strong>'+person.indicationRows.length+'</strong><small>upgrade / módulo</small></div><div class="bonus-activity rejected"><span>Reprovados</span><strong>'+((person.rejectedRows||[]).length+(person.rejectedProjectRows||[]).length)+'</strong><small>marcos e projetos</small></div></div>'+
+    '<div class="bonus-activity-grid"><div class="bonus-activity primary"><span>Di&aacute;rias realizadas</span><strong>'+cmaxEquivalentLabel(person.dailyEquivalent)+'</strong><small>equivalente contabilizado</small></div><div class="bonus-activity"><span>Di&aacute;rias especiais</span><strong>'+cmaxEquivalentLabel(special)+'</strong><small>fins de semana / feriados (1,5x)</small></div><div class="bonus-activity approved"><span>Marcos aprovados</span><strong>'+person.milestoneRows.length+'</strong><small>entregas validadas</small></div><div class="bonus-activity rejected"><span>Marcos reprovados</span><strong>'+(person.rejectedRows||[]).length+'</strong><small>não geram bonificação</small></div><div class="bonus-activity good"><span>Projetos aprovados</span><strong>'+(person.projectRows||[]).length+'</strong><small>fechamento de projeto</small></div><div class="bonus-activity"><span>Indica&ccedil;&otilde;es convertidas</span><strong>'+person.indicationRows.length+'</strong><small>upgrade / módulo</small></div></div>'+
     '<div class="bonus-financial"><div class="bonus-financial-item"><span>Valor das di&aacute;rias</span><strong>'+consultantMoney(person.dailyValue)+'</strong></div><div class="bonus-financial-item marcos"><span>Valor dos marcos</span><strong>'+consultantMoney(person.milestoneValue)+'</strong></div><div class="bonus-financial-item marcos"><span>Valor fech. projetos</span><strong>'+consultantMoney(person.projectValue||0)+'</strong></div><div class="bonus-financial-item indicacoes"><span>Valor das indica&ccedil;&otilde;es</span><strong>'+consultantMoney(person.indicationValue)+'</strong></div><div class="bonus-financial-item total"><span>Total remunera&ccedil;&atilde;o</span><strong>'+consultantMoney(person.total)+'</strong></div></div>'+
     '<div class="bonus-section"><div class="bonus-section-title">Detalhamento das di&aacute;rias</div>'+bonusDailyDetails(person)+'</div><div class="bonus-section"><div class="bonus-section-title">Detalhamento dos marcos aprovados</div>'+bonusMilestoneDetails(person)+'</div><div class="bonus-section"><div class="bonus-section-title">Fechamentos de projeto aprovados</div>'+bonusProjectClosingDetails(person)+'</div><div class="bonus-section"><div class="bonus-section-title">Indica&ccedil;&otilde;es convertidas</div>'+bonusIndicationDetails(person)+'</div><div class="bonus-section"><div class="bonus-section-title">Marcos reprovados e seus motivos</div>'+bonusRejectedDetails(person)+'</div><div class="bonus-section"><div class="bonus-section-title">Fechamentos de projeto reprovados</div>'+bonusProjectClosingRejectedDetails(person)+'</div></section>';
 }
