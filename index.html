@@ -3626,6 +3626,31 @@ body.theme-dark .exec-operation-status{background:#203126!important;border-color
 body.theme-dark .exec-operation-status [style*="color:"]{color:#8fc29a!important;}
 body.theme-dark .exec-operation-kpi{background:#17211a!important;border-color:#2f4034!important;}
 body.theme-dark .exec-operation-kpi>div:first-child{color:#eef5ef!important;}
+body.theme-dark .dashx-heatmap-cell.zero{background:#142019!important;color:#718576!important;border-color:#2a3b2f!important;}
+body.theme-dark .dashx-heatmap-cell.total{background:#1d2a21!important;color:#eef5ef!important;border-color:#3b5142!important;}
+.dashx-heatmap-cell[data-tip]{position:relative;}
+.dashx-heatmap-cell[data-tip]:hover:after,
+.dashx-heatmap-cell[data-tip]:focus-visible:after{
+  content:attr(data-tip);
+  position:absolute;
+  z-index:40;
+  left:50%;
+  bottom:calc(100% + 8px);
+  transform:translateX(-50%);
+  width:max-content;
+  max-width:230px;
+  padding:7px 9px;
+  border-radius:7px;
+  background:#203126;
+  border:1px solid #3b5142;
+  color:#eef5ef;
+  box-shadow:0 10px 24px rgba(0,0,0,.28);
+  font-size:10px;
+  font-weight:700;
+  line-height:1.35;
+  white-space:normal;
+  pointer-events:none;
+}
 body.theme-dark .snb{color:#aebdb1!important;border:1px solid transparent!important;}
 body.theme-dark .snb:hover{background:#1d2a21!important;color:#eef5ef!important;border-color:#2f4034!important;}
 body.theme-dark .snb.on{
@@ -11512,16 +11537,16 @@ function dashRenderHeatmap(map) {
       var cell = (map[nome] && map[nome][m]) || {projetos:0,diariasContr:0,diariasReal:0,riscos:0};
       total += Number(cell.projetos || 0);
       var cls = cell.projetos === 0 ? 'zero' : cell.projetos <= 2 ? 'low' : cell.projetos <= 4 ? 'med' : 'high';
-      var title = nome+' | '+m+'\\nProjetos de 2026: '+cell.projetos;
+      var title = nome+' · '+m+' · Projetos de 2026: '+cell.projetos;
       var action = cell.projetos > 0
         ? ' clickable" role="button" tabindex="0" onclick="return dashOpenHeatmapAudit(\''+jsQuote(nome)+'\',\''+jsQuote(m)+'\')" onkeydown="if(event.key===\'Enter\'||event.key===\' \'){event.preventDefault();return dashOpenHeatmapAudit(\''+jsQuote(nome)+'\',\''+jsQuote(m)+'\');}'
         : '';
-      return '<div class="dashx-heatmap-cell '+cls+action+'" title="'+title+'">'+cell.projetos+'</div>';
+      return '<div class="dashx-heatmap-cell '+cls+action+'" data-tip="'+title+'">'+cell.projetos+'</div>';
     }).join('');
     var totalAction = total > 0
       ? ' clickable" role="button" tabindex="0" onclick="return dashOpenHeatmapAudit(\''+jsQuote(nome)+'\',\'TOTAL\')" onkeydown="if(event.key===\'Enter\'||event.key===\' \'){event.preventDefault();return dashOpenHeatmapAudit(\''+jsQuote(nome)+'\',\'TOTAL\');}'
       : '';
-    return '<div class="dashx-heatmap-row"><div class="dashx-heatmap-name">'+nome+'</div>'+cells+'<div class="dashx-heatmap-cell total'+totalAction+'" title="'+nome+' | Total 2026\\nProjetos de 2026: '+total+'">'+total+'</div></div>';
+    return '<div class="dashx-heatmap-row"><div class="dashx-heatmap-name">'+nome+'</div>'+cells+'<div class="dashx-heatmap-cell total'+totalAction+'" data-tip="'+nome+' · Total 2026 · Projetos: '+total+'">'+total+'</div></div>';
   }).join('');
   return '<div class="dashx-heatmap">'+head+body+'</div>';
 }
