@@ -5290,11 +5290,57 @@ window.identificarUsuarioAtualizacao = function(nome) {
   showToast('Usuario de atualizacao definido: ' + n, 'ok');
   return n;
 };
-function goTab(id, btn) {
+var PANEL_ROUTES = {
+  dash:'dashboard',
+  exec:'executivo',
+  tower:'gestao',
+  acom:'acompanhamento',
+  cmax:'diarias-cmax',
+  fech:'fechamento',
+  projfech:'fechamento-projeto',
+  all:'projetos',
+  cons:'consultores',
+  vend:'vendedores',
+  avul:'avulso-novo',
+  log:'logistica',
+  praz:'prazos',
+  alert:'alertas',
+  bonus:'bonificacao',
+  admin:'usuarios'
+};
+var PANEL_ROUTE_IDS = Object.keys(PANEL_ROUTES).reduce(function(map,id){
+  map[PANEL_ROUTES[id]]=id;
+  return map;
+},{});
+var PANEL_ACTIVE_TAB = '';
+function panelRouteIdFromLocation() {
+  var route=decodeURIComponent(String(location.hash||'').replace(/^#\/?/,'')).toLowerCase().trim();
+  return PANEL_ROUTE_IDS[route]||'dash';
+}
+function panelWriteRoute(id, replace) {
+  var route=PANEL_ROUTES[id]||PANEL_ROUTES.dash;
+  var next='#/'+route;
+  if(location.hash===next)return;
+  var state={gestcsiTab:id};
+  if(replace)history.replaceState(state,'',next);
+  else history.pushState(state,'',next);
+}
+function panelOpenInitialRoute() {
+  var id=panelRouteIdFromLocation();
+  panelWriteRoute(id,true);
+  return goTab(id,null,{history:true});
+}
+function goTab(id, btn, options) {
+  options=options||{};
+  if(!PANEL_ROUTES[id])id='dash';
   if (id === 'bonus' && (!AUTH_STATE.user || AUTH_STATE.user.role !== 'admin')) {
     showToast('Bonificação disponível somente para administradores.', 'err');
+    panelWriteRoute('dash',true);
+    if(id!=='dash')goTab('dash',null,{history:true});
     return false;
   }
+  if(!options.history)panelWriteRoute(id,false);
+  PANEL_ACTIVE_TAB=id;
   if (id === 'admin') {
     performanceRefreshDiagnostic();
     setTimeout(function(){ carregarUsuariosPainel(false); }, 0);
@@ -5325,7 +5371,7 @@ function goTab(id, btn) {
     }, 220);
   }
   if (id === 'cmax') {
-    consultantCompensationLoad(true);
+    consultantCompensationLoad(false);
     carregarDiariasCmax(false);
   }
   if (id === 'dash') {
@@ -5344,7 +5390,11 @@ function goTab(id, btn) {
   if (id === 'bonus') {
     bonusLoad();
   }
+  return false;
 }
+window.addEventListener('popstate',function(){
+  goTab(panelRouteIdFromLocation(),null,{history:true});
+});
 function setPeriod(p, btn) {
   activePeriod = p;
   document.querySelectorAll('.pb').forEach(function(b) { b.classList.remove('on'); });
@@ -17217,8 +17267,7 @@ function _finalizarLoad(projetos, isRefresh, motivo, tipoAtualizacao) {
     activePeriod='all'; fS='all'; fC='all'; fM='all'; _openId=null;
     projectClosingRestoreCandidatesCache();
     renderAll();
-    var snbDash = document.querySelector('.snb');
-    if (snbDash) goTab('dash', snbDash);
+    panelOpenInitialRoute();
   }
 
   projectClosingBootstrapSharedQueue();
@@ -17285,8 +17334,7 @@ function inicializarPainel() {
         activePeriod='all'; fS='all'; fC='all'; fM='all'; _openId=null;
         projectClosingRestoreCandidatesCache();
         renderAll();
-        var snbDash = document.querySelector('.snb');
-        if (snbDash) goTab('dash', snbDash);
+        panelOpenInitialRoute();
         projectClosingBootstrapSharedQueue();
         window._jaCarregou = true;
         window._snapshotAtivo = true;
