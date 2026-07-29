@@ -3924,6 +3924,8 @@ var UPDATE_DEVICE_KEY = 'gestcsi_update_device_id_v1';
 var UPDATE_ACTOR_KEY = 'gestcsi_update_actor_v1';
 var LAST_UPDATE_KEY = 'gestcsi_last_update_label_v1';
 var PANEL_CACHE_KEY = 'gestcsi_panel_cache_v2';
+var PANEL_SNAPSHOT_KEY = 'gestcsi_portfolio_snapshot_v1';
+var PANEL_SNAPSHOT_SCHEMA = 1;
 var PANEL_APP_VERSION = '2026-07-17-dynamic-portfolio-total-v1';
 var PANEL_EXPECTED_TOTAL_KEY = 'gestcsi_portfolio_expected_total_v1';
 var THEME_MODE_KEY = 'gestcsi_theme_mode_v1';
@@ -3954,7 +3956,7 @@ function painelCarteiraCompleta(list) {
 }
 function painelMaiorBasePreservada(minimo) {
   var atual = Array.isArray(DATA && DATA.projetos) ? DATA.projetos : [];
-  var cache = carregarPainelCache();
+  var cache = carregarPainelSnapshot() || carregarPainelCache();
   var cacheProjetos = cache && Array.isArray(cache.projetos) ? cache.projetos : [];
   var melhor = atual.length >= cacheProjetos.length ? atual : cacheProjetos;
   return melhor.length >= Number(minimo || 0) ? melhor : [];
@@ -4175,6 +4177,32 @@ function carregarPainelCache() {
     return null;
   }
 }
+function carregarPainelSnapshot() {
+  try {
+    var snapshot = JSON.parse(storageGet(PANEL_SNAPSHOT_KEY, 'null'));
+    if (snapshot && snapshot.schema_version === PANEL_SNAPSHOT_SCHEMA &&
+        snapshot.status === 'complete' && Array.isArray(snapshot.projetos) &&
+        painelCarteiraCompleta(snapshot.projetos) &&
+        Number(snapshot.project_count || 0) === snapshot.projetos.length) {
+      return snapshot;
+    }
+  } catch(e) {}
+  var legacy = carregarPainelCache();
+  if (!legacy) return null;
+  var migrated = {
+    schema_version: PANEL_SNAPSHOT_SCHEMA,
+    status: 'complete',
+    saved_at: legacy.salvo_em || new Date().toISOString(),
+    app_version: legacy.app_version || PANEL_APP_VERSION,
+    project_count: legacy.projetos.length,
+    expected_min: painelMinimoCarteiraAtual(),
+    label: legacy.label || '',
+    source: legacy.fonte || 'legacy_cache',
+    projetos: legacy.projetos
+  };
+  storageSet(PANEL_SNAPSHOT_KEY, JSON.stringify(migrated));
+  return migrated;
+}
 function persistirPainelCache(projetos, info) {
   var lista = Array.isArray(projetos) ? projetos : [];
   if (!lista.length) return false;
@@ -4183,7 +4211,7 @@ function persistirPainelCache(projetos, info) {
     return false;
   }
   painelRegistrarTotalCarteira(lista.length, info && info.fonte || 'cache');
-  var atual = carregarPainelCache();
+  var atual = carregarPainelSnapshot() || carregarPainelCache();
   if (atual && atual.projetos && atual.projetos.length > lista.length) {
     console.warn('[CACHE] Carga menor ignorada para preservar cache mais completo:', lista.length, 'vs', atual.projetos.length);
     return false;
@@ -4193,6 +4221,17 @@ function persistirPainelCache(projetos, info) {
     salvo_em: new Date().toISOString(),
     label: info && info.label || '',
     fonte: info && info.fonte || '',
+    projetos: lista
+  }));
+  storageSet(PANEL_SNAPSHOT_KEY, JSON.stringify({
+    schema_version: PANEL_SNAPSHOT_SCHEMA,
+    status: 'complete',
+    saved_at: new Date().toISOString(),
+    app_version: PANEL_APP_VERSION,
+    project_count: lista.length,
+    expected_min: painelMinimoCarteiraAtual(),
+    label: info && info.label || '',
+    source: info && info.fonte || '',
     projetos: lista
   }));
   return true;
@@ -4405,11 +4444,11 @@ function aguardarReflexoSyncClickup(projectKey, syncedAtEsperado) {
   return tentar(0);
 }
 function obterProjetosFallback() {
-  var cache = carregarPainelCache();
+  var cache = carregarPainelSnapshot() || carregarPainelCache();
   if (cache && cache.projetos && cache.projetos.length) {
     return {
-      fonte: 'cache',
-      label: cache.label || ('Cache: ' + new Date(cache.salvo_em || Date.now()).toLocaleString('pt-BR')),
+      fonte: 'snapshot',
+      label: cache.label || ('Snapshot: ' + new Date(cache.saved_at || cache.salvo_em || Date.now()).toLocaleString('pt-BR')),
       projetos: cache.projetos
     };
   }
@@ -16318,7 +16357,7 @@ function loadAll(tipoAtualizacao) {
   } else {
     // Atualizacao: barra discreta
     if (rb) { rb.style.display='block'; rb.style.transform='scaleX(0.05)'; }
-    if (nd) nd.textContent = 'Atualizando...';
+    if (nd) nd.textContent = window._snapshotAtivo ? 'Snapshot carregado • atualizando em segundo plano...' : 'Atualizando...';
   }
 
   function buscarViaAppsScript(fallbackProjetos, fallbackMotivo) {
@@ -16648,6 +16687,7 @@ function _finalizarLoad(projetos, isRefresh, motivo, tipoAtualizacao) {
   projectClosingBootstrapSharedQueue();
   window._jaCarregou = true;
   window._cargaFinalizada = true;
+  window._snapshotAtivo = false;
   performanceRecord('painel.carga', performanceLoadStarted, {
     source: motivo || 'desconhecida',
     trigger: tipoAtualizacao || 'auto',
@@ -16670,6 +16710,7 @@ window._logModo = window._logModo || 'geral';
 window._logPeriodo = window._logPeriodo || '28';
 window._jaCarregou = false;
 window._cargaFinalizada = false;
+window._snapshotAtivo = false;
 window._cargasAuxiliaresIniciadas = false;
 function iniciarCargasAuxiliaresPainel() {
   if (window._cargasAuxiliaresIniciadas) return;
@@ -16696,9 +16737,10 @@ function iniciarCargasAuxiliaresPainel() {
 }
 function inicializarPainel() {
   try {
+    var snapshotStarted = performanceNowMs();
     console.log('[INIT] Inicialização completa iniciada');
     var ndLocal = document.getElementById('nav-date');
-    var cacheInicial = carregarPainelCache();
+    var cacheInicial = carregarPainelSnapshot();
     if (cacheInicial && cacheInicial.projetos && cacheInicial.projetos.length) {
       try {
         var baseCache = carregarBaseProjetos(lerDadosPlanilhaConsolidados(cacheInicial.projetos).projetos);
@@ -16709,8 +16751,15 @@ function inicializarPainel() {
         var snbDash = document.querySelector('.snb');
         if (snbDash) goTab('dash', snbDash);
         projectClosingBootstrapSharedQueue();
-        if (ndLocal) ndLocal.textContent = (cacheInicial.label || 'Ultima carga salva') + ' (cache)';
-        console.log('[INIT] Cache local renderizado:', DATA.projetos.length);
+        window._jaCarregou = true;
+        window._snapshotAtivo = true;
+        if (ndLocal) ndLocal.textContent = (cacheInicial.label || 'Último snapshot completo') + ' • atualizando...';
+        performanceRecord('painel.snapshot', snapshotStarted, {
+          source: cacheInicial.source || 'snapshot',
+          project_count: DATA.projetos.length,
+          snapshot_age_ms: Math.max(0, Date.now() - new Date(cacheInicial.saved_at || Date.now()).getTime())
+        }, true);
+        console.log('[INIT] Snapshot local renderizado:', DATA.projetos.length);
       } catch (eCache) {
         console.error('[INIT] Falha ao renderizar cache local:', eCache);
       }
