@@ -3645,6 +3645,8 @@ body.theme-dark .snb.on{
 body.theme-dark .snb.on .snb-icon{background:rgba(120,173,132,.14)!important;color:#8fc29a!important;}
 .btn-theme-icon{display:grid;place-items:center;width:15px;height:15px;}
 .btn-theme-icon svg{width:15px;height:15px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round;}
+.nav-action-icon{width:15px;height:15px;display:block;flex:0 0 15px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round;}
+.btn-history,.btn-admin-top,.btn-syncall,.btn-reload,.nav-profile{display:inline-flex;align-items:center!important;justify-content:center!important;gap:7px!important;}
 .btn-theme-icon .theme-sun{display:none;}
 body.theme-dark .btn-theme-icon .theme-moon{display:none;}
 body.theme-dark .btn-theme-icon .theme-sun{display:block;}
@@ -3718,11 +3720,11 @@ body.theme-dark .btn-reload{
       </span>
       <span id="theme-toggle-label">Escuro</span>
     </button>
-    <button class="btn-history" onclick="mostrarHistoricoAtualizacoes()">Hist&oacute;rico</button>
-    <button class="btn-admin-top" id="nav-admin" style="display:none" onclick="goTab('admin',this)">Usu&aacute;rios</button>
-    <button class="btn-syncall" onclick="sincronizarTodosProjetosClickup(this)">Sync ClickUp</button>
-    <button class="btn-reload" onclick="recarregarPainelManual()">Atualizar</button>
-    <button class="nav-profile" style="border:0;cursor:pointer" onclick="logoutPainel()" title="Sair" id="nav-user">PMO</button>
+    <button class="btn-history" onclick="mostrarHistoricoAtualizacoes()"><svg class="nav-action-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 12a9 9 0 109-9 9 9 0 00-6.4 2.6L3 8"/><path d="M3 3v5h5M12 7v5l3 2"/></svg><span>Hist&oacute;rico</span></button>
+    <button class="btn-admin-top" id="nav-admin" style="display:none" onclick="goTab('admin',this)"><svg class="nav-action-icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="9" cy="8" r="3"/><path d="M3 19c0-3 2.4-5 6-5s6 2 6 5M16 7h5M18.5 4.5v5"/></svg><span>Usu&aacute;rios</span></button>
+    <button class="btn-syncall" onclick="sincronizarTodosProjetosClickup(this)"><svg class="nav-action-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 7h-5V2M4 17h5v5M19 12a7 7 0 00-12-5L4 10M5 12a7 7 0 0012 5l3-3"/></svg><span>Sync ClickUp</span></button>
+    <button class="btn-reload" onclick="recarregarPainelManual()"><svg class="nav-action-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 6v5h-5M4 18v-5h5M18.5 9A7 7 0 006 6l-2 5M5.5 15A7 7 0 0018 18l2-5"/></svg><span>Atualizar</span></button>
+    <button class="nav-profile" style="border:0;cursor:pointer" onclick="logoutPainel()" title="Sair" id="nav-user"><svg class="nav-action-icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="8" r="3.5"/><path d="M5 20c0-4 2.8-6 7-6s7 2 7 6"/></svg><span id="nav-user-label">PMO</span></button>
   </div>
 </nav>
 <div class="period-bar" id="period-bar">
@@ -4196,7 +4198,7 @@ function authSet(session) {
   storageSet(AUTH_SESSION_KEY, session ? JSON.stringify(session) : '');
   var gate = document.getElementById('auth-gate');
   if (gate) gate.style.display = AUTH_STATE.user ? 'none' : 'flex';
-  var navUser = document.getElementById('nav-user');
+  var navUser = document.getElementById('nav-user-label');
   if (navUser) navUser.textContent = AUTH_STATE.user ? (AUTH_STATE.user.name || AUTH_STATE.user.username) : 'PMO';
   var adminNav = document.getElementById('nav-admin');
   if (adminNav) adminNav.style.display = AUTH_STATE.user && AUTH_STATE.user.role === 'admin' ? '' : 'none';
