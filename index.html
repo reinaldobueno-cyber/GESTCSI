@@ -3417,6 +3417,22 @@ body.theme-dark *{
 .closing-consultant-metric.rejected{border-color:rgba(192,57,43,.28);background:var(--red-s)}
 .closing-consultant-metric.rejected strong{color:var(--red)}
 .closing-project-list{padding:12px}
+.closing-status-groups{display:grid;gap:12px}
+.closing-status-group{border:1px solid var(--border);border-radius:12px;background:var(--surf2);overflow:hidden}
+.closing-status-group>summary{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:11px 13px;cursor:pointer;list-style:none;font-size:10px;font-weight:900;text-transform:uppercase;letter-spacing:.08em;color:var(--text2)}
+.closing-status-group>summary::-webkit-details-marker{display:none}
+.closing-status-group>summary:before{content:"›";font-size:16px;line-height:1;transform:rotate(90deg);transition:transform .16s ease}
+.closing-status-group:not([open])>summary:before{transform:rotate(0)}
+.closing-status-group-title{display:flex;align-items:center;gap:8px;margin-right:auto}
+.closing-status-group-count{display:inline-flex;align-items:center;justify-content:center;min-width:27px;height:22px;padding:0 7px;border-radius:999px;background:var(--surf);border:1px solid var(--border);font-size:10px;color:var(--text)}
+.closing-status-group-body{padding:10px;border-top:1px solid var(--border)}
+.closing-status-group-body .closing-project-card:last-child{margin-bottom:0}
+.closing-status-group.waiting{border-color:rgba(211,166,79,.34)}
+.closing-status-group.waiting>summary{color:var(--orange)}
+.closing-status-group.approved{border-color:rgba(45,110,78,.34)}
+.closing-status-group.approved>summary{color:var(--green)}
+.closing-status-group.rejected{border-color:rgba(192,57,43,.32)}
+.closing-status-group.rejected>summary{color:var(--red)}
 .closing-project-card{display:grid;grid-template-columns:minmax(240px,1.4fr) minmax(220px,2fr) auto;gap:14px;align-items:center;border:1px solid var(--border);border-radius:12px;padding:12px 14px;margin-bottom:9px;background:var(--surf)}
 .closing-project-card.attention{border-color:#e3bc63;background:linear-gradient(90deg,#fff8e7 0%,#fffdfa 55%,#fff 100%);box-shadow:inset 5px 0 0 #d9a93c}
 .closing-project-card:last-child{margin-bottom:0}
@@ -7832,7 +7848,7 @@ function initFechamento() {
     var consultantBonus = consultantRows.reduce(function(sum,item){ return sum + Number(item.valor_bonus || 0); },0);
     var consultantNew = fechamentoUnreadCount(consultant);
     var newBadge = consultantNew ? '<span class="closing-new-badge" title="'+consultantNew+' marco(s) novo(s) desde a última visualização"><span class="closing-new-bell" aria-hidden="true">&#128276;</span><span>'+consultantNew+'</span></span>' : '';
-    var projectCards = consultantRows.map(function(item) {
+    function renderClosingProjectCard(item) {
       var status = String(item.situacao || 'outro');
       var comment = item.justificativa
         ? escapeHtml(item.justificativa)+(item.justificativa_por ? '<div class="closing-project-meta">por '+escapeHtml(item.justificativa_por)+'</div>' : '')
@@ -7844,7 +7860,18 @@ function initFechamento() {
       return '<div class="closing-project-card '+(mismatch?'attention':'')+'"><div><div class="closing-project-title">'+escapeHtml(item.projeto || 'Projeto não mapeado')+'</div><div class="closing-project-marco">'+escapeHtml(item.marco || '-')+'</div><div class="closing-project-meta">'+escapeHtml(item.item_tipo || 'Marco')+' · '+escapeHtml(item.fase || '-')+'<br>Closed: '+(item.closed_at ? formatarDataHoraProjeto(item.closed_at) : '-')+(item.validation_at ? ' · Validado: '+formatarDataHoraProjeto(item.validation_at) : '')+attention+'</div></div>'+
         '<div><span class="closing-status '+escapeHtml(status)+'">'+escapeHtml(item.status_atual || status)+'</span><div class="closing-project-comment" style="margin-top:7px">'+comment+'<div class="closing-project-meta">'+ownerNote+'</div></div></div>'+
         '<div><strong>'+fechamentoMoney(item.valor_bonus)+'</strong><div style="margin-top:8px"><a class="project-link-btn" href="'+escapeHtml(item.link || '#')+'" target="_blank" rel="noopener">Abrir marco</a></div></div></div>';
-    }).join('');
+    }
+    function renderClosingStatusGroup(status, label, className) {
+      var rows = consultantRows.filter(function(item){ return item.situacao === status; });
+      if (!rows.length) return '';
+      return '<details class="closing-status-group '+className+'" open><summary><span class="closing-status-group-title">'+label+'</span><span class="closing-status-group-count">'+rows.length+'</span></summary><div class="closing-status-group-body">'+rows.map(renderClosingProjectCard).join('')+'</div></details>';
+    }
+    var projectCards = '<div class="closing-status-groups">'+
+      renderClosingStatusGroup('aguardando', 'Aguardando validação', 'waiting')+
+      renderClosingStatusGroup('aprovado', 'Aprovados', 'approved')+
+      renderClosingStatusGroup('reprovado', 'Reprovados', 'rejected')+
+      renderClosingStatusGroup('outro', 'Outros status', '')+
+    '</div>';
     return '<section class="closing-consultant-card '+(collapsed?'is-collapsed ':'')+(consultantNew?'has-new':'')+'"><div class="closing-consultant-head"><div class="closing-consultant-title-row"><button class="closing-consultant-toggle" onclick="return fechamentoToggleConsultant(decodeURIComponent(\''+encodeURIComponent(consultant)+'\'))"><span class="closing-consultant-arrow">&#9662;</span><span><span class="closing-consultant-name-line"><span class="closing-consultant-name">'+escapeHtml(consultant)+'</span>'+newBadge+'</span><span class="closing-project-meta">Marcos que entraram em Closed no período selecionado</span></span></button></div><div class="closing-consultant-metrics"><div class="closing-consultant-metric"><strong>'+consultantRows.length+'</strong><span>Marcos</span></div><div class="closing-consultant-metric"><strong>'+consultantWaiting+'</strong><span>Aguardando</span></div><div class="closing-consultant-metric approved"><strong>'+consultantApproved+'</strong><span>Aprovados</span></div><div class="closing-consultant-metric rejected"><strong>'+consultantRejected+'</strong><span>Reprovados</span></div><div class="closing-consultant-metric"><strong>'+fechamentoMoney(consultantBonus)+'</strong><span>Bônus</span></div></div></div><div class="closing-project-list">'+projectCards+'</div></section>';
   }).join('') || '<div class="empty">Nenhum marco encontrado neste recorte. Atualize os Closed ou consulte as validações.</div>';
   var error = FECHAMENTO_META.error ? '<div class="dashx-focus-note" style="margin-bottom:12px"><strong>'+escapeHtml(FECHAMENTO_META.error)+'</strong></div>' : '';
