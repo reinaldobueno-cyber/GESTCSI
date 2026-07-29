@@ -3583,6 +3583,49 @@ body.theme-dark #projfech-content .dashx-table td{background:#17211a!important;b
 body.theme-dark #projfech-content .dashx-table tbody tr:hover td{background:#203126!important;}
 body.theme-dark #projfech-content .project-link-btn{background:#203126!important;border-color:#3b5142!important;color:#eef5ef!important;}
 body.theme-dark #projfech-content .btn-syncall{background:linear-gradient(180deg,#78ad84,#659a72)!important;border-color:#78ad84!important;color:#0e1511!important;box-shadow:0 10px 22px rgba(120,173,132,.18)!important;}
+/* Componentes que ainda carregavam fundos claros ou azulados no tema antigo. */
+body.theme-dark .auth-backdrop{
+  background:
+    radial-gradient(circle at 50% 34%,rgba(120,173,132,.12),transparent 28rem),
+    rgba(8,14,10,.96)!important;
+}
+body.theme-dark .auth-card{background:#17211a!important;border-color:#3b5142!important;box-shadow:0 24px 80px rgba(0,0,0,.38)!important;}
+body.theme-dark .project-accordion-shell{
+  background:linear-gradient(180deg,#111b15 0%,#17211a 48%,#111b15 100%)!important;
+  border-color:#2f4034!important;
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.025),0 16px 34px rgba(0,0,0,.18)!important;
+}
+body.theme-dark .project-summary-card,
+body.theme-dark .project-box-grid{
+  background:linear-gradient(180deg,#1d2a21,#17211a)!important;
+  border-color:#3b5142!important;
+}
+body.theme-dark .project-box{background:#17211a!important;border-color:#3b5142!important;color:#eef5ef!important;}
+body.theme-dark .project-box:hover,
+body.theme-dark .project-box.on{background:#203126!important;border-color:#78ad84!important;}
+body.theme-dark .project-box.on .project-box-badge,
+body.theme-dark .project-box-panel-pill{background:#111b15!important;border-color:#3b5142!important;color:#8fc29a!important;}
+body.theme-dark .project-box-panel{
+  background:linear-gradient(135deg,#203126,#17211a 72%)!important;
+  border-color:#3b5142!important;
+}
+body.theme-dark .project-box-panel-head{background:transparent!important;border-color:#2f4034!important;}
+body.theme-dark .project-box-placeholder{background:#111b15!important;border-color:#3b5142!important;}
+body.theme-dark #projfech-content .closing-kpi.warn{
+  background:linear-gradient(180deg,#302718,#241f15)!important;
+  border-color:rgba(211,166,79,.46)!important;
+}
+body.theme-dark .cmax-modality.eligible,
+body.theme-dark .cmax-filter-chip.eligible{
+  background:#203126!important;
+  border-color:#3b6b4a!important;
+  color:#8fc29a!important;
+}
+body.theme-dark .cmax-modality.eligible span{color:#8fc29a!important;}
+body.theme-dark .exec-operation-status{background:#203126!important;border-color:#3b6b4a!important;}
+body.theme-dark .exec-operation-status [style*="color:"]{color:#8fc29a!important;}
+body.theme-dark .exec-operation-kpi{background:#17211a!important;border-color:#2f4034!important;}
+body.theme-dark .exec-operation-kpi>div:first-child{color:#eef5ef!important;}
 @media(max-width:800px){
   .nav-brand{gap:8px!important;}
   .nav-brand-image{width:76px;height:34px;}
@@ -8320,7 +8363,7 @@ function initExec() {
 
   // KPIs executivos
   var kpiExec = function(label, val, sub, cor, onclickJs) {
-    return '<div style="background:#fff;border:1px solid var(--border);border-radius:10px;padding:14px 16px;text-align:center;'+(onclickJs?'cursor:pointer;transition:transform .16s ease,box-shadow .16s ease;':'')+'" '+(onclickJs?'onclick="'+onclickJs+'" onmouseenter="this.style.transform=\'translateY(-1px)\';this.style.boxShadow=\'0 10px 22px rgba(66,82,64,.10)\'" onmouseleave="this.style.transform=\'none\';this.style.boxShadow=\'none\'"':'')+'>'+
+    return '<div class="exec-operation-kpi" style="background:var(--surf);border:1px solid var(--border);border-radius:10px;padding:14px 16px;text-align:center;'+(onclickJs?'cursor:pointer;transition:transform .16s ease,box-shadow .16s ease;':'')+'" '+(onclickJs?'onclick="'+onclickJs+'" onmouseenter="this.style.transform=\'translateY(-1px)\';this.style.boxShadow=\'0 10px 22px rgba(66,82,64,.10)\'" onmouseleave="this.style.transform=\'none\';this.style.boxShadow=\'none\'"':'')+'>'+
       '<div style="font-size:28px;font-weight:800;color:'+(cor||'var(--text)')+'">'+val+'</div>'+
       '<div style="font-size:11px;font-weight:700;color:var(--text2);margin-top:2px">'+label+'</div>'+
       (sub?'<div style="font-size:10px;color:var(--muted);margin-top:2px">'+sub+'</div>':'')+
@@ -8424,7 +8467,7 @@ function initExec() {
 
   el.innerHTML =
     // Header status
-    '<div style="background:'+stBg+';border:1.5px solid '+stCor+'40;border-radius:12px;padding:18px 22px;margin-bottom:18px;display:flex;align-items:center;gap:16px">'+
+    '<div class="exec-operation-status" style="background:'+stBg+';border:1.5px solid '+stCor+'40;border-radius:12px;padding:18px 22px;margin-bottom:18px;display:flex;align-items:center;gap:16px">'+
       '<div style="font-size:38px;line-height:1">'+stIcon+'</div>'+
       '<div style="flex:1">'+
         '<div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1.2px;color:'+stCor+';margin-bottom:3px">Classifica\u00E7\u00E3o da Opera\u00E7\u00E3o</div>'+
