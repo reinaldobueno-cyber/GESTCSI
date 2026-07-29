@@ -8,7 +8,7 @@
 (function() {
   try {
     var saved = localStorage.getItem('gestcsi_theme_mode_v1');
-    var dark = saved === 'dark' || (!saved && window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches);
+    var dark = saved !== 'light';
     document.documentElement.dataset.theme = dark ? 'dark' : 'light';
     document.documentElement.style.colorScheme = dark ? 'dark' : 'light';
   } catch(e) {}
@@ -4281,10 +4281,7 @@ function aplicarTema(mode) {
 function obterTemaPreferido() {
   var saved = storageGet(THEME_MODE_KEY, '');
   if (saved === 'dark' || saved === 'light') return saved;
-  try {
-    if (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) return 'dark';
-  } catch(e) {}
-  return 'light';
+  return 'dark';
 }
 function inicializarTema() {
   aplicarTema(obterTemaPreferido());
