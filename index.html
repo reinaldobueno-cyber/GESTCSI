@@ -16654,6 +16654,7 @@ function _finalizarLoad(projetos, isRefresh, motivo, tipoAtualizacao) {
     project_count: DATA && Array.isArray(DATA.projetos) ? DATA.projetos.length : 0,
     refresh: !!isRefresh
   }, !!(DATA && Array.isArray(DATA.projetos) && DATA.projetos.length));
+  iniciarCargasAuxiliaresPainel();
 }
 
 
@@ -16669,6 +16670,30 @@ window._logModo = window._logModo || 'geral';
 window._logPeriodo = window._logPeriodo || '28';
 window._jaCarregou = false;
 window._cargaFinalizada = false;
+window._cargasAuxiliaresIniciadas = false;
+function iniciarCargasAuxiliaresPainel() {
+  if (window._cargasAuxiliaresIniciadas) return;
+  window._cargasAuxiliaresIniciadas = true;
+  window.setTimeout(function(){
+    loadProjectLinksFromSheet().then(function(){
+      console.log('[INIT] Links por aba carregados em background');
+      var baseComLinks = carregarBaseProjetos(lerDadosPlanilhaConsolidados(DATA.projetos || []).projetos);
+      DATA.projetos = baseComLinks.projetos;
+      runProjectLinkAudit(DATA.projetos);
+      if (window._jaCarregou) renderAll();
+    }).catch(function(err){
+      console.error('[INIT] Falha ao carregar links por aba:', err);
+    });
+    loadMetricasFromSheet().then(function(){
+      console.log('[INIT] Metricas por aba carregadas em background');
+      var baseComMetricas = carregarBaseProjetos(lerDadosPlanilhaConsolidados(DATA.projetos || []).projetos);
+      DATA.projetos = baseComMetricas.projetos;
+      if (window._jaCarregou) renderAll();
+    }).catch(function(err){
+      console.error('[INIT] Falha ao carregar metricas por aba:', err);
+    });
+  }, 0);
+}
 function inicializarPainel() {
   try {
     console.log('[INIT] Inicialização completa iniciada');
@@ -16693,23 +16718,6 @@ function inicializarPainel() {
       if (ndLocal) ndLocal.textContent = 'Carregando planilha...';
       console.log('[INIT] Sem cache local. Aguardando planilha antes de renderizar para evitar base embutida antiga.');
     }
-    loadProjectLinksFromSheet().then(function(){
-      console.log('[INIT] Links por aba carregados');
-      var baseComLinks = carregarBaseProjetos(lerDadosPlanilhaConsolidados(DATA.projetos || []).projetos);
-      DATA.projetos = baseComLinks.projetos;
-      runProjectLinkAudit(DATA.projetos);
-      if (window._jaCarregou) renderAll();
-    }).catch(function(err){
-      console.error('[INIT] Falha ao carregar links por aba:', err);
-    });
-    loadMetricasFromSheet().then(function(){
-      console.log('[INIT] Metricas por aba carregadas');
-      var baseComMetricas = carregarBaseProjetos(lerDadosPlanilhaConsolidados(DATA.projetos || []).projetos);
-      DATA.projetos = baseComMetricas.projetos;
-      if (window._jaCarregou) renderAll();
-    }).catch(function(err){
-      console.error('[INIT] Falha ao carregar metricas por aba:', err);
-    });
     loadContractsMrr();
     var ultimoLabel = storageGet(LAST_UPDATE_KEY, '');
     if (ultimoLabel && ndLocal && cacheInicial) ndLocal.textContent = ultimoLabel + ' (cache)';
