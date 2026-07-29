@@ -3578,8 +3578,8 @@ body.theme-dark #projfech-content .btn-syncall:disabled{
   flex:0 0 auto;
 }
 .site-footer{
-  width:100vw;
-  margin-left:calc(100% - 100vw);
+  width:100%;
+  margin-left:0;
   min-height:46px;
   display:flex;
   align-items:center;
@@ -3599,6 +3599,38 @@ body.theme-dark .site-footer{
   border-top-color:rgba(148,163,184,.18);
   background:linear-gradient(135deg,#22352a 0%,#17251d 100%);
   color:#e7f2e9;
+}
+.main-content{
+  display:flex;
+  flex-direction:column;
+  min-height:calc(100vh - 98px);
+}
+.main-content>.page.on{
+  flex:1 0 auto;
+  width:100%;
+}
+.main-content>.site-footer{
+  flex:0 0 auto;
+  margin-top:auto;
+}
+body.theme-dark #page-log .log-period-card{
+  background:linear-gradient(180deg,rgba(31,49,38,.96),rgba(23,37,29,.96));
+  border-color:rgba(120,173,132,.28);
+  box-shadow:0 12px 28px rgba(0,0,0,.16),inset 0 1px 0 rgba(255,255,255,.025);
+}
+body.theme-dark #page-log .log-period-title{color:#9bb6a1}
+body.theme-dark #page-log .log-period-sub{color:#a9b8ac}
+body.theme-dark #page-log .log-period-sub b{color:#e7f2e9}
+body.theme-dark #page-log .log-map-empty,
+body.theme-dark #page-log .log-map-shell{
+  background:linear-gradient(180deg,#17251d,#132019)!important;
+  border-color:rgba(120,173,132,.25)!important;
+  color:#9bb6a1!important;
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.025);
+}
+body.theme-dark #log-map,
+body.theme-dark #log-map .leaflet-container{
+  background:#17251d!important;
 }
 /* Alinhamento visual com o modo escuro do Gestão Atendimento. */
 body.theme-dark #projfech-content .dashx-inline-note,
@@ -13267,12 +13299,12 @@ function buildBrazilMap(projList) {
     return !!(info.cidade || info.uf);
   });
   if (!comLocal.length) {
-    return '<div style="background:var(--surf);border:1px solid var(--border);border-radius:10px;padding:40px;text-align:center;color:var(--muted);margin-bottom:12px">' +
+    return '<div class="log-map-empty" style="background:var(--surf);border:1px solid var(--border);border-radius:10px;padding:40px;text-align:center;color:var(--muted);margin-bottom:12px">' +
       '<div style="font-size:14px;font-weight:600;margin-bottom:6px">Preencha a coluna CIDADE na planilha</div>' +
       '<div style="font-size:12px">Formato: <b>Goi&acirc;nia - GO</b> ou <b>S&atilde;o Paulo - SP</b></div>' +
     '</div>';
   }
-  return '<div style="margin-bottom:12px">' +
+  return '<div class="log-map-shell" style="margin-bottom:12px;border-radius:12px;padding:12px;border:1px solid transparent">' +
     '<div style="display:flex;gap:14px;margin-bottom:10px;flex-wrap:wrap">' +
       '<span style="display:flex;align-items:center;gap:5px;font-size:11px;font-weight:600;color:var(--green)"><span style="width:10px;height:10px;border-radius:50%;background:#2d6e4e;display:inline-block"></span>2+ visitas agrupadas</span>' +
       '<span style="display:flex;align-items:center;gap:5px;font-size:11px;font-weight:600;color:var(--orange)"><span style="width:10px;height:10px;border-radius:50%;background:#b85c00;display:inline-block"></span>In Loco</span>' +
