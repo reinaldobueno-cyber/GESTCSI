@@ -3874,6 +3874,114 @@ body.theme-dark .trend-bar{
   filter:saturate(1.14) brightness(1.06);
   box-shadow:0 0 12px rgba(120,255,183,.10),inset 0 1px 0 rgba(255,255,255,.13);
 }
+/* Status por período: névoa e contorno são camadas independentes. */
+body.theme-dark .dashx-status-seg,
+body.theme-dark .dashx-status-overall-seg{
+  --status-rgb:120,173,132;
+  position:relative;
+  isolation:isolate;
+  overflow:hidden;
+  background:transparent!important;
+  border:0!important;
+  border-radius:7px;
+  box-shadow:none!important;
+  filter:none!important;
+}
+body.theme-dark .dashx-status-seg>span,
+body.theme-dark .dashx-status-overall-seg>span{
+  position:relative;
+  z-index:3;
+}
+body.theme-dark .dashx-status-seg:before,
+body.theme-dark .dashx-status-overall-seg:before{
+  content:"";
+  position:absolute;
+  z-index:1;
+  left:-2px;
+  right:-2px;
+  bottom:-2px;
+  height:62%;
+  background:linear-gradient(
+    to top,
+    rgba(var(--status-rgb),.21) 0%,
+    rgba(var(--status-rgb),.09) 40%,
+    rgba(var(--status-rgb),0) 96%
+  );
+  filter:blur(3.5px);
+  pointer-events:none;
+}
+body.theme-dark .dashx-status-seg:after,
+body.theme-dark .dashx-status-overall-seg:after{
+  content:"";
+  position:absolute;
+  z-index:2;
+  inset:0;
+  border-radius:inherit;
+  background:
+    linear-gradient(90deg,rgba(var(--status-rgb),.64),rgba(var(--status-rgb),.48)) top/100% .8px no-repeat,
+    linear-gradient(to bottom,rgba(var(--status-rgb),.60),rgba(var(--status-rgb),.42) 48%,rgba(var(--status-rgb),.08)) left/.8px 100% no-repeat,
+    linear-gradient(to bottom,rgba(var(--status-rgb),.60),rgba(var(--status-rgb),.42) 48%,rgba(var(--status-rgb),.08)) right/.8px 100% no-repeat,
+    linear-gradient(90deg,rgba(var(--status-rgb),.08),rgba(var(--status-rgb),.035)) bottom/100% .8px no-repeat;
+  pointer-events:none;
+}
+body.theme-dark .dashx-status-seg.tone-andamento,
+body.theme-dark .dashx-status-overall-seg.tone-andamento{--status-rgb:242,184,107;background:transparent!important;color:#fff7e8!important;}
+body.theme-dark .dashx-status-seg.tone-aguardando,
+body.theme-dark .dashx-status-overall-seg.tone-aguardando{--status-rgb:79,131,196;background:transparent!important;}
+body.theme-dark .dashx-status-seg.tone-aguardando_entrega,
+body.theme-dark .dashx-status-overall-seg.tone-aguardando_entrega{--status-rgb:139,107,200;background:transparent!important;}
+body.theme-dark .dashx-status-seg.tone-parado,
+body.theme-dark .dashx-status-overall-seg.tone-parado{--status-rgb:174,184,177;background:transparent!important;color:#f1f7f2!important;}
+body.theme-dark .dashx-status-seg.tone-concluido,
+body.theme-dark .dashx-status-overall-seg.tone-concluido{--status-rgb:47,173,112;background:transparent!important;}
+body.theme-dark .dashx-status-seg.tone-atrasado,
+body.theme-dark .dashx-status-overall-seg.tone-atrasado{--status-rgb:216,97,88;background:transparent!important;}
+body.theme-dark .dashx-status-seg.tone-cancelado,
+body.theme-dark .dashx-status-overall-seg.tone-cancelado{--status-rgb:201,108,95;background:transparent!important;}
+body.theme-dark .dashx-status-seg:hover,
+body.theme-dark .dashx-status-overall-seg:hover{
+  transform:none!important;
+  filter:none!important;
+  box-shadow:none!important;
+}
+body.theme-dark .dashx-status-seg:hover:after,
+body.theme-dark .dashx-status-overall-seg:hover:after{opacity:.86;}
+@media(min-width:701px){
+  body.theme-dark .dashx-status-overall-track{
+    height:9px!important;
+    margin-top:28px;
+    overflow:visible!important;
+  }
+  body.theme-dark .dashx-status-overall-seg{overflow:visible;}
+  body.theme-dark .dashx-status-overall-seg>span{
+    position:absolute;
+    left:50%;
+    bottom:16px;
+    transform:translateX(-50%);
+    color:#eef5ef;
+    white-space:nowrap;
+  }
+}
+/* Nas barras auxiliares, a mesma linguagem aparece de forma mais discreta. */
+body.theme-dark .dashx-delivery-seg,
+body.theme-dark .dashx-bar-fill,
+body.theme-dark .dbar-fill,
+body.theme-dark .stat-bar-fill,
+body.theme-dark .prazo-bar-fill,
+body.theme-dark .pz-vbar-fill,
+body.theme-dark .acom-bucket-fill,
+body.theme-dark .acom-mini-fill,
+body.theme-dark .exec-progress .fill,
+body.theme-dark .tower-score-fill,
+body.theme-dark .tower-bar-fill,
+body.theme-dark .rank-fill,
+body.theme-dark .trend-bar{
+  opacity:.46;
+  filter:saturate(1.08) brightness(1.04);
+  outline:.8px solid rgba(174,225,188,.28);
+  outline-offset:-.8px;
+  box-shadow:inset 0 -7px 12px rgba(120,255,183,.055)!important;
+}
 .dashx-heatmap-cell[data-tip]{position:relative;}
 .dashx-heatmap-cell[data-tip]:hover:after,
 .dashx-heatmap-cell[data-tip]:focus-visible:after{
@@ -11631,7 +11739,7 @@ function dashRenderStatusStack(items) {
   var overallSegs = order.map(function(key) {
     var count = Number(overallCounts[key] || 0);
     if (!count) return '';
-    return '<button type="button" class="dashx-status-overall-seg tone-'+key+'" style="flex-grow:'+count+';background:'+colors[key]+'" title="'+labels[key]+': '+count+' projeto(s)" onclick="return dashOpenStatusMonthAudit(\'TOTAL\',\''+key+'\')">'+count+'</button>';
+    return '<button type="button" class="dashx-status-overall-seg tone-'+key+'" style="flex-grow:'+count+';background:'+colors[key]+'" title="'+labels[key]+': '+count+' projeto(s)" onclick="return dashOpenStatusMonthAudit(\'TOTAL\',\''+key+'\')"><span>'+count+'</span></button>';
   }).join('');
   var overall = '<div class="dashx-status-summary"><div class="dashx-status-summary-head"><div class="dashx-status-summary-title"><span>Composição total do período</span><strong>Projetos por status</strong></div><div class="dashx-status-summary-total">'+overallTotal+' projetos</div></div><div class="dashx-status-overall-track">'+overallSegs+'</div></div>';
   var legend = '<div class="dashx-chart-legend">'+order.map(function(key){ return '<span class="dashx-legend-item"><span class="dashx-legend-swatch" style="background:'+colors[key]+'"></span>'+labels[key]+' <b>'+Number(overallCounts[key] || 0)+'</b></span>'; }).join('')+'</div>';
