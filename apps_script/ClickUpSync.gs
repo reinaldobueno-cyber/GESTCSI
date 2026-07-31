@@ -4471,7 +4471,7 @@ function syncClickUpValidationSituation_(params, situation) {
       return !existing.task_id ||
         existing.situacao !== situation ||
         sanitizeText_(existing.status_atual) !== clickUpTaskStatusText_(task) ||
-        !sanitizeText_(existing.justificativa);
+        (situation === 'reprovado' && !sanitizeText_(existing.justificativa));
     }).map(function(task) {
       return String(task && task.id || '');
     }).filter(function(id, index, all) {

@@ -8099,7 +8099,7 @@ function fechamentoRunSync(action, label, btn, extraParams) {
       if (toastMessage) showToast(toastMessage, 'ok');
     });
   }
-  chamarAppsScriptJsonp(action, requestParams, 45000).then(function(recent) {
+  chamarAppsScriptJsonp(action, requestParams, 180000).then(function(recent) {
     if (recent && recent.ok !== false && recent.background_sync && !Array.isArray(recent.marcos)) {
       reloadCanonical(recent, label+' iniciado em segundo plano. A lista será atualizada automaticamente.');
       fechamentoSchedulePoll(3000);
