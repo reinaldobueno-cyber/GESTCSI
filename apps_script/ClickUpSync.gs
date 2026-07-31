@@ -1755,34 +1755,45 @@ function fetchClickUpValidationSituationForMonth_(situation, month) {
   if (!token) throw new Error('Missing CLICKUP_TOKEN script property');
   if (!workspaceId) throw new Error('CLICKUP_TEAM_ID nao configurado.');
   var since = new Date(month + '-01T00:00:00').getTime();
-  var requests = [];
-  clickUpMilestoneStatusAliases_(situation).forEach(function(status) {
-    [true, false].forEach(function(customItemsOnly) {
-      var query = [
-        'include_closed=true',
-        'subtasks=true',
-        'date_updated_gt=' + since,
-        'order_by=updated',
-        'reverse=true',
-        'page=0',
-        'statuses[]=' + encodeURIComponent(status)
-      ];
-      if (customItemsOnly) query.splice(2, 0, 'custom_items[]=1');
-      requests.push({
-        url: CLICKUP_API_BASE + '/team/' + workspaceId + '/task?' + query.join('&'),
-        method: 'get',
-        muteHttpExceptions: true,
-        headers: { Authorization: token, Accept: 'application/json', 'Content-Type': 'application/json' }
+  var monthStart = new Date(month + '-01T00:00:00');
+  var untilDate = new Date(monthStart.getFullYear(), monthStart.getMonth() + 1, 1);
+  var until = untilDate.getTime() - 1;
+  var tasks = [];
+  var statuses = clickUpMilestoneStatusAliases_(situation);
+  for (var page = 0; page < 10; page++) {
+    var requests = [];
+    statuses.forEach(function(status) {
+      [true, false].forEach(function(customItemsOnly) {
+        var query = [
+          'include_closed=true',
+          'subtasks=true',
+          'date_updated_gt=' + since,
+          'date_updated_lt=' + until,
+          'order_by=updated',
+          'reverse=true',
+          'page=' + page,
+          'statuses[]=' + encodeURIComponent(status)
+        ];
+        if (customItemsOnly) query.splice(2, 0, 'custom_items[]=1');
+        requests.push({
+          url: CLICKUP_API_BASE + '/team/' + workspaceId + '/task?' + query.join('&'),
+          method: 'get',
+          muteHttpExceptions: true,
+          headers: { Authorization: token, Accept: 'application/json', 'Content-Type': 'application/json' }
+        });
       });
     });
-  });
-  var tasks = [];
-  UrlFetchApp.fetchAll(requests).forEach(function(response) {
-    if (response.getResponseCode() < 200 || response.getResponseCode() >= 300) return;
-    try {
-      tasks = tasks.concat(JSON.parse(response.getContentText() || '{}').tasks || []);
-    } catch (error) {}
-  });
+    var hasFullPage = false;
+    UrlFetchApp.fetchAll(requests).forEach(function(response) {
+      if (response.getResponseCode() < 200 || response.getResponseCode() >= 300) return;
+      try {
+        var batch = JSON.parse(response.getContentText() || '{}').tasks || [];
+        tasks = tasks.concat(batch);
+        if (batch.length >= 100) hasFullPage = true;
+      } catch (error) {}
+    });
+    if (!hasFullPage) break;
+  }
   return dedupeTasks_(tasks).filter(function(task) {
     return clickUpMilestoneStatusMatchesSituation_(clickUpTaskStatusText_(task), situation) &&
       normalizeClickUpMonthReference_(task && task.date_updated ? fromMillisIso_(task.date_updated) : '') === month;
