@@ -3338,16 +3338,42 @@ body.theme-dark .project-link-btn:hover{
 body.theme-dark *{
   scrollbar-color:#334155 #0B1120;
 }
-.auth-backdrop{position:fixed;inset:0;background:rgba(240,244,240,.94);z-index:20000;display:flex;align-items:center;justify-content:center;padding:20px;}
-.auth-card{width:min(420px,calc(100vw - 32px));background:var(--surf);border:1px solid var(--border);border-radius:12px;box-shadow:0 20px 70px rgba(20,32,24,.18);padding:24px;}
-.auth-title{font-size:22px;font-weight:900;color:var(--text);margin-bottom:6px;}
-.auth-sub{font-size:12px;color:var(--text2);line-height:1.5;margin-bottom:18px;}
-.auth-form{display:flex;flex-direction:column;gap:10px;}
-.auth-form label{font-size:10px;font-weight:900;color:var(--muted);letter-spacing:.7px;text-transform:uppercase;}
-.auth-form input,.auth-form select{height:40px;border:1px solid var(--border);border-radius:8px;background:var(--surf);padding:0 11px;font:700 13px 'Inter',sans-serif;color:var(--text);}
+.auth-backdrop{position:fixed;inset:0;background:linear-gradient(135deg,#edf3ef 0%,#f8faf8 48%,#e6efe9 100%);z-index:20000;display:flex;align-items:center;justify-content:center;padding:24px;}
+.auth-card{width:min(1020px,calc(100vw - 48px));min-height:610px;background:#fff;border:1px solid rgba(34,75,51,.1);border-radius:24px;box-shadow:0 28px 80px rgba(15,47,29,.16);padding:0;overflow:hidden;display:grid;grid-template-columns:1.08fr .92fr;}
+.auth-brand{position:relative;display:flex;flex-direction:column;justify-content:space-between;padding:48px;background:linear-gradient(150deg,#eef5f0 0%,#f7faf7 62%,#e6f0e9 100%);overflow:hidden;}
+.auth-brand:before,.auth-brand:after{content:"";position:absolute;border-radius:50%;pointer-events:none;}
+.auth-brand:before{width:350px;height:350px;right:-190px;top:-150px;background:rgba(25,148,157,.09);}
+.auth-brand:after{width:280px;height:280px;left:-150px;bottom:-170px;background:rgba(113,148,9,.1);}
+.auth-logo{position:relative;width:min(310px,80%);height:auto;display:block;}
+.auth-brand-copy{position:relative;z-index:1;max-width:440px;}
+.auth-eyebrow{display:inline-flex;align-items:center;gap:9px;color:#287147;font:900 11px 'Inter',sans-serif;letter-spacing:1.5px;text-transform:uppercase;margin-bottom:18px;}
+.auth-eyebrow:before{content:"";width:28px;height:3px;border-radius:3px;background:linear-gradient(90deg,#15949d,#7b9a0b);}
+.auth-brand-title{max-width:430px;margin:0 0 14px;color:#123c26;font:900 clamp(34px,4vw,52px)/1.04 'Inter',sans-serif;letter-spacing:-2px;}
+.auth-brand-text{max-width:390px;margin:0;color:#5e7467;font:500 14px/1.7 'Inter',sans-serif;}
+.auth-credit{position:relative;z-index:1;color:#789084;font:600 11px 'Inter',sans-serif;letter-spacing:.15px;}
+.auth-credit strong{color:#315e45;font-weight:900;}
+.auth-access{display:flex;flex-direction:column;justify-content:center;padding:54px 58px;background:#fff;}
+.auth-access-mark{width:46px;height:46px;border-radius:14px;display:grid;place-items:center;margin-bottom:28px;background:linear-gradient(145deg,#276e46,#17452d);box-shadow:0 10px 24px rgba(28,91,55,.22);color:#fff;font:900 18px 'Inter',sans-serif;}
+.auth-title{font-size:28px;font-weight:900;color:#183d28;margin-bottom:8px;letter-spacing:-.7px;}
+.auth-sub{font-size:13px;color:#7a8d81;line-height:1.6;margin-bottom:28px;max-width:340px;}
+.auth-form{display:flex;flex-direction:column;gap:11px;}
+.auth-form label{font-size:11px;font-weight:900;color:#456152;letter-spacing:.2px;text-transform:none;}
+.auth-form input,.auth-form select{height:48px;border:1px solid #d9e3dc;border-radius:10px;background:#fff;padding:0 14px;font:700 13px 'Inter',sans-serif;color:#183d28;transition:border-color .2s,box-shadow .2s;}
 .auth-form input:focus,.auth-form select:focus{outline:none;border-color:rgba(45,110,78,.35);box-shadow:0 0 0 4px rgba(45,110,78,.08);}
-.auth-btn{height:40px;border:1px solid var(--green);background:var(--green);color:#fff;border-radius:8px;font:900 12px 'Inter',sans-serif;cursor:pointer;margin-top:4px;}
+.auth-btn{height:48px;border:0;background:linear-gradient(135deg,#287548,#17472e);color:#fff;border-radius:10px;font:900 12px 'Inter',sans-serif;cursor:pointer;margin-top:5px;box-shadow:0 9px 20px rgba(25,82,49,.2);transition:transform .2s,box-shadow .2s;}
+.auth-btn:hover{transform:translateY(-1px);box-shadow:0 12px 24px rgba(25,82,49,.26);}
 .auth-error{font-size:12px;color:var(--red);font-weight:800;min-height:16px;}
+@media(max-width:760px){
+  .auth-backdrop{padding:14px;align-items:flex-start;overflow:auto;}
+  .auth-card{width:100%;min-height:0;margin:auto;grid-template-columns:1fr;border-radius:19px;}
+  .auth-brand{min-height:280px;padding:30px;gap:42px;}
+  .auth-logo{width:230px;}
+  .auth-brand-title{font-size:34px;letter-spacing:-1.3px;}
+  .auth-brand-text{font-size:13px;}
+  .auth-credit{display:none;}
+  .auth-access{padding:34px 30px 38px;}
+  .auth-access-mark{display:none;}
+}
 .admin-users{display:grid;grid-template-columns:1fr 1fr;gap:14px;}
 .admin-user-row{display:grid;grid-template-columns:1fr auto;gap:10px;align-items:center;padding:9px 0;border-bottom:1px solid var(--border);}
 .admin-user-row:last-child{border-bottom:none;}
@@ -4172,16 +4198,28 @@ document.body.classList.toggle('theme-dark', document.documentElement.dataset.th
 </script>
 <div class="auth-backdrop" id="auth-gate">
   <div class="auth-card">
-    <div class="auth-title">Entrar no painel</div>
-    <div class="auth-sub">Use seu usu&aacute;rio para registrar acompanhamentos com respons&aacute;vel identificado.</div>
-    <form class="auth-form" onsubmit="return loginPainel(this)">
-      <label for="auth-user">Usu&aacute;rio</label>
-      <input id="auth-user" name="username" autocomplete="username" required>
-      <label for="auth-pass">Senha</label>
-      <input id="auth-pass" name="password" type="password" autocomplete="current-password" required>
-      <div class="auth-error" id="auth-error"></div>
-      <button class="auth-btn" type="submit">Entrar</button>
-    </form>
+    <section class="auth-brand" aria-label="Gest&atilde;o CSI">
+      <img class="auth-logo" src="assets/multsoft-mb-ima.png" alt="Multsoft MB IMA">
+      <div class="auth-brand-copy">
+        <div class="auth-eyebrow">Gest&atilde;o CSI</div>
+        <h1 class="auth-brand-title">Projetos sob controle. Decis&otilde;es com clareza.</h1>
+        <p class="auth-brand-text">Gest&atilde;o integrada de projetos, entregas e indicadores da equipe de Consultoria e Servi&ccedil;os de Implanta&ccedil;&atilde;o.</p>
+      </div>
+      <div class="auth-credit">Desenvolvido por <strong>Reinaldo Bueno</strong></div>
+    </section>
+    <section class="auth-access">
+      <div class="auth-access-mark" aria-hidden="true">CSI</div>
+      <div class="auth-title">Acesse sua conta</div>
+      <div class="auth-sub">Entre com suas credenciais para acessar o ambiente de Gest&atilde;o CSI.</div>
+      <form class="auth-form" onsubmit="return loginPainel(this)">
+        <label for="auth-user">Usu&aacute;rio</label>
+        <input id="auth-user" name="username" autocomplete="username" placeholder="Digite seu usu&aacute;rio" required>
+        <label for="auth-pass">Senha</label>
+        <input id="auth-pass" name="password" type="password" autocomplete="current-password" placeholder="Digite sua senha" required>
+        <div class="auth-error" id="auth-error"></div>
+        <button class="auth-btn" type="submit">Entrar na Gest&atilde;o CSI</button>
+      </form>
+    </section>
   </div>
 </div>
 <div id="refresh-bar"></div>
