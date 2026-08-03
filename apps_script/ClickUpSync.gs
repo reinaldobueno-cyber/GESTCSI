@@ -6957,6 +6957,36 @@ function requireAdmin_(params) {
   return user;
 }
 
+function panelUserLoginCacheKey_(username) {
+  return 'PANEL_LOGIN_USER_' + sanitizeText_(username).toLowerCase();
+}
+
+function cachePanelUserForLogin_(user) {
+  if (!user || !user.username) return;
+  PropertiesService.getScriptProperties().setProperty(panelUserLoginCacheKey_(user.username), JSON.stringify(user));
+}
+
+function getCachedPanelUserForLogin_(username) {
+  var raw = PropertiesService.getScriptProperties().getProperty(panelUserLoginCacheKey_(username));
+  if (!raw) return null;
+  try { return JSON.parse(raw); } catch (error) { return null; }
+}
+
+function warmPanelUserLoginCache() {
+  var sheet = getUsersSheet_();
+  var values = sheet.getDataRange().getValues();
+  if (values.length <= 1) return { ok: true, cached: 0 };
+  var header = values[0];
+  var cached = 0;
+  values.slice(1).forEach(function(row) {
+    var user = rowToObject_(header, row);
+    if (!user.username) return;
+    cachePanelUserForLogin_(user);
+    cached += 1;
+  });
+  return { ok: true, cached: cached };
+}
+
 function loginUser_(params) {
   params = params || {};
   var username = sanitizeText_(params.username).toLowerCase();
@@ -6980,12 +7010,17 @@ function loginUser_(params) {
     };
     return { ok: true, token: storeSession_(adminUser), user: publicUser_(adminUser) };
   }
+  var cachedUser = getCachedPanelUserForLogin_(username);
+  if (cachedUser && String(cachedUser.enabled || '').toUpperCase() !== 'FALSE' && hashPassword_(cachedUser.password_salt, passwordSha) === String(cachedUser.password_hash || '')) {
+    return { ok: true, token: storeSession_(cachedUser), user: publicUser_(cachedUser) };
+  }
   var found = findUserRow_(username);
   if (!found) throw new Error('Usuario ou senha invalidos.');
   var user = found.user;
   if (String(user.enabled || '').toUpperCase() === 'FALSE') throw new Error('Usuario desativado.');
   var expected = hashPassword_(user.password_salt, passwordSha);
   if (expected !== String(user.password_hash || '')) throw new Error('Usuario ou senha invalidos.');
+  cachePanelUserForLogin_(user);
   found.sheet.getRange(found.row, found.header.indexOf('last_login') + 1).setValue(new Date());
   var token = storeSession_(user);
   return {
