@@ -264,6 +264,9 @@ function doGet(e) {
     if (action === 'setUserEnabled') {
       return jsonOutput_(setUserEnabled_(params), params.callback);
     }
+    if (action === 'resetUserPassword') {
+      return jsonOutput_(resetUserPassword_(params), params.callback);
+    }
     if (action === 'setUserSeniority') {
       return jsonOutput_(setUserSeniority_(params), params.callback);
     }
@@ -7031,6 +7034,23 @@ function setUserEnabled_(params) {
   var col = found.header.indexOf('enabled') + 1;
   found.sheet.getRange(found.row, col).setValue(enabled ? 'TRUE' : 'FALSE');
   return { ok: true, username: username, enabled: enabled };
+}
+
+function resetUserPassword_(params) {
+  var admin = requireAdmin_(params);
+  params = params || {};
+  var username = sanitizeText_(params.username).toLowerCase();
+  var passwordSha = sanitizeText_(params.password_sha).toLowerCase();
+  if (!username || !/^[a-f0-9]{64}$/.test(passwordSha)) throw new Error('Usuario e nova senha sao obrigatorios.');
+  var found = findUserRow_(username);
+  if (!found) throw new Error('Usuario nao encontrado.');
+  var saltCol = found.header.indexOf('password_salt') + 1;
+  var hashCol = found.header.indexOf('password_hash') + 1;
+  if (!saltCol || !hashCol) throw new Error('Cadastro de usuarios desatualizado.');
+  var salt = makeAuthToken_().slice(0, 16);
+  found.sheet.getRange(found.row, saltCol).setValue(salt);
+  found.sheet.getRange(found.row, hashCol).setValue(hashPassword_(salt, passwordSha));
+  return { ok: true, username: username, updated_by: admin.username };
 }
 
 function buildSheetSafeClickUpJson_(normalized) {

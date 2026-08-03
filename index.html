@@ -8279,6 +8279,29 @@ var BONUS_FILTER = {month:fechamentoCurrentMonth(), consultant:'todos'};
 var BONUS_INDICATION_STATE = {items:[],loadedMonth:'',loading:false};
 var BONUS_REPORT_NOTES_STORAGE_KEY = 'pmo_bonus_report_notes_v1';
 var _bonusReportNotesMap = null;
+var BONUS_DAILY_CARRYOVERS = [{
+  event_keys:['29870','29871','29872'], source_month:'2026-06', payment_month:'2026-07', consultant:'Marcus Silva',
+  note:'Exceção de pagamento: as diárias de 28, 29 e 30/06, referentes à viagem concluída no início de julho, não foram pagas no fechamento anterior e integram o pagamento de JUL/2026.'
+}];
+function bonusDailyCarryoverFor(item) {
+  var eventKey=String(item&&(item.event_key||item.event_id)||'');
+  return BONUS_DAILY_CARRYOVERS.filter(function(rule){return rule.event_keys.indexOf(eventKey)>=0&&bonusNamesMatch(item.consultor,rule.consultant);})[0]||null;
+}
+function bonusDailyEffectiveMonth(item) {
+  var carryover=bonusDailyCarryoverFor(item);
+  return carryover?carryover.payment_month:String(item&&item.mes||'').slice(0,7);
+}
+function bonusLoadDailyCarryovers(month,force) {
+  var sources=BONUS_DAILY_CARRYOVERS.filter(function(rule){return rule.payment_month===month;}).map(function(rule){return rule.source_month;});
+  sources=sources.filter(function(source,index){return sources.indexOf(source)===index;});
+  return Promise.all(sources.map(function(source){
+    if(!force&&cmaxCachedResponse(source))return Promise.resolve(cmaxCachedResponse(source));
+    return chamarAppsScriptJsonp('getCmaxDailyEvents',{month:source},30000).then(function(resp){
+      if(resp&&resp.ok!==false&&!resp.building_view&&Array.isArray(resp.events)){CMAX_DAILY_STATE.monthResponses[source]=resp;cmaxWriteBrowserCache(source,resp);}
+      return resp;
+    }).catch(function(){return null;});
+  })).then(function(){initBonus();});
+}
 function bonusNamesMatch(a,b) {
   var aKey=consultantCompKey(a),bKey=consultantCompKey(b);
   if(!aKey||!bKey)return false;
@@ -8333,6 +8356,7 @@ function bonusLoad() {
   projectClosingLoadCandidates(false);
   consultantCompensationLoad(false);
   bonusLoadIndications(false);
+  bonusLoadDailyCarryovers(month,false);
   if(CMAX_DAILY_STATE.month!==month) {
     CMAX_DAILY_STATE.month=month;
     CMAX_DAILY_STATE.loaded=false;
@@ -8342,7 +8366,7 @@ function bonusLoad() {
 }
 function bonusRefresh(btn) {
   if(btn){btn.disabled=true;btn.textContent='Atualizando...';}
-  Promise.all([fechamentoLoad(true),projectClosingLoadDecisions(true),projectClosingLoadCandidates(true),bonusLoadIndications(true)]).then(function(){
+  Promise.all([fechamentoLoad(true),projectClosingLoadDecisions(true),projectClosingLoadCandidates(true),bonusLoadIndications(true),bonusLoadDailyCarryovers(BONUS_FILTER.month||fechamentoCurrentMonth(),true)]).then(function(){
     carregarDiariasCmax(true);
     setTimeout(function(){
       initBonus();
@@ -8513,7 +8537,18 @@ function bonusMilestonesApprovedForMonth(month) {
 }
 function bonusDataset() {
   var month=BONUS_FILTER.month||fechamentoCurrentMonth();
-  var daily=(CMAX_DAILY_STATE.events||[]).filter(function(item){return String(item.mes||'')===month&&cmaxCountsDaily(item);});
+  var dailyPool=(CMAX_DAILY_STATE.events||[]).slice();
+  BONUS_DAILY_CARRYOVERS.filter(function(rule){return rule.payment_month===month;}).forEach(function(rule){
+    var response=cmaxCachedResponse(rule.source_month);
+    if(response&&Array.isArray(response.events))dailyPool=dailyPool.concat(response.events);
+  });
+  var dailySeen={};
+  var daily=dailyPool.filter(function(item){
+    var key=String(item&&(item.event_key||item.event_id)||[item.data,item.consultor,item.cliente,item.hora_inicio].join('|'));
+    if(dailySeen[key])return false;
+    dailySeen[key]=true;
+    return bonusDailyEffectiveMonth(item)===month&&cmaxCountsDaily(item);
+  });
   var monthMilestones=(FECHAMENTO_MARCOS||[]).filter(function(item){return String(item.mes_fechamento||'')===month&&!fechamentoIsProjectClosing(item);});
   var milestones=bonusMilestonesApprovedForMonth(month);
   var rejectedMilestones=(FECHAMENTO_MARCOS||[]).filter(function(item){
@@ -8547,7 +8582,7 @@ function bonusDataset() {
     var dailyRows=events.map(function(item,index){
       var equivalent=allocated[index]||0;
       var special=cmaxSpecialDayInfo(item.data);
-      return {item:item,equivalent:equivalent,multiplier:special.multiplier,specialLabel:special.label,value:equivalent*Number(comp.daily_value||0)*special.multiplier};
+      return {item:item,equivalent:equivalent,multiplier:special.multiplier,specialLabel:special.label,value:equivalent*Number(comp.daily_value||0)*special.multiplier,carryover:bonusDailyCarryoverFor(item)};
     }).filter(function(row){return row.equivalent>0;});
     var marcoRows=milestones.filter(function(item){return bonusNamesMatch(fechamentoEffectiveConsultant(item),name);});
     var projectRows=approvedProjects.filter(function(item){return bonusNamesMatch(fechamentoEffectiveConsultant(item),name);});
@@ -8572,6 +8607,7 @@ function bonusDataset() {
       milestoneValue:milestoneValue,
       projectValue:projectValue,
       indicationValue:indicationValue,
+      observations:BONUS_DAILY_CARRYOVERS.filter(function(rule){return rule.payment_month===month&&bonusNamesMatch(rule.consultant,name)&&dailyRows.some(function(row){return row.carryover===rule;});}).map(function(rule){return rule.note;}),
       total:dailyValue+milestoneValue+projectValue+indicationValue
     };
   });
@@ -8579,7 +8615,7 @@ function bonusDataset() {
 function bonusDailyDetails(person) {
   var rows=person.dailyRows.map(function(row){
     var item=row.item,info=cmaxDateInfo(item.data),start=cmaxTime(item.hora_inicio)||'-',end=cmaxTime(item.hora_fim);
-    return '<tr><td>'+escapeHtml(info.date)+cmaxSpecialLabel(item.data)+'</td><td><strong>'+escapeHtml(item.cliente||'-')+'</strong></td><td>'+escapeHtml(cmaxModeLabel(item))+'</td><td>'+escapeHtml(start+(end?' - '+end:''))+'</td><td>'+cmaxEquivalentLabel(row.equivalent)+(row.multiplier>1?' &times; 1,5':'')+'</td><td><strong>'+consultantMoney(row.value)+'</strong></td></tr>';
+    return '<tr><td>'+escapeHtml(info.date)+cmaxSpecialLabel(item.data)+(row.carryover?' <span class="tag tag-o">Exceção JUN</span>':'')+'</td><td><strong>'+escapeHtml(item.cliente||'-')+'</strong></td><td>'+escapeHtml(cmaxModeLabel(item))+'</td><td>'+escapeHtml(start+(end?' - '+end:''))+'</td><td>'+cmaxEquivalentLabel(row.equivalent)+(row.multiplier>1?' &times; 1,5':'')+'</td><td><strong>'+consultantMoney(row.value)+'</strong></td></tr>';
   }).join('');
   return rows?'<div class="dashx-table-wrap"><table class="dashx-table"><thead><tr><th>Data</th><th>Cliente</th><th>Modalidade</th><th>Hor&aacute;rio</th><th>Equiv.</th><th>Valor</th></tr></thead><tbody>'+rows+'</tbody></table></div>':'<div class="bonus-empty">Nenhuma di&aacute;ria contabiliz&aacute;vel neste m&ecirc;s.</div>';
 }
@@ -8626,7 +8662,8 @@ function bonusPersonReport(person) {
   var initial=String(person.name||'?').trim().charAt(0).toUpperCase();
   var online=person.dailyRows.filter(function(row){return cmaxModality(cmaxModeLabel(row.item)).indexOf('ON LINE')>=0;}).length;
   var special=person.dailyRows.reduce(function(total,row){return total+(row.multiplier>1?row.equivalent:0);},0);
-  return '<section class="bonus-report"><div class="bonus-report-head"><div class="bonus-person"><div class="bonus-avatar">'+escapeHtml(initial)+'</div><div><div class="bonus-person-name">'+escapeHtml(person.name)+'</div><div class="bonus-person-meta">'+escapeHtml(consultantSeniorityLabel(person.seniority))+' &middot; '+escapeHtml(bonusMonthLabel(BONUS_FILTER.month))+'</div></div></div><div class="bonus-report-total"><span>Total da bonifica&ccedil;&atilde;o</span><strong>'+consultantMoney(person.total)+'</strong></div></div>'+
+  var observations=(person.observations||[]).map(function(note){return '<div class="bonus-observation-text"><strong>Observação individual</strong><br>'+escapeHtml(note)+'</div>';}).join('');
+  return '<section class="bonus-report"><div class="bonus-report-head"><div class="bonus-person"><div class="bonus-avatar">'+escapeHtml(initial)+'</div><div><div class="bonus-person-name">'+escapeHtml(person.name)+'</div><div class="bonus-person-meta">'+escapeHtml(consultantSeniorityLabel(person.seniority))+' &middot; '+escapeHtml(bonusMonthLabel(BONUS_FILTER.month))+'</div></div></div><div class="bonus-report-total"><span>Total da bonifica&ccedil;&atilde;o</span><strong>'+consultantMoney(person.total)+'</strong></div></div>'+observations+
     '<div class="bonus-activity-grid"><div class="bonus-activity primary"><span>Di&aacute;rias realizadas</span><strong>'+cmaxEquivalentLabel(person.dailyEquivalent)+'</strong><small>equivalente contabilizado</small></div><div class="bonus-activity"><span>Di&aacute;rias especiais</span><strong>'+cmaxEquivalentLabel(special)+'</strong><small>fins de semana / feriados (1,5x)</small></div><div class="bonus-activity approved"><span>Marcos aprovados</span><strong>'+person.milestoneRows.length+'</strong><small>entregas validadas</small></div><div class="bonus-activity rejected"><span>Marcos reprovados</span><strong>'+(person.rejectedRows||[]).length+'</strong><small>não geram bonificação</small></div><div class="bonus-activity good"><span>Projetos aprovados</span><strong>'+(person.projectRows||[]).length+'</strong><small>fechamento de projeto</small></div><div class="bonus-activity"><span>Indica&ccedil;&otilde;es convertidas</span><strong>'+person.indicationRows.length+'</strong><small>upgrade / módulo</small></div></div>'+
     '<div class="bonus-financial"><div class="bonus-financial-item"><span>Valor das di&aacute;rias</span><strong>'+consultantMoney(person.dailyValue)+'</strong></div><div class="bonus-financial-item marcos"><span>Valor dos marcos</span><strong>'+consultantMoney(person.milestoneValue)+'</strong></div><div class="bonus-financial-item marcos"><span>Valor fech. projetos</span><strong>'+consultantMoney(person.projectValue||0)+'</strong></div><div class="bonus-financial-item indicacoes"><span>Valor das indica&ccedil;&otilde;es</span><strong>'+consultantMoney(person.indicationValue)+'</strong></div><div class="bonus-financial-item total"><span>Total remunera&ccedil;&atilde;o</span><strong>'+consultantMoney(person.total)+'</strong></div></div>'+
     '<div class="bonus-section"><div class="bonus-section-title">Detalhamento das di&aacute;rias</div>'+bonusDailyDetails(person)+'</div><div class="bonus-section"><div class="bonus-section-title">Detalhamento dos marcos aprovados</div>'+bonusMilestoneDetails(person)+'</div><div class="bonus-section"><div class="bonus-section-title">Fechamentos de projeto aprovados</div>'+bonusProjectClosingDetails(person)+'</div><div class="bonus-section"><div class="bonus-section-title">Indica&ccedil;&otilde;es convertidas</div>'+bonusIndicationDetails(person)+'</div><div class="bonus-section"><div class="bonus-section-title">Marcos reprovados e seus motivos</div>'+bonusRejectedDetails(person)+'</div><div class="bonus-section"><div class="bonus-section-title">Fechamentos de projeto reprovados</div>'+bonusProjectClosingRejectedDetails(person)+'</div></section>';
@@ -8805,7 +8842,7 @@ function carregarUsuariosPainel(force) {
     ADMIN_USERS_CACHE.html = users.map(function(u){
       return '<div class="admin-user-row"><div><div class="admin-user-name">'+escapeHtml(u.name || u.username)+'</div><div class="admin-user-meta">'+escapeHtml(u.username)+' &bull; '+escapeHtml(u.role || 'user')+' &bull; '+(u.enabled ? 'ativo' : 'desativado')+'</div></div>'+
         adminUserSeniorityControl(u)+
-        '<button class="admin-toggle" onclick="return alternarUsuarioPainel(\''+jsQuote(u.username)+'\', '+(u.enabled ? 'false' : 'true')+')">'+(u.enabled ? 'Desativar' : 'Ativar')+'</button></div>';
+        '<div style="display:flex;gap:8px;flex-wrap:wrap"><button class="admin-toggle" onclick="return redefinirSenhaUsuarioPainel(\''+jsQuote(u.username)+'\',\''+jsQuote(u.name||u.username)+'\',this)">Redefinir senha</button><button class="admin-toggle" onclick="return alternarUsuarioPainel(\''+jsQuote(u.username)+'\', '+(u.enabled ? 'false' : 'true')+')">'+(u.enabled ? 'Desativar' : 'Ativar')+'</button></div></div>';
     }).join('') || '<div class="empty">Nenhum usu&aacute;rio cadastrado.</div>';
     ADMIN_USERS_CACHE.loaded_at = Date.now();
     adminUsersApplyCache();
@@ -8849,8 +8886,25 @@ function alternarUsuarioPainel(username, enabled) {
   });
   return false;
 }
+function redefinirSenhaUsuarioPainel(username,name,button) {
+  var password=prompt('Digite a nova senha de '+name+':');
+  if(password===null)return false;
+  password=String(password||'');
+  if(password.length<6){showToast('A nova senha deve ter pelo menos 6 caracteres.','err');return false;}
+  var confirmation=prompt('Confirme a nova senha de '+name+':');
+  if(confirmation===null)return false;
+  if(password!==String(confirmation||'')){showToast('As senhas informadas não conferem.','err');return false;}
+  if(!confirm('Redefinir a senha de '+name+'? A senha anterior deixará de funcionar.'))return false;
+  if(button){button.disabled=true;button.textContent='Redefinindo...';}
+  sha256Hex(password).then(function(passwordSha){return chamarAppsScriptJsonp('resetUserPassword',{auth_token:authTokenParam(),username:username,password_sha:passwordSha},12000);}).then(function(resp){
+    if(!resp||resp.ok===false)throw new Error((resp&&(resp.error||resp.message))||'Redefinição recusada');
+    showToast('Senha de '+name+' redefinida com sucesso.','ok');
+  }).catch(function(error){showToast((error&&error.message)||'Erro ao redefinir senha','err');}).finally(function(){if(button){button.disabled=false;button.textContent='Redefinir senha';}});
+  return false;
+}
 window.criarUsuarioPainel = criarUsuarioPainel;
 window.alternarUsuarioPainel = alternarUsuarioPainel;
+window.redefinirSenhaUsuarioPainel = redefinirSenhaUsuarioPainel;
 
 function renderAll() {
   var performanceStarted = performanceNowMs();
