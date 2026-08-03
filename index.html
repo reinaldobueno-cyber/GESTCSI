@@ -8437,12 +8437,20 @@ function bonusRefresh(btn) {
 }
 function bonusLoadIndications(force) {
   var month=BONUS_FILTER.month||fechamentoCurrentMonth();
-  if(!authTokenParam()||BONUS_INDICATION_STATE.loading||(!force&&BONUS_INDICATION_STATE.loadedMonth===month))return Promise.resolve(null);
+  if(BONUS_INDICATION_STATE.loading||(!force&&BONUS_INDICATION_STATE.loadedMonth===month))return Promise.resolve(null);
   BONUS_INDICATION_STATE.loading=true;
-  return chamarAppsScriptJsonp('getBonusSalesIndications',{auth_token:authTokenParam(),month:month},15000).then(function(resp){
-    if(!resp||resp.ok===false||!Array.isArray(resp.items))throw new Error((resp&&resp.error)||'Falha ao carregar indicações.');
-    var pending=(BONUS_INDICATION_STATE.items||[]).filter(function(item){return item.month===month&&!resp.items.some(function(remote){return remote.id===item.id;});});
-    BONUS_INDICATION_STATE.items=resp.items.concat(pending);
+  var url='https://docs.google.com/spreadsheets/d/'+SHEET_ID+'/gviz/tq?sheet=BONUS_INDICACOES&_ts='+Date.now();
+  return loadGvizTableJsonp(url,15000).then(function(table){
+    if(!table)throw new Error('Tabela de indicações indisponível.');
+    var normalizada=normalizarTabelaGviz(table);
+    var items=(normalizada.rows||[]).map(function(row){
+      var item=mapearGvizRow(normalizada.cols,row);
+      var indicationDate=String(normalizeGvizDateValue_(item.indication_date)||'').slice(0,10);
+      var saleDate=String(normalizeGvizDateValue_(item.sale_date)||'').slice(0,10);
+      return {id:String(item.id||''),consultant_name:String(item.consultant_name||''),client:String(item.client||''),indication_type:String(item.indication_type||''),indication_date:indicationDate,sale_date:saleDate,month:saleDate.slice(0,7)||String(item.month||''),value:Number(item.value||0),notes:String(item.notes||''),created_at:String(normalizeGvizDateValue_(item.created_at)||''),created_by:String(item.created_by||'')};
+    }).filter(function(item){return item.id&&item.month===month;});
+    var resp={ok:true,items:items,month:month,sheet_source:true};
+    BONUS_INDICATION_STATE.items=resp.items;
     BONUS_INDICATION_STATE.loadedMonth=month;
     BONUS_INDICATION_STATE.loading=false;
     initBonus();
