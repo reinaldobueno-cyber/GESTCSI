@@ -8286,12 +8286,16 @@ var BONUS_INDICATION_STATE = {items:[],loadedMonth:'',loading:false};
 var BONUS_REPORT_NOTES_STORAGE_KEY = 'pmo_bonus_report_notes_v1';
 var _bonusReportNotesMap = null;
 var BONUS_DAILY_CARRYOVERS = [{
-  event_keys:['29870','29871','29872'], source_month:'2026-06', payment_month:'2026-07', consultant:'Marcus Silva',
+  event_keys:['29870','29871','29872'], event_dates:['2026-06-28','2026-06-29','2026-06-30'], source_month:'2026-06', payment_month:'2026-07', consultant:'Marcus Silva',
   note:'Exceção de pagamento: as diárias de 28, 29 e 30/06, referentes à viagem concluída no início de julho, não foram pagas no fechamento anterior e integram o pagamento de JUL/2026.'
 }];
 function bonusDailyCarryoverFor(item) {
   var eventKey=String(item&&(item.event_key||item.event_id)||'');
-  return BONUS_DAILY_CARRYOVERS.filter(function(rule){return rule.event_keys.indexOf(eventKey)>=0&&bonusNamesMatch(item.consultor,rule.consultant);})[0]||null;
+  var eventDate=String(item&&item.data||'').slice(0,10);
+  return BONUS_DAILY_CARRYOVERS.filter(function(rule){
+    var matchesEvent=rule.event_keys.indexOf(eventKey)>=0||(rule.event_dates||[]).indexOf(eventDate)>=0;
+    return matchesEvent&&bonusNamesMatch(item.consultor,rule.consultant);
+  })[0]||null;
 }
 function bonusDailyEffectiveMonth(item) {
   var carryover=bonusDailyCarryoverFor(item);
@@ -8302,7 +8306,7 @@ function bonusLoadDailyCarryovers(month,force) {
   sources=sources.filter(function(source,index){return sources.indexOf(source)===index;});
   return Promise.all(sources.map(function(source){
     if(!force&&cmaxCachedResponse(source))return Promise.resolve(cmaxCachedResponse(source));
-    return chamarAppsScriptJsonp('getCmaxDailyEvents',{month:source},30000).then(function(resp){
+    return chamarAppsScriptJsonp('getCmaxDailyEvents',{month:source},90000).then(function(resp){
       if(resp&&resp.ok!==false&&!resp.building_view&&Array.isArray(resp.events)){CMAX_DAILY_STATE.monthResponses[source]=resp;cmaxWriteBrowserCache(source,resp);}
       return resp;
     }).catch(function(){return null;});
