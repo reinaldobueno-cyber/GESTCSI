@@ -3234,6 +3234,7 @@ body.theme-dark .tower-kpis [style*="background:#fff"]{
 .bonus-card.total{border-color:#78a98a;background:#edf8ef}.bonus-card.total strong{color:#23623d}
 .bonus-admin-table,.bonus-report,.bonus-observation{background:var(--surf);border:1px solid var(--border);border-radius:18px;overflow:hidden;box-shadow:0 14px 35px rgba(30,64,105,.08)}
 .bonus-signatures{display:none}
+.bonus-print-header{display:none}
 .bonus-daily-table{width:100%;min-width:0;table-layout:fixed}
 .bonus-daily-table th:nth-child(1),.bonus-daily-table td:nth-child(1){width:13%}
 .bonus-daily-table th:nth-child(2),.bonus-daily-table td:nth-child(2){width:39%}
@@ -3283,7 +3284,7 @@ body.theme-dark .tower-kpis [style*="background:#fff"]{
   @page{size:A4 landscape;margin:8mm}
   @page bonusAdminLandscape{size:A4 landscape;margin:8mm}
   body.bonus-print-admin{page:bonusAdminLandscape}
-  html,body{background:#fff!important;color:#111!important;overflow:visible!important;font-size:10px!important}
+  html,body{background:#fff!important;color:#111!important;overflow:visible!important;font-size:10px!important;-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important}
   nav,.period-bar,.sidenav,.tabs,.bonus-actions,.btn-syncall,.project-link-btn.warn,.auth-backdrop{display:none!important}
   .app-shell,.main-content{display:block!important;width:100%!important;max-width:none!important;margin:0!important;padding:0!important;overflow:visible!important}
   .page{display:none!important;padding:0!important;max-width:none!important;margin:0!important}
@@ -3307,6 +3308,11 @@ body.theme-dark .tower-kpis [style*="background:#fff"]{
   .bonus-exec-kpi span,.bonus-exec-kpi small{font-size:7px!important;letter-spacing:0!important}
   .bonus-exec-kpi strong{font-size:12px!important;margin-top:3px!important}
   .bonus-exec-columns{grid-template-columns:1fr 1fr!important;gap:7px!important;padding:7px!important}
+  body.bonus-print-admin .bonus-exec-columns{grid-template-columns:1.35fr .65fr!important}
+  body.bonus-print-admin .bonus-exec-panel:first-child{display:grid!important;grid-template-columns:1fr 1fr!important;align-content:start!important}
+  body.bonus-print-admin .bonus-exec-panel:first-child .bonus-exec-panel-title{grid-column:1/-1!important}
+  body.bonus-print-admin .bonus-exec-panel:first-child .bonus-rank-row{grid-template-columns:16px minmax(90px,1fr) auto!important;border-right:1px solid #d7e2da!important}
+  body.bonus-print-admin .bonus-exec-panel:first-child .bonus-rank-track{display:none!important}
   .bonus-exec-panel{border-radius:0!important;overflow:visible!important}
   .bonus-exec-panel-title{padding:6px 7px!important;font-size:8px!important}
   .bonus-rank-row{grid-template-columns:18px minmax(120px,1fr) minmax(110px,.7fr) auto!important;gap:5px!important;padding:5px 7px!important;break-inside:avoid;page-break-inside:avoid}
@@ -3316,8 +3322,14 @@ body.theme-dark .tower-kpis [style*="background:#fff"]{
   .bonus-report{break-before:page;page-break-before:always;margin:0!important}
   body.bonus-print-admin .bonus-report{display:none!important}
   body.bonus-print-admin .bonus-rejected-print{display:none!important}
-  body.bonus-print-admin .bonus-exec{zoom:.70;width:142.85%!important;break-inside:avoid!important;page-break-inside:avoid!important;break-after:page!important;page-break-after:always!important}
+  body.bonus-print-admin .bonus-hero{display:none!important}
+  body.bonus-print-admin .bonus-exec{zoom:.84;width:119.05%!important;break-inside:avoid!important;page-break-inside:avoid!important;break-after:page!important;page-break-after:always!important}
   body.bonus-print-admin .bonus-detail-base{break-before:auto!important;page-break-before:auto!important}
+  body.bonus-print-admin .bonus-print-header{display:flex!important;align-items:center!important;justify-content:space-between!important;gap:10mm!important;margin:0 0 4mm!important;padding:0 2mm 3mm!important;border-bottom:2px solid #1d5a38!important;break-inside:avoid!important;page-break-inside:avoid!important}
+  .bonus-print-logo{display:block!important;width:64mm!important;height:auto!important}
+  .bonus-print-heading{text-align:right!important;color:#173b2a!important}
+  .bonus-print-heading strong{display:block!important;font-size:16px!important;line-height:1.1!important}
+  .bonus-print-heading span{display:block!important;margin-top:2mm!important;font-size:9px!important;color:#527060!important}
   body.bonus-print-individual .bonus-exec,
   body.bonus-print-individual .bonus-admin-table.bonus-detail-base,
   body.bonus-print-individual .bonus-observation{display:none!important}
@@ -3350,7 +3362,7 @@ body.theme-dark .tower-kpis [style*="background:#fff"]{
   .bonus-daily-table th:nth-child(6),.bonus-daily-table td:nth-child(6){white-space:nowrap!important}
   .bonus-daily-table th:nth-child(2),.bonus-daily-table td:nth-child(2){overflow-wrap:anywhere!important}
   .bonus-admin-summary-table{table-layout:fixed!important;width:100%!important}
-  .bonus-admin-summary-table th,.bonus-admin-summary-table td{font-size:7px!important;line-height:1.25!important;word-break:normal!important;overflow-wrap:normal!important;vertical-align:middle!important}
+  .bonus-admin-summary-table th,.bonus-admin-summary-table td{font-size:8px!important;line-height:1.3!important;word-break:normal!important;overflow-wrap:normal!important;vertical-align:middle!important}
   .bonus-admin-summary-table th:nth-child(1),.bonus-admin-summary-table td:nth-child(1){width:16%!important;text-align:left!important}
   .bonus-admin-summary-table th:nth-child(2),.bonus-admin-summary-table td:nth-child(2){width:10%!important;text-align:left!important}
   .bonus-admin-summary-table th:nth-child(3),.bonus-admin-summary-table td:nth-child(3){width:8%!important;text-align:center!important;white-space:nowrap!important}
@@ -3359,7 +3371,8 @@ body.theme-dark .tower-kpis [style*="background:#fff"]{
   .bonus-admin-summary-table tfoot td{font-weight:900!important;background:#edf4ef!important;border-top:2px solid #173b2a!important;white-space:nowrap!important}
   .bonus-signatures{display:grid!important;grid-template-columns:repeat(3,1fr)!important;gap:14mm!important;margin-top:14mm!important;padding:0 8mm 4mm!important;break-inside:avoid!important;page-break-inside:avoid!important}
   .bonus-signature{padding-top:3mm!important;border-top:1px solid #111!important;text-align:center!important;font-size:9px!important;color:#111!important}
-  .bonus-signature strong{display:block!important;font-size:10px!important;margin-bottom:1mm!important}
+  .bonus-signature strong{display:block!important;font-size:11px!important;margin-bottom:1mm!important;color:#173b2a!important}
+  .bonus-signature span{display:block!important;font-size:9px!important;color:#4e6557!important}
   .dashx-table th{letter-spacing:0!important;background:#f1f4f1!important}
   .dashx-table td strong{color:#111!important}
   a[href]{color:#111!important;text-decoration:none!important}
@@ -8829,14 +8842,15 @@ function initBonus() {
     total:people.reduce(function(sum,p){return sum+Number(p.total||0);},0)
   };
   var adminTotalRow='<tfoot><tr><td><strong>TOTAL</strong></td><td>-</td><td>'+cmaxEquivalentLabel(adminTotals.dailyEquivalent)+'</td><td>'+consultantMoney(adminTotals.dailyValue)+'</td><td>'+adminTotals.projectApproved+'</td><td>'+adminTotals.projectRejected+'</td><td>'+adminTotals.milestoneApproved+'</td><td>'+consultantMoney(adminTotals.projectValue)+'</td><td>'+consultantMoney(adminTotals.milestoneValue)+'</td><td>'+adminTotals.indicationCount+'</td><td>'+consultantMoney(adminTotals.indicationValue)+'</td><td>'+consultantMoney(adminTotals.total)+'</td></tr></tfoot>';
-  var adminSignatures='<div class="bonus-signatures"><div class="bonus-signature"><strong>La&iacute;s Medeiros</strong>Assinatura</div><div class="bonus-signature"><strong>Guilherme</strong>Assinatura</div><div class="bonus-signature"><strong>Reinaldo Bueno</strong>Assinatura</div></div>';
+  var adminSignatures='<div class="bonus-signatures"><div class="bonus-signature"><strong>La&iacute;s Medeiros</strong><span>Analista de Projeto</span></div><div class="bonus-signature"><strong>Guilherme</strong><span>L&iacute;der T&eacute;cnico</span></div><div class="bonus-signature"><strong>Reinaldo Bueno</strong><span>Gestor CSI</span></div></div>';
+  var adminPrintHeader='<div class="bonus-print-header"><img class="bonus-print-logo" src="assets/multsoft-mb-ima.png" alt="Multsoft MB IMA"><div class="bonus-print-heading"><strong>Fechamento CSI</strong><span>'+escapeHtml(bonusMonthLabel(BONUS_FILTER.month))+' &middot; Relat&oacute;rio administrativo</span></div></div>';
   var indicationForm='<section class="bonus-admin-table"><div class="bonus-section"><div class="bonus-admin-label">Lan&ccedil;ar indica&ccedil;&atilde;o convertida</div><div class="bonus-admin-sub">Upgrade gera R$ 150,00 e m&oacute;dulo gera R$ 50,00. O valor entra no m&ecirc;s da venda.</div><form id="bonus-indication-form" class="bonus-indication-form" onsubmit="event.preventDefault();return bonusSaveIndication(this.querySelector(\'button[type=submit]\'))"><div class="bonus-indication-field"><label>Consultor</label><select name="consultant_name" required><option value="">Selecione</option>'+sortedBonusNames.map(function(name){return '<option value="'+escapeHtml(name)+'">'+escapeHtml(name)+'</option>';}).join('')+'</select></div><div class="bonus-indication-field"><label>Cliente</label><input name="client" required placeholder="Nome do cliente"></div><div class="bonus-indication-field"><label>Tipo</label><select name="indication_type" required><option value="upgrade">Upgrade - R$ 150</option><option value="modulo">M&oacute;dulo - R$ 50</option></select></div><div class="bonus-indication-field"><label>Data da indica&ccedil;&atilde;o</label><input name="indication_date" type="date" required></div><div class="bonus-indication-field"><label>Data da venda</label><input name="sale_date" type="date" required></div><div class="bonus-indication-field"><label>Observa&ccedil;&atilde;o</label><input name="notes" placeholder="Opcional"></div><button class="btn-syncall" type="submit">Lan&ccedil;ar indica&ccedil;&atilde;o</button></form></div></section>';
   var seniorityForm='<section class="bonus-admin-table"><div class="bonus-section"><div class="bonus-admin-label">Senioridade pontual</div><div class="bonus-admin-sub">Use para suporte ou trabalho avulso sem criar usuário. A informação fica na aba CONSULTORES_REMUNERACAO e entra no cálculo das diárias.</div><form id="bonus-seniority-form" class="bonus-seniority-form" onsubmit="event.preventDefault();return bonusSaveSeniority(this.querySelector(\'button[type=submit]\'))"><div class="bonus-indication-field"><label>Nome</label><input name="consultant_name" list="bonus-seniority-names" required placeholder="Nome como aparece no CMAX"><datalist id="bonus-seniority-names">'+seniorityNameOptions+'</datalist></div><div class="bonus-indication-field"><label>Senioridade</label><select name="seniority" required><option value="">Selecione</option><option value="junior">Junior - R$ 60</option><option value="pleno">Pleno - R$ 85</option><option value="senior">Senior - R$ 110</option><option value="master">Master - R$ 220</option></select></div><button class="btn-syncall" type="submit">Salvar senioridade</button></form></div></section>';
   var status=(CMAX_DAILY_STATE.loading?'Carregando di&aacute;rias do m&ecirc;s selecionado. ':'')+(FECHAMENTO_LOADING?'Carregando fechamento de marcos. ':'');
-  var detailedBaseSection=isAdmin?'<section class="bonus-admin-table bonus-detail-base"><div class="bonus-section"><div class="bonus-admin-label">Base detalhada administrativa</div><div class="bonus-admin-sub">Composi&ccedil;&atilde;o financeira por consultor para confer&ecirc;ncia e envio ao administrativo.</div><div class="dashx-table-wrap"><table class="dashx-table bonus-admin-summary-table"><thead><tr><th>Consultor</th><th>Senioridade</th><th>Di&aacute;rias</th><th>Valor di&aacute;rias</th><th>Proj. aprovado</th><th>Proj. reprovado</th><th>Marco aprovado</th><th>Valor projetos</th><th>Valor marcos</th><th>Indica&ccedil;&otilde;es</th><th>Valor indica&ccedil;&otilde;es</th><th>Total</th></tr></thead><tbody>'+adminRows+'</tbody>'+adminTotalRow+'</table></div>'+adminSignatures+'</div></section>':'';
+  var detailedBaseSection=isAdmin?'<section class="bonus-admin-table bonus-detail-base">'+adminPrintHeader+'<div class="bonus-section"><div class="bonus-admin-label">Base detalhada administrativa</div><div class="bonus-admin-sub">Composi&ccedil;&atilde;o financeira por consultor para confer&ecirc;ncia e envio ao administrativo.</div><div class="dashx-table-wrap"><table class="dashx-table bonus-admin-summary-table"><thead><tr><th>Consultor</th><th>Senioridade</th><th>Di&aacute;rias</th><th>Valor di&aacute;rias</th><th>Proj. aprovado</th><th>Proj. reprovado</th><th>Marco aprovado</th><th>Valor projetos</th><th>Valor marcos</th><th>Indica&ccedil;&otilde;es</th><th>Valor indica&ccedil;&otilde;es</th><th>Total</th></tr></thead><tbody>'+adminRows+'</tbody>'+adminTotalRow+'</table></div>'+adminSignatures+'</div></section>':'';
   box.innerHTML='<div class="bonus-shell"><div class="bonus-hero"><div><div class="bonus-title">Bonifica&ccedil;&atilde;o mensal</div><div class="bonus-sub">Relat&oacute;rio consolidado alimentado pelas di&aacute;rias contabiliz&aacute;veis do CMAX e pelos marcos aprovados na valida&ccedil;&atilde;o t&eacute;cnica.</div></div><div class="bonus-actions"><select class="bonus-select" onchange="return bonusSetMonth(this.value)">'+monthOptions+'</select>'+(isAdmin?'<select class="bonus-select" onchange="return bonusSetConsultant(this.value)">'+consultantOptions+'</select>':'')+'<button class="btn-syncall" onclick="return bonusRefresh(this)">Atualizar relat&oacute;rio</button><button class="btn-syncall" onclick="return bonusPrint(\'admin\')">PDF administrativo</button><button class="btn-syncall" onclick="return bonusPrint(\'individual\')">PDF individual</button></div></div>'+
     (status?'<div class="cmax-status">'+status+'</div>':'')+
-    bonusExecutivePanel(people,daily,milestones,projects,equivalents,total,closedStats)+indicationForm+seniorityForm+
+    adminPrintHeader+bonusExecutivePanel(people,daily,milestones,projects,equivalents,total,closedStats)+indicationForm+seniorityForm+
     detailedBaseSection+bonusReportObservationSection(BONUS_FILTER.month)+
     (people.map(bonusPersonReport).join('')||'<div class="bonus-empty">Nenhuma bonifica&ccedil;&atilde;o encontrada para este usu&aacute;rio no m&ecirc;s selecionado.</div>')+'</div>';
 }
