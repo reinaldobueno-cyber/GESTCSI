@@ -6962,6 +6962,18 @@ function loginUser_(params) {
   var username = sanitizeText_(params.username).toLowerCase();
   var passwordSha = sanitizeText_(params.password_sha);
   if (!username || !passwordSha) throw new Error('Usuario e senha sao obrigatorios.');
+  var adminUsername = sanitizeText_(getScriptProperty_('PANEL_ADMIN_USERNAME', '')).toLowerCase();
+  var adminPasswordSha = sanitizeText_(getScriptProperty_('PANEL_ADMIN_PASSWORD_SHA256', '')).toLowerCase();
+  if (adminUsername && adminPasswordSha && username === adminUsername && passwordSha.toLowerCase() === adminPasswordSha) {
+    var adminUser = {
+      username: adminUsername,
+      name: sanitizeText_(getScriptProperty_('PANEL_ADMIN_NAME', adminUsername)) || adminUsername,
+      role: 'admin',
+      enabled: 'TRUE',
+      last_login: ''
+    };
+    return { ok: true, token: storeSession_(adminUser), user: publicUser_(adminUser) };
+  }
   var found = findUserRow_(username);
   if (!found) throw new Error('Usuario ou senha invalidos.');
   var user = found.user;
