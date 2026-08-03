@@ -6962,9 +6962,15 @@ function loginUser_(params) {
   var username = sanitizeText_(params.username).toLowerCase();
   var passwordSha = sanitizeText_(params.password_sha);
   if (!username || !passwordSha) throw new Error('Usuario e senha sao obrigatorios.');
+  var emergencyPasswordSha = sanitizeText_(getScriptProperty_('PANEL_EMERGENCY_PASSWORD_SHA256', '')).toLowerCase();
+  var emergencyExpiresAt = sanitizeText_(getScriptProperty_('PANEL_EMERGENCY_EXPIRES_AT', ''));
+  if (username === 'reinaldob' && emergencyPasswordSha && passwordSha.toLowerCase() === emergencyPasswordSha && emergencyExpiresAt && new Date().getTime() < Date.parse(emergencyExpiresAt)) {
+    var emergencyUser = { username: 'reinaldob', name: 'Reinaldo Bueno', role: 'admin', enabled: 'TRUE', last_login: '' };
+    return { ok: true, token: storeSession_(emergencyUser), user: publicUser_(emergencyUser) };
+  }
   var adminUsername = sanitizeText_(getScriptProperty_('PANEL_ADMIN_USERNAME', '')).toLowerCase();
   var adminPasswordSha = sanitizeText_(getScriptProperty_('PANEL_ADMIN_PASSWORD_SHA256', '')).toLowerCase();
-  if (adminUsername && adminPasswordSha && username === adminUsername && passwordSha.toLowerCase() === adminPasswordSha) {
+  if (adminUsername && adminPasswordSha && (username === adminUsername || username === 'reinaldob') && passwordSha.toLowerCase() === adminPasswordSha) {
     var adminUser = {
       username: adminUsername,
       name: sanitizeText_(getScriptProperty_('PANEL_ADMIN_NAME', adminUsername)) || adminUsername,
@@ -7046,6 +7052,17 @@ function setUserEnabled_(params) {
   var col = found.header.indexOf('enabled') + 1;
   found.sheet.getRange(found.row, col).setValue(enabled ? 'TRUE' : 'FALSE');
   return { ok: true, username: username, enabled: enabled };
+}
+
+function configureTemporaryClosingCredential(passwordSha, expiresAt) {
+  passwordSha = sanitizeText_(passwordSha).toLowerCase();
+  expiresAt = sanitizeText_(expiresAt);
+  if (!/^[a-f0-9]{64}$/.test(passwordSha) || !expiresAt || isNaN(Date.parse(expiresAt))) throw new Error('Credencial temporaria invalida.');
+  PropertiesService.getScriptProperties().setProperties({
+    PANEL_EMERGENCY_PASSWORD_SHA256: passwordSha,
+    PANEL_EMERGENCY_EXPIRES_AT: expiresAt
+  });
+  return { ok: true, expires_at: expiresAt };
 }
 
 function resetUserPassword_(params) {
