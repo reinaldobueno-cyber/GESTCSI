@@ -15122,8 +15122,12 @@ function consultantMoney(value) {
 function consultantCompensationLoad(force) {
   if(!authTokenParam()||CONSULTANT_COMP_STATE.loading||(!force&&CONSULTANT_COMP_STATE.loaded))return Promise.resolve(null);
   CONSULTANT_COMP_STATE.loading=true;
-  return chamarAppsScriptJsonp('getConsultantCompensation',{auth_token:authTokenParam()},15000).then(function(resp){
-    if(!resp||resp.ok===false||!Array.isArray(resp.consultants))throw new Error((resp&&resp.error)||'Publique o Apps Script atualizado para carregar senioridades.');
+  var url='https://docs.google.com/spreadsheets/d/'+SHEET_ID+'/gviz/tq?sheet=CONSULTORES_REMUNERACAO&_ts='+Date.now();
+  return loadGvizTableJsonp(url,15000).then(function(table){
+    if(!table)throw new Error('Tabela de remuneração indisponível.');
+    var normalizada=normalizarTabelaGviz(table);
+    var consultants=(normalizada.rows||[]).map(function(row){return mapearGvizRow(normalizada.cols,row);}).filter(function(item){return item&&(item.consultant_key||item.consultant_name)&&item.seniority;});
+    var resp={ok:true,consultants:consultants,rates:CONSULTANT_COMP_STATE.rates,sheet_source:true};
     var items={};
     (resp.consultants||[]).forEach(function(item){items[consultantCompKey(item.consultant_key||item.consultant_name)]=item;});
     CONSULTANT_COMP_STATE.items=items;
