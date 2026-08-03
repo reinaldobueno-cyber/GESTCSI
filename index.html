@@ -4780,7 +4780,13 @@ function loginPainel(form) {
   var username = String((form && form.username && form.username.value) || '').trim();
   var password = String((form && form.password && form.password.value) || '');
   sha256Hex(password).then(function(passwordSha){
-    return chamarAppsScriptJsonp('login', {username:username, password_sha:passwordSha}, 12000);
+    var loginParams = {username:username, password_sha:passwordSha};
+    return chamarAppsScriptJsonp('login', loginParams, 30000).catch(function(firstError){
+      var message = String((firstError && firstError.message) || '');
+      if (!/Timeout|Erro ao acessar Apps Script/i.test(message)) throw firstError;
+      if (error) error.textContent = 'O servidor demorou para responder. Tentando novamente...';
+      return chamarAppsScriptJsonp('login', loginParams, 30000);
+    });
   }).then(function(resp){
     if (!resp || resp.ok === false || !resp.token) throw new Error((resp && (resp.error || resp.message)) || 'Login recusado');
     authSet({token:resp.token, user:resp.user});
