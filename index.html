@@ -8949,14 +8949,24 @@ function initBonus() {
 }
 function bonusPrint(mode) {
   var className=mode==='individual'?'bonus-print-individual':'bonus-print-admin';
+  var previousOverride=document.getElementById('bonus-print-page-override');
+  if(previousOverride&&previousOverride.parentNode)previousOverride.parentNode.removeChild(previousOverride);
+  var pageOverride=document.createElement('style');
+  pageOverride.id='bonus-print-page-override';
+  pageOverride.textContent=mode==='individual'
+    ? '@media print{@page{size:A4 portrait;margin:10mm}html,body,.app-shell,.main-content,.page,#bonus-content,.bonus-shell,.bonus-report{transform:none!important;rotate:none!important;writing-mode:horizontal-tb!important}.bonus-print-individual .bonus-hero{display:none!important}.bonus-print-individual .bonus-report{width:100%!important;max-width:190mm!important;margin:0 auto!important}}'
+    : '@media print{@page{size:A4 landscape;margin:8mm}}';
+  document.head.appendChild(pageOverride);
   document.body.classList.remove('bonus-print-admin','bonus-print-individual');
   document.body.classList.add(className);
   var cleanup=function(){
     document.body.classList.remove('bonus-print-admin','bonus-print-individual');
+    var activeOverride=document.getElementById('bonus-print-page-override');
+    if(activeOverride&&activeOverride.parentNode)activeOverride.parentNode.removeChild(activeOverride);
     window.removeEventListener('afterprint',cleanup);
   };
   window.addEventListener('afterprint',cleanup);
-  setTimeout(function(){window.print();setTimeout(cleanup,1000);},50);
+  requestAnimationFrame(function(){requestAnimationFrame(function(){window.print();setTimeout(cleanup,1000);});});
   return false;
 }
 window.bonusSetMonth=bonusSetMonth;
