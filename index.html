@@ -3285,7 +3285,9 @@ body.theme-dark .tower-kpis [style*="background:#fff"]{
 @media print{
   @page{size:A4 landscape;margin:8mm}
   @page bonusAdminLandscape{size:A4 landscape;margin:8mm}
+  @page bonusIndividualLandscape{size:A4 landscape;margin:8mm}
   body.bonus-print-admin{page:bonusAdminLandscape}
+  body.bonus-print-individual{page:bonusIndividualLandscape}
   html,body{background:#fff!important;color:#111!important;overflow:visible!important;font-size:10px!important;-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important}
   nav,.period-bar,.sidenav,.tabs,.bonus-actions,.btn-syncall,.project-link-btn.warn,.auth-backdrop,.toast{display:none!important}
   .app-shell,.main-content{display:block!important;width:100%!important;max-width:none!important;margin:0!important;padding:0!important;overflow:visible!important}
@@ -4045,6 +4047,27 @@ body.theme-dark .consultant-seniority-badge{
   body.theme-dark.bonus-print-admin .bonus-insight span{color:#60796a!important}
   body.bonus-print-admin .bonus-exec-grid,
   body.bonus-print-admin .bonus-exec-columns{width:100%!important;max-width:100%!important;overflow:hidden!important}
+  html body.theme-dark.bonus-print-individual,body.theme-dark.bonus-print-individual .main-content,body.theme-dark.bonus-print-individual .page,body.theme-dark.bonus-print-individual .bonus-shell{background:#fff!important;color:#173b2a!important}
+  body.theme-dark.bonus-print-individual .bonus-hero{background:#fff!important;color:#173b2a!important;margin-bottom:4mm!important}
+  body.theme-dark.bonus-print-individual .bonus-title{color:#173b2a!important;font-size:18px!important}
+  body.theme-dark.bonus-print-individual .bonus-sub{color:#60796a!important;font-size:9px!important}
+  body.theme-dark.bonus-print-individual .bonus-report{width:100%!important;max-width:100%!important;background:#fff!important;color:#173b2a!important;border:1.5px solid #2d6a48!important;border-radius:3mm!important;overflow:hidden!important}
+  body.theme-dark.bonus-print-individual .bonus-report-head{background:linear-gradient(100deg,#123d2a,#205b3e)!important;color:#fff!important;border-bottom:3px solid #71d29a!important}
+  body.theme-dark.bonus-print-individual .bonus-person-name,body.theme-dark.bonus-print-individual .bonus-report-total strong{color:#fff!important}
+  body.theme-dark.bonus-print-individual .bonus-person-meta,body.theme-dark.bonus-print-individual .bonus-report-total span{color:#dff3e6!important}
+  body.theme-dark.bonus-print-individual .bonus-activity,body.theme-dark.bonus-print-individual .bonus-financial-item{background:#f4faf6!important;border-color:#83b494!important;color:#173b2a!important}
+  body.theme-dark.bonus-print-individual .bonus-activity.good,body.theme-dark.bonus-print-individual .bonus-activity.primary,body.theme-dark.bonus-print-individual .bonus-activity.approved,body.theme-dark.bonus-print-individual .bonus-financial-item.total{background:#edf8f0!important;border-color:#4f9569!important}
+  body.theme-dark.bonus-print-individual .bonus-activity.rejected{background:#fff2f1!important;border-color:#d98b87!important}
+  body.theme-dark.bonus-print-individual .bonus-activity span,body.theme-dark.bonus-print-individual .bonus-financial-item span{color:#416b55!important;font-size:8px!important}
+  body.theme-dark.bonus-print-individual .bonus-activity strong,body.theme-dark.bonus-print-individual .bonus-financial-item strong{color:#173b2a!important;font-size:14px!important}
+  body.theme-dark.bonus-print-individual .bonus-activity small{color:#60796a!important;font-size:8px!important}
+  body.theme-dark.bonus-print-individual .bonus-section{background:#fff!important;color:#173b2a!important;border-color:#d7e5dc!important}
+  body.theme-dark.bonus-print-individual .bonus-section-title{color:#173b2a!important;font-size:10px!important}
+  body.theme-dark.bonus-print-individual .dashx-table-wrap,body.theme-dark.bonus-print-individual .dashx-table,body.theme-dark.bonus-print-individual .dashx-table tbody,body.theme-dark.bonus-print-individual .dashx-table tr{background:#fff!important;border-color:#b8d5c2!important}
+  body.theme-dark.bonus-print-individual .dashx-table th{background:#16472f!important;color:#fff!important;border-color:#2d6a48!important;font-size:8px!important}
+  body.theme-dark.bonus-print-individual .dashx-table td,body.theme-dark.bonus-print-individual .dashx-table td strong{background:#fff!important;color:#173b2a!important;border-color:#d7e5dc!important;font-size:8.5px!important}
+  body.theme-dark.bonus-print-individual .bonus-empty{background:#f8fbf9!important;color:#60796a!important}
+  body.theme-dark.bonus-print-individual .bonus-report-footer{background:#16472f!important;color:#fff!important}
 }
 /* Barras translúcidas com brilho sutil para o modo escuro. */
 body.theme-dark .dashx-status-bar,
