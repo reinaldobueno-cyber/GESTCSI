@@ -3233,6 +3233,13 @@ body.theme-dark .tower-kpis [style*="background:#fff"]{
 .bonus-card strong{display:block;margin-top:7px;font-size:25px;color:var(--text)}
 .bonus-card.total{border-color:#78a98a;background:#edf8ef}.bonus-card.total strong{color:#23623d}
 .bonus-admin-table,.bonus-report,.bonus-observation{background:var(--surf);border:1px solid var(--border);border-radius:18px;overflow:hidden;box-shadow:0 14px 35px rgba(30,64,105,.08)}
+.bonus-daily-table{width:100%;min-width:0;table-layout:fixed}
+.bonus-daily-table th:nth-child(1),.bonus-daily-table td:nth-child(1){width:13%}
+.bonus-daily-table th:nth-child(2),.bonus-daily-table td:nth-child(2){width:39%}
+.bonus-daily-table th:nth-child(3),.bonus-daily-table td:nth-child(3){width:18%}
+.bonus-daily-table th:nth-child(4),.bonus-daily-table td:nth-child(4){width:12%}
+.bonus-daily-table th:nth-child(5),.bonus-daily-table td:nth-child(5){width:8%}
+.bonus-daily-table th:nth-child(6),.bonus-daily-table td:nth-child(6){width:10%}
 .bonus-exec{background:var(--surf);border:1px solid var(--border);border-radius:18px;overflow:hidden;box-shadow:0 18px 42px rgba(30,64,105,.1)}
 .bonus-exec-head{display:flex;justify-content:space-between;align-items:center;gap:18px;flex-wrap:wrap;padding:22px 24px;background:linear-gradient(120deg,#173b67,#2f72b5);color:#fff}
 .bonus-exec-kicker{font-size:9px;font-weight:900;letter-spacing:.14em;text-transform:uppercase;color:#c8e5ff}.bonus-exec-title{font-size:22px;font-weight:900;margin-top:5px}.bonus-exec-meta{font-size:11px;color:#d9edff;margin-top:5px}
@@ -3329,6 +3336,12 @@ body.theme-dark .tower-kpis [style*="background:#fff"]{
   .dashx-table thead{display:table-header-group}
   .dashx-table tr{break-inside:avoid;page-break-inside:avoid}
   .dashx-table th,.dashx-table td{padding:3px 4px!important;font-size:7px!important;line-height:1.2!important;white-space:normal!important;word-break:break-word!important;color:#111!important}
+  .bonus-daily-table th,.bonus-daily-table td{font-size:8px!important;line-height:1.3!important;word-break:normal!important;overflow-wrap:normal!important;vertical-align:top!important}
+  .bonus-daily-table th:nth-child(1),.bonus-daily-table td:nth-child(1),
+  .bonus-daily-table th:nth-child(4),.bonus-daily-table td:nth-child(4),
+  .bonus-daily-table th:nth-child(5),.bonus-daily-table td:nth-child(5),
+  .bonus-daily-table th:nth-child(6),.bonus-daily-table td:nth-child(6){white-space:nowrap!important}
+  .bonus-daily-table th:nth-child(2),.bonus-daily-table td:nth-child(2){overflow-wrap:anywhere!important}
   .dashx-table th{letter-spacing:0!important;background:#f1f4f1!important}
   .dashx-table td strong{color:#111!important}
   a[href]{color:#111!important;text-decoration:none!important}
@@ -8630,7 +8643,7 @@ function bonusDailyDetails(person) {
     var item=row.item,info=cmaxDateInfo(item.data),start=cmaxTime(item.hora_inicio)||'-',end=cmaxTime(item.hora_fim);
     return '<tr><td>'+escapeHtml(info.date)+cmaxSpecialLabel(item.data)+(row.carryover?' <span class="tag tag-o">Exceção JUN</span>':'')+'</td><td><strong>'+escapeHtml(item.cliente||'-')+'</strong></td><td>'+escapeHtml(cmaxModeLabel(item))+'</td><td>'+escapeHtml(start+(end?' - '+end:''))+'</td><td>'+cmaxEquivalentLabel(row.equivalent)+(row.multiplier>1?' &times; 1,5':'')+'</td><td><strong>'+consultantMoney(row.value)+'</strong></td></tr>';
   }).join('');
-  return rows?'<div class="dashx-table-wrap"><table class="dashx-table"><thead><tr><th>Data</th><th>Cliente</th><th>Modalidade</th><th>Hor&aacute;rio</th><th>Equiv.</th><th>Valor</th></tr></thead><tbody>'+rows+'</tbody></table></div>':'<div class="bonus-empty">Nenhuma di&aacute;ria contabiliz&aacute;vel neste m&ecirc;s.</div>';
+  return rows?'<div class="dashx-table-wrap"><table class="dashx-table bonus-daily-table"><colgroup><col><col><col><col><col><col></colgroup><thead><tr><th>Data</th><th>Cliente</th><th>Modalidade</th><th>Hor&aacute;rio</th><th>Equiv.</th><th>Valor</th></tr></thead><tbody>'+rows+'</tbody></table></div>':'<div class="bonus-empty">Nenhuma di&aacute;ria contabiliz&aacute;vel neste m&ecirc;s.</div>';
 }
 function bonusIndicationDetails(person) {
   var rows=person.indicationRows.map(function(item){
