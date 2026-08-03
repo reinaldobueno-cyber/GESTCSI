@@ -8022,11 +8022,8 @@ function fechamentoLoad(force) {
   FECHAMENTO_LOADING = true;
   initFechamento();
   initProjectClosing();
-  return fechamentoLoadAppsScriptClosing().catch(function(primaryError) {
-    return fechamentoLoadSheetFallback({
-      warning: 'Apps Script indisponível; usando leitura pública da planilha.',
-      apps_script_error: (primaryError && primaryError.message) || ''
-    });
+  return fechamentoLoadSheetFallback({
+    warning: 'Leitura rápida da aba consolidada; atualizações do Apps Script continuam disponíveis pelos botões de sincronização.'
   }).catch(function(error) {
     FECHAMENTO_LOADING = false;
     FECHAMENTO_META.error = FECHAMENTO_LOADED
@@ -17152,13 +17149,6 @@ function loadAll(tipoAtualizacao) {
   var isRefresh = window._jaCarregou === true;
   window._lastUpdateTrigger = tipoAtualizacao || (isRefresh ? 'manual' : 'auto');
   var appsScriptAllPrefetch = null;
-  if (new Date().getFullYear() === 2026 && APPS_SCRIPT_URL && APPS_SCRIPT_URL.indexOf('AK') >= 0) {
-    appsScriptAllPrefetch = chamarAppsScriptJsonp('getMonthlyProjects', {mes:'ALL'}, 25000).then(function(resp){
-      return {ok:true, response:resp};
-    }).catch(function(error){
-      return {ok:false, error:error};
-    });
-  }
 
   if (!isRefresh) {
     // Primeiro acesso: mostra overlay, nao renderiza nada ainda
@@ -17306,11 +17296,6 @@ function loadAll(tipoAtualizacao) {
         if (!painelCarteiraCompleta(projetosDiretos)) {
           console.warn('[INIT] Leitura direta abaixo do minimo esperado ('+projetosDiretos.length+'/'+painelMinimoCarteiraAtual()+'). Tentando fallback sem substituir base completa.');
           buscarViaAppsScript(projetosDiretos, 'sheet_direct_partial');
-          return;
-        }
-        if (new Date().getFullYear() === 2026) {
-          console.log('[INIT] Leitura direta plausivel ('+projetosDiretos.length+'), confirmando total atual via Apps Script antes de salvar cache.');
-          buscarViaAppsScript(projetosDiretos, 'sheet_direct_verify');
           return;
         }
         console.log('[INIT] Leitura direta completa pela planilha mensal; esta e a fonte oficial da carteira.');
