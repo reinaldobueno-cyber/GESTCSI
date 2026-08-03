@@ -3303,6 +3303,12 @@ body.theme-dark .tower-kpis [style*="background:#fff"]{
   .bonus-rank-meta,.bonus-insight span{font-size:7px!important;line-height:1.25!important}
   .bonus-insight{padding:6px 7px!important;break-inside:avoid;page-break-inside:avoid}
   .bonus-report{break-before:page;page-break-before:always;margin:0!important}
+  body.bonus-print-admin .bonus-report{display:none!important}
+  body.bonus-print-individual .bonus-exec,
+  body.bonus-print-individual .bonus-admin-table.bonus-detail-base,
+  body.bonus-print-individual .bonus-observation{display:none!important}
+  body.bonus-print-individual .bonus-report{break-before:auto;page-break-before:auto}
+  body.bonus-print-individual .bonus-report + .bonus-report{break-before:page;page-break-before:always}
   .bonus-report-head{gap:8px!important}
   .bonus-avatar{width:32px!important;height:32px!important;border-width:1px!important;font-size:14px!important}
   .bonus-activity-grid{grid-template-columns:repeat(5,minmax(0,1fr))!important;gap:5px!important;padding:7px!important}
@@ -8783,11 +8789,23 @@ function initBonus() {
   var seniorityForm='<section class="bonus-admin-table"><div class="bonus-section"><div class="bonus-admin-label">Senioridade pontual</div><div class="bonus-admin-sub">Use para suporte ou trabalho avulso sem criar usuário. A informação fica na aba CONSULTORES_REMUNERACAO e entra no cálculo das diárias.</div><form id="bonus-seniority-form" class="bonus-seniority-form" onsubmit="event.preventDefault();return bonusSaveSeniority(this.querySelector(\'button[type=submit]\'))"><div class="bonus-indication-field"><label>Nome</label><input name="consultant_name" list="bonus-seniority-names" required placeholder="Nome como aparece no CMAX"><datalist id="bonus-seniority-names">'+seniorityNameOptions+'</datalist></div><div class="bonus-indication-field"><label>Senioridade</label><select name="seniority" required><option value="">Selecione</option><option value="junior">Junior - R$ 60</option><option value="pleno">Pleno - R$ 85</option><option value="senior">Senior - R$ 110</option><option value="master">Master - R$ 220</option></select></div><button class="btn-syncall" type="submit">Salvar senioridade</button></form></div></section>';
   var status=(CMAX_DAILY_STATE.loading?'Carregando di&aacute;rias do m&ecirc;s selecionado. ':'')+(FECHAMENTO_LOADING?'Carregando fechamento de marcos. ':'');
   var detailedBaseSection=isAdmin?'<section class="bonus-admin-table bonus-detail-base"><div class="bonus-section"><div class="bonus-admin-label">Base detalhada administrativa</div><div class="bonus-admin-sub">Composi&ccedil;&atilde;o financeira por consultor para confer&ecirc;ncia e envio ao administrativo.</div><div class="dashx-table-wrap"><table class="dashx-table"><thead><tr><th>Consultor</th><th>Senioridade</th><th>Di&aacute;rias</th><th>Valor di&aacute;rias</th><th>Proj. aprovado</th><th>Proj. reprovado</th><th>Marco aprovado</th><th>Marco reprovado</th><th>Valor projetos</th><th>Valor marcos</th><th>Indica&ccedil;&otilde;es</th><th>Valor indica&ccedil;&otilde;es</th><th>Total</th></tr></thead><tbody>'+adminRows+'</tbody></table></div></div><div class="bonus-section"><div class="bonus-admin-label">Reprovados e justificativas</div><div class="bonus-admin-sub">Marcos e fechamentos de projeto que não geraram bonifica&ccedil;&atilde;o.</div>'+bonusAdminRejectedTable(people)+'</div></section>':'';
-  box.innerHTML='<div class="bonus-shell"><div class="bonus-hero"><div><div class="bonus-title">Bonifica&ccedil;&atilde;o mensal</div><div class="bonus-sub">Relat&oacute;rio consolidado alimentado pelas di&aacute;rias contabiliz&aacute;veis do CMAX e pelos marcos aprovados na valida&ccedil;&atilde;o t&eacute;cnica.</div></div><div class="bonus-actions"><select class="bonus-select" onchange="return bonusSetMonth(this.value)">'+monthOptions+'</select>'+(isAdmin?'<select class="bonus-select" onchange="return bonusSetConsultant(this.value)">'+consultantOptions+'</select>':'')+'<button class="btn-syncall" onclick="return bonusRefresh(this)">Atualizar relat&oacute;rio</button><button class="btn-syncall" onclick="window.print()">Imprimir / PDF</button></div></div>'+
+  box.innerHTML='<div class="bonus-shell"><div class="bonus-hero"><div><div class="bonus-title">Bonifica&ccedil;&atilde;o mensal</div><div class="bonus-sub">Relat&oacute;rio consolidado alimentado pelas di&aacute;rias contabiliz&aacute;veis do CMAX e pelos marcos aprovados na valida&ccedil;&atilde;o t&eacute;cnica.</div></div><div class="bonus-actions"><select class="bonus-select" onchange="return bonusSetMonth(this.value)">'+monthOptions+'</select>'+(isAdmin?'<select class="bonus-select" onchange="return bonusSetConsultant(this.value)">'+consultantOptions+'</select>':'')+'<button class="btn-syncall" onclick="return bonusRefresh(this)">Atualizar relat&oacute;rio</button><button class="btn-syncall" onclick="return bonusPrint(\'admin\')">PDF administrativo</button><button class="btn-syncall" onclick="return bonusPrint(\'individual\')">PDF individual</button></div></div>'+
     (status?'<div class="cmax-status">'+status+'</div>':'')+
     bonusExecutivePanel(people,daily,milestones,projects,equivalents,total,closedStats)+indicationForm+seniorityForm+
     detailedBaseSection+bonusReportObservationSection(BONUS_FILTER.month)+
     (people.map(bonusPersonReport).join('')||'<div class="bonus-empty">Nenhuma bonifica&ccedil;&atilde;o encontrada para este usu&aacute;rio no m&ecirc;s selecionado.</div>')+'</div>';
+}
+function bonusPrint(mode) {
+  var className=mode==='individual'?'bonus-print-individual':'bonus-print-admin';
+  document.body.classList.remove('bonus-print-admin','bonus-print-individual');
+  document.body.classList.add(className);
+  var cleanup=function(){
+    document.body.classList.remove('bonus-print-admin','bonus-print-individual');
+    window.removeEventListener('afterprint',cleanup);
+  };
+  window.addEventListener('afterprint',cleanup);
+  setTimeout(function(){window.print();setTimeout(cleanup,1000);},50);
+  return false;
 }
 window.bonusSetMonth=bonusSetMonth;
 window.bonusSetConsultant=bonusSetConsultant;
@@ -8797,6 +8815,7 @@ window.bonusDeleteIndication=bonusDeleteIndication;
 window.bonusSaveSeniority=bonusSaveSeniority;
 window.bonusSaveReportObservation=bonusSaveReportObservation;
 window.bonusDeleteReportObservation=bonusDeleteReportObservation;
+window.bonusPrint=bonusPrint;
 
 function initAdmin() {
   var el = document.getElementById('admin-content');
