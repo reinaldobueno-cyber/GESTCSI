@@ -6679,7 +6679,8 @@ var FECHAMENTO_LOADING = false;
 var FECHAMENTO_SESSION_REFRESHED = false;
 var FECHAMENTO_POLL_TIMER = null;
 var FECHAMENTO_FILTER = { month:fechamentoCurrentMonth(), consultor:'todos', projetoBusca:'', situacao:'todos' };
-var FECHAMENTO_CACHE_VERSION = 'closing-appscript-primary-v10-june-validation-recovery';
+var FECHAMENTO_CACHE_VERSION = 'closing-appscript-primary-v11-deleted-task-filter';
+var FECHAMENTO_EXCLUDED_TASK_IDS = {'86ajpvhuc':true};
 var FECHAMENTO_MILESTONE_BONUS_VALUE = 30;
 var PROJECT_CLOSING_RULE_VERSION = 'breakoff-entrega-id-aprovar-v7';
 var PROJECT_CLOSING_LOOKUP = {term:'', loading:false, result:null, error:''};
@@ -6934,7 +6935,8 @@ function fechamentoNormalizeRows(rows) {
     if (item.situacao !== 'aprovado') item.valor_bonus = 0;
     return item;
   }).filter(function(item) {
-    return String(item.mes_fechamento || '') >= '2024-01';
+    var taskId = String(item && (item.task_id || item.id || item.item_id) || '').trim().toLowerCase();
+    return !FECHAMENTO_EXCLUDED_TASK_IDS[taskId] && String(item.mes_fechamento || '') >= '2024-01';
   });
 }
 function fechamentoRowKey(item) {
