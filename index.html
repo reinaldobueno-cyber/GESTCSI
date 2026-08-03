@@ -3235,6 +3235,7 @@ body.theme-dark .tower-kpis [style*="background:#fff"]{
 .bonus-admin-table,.bonus-report,.bonus-observation{background:var(--surf);border:1px solid var(--border);border-radius:18px;overflow:hidden;box-shadow:0 14px 35px rgba(30,64,105,.08)}
 .bonus-signatures{display:none}
 .bonus-print-header{display:none}
+.bonus-seniority-print{display:none}
 .bonus-daily-table{width:100%;min-width:0;table-layout:fixed}
 .bonus-daily-table th:nth-child(1),.bonus-daily-table td:nth-child(1){width:13%}
 .bonus-daily-table th:nth-child(2),.bonus-daily-table td:nth-child(2){width:39%}
@@ -3323,6 +3324,8 @@ body.theme-dark .tower-kpis [style*="background:#fff"]{
   body.bonus-print-admin .bonus-report{display:none!important}
   body.bonus-print-admin .bonus-rejected-print{display:none!important}
   body.bonus-print-admin .bonus-hero{display:none!important}
+  body.bonus-print-admin .bonus-seniority-screen{display:none!important}
+  body.bonus-print-admin .bonus-seniority-print{display:inline!important}
   body.bonus-print-admin .bonus-exec{zoom:.84;width:119.05%!important;break-inside:avoid!important;page-break-inside:avoid!important;break-after:page!important;page-break-after:always!important}
   body.bonus-print-admin .bonus-detail-base{break-before:auto!important;page-break-before:auto!important}
   body.bonus-print-admin .bonus-print-header{display:flex!important;align-items:center!important;justify-content:space-between!important;gap:10mm!important;margin:0 0 4mm!important;padding:0 2mm 3mm!important;border-bottom:2px solid #1d5a38!important;break-inside:avoid!important;page-break-inside:avoid!important}
@@ -8628,6 +8631,7 @@ function bonusDataset() {
   var isAdmin=AUTH_STATE.user&&AUTH_STATE.user.role==='admin';
   var allowed=names.filter(function(name){
     if(!isAdmin&&!bonusNamesMatch(name,userName))return false;
+    if(consultantCompKey(name)==='THIAGO RIBEIRO')return false;
     return BONUS_FILTER.consultant==='todos'||bonusNamesMatch(name,BONUS_FILTER.consultant);
   }).sort();
   return allowed.map(function(name){
@@ -8828,7 +8832,7 @@ function initBonus() {
   var sortedBonusNames=allNames.slice().sort();
   var consultantOptions='<option value="todos">Todos os consultores</option>'+sortedBonusNames.map(function(name){return '<option value="'+escapeHtml(name)+'" '+(BONUS_FILTER.consultant===name?'selected':'')+'>'+escapeHtml(name)+'</option>';}).join('');
   var seniorityNameOptions=sortedBonusNames.map(function(name){return '<option value="'+escapeHtml(name)+'"></option>';}).join('');
-  var adminRows=people.map(function(person){return '<tr><td><strong>'+escapeHtml(person.name)+'</strong></td><td>'+escapeHtml(consultantSeniorityLabel(person.seniority))+'</td><td>'+cmaxEquivalentLabel(person.dailyEquivalent)+'</td><td>'+consultantMoney(person.dailyValue)+'</td><td>'+(person.projectRows||[]).length+'</td><td>'+(person.rejectedProjectRows||[]).length+'</td><td>'+person.milestoneRows.length+'</td><td>'+consultantMoney(person.projectValue||0)+'</td><td>'+consultantMoney(person.milestoneValue)+'</td><td>'+person.indicationRows.length+'</td><td>'+consultantMoney(person.indicationValue)+'</td><td><strong>'+consultantMoney(person.total)+'</strong></td></tr>';}).join('');
+  var adminRows=people.map(function(person){return '<tr><td><strong>'+escapeHtml(person.name)+'</strong></td><td><span class="bonus-seniority-screen">'+consultantSeniorityControl(person.name)+'</span><span class="bonus-seniority-print">'+escapeHtml(consultantSeniorityLabel(person.seniority))+'</span></td><td>'+cmaxEquivalentLabel(person.dailyEquivalent)+'</td><td>'+consultantMoney(person.dailyValue)+'</td><td>'+(person.projectRows||[]).length+'</td><td>'+(person.rejectedProjectRows||[]).length+'</td><td>'+person.milestoneRows.length+'</td><td>'+consultantMoney(person.projectValue||0)+'</td><td>'+consultantMoney(person.milestoneValue)+'</td><td>'+person.indicationRows.length+'</td><td>'+consultantMoney(person.indicationValue)+'</td><td><strong>'+consultantMoney(person.total)+'</strong></td></tr>';}).join('');
   var adminTotals={
     dailyEquivalent:people.reduce(function(sum,p){return sum+Number(p.dailyEquivalent||0);},0),
     dailyValue:people.reduce(function(sum,p){return sum+Number(p.dailyValue||0);},0),
@@ -15264,7 +15268,7 @@ function userSetSeniority(username,name,seniority,select) {
 function consultantSetSeniority(name,seniority,select) {
   if(!seniority)return false;
   if(select)select.disabled=true;
-  return chamarAppsScriptJsonp('setConsultantSeniority',{auth_token:authTokenParam(),consultant_name:name,seniority:seniority},15000).then(function(resp){
+  return chamarAppsScriptJsonp('setConsultantSeniority',{auth_token:authTokenParam(),consultant_name:name,seniority:seniority},90000).then(function(resp){
     if(!resp||resp.ok===false||!resp.consultant)throw new Error((resp&&resp.error)||'Publique o Apps Script atualizado para salvar senioridades.');
     CONSULTANT_COMP_STATE.items[consultantCompKey(name)]=resp.consultant;
     CONSULTANT_COMP_STATE.loaded=true;
