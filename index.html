@@ -3284,7 +3284,7 @@ body.theme-dark .tower-kpis [style*="background:#fff"]{
 @media(max-width:900px){.bonus-financial{grid-template-columns:1fr}.bonus-report-head{padding:20px}.bonus-report-total strong{font-size:24px}.bonus-rank-row{grid-template-columns:24px 1fr auto}.bonus-rank-track{display:none}}
 @media(max-width:560px){.bonus-activity-grid{grid-template-columns:1fr}}
 @media print{
-  @page{size:A4 landscape;margin:8mm}
+  @page{size:A4 portrait;margin:10mm}
   html,body{background:#fff!important;color:#111!important;overflow:visible!important;font-size:10px!important;-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important}
   nav,.period-bar,.sidenav,.tabs,.bonus-actions,.btn-syncall,.project-link-btn.warn,.auth-backdrop,.toast{display:none!important}
   .app-shell,.main-content{display:block!important;width:100%!important;max-width:none!important;margin:0!important;padding:0!important;overflow:visible!important}
@@ -3347,16 +3347,16 @@ body.theme-dark .tower-kpis [style*="background:#fff"]{
   body.bonus-print-individual .bonus-exec,
   body.bonus-print-individual .bonus-admin-table.bonus-detail-base,
   body.bonus-print-individual .bonus-observation{display:none!important}
-  body.bonus-print-individual .bonus-report{break-before:auto;page-break-before:auto}
+  body.bonus-print-individual .bonus-report{break-before:auto;page-break-before:auto;width:100%!important;max-width:190mm!important;margin:0 auto!important;transform:none!important;writing-mode:horizontal-tb!important}
   body.bonus-print-individual .bonus-report + .bonus-report{break-before:page;page-break-before:always}
   .bonus-report-head{gap:8px!important}
   .bonus-avatar{width:32px!important;height:32px!important;border-width:1px!important;font-size:14px!important}
-  .bonus-activity-grid{grid-template-columns:repeat(5,minmax(0,1fr))!important;gap:5px!important;padding:7px!important}
+  .bonus-activity-grid{grid-template-columns:repeat(4,minmax(0,1fr))!important;gap:5px!important;padding:7px!important}
   .bonus-activity{min-height:auto!important;padding:6px 7px!important;border-radius:0!important;break-inside:avoid;page-break-inside:avoid}
   .bonus-activity span,.bonus-financial-item span{font-size:7px!important;letter-spacing:0!important}
   .bonus-activity strong{font-size:13px!important;margin-top:3px!important}
   .bonus-activity small{font-size:7px!important;margin-top:2px!important}
-  .bonus-financial{grid-template-columns:repeat(4,minmax(0,1fr))!important;gap:5px!important;padding:0 7px 7px!important}
+  .bonus-financial{grid-template-columns:repeat(2,minmax(0,1fr))!important;gap:5px!important;padding:0 7px 7px!important}
   .bonus-financial-item{padding:6px 7px!important;border-radius:0!important;break-inside:avoid;page-break-inside:avoid}
   .bonus-financial-item strong,.bonus-financial-item.total strong{font-size:12px!important;margin-top:3px!important}
   .bonus-section{padding:6px 7px!important;break-inside:auto!important;page-break-inside:auto!important}
@@ -4718,14 +4718,14 @@ var LAST_UPDATE_KEY = 'gestcsi_last_update_label_v1';
 var PANEL_CACHE_KEY = 'gestcsi_panel_cache_v2';
 var PANEL_SNAPSHOT_KEY = 'gestcsi_portfolio_snapshot_v1';
 var PANEL_SNAPSHOT_SCHEMA = 1;
-var PANEL_APP_VERSION = '2026-07-17-dynamic-portfolio-total-v1';
+var PANEL_APP_VERSION = '2026-08-03-portfolio-197-v1';
 var PANEL_EXPECTED_TOTAL_KEY = 'gestcsi_portfolio_expected_total_v1';
 var THEME_MODE_KEY = 'gestcsi_theme_mode_v1';
 var AUTH_SESSION_KEY = 'gestcsi_auth_session_v1';
 var AUTH_STATE = { token:'', user:null };
 var PANEL_STARTED = false;
 var PANEL_CACHE_MIN_PROJECTS = 80;
-var PANEL_MIN_2026_PROJECTS = 186;
+var PANEL_MIN_2026_PROJECTS = 197;
 function painelMinimoCarteiraBase() {
   var now = new Date();
   return now.getFullYear() === 2026 ? PANEL_MIN_2026_PROJECTS : PANEL_CACHE_MIN_PROJECTS;
