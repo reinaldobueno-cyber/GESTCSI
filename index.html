@@ -4840,7 +4840,7 @@ function iniciarPainelAutenticado() {
   inicializarPainel();
 }
 function inicializarAuth() {
-  authSet(null);
+  authSet(authSession());
 }
 window.loginPainel = loginPainel;
 window.logoutPainel = logoutPainel;
@@ -8425,7 +8425,7 @@ function bonusSaveIndication(button) {
   var data=new FormData(form),params={auth_token:authTokenParam()};
   data.forEach(function(value,key){params[key]=value;});
   if(button){button.disabled=true;button.textContent='Salvando...';}
-  return chamarAppsScriptJsonp('saveBonusSalesIndication',params,15000).then(function(resp){
+  return chamarAppsScriptJsonp('saveBonusSalesIndication',params,90000).then(function(resp){
     if(!resp||resp.ok===false||!resp.item)throw new Error((resp&&resp.error)||'Falha ao salvar indicação.');
     form.reset();
     BONUS_FILTER.month=resp.item.month;
