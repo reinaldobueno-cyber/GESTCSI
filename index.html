@@ -13065,7 +13065,7 @@ var REGIOES = {
   'AL':'Nordeste','BA':'Nordeste','CE':'Nordeste','MA':'Nordeste','PB':'Nordeste','PE':'Nordeste','PI':'Nordeste','RN':'Nordeste','SE':'Nordeste',
   'DF':'Centro-Oeste','GO':'Centro-Oeste','MS':'Centro-Oeste','MT':'Centro-Oeste',
   'ES':'Sudeste','MG':'Sudeste','RJ':'Sudeste','SP':'Sudeste',
-  'PR':'Sul','RS':'Sul','SC':'Sul'
+  'PR':'Sul','RS':'Sul','SC':'Sul','PY':'Paraguai'
 };
 
 // Coordenadas aproximadas de capitais por UF
@@ -13109,14 +13109,22 @@ function parseCidadeInfo(cidade) {
     cidadeNome = raw
       .replace(/(?:-|\/)\s*[A-Z]{2}\s*$/i, '')
       .replace(/\(\s*[A-Z]{2}\s*\)\s*$/i, '')
+      .replace(/[\s\-/]+$/g, '')
       .trim();
     if (/^[A-Z]{2}$/i.test(cidadeNome)) cidadeNome = '';
+  }
+
+  var cidadeNorm = normalizeMapText(cidadeNome);
+  if (cidadeNorm === 'CHAPADAO DO SUL' && uf === 'MT') {
+    cidadeNome = 'Chapadão do Sul';
+    cidadeNorm = 'CHAPADAO DO SUL';
+    uf = 'MS';
   }
 
   return {
     raw: raw,
     cidade: cidadeNome,
-    cidadeNorm: normalizeMapText(cidadeNome),
+    cidadeNorm: cidadeNorm,
     uf: uf
   };
 }
@@ -13438,31 +13446,55 @@ var CIDADES_COORDS = {
 
 var CIDADES_UF_COORDS = {
   'AGUA BOA|MT':[-14.0491,-52.1600],
+  'ALTAMIRA|PA':[-3.2033,-52.2064],
+  'APARECIDA DO RIO DOCE|GO':[-18.2989,-51.1453],
+  'ARAGUAPAZ|GO':[-15.0908,-50.6322],
+  'ARUANA|GO':[-14.9203,-51.0831],
   'BANDEIRANTES DO TOCANTINS|TO':[-7.7561,-48.5844],
   'BARRA DO GARCAS|MT':[-15.8901,-52.2567],
   'BARREIRAS|TO':[-12.1500,-46.0900],
   'BARREIRAS DO TOCANTINS|TO':[-12.1500,-46.0900],
   'CABIXI|RO':[-13.4945,-60.5440],
+  'CACERES|MT':[-16.0706,-57.6789],
   'CASSILANDIA|MS':[-19.1133,-51.7342],
+  'CHAPADAO DO SUL|MS':[-18.7942,-52.6228],
+  'COCALINHO|MT':[-14.3972,-50.9958],
+  'FIGUEIROPOLIS|TO':[-12.1308,-49.1742],
   'FORMOSA|GO':[-15.5372,-47.3344],
   'GONGOCI|BA':[-14.3194,-39.4692],
   'GONGOGI|BA':[-14.3194,-39.4692],
   'GRAJAU|MA':[-5.8194,-46.1386],
+  'GURUPI|TO':[-11.7292,-49.0686],
+  'ITAGIBA|BA':[-14.2836,-39.8428],
+  'LUCELIA|SP':[-21.7203,-51.0189],
   'MARABA|PA':[-5.3686,-49.1178],
   'MATOSINHOS|MG':[-19.5578,-44.0814],
   'MATOZINHOS|MG':[-19.5578,-44.0814],
   'MOZARLANDIA|GO':[-14.7447,-50.5706],
   'NAVIRAI|MS':[-23.0650,-54.1907],
+  'PARAGOMINAS|PA':[-2.9956,-47.3549],
+  'PARAISO DO TOCANTINS|TO':[-10.1761,-48.8667],
+  'PARANAIGUARA|GO':[-18.9158,-50.6539],
+  'PICARRA|PA':[-6.4381,-48.8717],
   'PIRACANJUBA|GO':[-17.3028,-49.0166],
+  'PIRES DO RIO|GO':[-17.2997,-48.2794],
+  'QUERENCIA|MT':[-12.5969,-52.1997],
+  'REDENCAO|PA':[-8.0286,-50.0314],
   'ROSARIO OESTE|MT':[-14.8361,-56.4275],
+  'SALTO DEL GUAIRA|PY':[-24.0633,-54.3076],
   'SAO FELIX DO XINGU|PA':[-6.6425,-51.9904],
+  'SAO GONCALO DOS CAMPOS|BA':[-12.4339,-38.9506],
+  'SAO JOAO NEPOMUCENO|MG':[-21.5400,-43.0106],
   'SAO SEBASTIAO DA GRAMA|SP':[-21.7041,-46.8208],
+  'SANTO ANTONIO DO CAIUA|PR':[-22.7347,-52.3422],
   'SAPUCAIA|PA':[-6.9408,-49.6836],
+  'SIDROLANDIA|MS':[-20.9319,-54.9614],
   'TAPURAH|MT':[-12.7388,-56.5158],
+  'TOME ACU|PA':[-2.4189,-48.1522],
   'XINGUARA|PA':[-7.1006,-49.9433]
 };
 
-var MAP_GEOCODE_CACHE_KEY = 'gestcsi_map_geocode_cache_v1';
+var MAP_GEOCODE_CACHE_KEY = 'gestcsi_map_geocode_cache_v2_exact';
 var _mapGeocodeCache = null;
 var _mapGeocodeInFlight = {};
 var _mapGeocodeRefreshTimer = null;
@@ -13548,6 +13580,10 @@ function geocodeCidadeAutomatica_(info) {
       var lat = Number(first.lat);
       var lon = Number(first.lon);
       if (isNaN(lat) || isNaN(lon)) return false;
+      var address = first.address || {};
+      var iso = String(address['ISO3166-2-lvl4'] || address['ISO3166-2-lvl3'] || '').toUpperCase();
+      if (info.uf && iso && iso.slice(-2) !== info.uf) return false;
+      if (lat < -34 || lat > 6 || lon < -74 || lon > -28) return false;
       cacheMapGeocode_(info, [lat, lon], 'OpenStreetMap');
       return true;
     })
@@ -13599,9 +13635,6 @@ function getCidadeCoordInfo(cidadeStr) {
   }
   var cached = getCachedMapGeocode_(info);
   if (cached) return cached;
-  if (info.uf && UF_COORDS[info.uf]) {
-    return { coords: UF_COORDS[info.uf], aproximado: true, tipo: 'uf' };
-  }
   return null;
 }
 
@@ -13677,7 +13710,7 @@ function buildBrazilMap(projList) {
     '<div style="display:flex;gap:14px;margin-bottom:10px;flex-wrap:wrap">' +
       '<span style="display:flex;align-items:center;gap:5px;font-size:11px;font-weight:600;color:var(--green)"><span style="width:10px;height:10px;border-radius:50%;background:#2d6e4e;display:inline-block"></span>2+ visitas agrupadas</span>' +
       '<span style="display:flex;align-items:center;gap:5px;font-size:11px;font-weight:600;color:var(--orange)"><span style="width:10px;height:10px;border-radius:50%;background:#b85c00;display:inline-block"></span>In Loco</span>' +
-      '<span style="display:flex;align-items:center;gap:5px;font-size:11px;font-weight:600;color:#6f7f75"><span style="width:10px;height:10px;border-radius:50%;background:#6f7f75;border:1px dashed #fff;display:inline-block"></span>Fallback por UF</span>' +
+      '<span style="display:flex;align-items:center;gap:5px;font-size:11px;font-weight:600;color:#6f7f75">Coordenadas exatas por município</span>' +
     '</div>' +
     '<div id="log-map" style="height:500px;border-radius:10px;border:1px solid var(--border);overflow:hidden;"></div>' +
   '</div>';
