@@ -7480,16 +7480,30 @@ function projectClosingLoadCandidates(force, reloadShared) {
       PROJECT_CLOSING_SYNC.active = false;
       PROJECT_CLOSING_SYNC.processed = PROJECT_CLOSING_SYNC.total || PROJECT_CLOSING_SYNC.processed;
       projectClosingSaveCandidatesCache();
-      initProjectClosing();
-      initBonus();
-      initDash();
-      return {
+      var completedResult = {
         ok: true,
         total: PROJECT_CLOSING_CANDIDATES.items.length,
         scanned_total: PROJECT_CLOSING_SYNC.total,
         errors: PROJECT_CLOSING_SYNC.errors,
         items: PROJECT_CLOSING_CANDIDATES.items
       };
+      // A busca pode reconciliar uma decisão final no backend. Recarregue o
+      // histórico antes de recalcular a bonificação; candidatos e decisões são
+      // fontes diferentes e não podem ficar dessincronizadas na mesma tela.
+      PROJECT_CLOSING_DECISIONS.loaded = false;
+      if (!PROJECT_CLOSING_DECISIONS.loading) {
+        return projectClosingLoadDecisions(true).then(function() {
+          initProjectClosing();
+          initBonus();
+          initDash();
+          return completedResult;
+        });
+      }
+      setTimeout(function() { projectClosingLoadDecisions(true); }, 500);
+      initProjectClosing();
+      initBonus();
+      initDash();
+      return completedResult;
     });
   }
   return loadBatch(0).catch(function(error) {
