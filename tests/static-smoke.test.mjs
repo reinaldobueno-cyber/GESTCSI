@@ -26,3 +26,10 @@ test('validates the Apps Script ALL response before accepting it', () => {
   assert.doesNotMatch(html, /apps_script_all_merged/);
   assert.doesNotMatch(html, /apps_script_monthly_merged/);
 });
+
+test('keeps approved project-closing bonuses readable from the immutable sheet', () => {
+  assert.match(html, /function projectClosingLoadDecisionsFromSheet\(\)/);
+  assert.match(html, /gid=533338656/);
+  assert.match(html, /projectClosingMergeDecisionSources/);
+  assert.match(html, /item\.decision === 'approved' \|\| item\.decision === 'rejected'/);
+});

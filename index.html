@@ -7315,23 +7315,66 @@ function projectClosingSearch() {
   }, 0);
   return false;
 }
+function projectClosingLoadDecisionsFromSheet() {
+  var url = 'https://docs.google.com/spreadsheets/d/' + SHEET_ID + '/gviz/tq?gid=533338656&_ts=' + Date.now();
+  return loadGvizTableJsonp(url, 15000).then(function(table) {
+    if (!table) throw new Error('Histórico de fechamento indisponível.');
+    var normalizada = normalizarTabelaGviz(table);
+    return (normalizada.rows || []).map(function(row) {
+      var item = mapearGvizRow(normalizada.cols, row);
+      return {
+        project_key:String(item.project_key || '').trim(),
+        project_name:String(item.project_name || '').trim(),
+        consultant:String(item.consultant || '').trim(),
+        item_id:String(item.item_id || '').trim(),
+        item_name:String(item.item_name || '').trim(),
+        decision:String(item.decision || '').trim().toLowerCase(),
+        notes:String(item.notes || '').trim(),
+        decided_at:String(normalizeGvizDateValue_(item.decided_at) || '').trim(),
+        decided_by:String(item.decided_by || '').trim(),
+        month:String(item.month || '').trim(),
+        bonus_value:Number(item.bonus_value || 0),
+        clickup_status:String(item.clickup_status || '').trim(),
+        clickup_updated_at:String(normalizeGvizDateValue_(item.clickup_updated_at) || '').trim(),
+        project_month:String(item.project_month || '').trim(),
+        item_url:String(item.item_url || '').trim()
+      };
+    }).filter(function(item) {
+      return !!(item.project_key || item.item_id) && (item.decision === 'approved' || item.decision === 'rejected');
+    });
+  });
+}
+function projectClosingMergeDecisionSources(apiItems, sheetItems) {
+  var map = {};
+  (apiItems || []).concat(sheetItems || []).forEach(function(item) {
+    var key = String(item && (item.item_id || item.project_key) || '').trim();
+    if (!key) return;
+    map[key] = Object.assign({}, map[key] || {}, item);
+  });
+  return Object.keys(map).map(function(key) { return map[key]; });
+}
 function projectClosingLoadDecisions(force) {
   if (!authTokenParam() || PROJECT_CLOSING_DECISIONS.loading || (PROJECT_CLOSING_DECISIONS.loaded && !force)) return Promise.resolve(null);
   PROJECT_CLOSING_DECISIONS.loading = true;
-  return chamarAppsScriptJsonp('getProjectClosingDecisions', {auth_token:authTokenParam()}, 20000).then(function(resp) {
+  var apiRequest = chamarAppsScriptJsonp('getProjectClosingDecisions', {auth_token:authTokenParam()}, 20000).then(function(resp) {
     if (resp && resp.service === 'clickup-sync' && !Array.isArray(resp.items)) {
       PROJECT_CLOSING_DECISIONS.backendReady = false;
       throw new Error('Apps Script desatualizado. Implante uma nova versão do Web App.');
     }
     if (!resp || resp.ok === false || !Array.isArray(resp.items)) throw new Error((resp && (resp.error || resp.message)) || 'Falha ao carregar decisões.');
-    PROJECT_CLOSING_DECISIONS.items = resp.items;
+    return resp.items;
+  }).catch(function() { return null; });
+  var sheetRequest = projectClosingLoadDecisionsFromSheet().catch(function() { return null; });
+  return Promise.all([apiRequest, sheetRequest]).then(function(results) {
+    if (!results[0] && !results[1]) throw new Error('Falha ao carregar decisões do fechamento.');
+    PROJECT_CLOSING_DECISIONS.items = projectClosingMergeDecisionSources(results[0], results[1]);
     PROJECT_CLOSING_DECISIONS.loaded = true;
     PROJECT_CLOSING_DECISIONS.loading = false;
-    PROJECT_CLOSING_DECISIONS.backendReady = true;
+    PROJECT_CLOSING_DECISIONS.backendReady = !!results[0];
     PROJECT_CLOSING_DECISIONS.error = '';
     initProjectClosing();
     initBonus();
-    return resp;
+    return {ok:true, items:PROJECT_CLOSING_DECISIONS.items, sheet_source:!!results[1]};
   }).catch(function(error) {
     PROJECT_CLOSING_DECISIONS.loading = false;
     PROJECT_CLOSING_DECISIONS.error = (error && error.message) || 'Falha ao carregar decisões do fechamento.';
