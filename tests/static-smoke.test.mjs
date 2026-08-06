@@ -12,7 +12,8 @@ test('loads the portfolio integrity module before the application script', () =>
 });
 
 test('keeps critical production invariants in the staging build', () => {
-  assert.match(html, /PANEL_MIN_2026_PROJECTS = 197/);
+  assert.match(html, /PANEL_MIN_2026_PROJECTS = 201/);
+  assert.match(html, /PANEL_APP_VERSION = '2026-08-06-portfolio-201-v2'/);
   assert.match(html, /@page\{size:A4 portrait/);
   assert.match(html, /gestcsi_map_geocode_cache_v2_exact/);
   assert.doesNotMatch(html, /Fallback por UF/);

@@ -12,6 +12,29 @@ function projects(count, month = 'JAN') {
   }));
 }
 
+test('accepts the currently verified 201-project portfolio', () => {
+  const list = projects(201);
+  const result = integrity.validateSnapshot({
+    projetos: list,
+    total: 201,
+    projetos_por_mes: { JAN: 201 }
+  }, { minimumTotal: 201, requireDeclaredTotal: true });
+
+  assert.equal(result.ok, true);
+  assert.equal(result.manifest.total, 201);
+});
+
+test('rejects the stale 199-project snapshot', () => {
+  const result = integrity.validateSnapshot({
+    projetos: projects(199),
+    total: 199,
+    projetos_por_mes: { JAN: 199 }
+  }, { minimumTotal: 201, requireDeclaredTotal: true });
+
+  assert.equal(result.ok, false);
+  assert.ok(result.errors.includes('below_minimum_total'));
+});
+
 test('accepts a portfolio whose declared totals match the payload', () => {
   const list = projects(197);
   const result = integrity.validateSnapshot({
