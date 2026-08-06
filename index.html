@@ -4724,6 +4724,7 @@ var PANEL_EXPECTED_TOTAL_KEY = 'gestcsi_portfolio_expected_total_v1';
 var THEME_MODE_KEY = 'gestcsi_theme_mode_v1';
 var AUTH_SESSION_KEY = 'gestcsi_auth_session_v1';
 var AUTH_STATE = { token:'', user:null };
+var AUTH_SESSION_INVALIDATED = false;
 var PANEL_STARTED = false;
 var PANEL_CACHE_MIN_PROJECTS = 80;
 var PANEL_MIN_2026_PROJECTS = 197;
@@ -4859,6 +4860,17 @@ function authSet(session) {
     try { iniciarPainelAutenticado(); } catch(e) {}
   }
 }
+function authResponseIsExpired(resp) {
+  var message = String(resp && (resp.error || resp.message) || '');
+  return /sess[aã]o expirada|sessao expirada|login obrigat[oó]rio/i.test(message);
+}
+function authInvalidateExpiredSession() {
+  if (AUTH_SESSION_INVALIDATED) return;
+  AUTH_SESSION_INVALIDATED = true;
+  PANEL_STARTED = false;
+  authSet(null);
+  showToast('Sua sessão expirou. Entre novamente; a carteira íntegra foi preservada.', 'err');
+}
 function authTokenParam() {
   return AUTH_STATE.token || '';
 }
@@ -4918,6 +4930,7 @@ function loginPainel(form) {
     });
   }).then(function(resp){
     if (!resp || resp.ok === false || !resp.token) throw new Error((resp && (resp.error || resp.message)) || 'Login recusado');
+    AUTH_SESSION_INVALIDATED = false;
     authSet({token:resp.token, user:resp.user});
     ACOMP_REMOTE_LOADED = false;
     ACOMP_REMOTE_ERROR = '';
@@ -5402,6 +5415,7 @@ function chamarAppsScriptJsonp(action, params, timeoutMs) {
       clearTimeout(timer);
       _limparJsonp(cbName);
       performanceRecord('rede.apps_script', performanceStarted, {action:String(action || ''), response_ok:!(resp && resp.ok === false)}, !(resp && resp.ok === false));
+      if (authResponseIsExpired(resp)) authInvalidateExpiredSession();
       resolve(resp || {});
     };
 
@@ -17654,9 +17668,12 @@ function _finalizarLoad(projetos, isRefresh, motivo, tipoAtualizacao) {
       } else {
         console.error('[CONSOLIDADO] Carga parcial sem base completa preservada:', baseInfo.projetos.length, 'mínimo:', minimoCarteira, 'motivo:', motivo);
         cargaParcialBloqueada = true;
-        if (nd) nd.textContent = 'Carga parcial exibida (' + baseInfo.projetos.length + '/' + minimoCarteira + ')';
-        registrarHistoricoAtualizacao({tipo: tipoAtualizacao || 'auto', resultado: 'parcial', motivo: motivo || 'base_parcial_sem_cache', projetos: baseInfo.projetos.length});
-        showToast('Carga parcial exibida. A planilha ainda não retornou a base completa.', 'err');
+        if (nd) nd.textContent = 'Carga parcial bloqueada (' + baseInfo.projetos.length + '/' + minimoCarteira + ')';
+        registrarHistoricoAtualizacao({tipo: tipoAtualizacao || 'auto', resultado: 'bloqueado', motivo: motivo || 'base_parcial_sem_cache', projetos: Array.isArray(DATA.projetos) ? DATA.projetos.length : 0});
+        showToast('Carga parcial bloqueada. A carteira atual não foi substituída.', 'err');
+        var partialError = new Error('Carga parcial bloqueada sem base íntegra de substituição.');
+        partialError._partialHandled = true;
+        throw partialError;
       }
     }
     (baseInfo.projetos || []).slice(0, 25).forEach(function(projetoAtual){

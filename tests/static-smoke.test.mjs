@@ -33,3 +33,10 @@ test('keeps approved project-closing bonuses readable from the immutable sheet',
   assert.match(html, /projectClosingMergeDecisionSources/);
   assert.match(html, /item\.decision === 'approved' \|\| item\.decision === 'rejected'/);
 });
+
+test('invalidates expired browser sessions without replacing the portfolio', () => {
+  assert.match(html, /function authInvalidateExpiredSession\(\)/);
+  assert.match(html, /a carteira íntegra foi preservada/);
+  assert.match(html, /Carga parcial bloqueada sem base íntegra de substituição/);
+  assert.doesNotMatch(html, /Carga parcial exibida\. A planilha ainda não retornou a base completa/);
+});
