@@ -24,6 +24,18 @@ test('accepts the currently verified 201-project portfolio', () => {
   assert.equal(result.manifest.total, 201);
 });
 
+test('automatically accepts a newly added project without changing the configured floor', () => {
+  const candidate = projects(202);
+  const result = integrity.shouldReplaceSnapshot({
+    projetos: candidate,
+    total: 202,
+    projetos_por_mes: { JAN: 202 }
+  }, projects(201), { minimumTotal: 201, requireDeclaredTotal: true });
+
+  assert.equal(result.replace, true);
+  assert.equal(result.manifest.total, 202);
+});
+
 test('rejects the stale 199-project snapshot', () => {
   const result = integrity.validateSnapshot({
     projetos: projects(199),

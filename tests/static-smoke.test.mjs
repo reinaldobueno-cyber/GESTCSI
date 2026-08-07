@@ -13,7 +13,7 @@ test('loads the portfolio integrity module before the application script', () =>
 
 test('keeps critical production invariants in the staging build', () => {
   assert.match(html, /PANEL_MIN_2026_PROJECTS = 201/);
-  assert.match(html, /PANEL_APP_VERSION = '2026-08-07-portfolio-authority-v3'/);
+  assert.match(html, /PANEL_APP_VERSION = '2026-08-07-portfolio-auto-refresh-v4'/);
   assert.match(html, /@page\{size:A4 portrait/);
   assert.match(html, /gestcsi_map_geocode_cache_v2_exact/);
   assert.doesNotMatch(html, /Fallback por UF/);
@@ -35,6 +35,16 @@ test('uses one authoritative portfolio source and never manufactures a hybrid sn
   assert.doesNotMatch(html, /_finalizarLoad\(projetosDiretos/);
   assert.doesNotMatch(html, /painelMesclarBaseParcialComPreservada/);
   assert.doesNotMatch(html, /Carga parcial complementada/);
+});
+
+test('discovers new spreadsheet rows automatically without overlapping full loads', () => {
+  assert.match(html, /PANEL_AUTO_REFRESH_INTERVAL_MS = 5 \* 60 \* 1000/);
+  assert.match(html, /function reconciliarCarteiraAutomatica\(gatilho\)/);
+  assert.match(html, /apps_script_auto_validated/);
+  assert.match(html, /_finalizarLoad\(response\.projetos, true, 'apps_script_auto_validated', 'auto_monitor'\)/);
+  assert.match(html, /visibilitychange/);
+  assert.match(html, /if \(PANEL_LOAD_IN_FLIGHT\)/);
+  assert.doesNotMatch(html, /source: 'google_sheets_client_column'/);
 });
 
 test('keeps approved project-closing bonuses readable from the immutable sheet', () => {

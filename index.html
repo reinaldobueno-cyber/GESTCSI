@@ -4719,8 +4719,15 @@ var LAST_UPDATE_KEY = 'gestcsi_last_update_label_v1';
 var PANEL_CACHE_KEY = 'gestcsi_panel_cache_v2';
 var PANEL_SNAPSHOT_KEY = 'gestcsi_portfolio_snapshot_v1';
 var PANEL_SNAPSHOT_SCHEMA = 1;
-var PANEL_APP_VERSION = '2026-08-07-portfolio-authority-v3';
+var PANEL_APP_VERSION = '2026-08-07-portfolio-auto-refresh-v4';
 var PANEL_EXPECTED_TOTAL_KEY = 'gestcsi_portfolio_expected_total_v1';
+var PANEL_AUTO_REFRESH_INTERVAL_MS = 5 * 60 * 1000;
+var PANEL_AUTO_REFRESH_MIN_GAP_MS = 60 * 1000;
+var PANEL_AUTO_REFRESH_TIMER = null;
+var PANEL_AUTO_REFRESH_IN_FLIGHT = false;
+var PANEL_AUTO_REFRESH_LAST_CHECK_AT = 0;
+var PANEL_AUTO_REFRESH_STARTED = false;
+var PANEL_LOAD_IN_FLIGHT = false;
 var THEME_MODE_KEY = 'gestcsi_theme_mode_v1';
 var AUTH_SESSION_KEY = 'gestcsi_auth_session_v1';
 var AUTH_STATE = { token:'', user:null };
@@ -4730,6 +4737,8 @@ var PANEL_CACHE_MIN_PROJECTS = 80;
 var PANEL_MIN_2026_PROJECTS = 201;
 function painelMinimoCarteiraBase() {
   var now = new Date();
+  // Piso historico de seguranca, nao meta fixa. Totais maiores sao aprendidos
+  // automaticamente depois que o manifesto oficial confirma todas as linhas.
   return now.getFullYear() === 2026 ? PANEL_MIN_2026_PROJECTS : PANEL_CACHE_MIN_PROJECTS;
 }
 function painelMinimoCarteiraAtual() {
@@ -16687,12 +16696,17 @@ function mapearProjetoMensalPorIndice(row, abaTitle) {
     link_projeto: valorCelulaGviz(row, 23)
   };
 }
-function linhaProjetoMensalValida(ro) {
-  var cliente = String(valorRowAlias(ro, ['cliente','nome_cliente','nome_do_cliente']) || '').trim();
+function clienteProjetoMensalValido(cliente) {
+  cliente = String(cliente || '').trim();
   if (!cliente) return false;
   var clienteKey = normalizeClienteKey(cliente);
   if (!clienteKey || ['CLIENTE','NOME CLIENTE','NOME DO CLIENTE'].indexOf(clienteKey) >= 0) return false;
   if (['TOTAL DE PROJETOS','CONSULTOR','VENDEDOR','STATUS','FORMATO','TIPO','PERIODO','MES','INDICADORES GERAIS'].indexOf(clienteKey) >= 0) return false;
+  return true;
+}
+function linhaProjetoMensalValida(ro) {
+  var cliente = String(valorRowAlias(ro, ['cliente','nome_cliente','nome_do_cliente']) || '').trim();
+  if (!clienteProjetoMensalValido(cliente)) return false;
   var dataVendaKey = normalizeClienteKey(valorRowAlias(ro, ['data_venda','data_da_venda']) || '');
   if (dataVendaKey === 'DATA DA VENDA') return false;
   var camposReais = [
@@ -17407,6 +17421,12 @@ function _limparJsonp(cb) {
 }
 
 function loadAll(tipoAtualizacao) {
+  if (PANEL_LOAD_IN_FLIGHT) {
+    console.log('[INIT] Carga ignorada porque já existe outra em andamento:', tipoAtualizacao || '-');
+    return false;
+  }
+  PANEL_LOAD_IN_FLIGHT = true;
+  window._cargaFinalizada = false;
   var performanceLoadStarted = performanceNowMs();
   window._performanceLoadStarted = performanceLoadStarted;
   console.log('[INIT] Iniciando carga principal do painel');
@@ -17563,6 +17583,7 @@ function loadAll(tipoAtualizacao) {
     console.error('[INIT] Erro inesperado na inicialização da carga principal:', error);
     _finalizarLoad([], isRefresh, 'init_error', window._lastUpdateTrigger);
   }
+  return true;
 }
 
 
@@ -17692,6 +17713,9 @@ function _finalizarLoad(projetos, isRefresh, motivo, tipoAtualizacao) {
     }
   }
 
+  // A consolidação síncrona terminou. Liberar antes do render não cria corrida,
+  // pois o navegador só processa o próximo evento depois desta pilha terminar.
+  PANEL_LOAD_IN_FLIGHT = false;
   if (isRefresh) {
     var pageAtiva = document.querySelector('.page.on');
     var snbAtivo  = document.querySelector('.snb.on');
@@ -17722,6 +17746,9 @@ function _finalizarLoad(projetos, isRefresh, motivo, tipoAtualizacao) {
   window._jaCarregou = true;
   window._cargaFinalizada = true;
   window._snapshotAtivo = false;
+  if (String(motivo || '').indexOf('apps_script') === 0) {
+    PANEL_AUTO_REFRESH_LAST_CHECK_AT = Date.now();
+  }
   performanceRecord('painel.carga', performanceLoadStarted, {
     source: motivo || 'desconhecida',
     trigger: tipoAtualizacao || 'auto',
@@ -17729,6 +17756,91 @@ function _finalizarLoad(projetos, isRefresh, motivo, tipoAtualizacao) {
     refresh: !!isRefresh
   }, !!(DATA && Array.isArray(DATA.projetos) && DATA.projetos.length));
   iniciarCargasAuxiliaresPainel();
+}
+
+function painelContagemAtualPorMes() {
+  var byMonth = {};
+  Object.keys(ABAS_GID_FIXAS).forEach(function(mes){ byMonth[mes] = 0; });
+  (DATA && Array.isArray(DATA.projetos) ? DATA.projetos : []).forEach(function(item){
+    var mes = String((item && (item.mes || item.mes_origem)) || '').toUpperCase().trim();
+    if (byMonth.hasOwnProperty(mes)) byMonth[mes] += 1;
+  });
+  return byMonth;
+}
+function painelContagemMensalMudou(nova, atual) {
+  return Object.keys(ABAS_GID_FIXAS).some(function(mes){
+    return Number((nova && nova[mes]) || 0) !== Number((atual && atual[mes]) || 0);
+  });
+}
+function reconciliarCarteiraAutomatica(gatilho) {
+  if (!PANEL_STARTED || !AUTH_STATE.user || document.hidden) return Promise.resolve(false);
+  if (PANEL_AUTO_REFRESH_IN_FLIGHT || PANEL_LOAD_IN_FLIGHT) return Promise.resolve(false);
+  var now = Date.now();
+  if (now - PANEL_AUTO_REFRESH_LAST_CHECK_AT < PANEL_AUTO_REFRESH_MIN_GAP_MS) return Promise.resolve(false);
+  PANEL_AUTO_REFRESH_LAST_CHECK_AT = now;
+  PANEL_AUTO_REFRESH_IN_FLIGHT = true;
+  PANEL_LOAD_IN_FLIGHT = true;
+  return chamarAppsScriptJsonp('getMonthlyProjects', {mes:'ALL'}, 25000).then(function(response){
+    var integrity = window.PortfolioIntegrity.validateSnapshot(response || {}, {
+      minimumTotal: painelMinimoCarteiraAtual(),
+      months: Object.keys(ABAS_GID_FIXAS),
+      requireDeclaredTotal: true
+    });
+    if (!integrity.ok) {
+      console.warn('[CARTEIRA AUTO] Resposta automática recusada:', integrity.errors, integrity.manifest || {});
+      return false;
+    }
+    var manifest = integrity.manifest;
+    var totalAtual = DATA && Array.isArray(DATA.projetos) ? DATA.projetos.length : 0;
+    var mudouMes = painelContagemMensalMudou(manifest.byMonth, painelContagemAtualPorMes());
+    window._portfolioCountAudit = {
+      source: 'apps_script_all_validated',
+      trigger: gatilho || 'timer',
+      declared: Number(response.total),
+      current: totalAtual,
+      by_month: manifest.byMonth,
+      checked_at: new Date().toISOString()
+    };
+    if (manifest.total < totalAtual) {
+      console.warn('[CARTEIRA AUTO] Contagem menor detectada e não promovida:', manifest.total, 'atual:', totalAtual);
+      return false;
+    }
+    if (manifest.total > totalAtual || mudouMes || !totalAtual) {
+      console.warn('[CARTEIRA AUTO] Mudança detectada:', totalAtual, '->', manifest.total, 'gatilho:', gatilho || 'timer');
+      painelRegistrarTotalCarteira(manifest.total, 'apps_script_auto_validated');
+      window._portfolioLoadAudit = {
+        source: 'apps_script_auto_validated',
+        declared: Number(response.total),
+        received: manifest.total,
+        by_month: manifest.byMonth,
+        validated_at: new Date().toISOString()
+      };
+      _finalizarLoad(response.projetos, true, 'apps_script_auto_validated', 'auto_monitor');
+      return true;
+    }
+    console.log('[CARTEIRA AUTO] Carteira conferida sem alterações:', totalAtual);
+    return false;
+  }).catch(function(error){
+    console.warn('[CARTEIRA AUTO] Conferência automática adiada:', error);
+    return false;
+  }).finally(function(){
+    PANEL_AUTO_REFRESH_IN_FLIGHT = false;
+    PANEL_LOAD_IN_FLIGHT = false;
+  });
+}
+function iniciarMonitorCarteiraAutomatica() {
+  if (PANEL_AUTO_REFRESH_STARTED) return;
+  PANEL_AUTO_REFRESH_STARTED = true;
+  PANEL_AUTO_REFRESH_TIMER = window.setInterval(function(){
+    reconciliarCarteiraAutomatica('timer');
+  }, PANEL_AUTO_REFRESH_INTERVAL_MS);
+  document.addEventListener('visibilitychange', function(){
+    if (!document.hidden) reconciliarCarteiraAutomatica('visibility');
+  });
+  window.addEventListener('focus', function(){
+    reconciliarCarteiraAutomatica('focus');
+  });
+  console.log('[CARTEIRA AUTO] Monitor iniciado a cada '+Math.round(PANEL_AUTO_REFRESH_INTERVAL_MS / 60000)+' minuto(s).');
 }
 
 
@@ -17804,6 +17916,7 @@ function inicializarPainel() {
     var ultimoLabel = storageGet(LAST_UPDATE_KEY, '');
     if (ultimoLabel && ndLocal && cacheInicial) ndLocal.textContent = ultimoLabel + ' (cache)';
     loadAll('auto');
+    iniciarMonitorCarteiraAutomatica();
     // Watchdog: garante fallback final caso JSONP não conclua em browsers móveis.
     setTimeout(function(){
       if (window._cargaFinalizada) return;
