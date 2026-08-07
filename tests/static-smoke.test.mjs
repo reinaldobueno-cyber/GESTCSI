@@ -13,7 +13,7 @@ test('loads the portfolio integrity module before the application script', () =>
 
 test('keeps critical production invariants in the staging build', () => {
   assert.match(html, /PANEL_MIN_2026_PROJECTS = 201/);
-  assert.match(html, /PANEL_APP_VERSION = '2026-08-06-portfolio-201-v2'/);
+  assert.match(html, /PANEL_APP_VERSION = '2026-08-07-portfolio-authority-v3'/);
   assert.match(html, /@page\{size:A4 portrait/);
   assert.match(html, /gestcsi_map_geocode_cache_v2_exact/);
   assert.doesNotMatch(html, /Fallback por UF/);
@@ -26,6 +26,15 @@ test('validates the Apps Script ALL response before accepting it', () => {
   assert.match(html, /apps_script_monthly_validated/);
   assert.doesNotMatch(html, /apps_script_all_merged/);
   assert.doesNotMatch(html, /apps_script_monthly_merged/);
+});
+
+test('uses one authoritative portfolio source and never manufactures a hybrid snapshot', () => {
+  assert.match(html, /Aguardando manifesto oficial completo da carteira/);
+  assert.match(html, /Fonte oficial indisponível; nenhuma base parcial será promovida/);
+  assert.match(html, /Planilha validada:[^\n]+DATA\.projetos\.length[^\n]+projetos/);
+  assert.doesNotMatch(html, /_finalizarLoad\(projetosDiretos/);
+  assert.doesNotMatch(html, /painelMesclarBaseParcialComPreservada/);
+  assert.doesNotMatch(html, /Carga parcial complementada/);
 });
 
 test('keeps approved project-closing bonuses readable from the immutable sheet', () => {
