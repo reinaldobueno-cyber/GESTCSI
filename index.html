@@ -2395,7 +2395,8 @@ button.dashx-mini-chip:hover{background:#f3f8f3;border-color:#b9c9b8;}
 .dashx-status-total span{font-size:11px;font-weight:850;color:#69776d;margin-left:4px;}
 .dashx-status-bar-wrap{height:320px;width:100%;display:flex;align-items:flex-end;justify-content:center;}
 .dashx-status-bar{width:min(116px,94%);height:var(--bar-height,0%);min-height:18px;border-radius:10px;background:#f2f5f2;overflow:hidden;display:flex;flex-direction:column-reverse;box-shadow:0 14px 28px rgba(30,43,35,.10),inset 0 0 0 1px rgba(30,43,35,.08);}
-.dashx-status-seg{appearance:none;border:0;border-top:1px solid rgba(255,255,255,.40);width:100%;min-height:22px;padding:0;display:flex;flex-basis:0;align-items:center;justify-content:center;color:#fff;font-size:12px;font-weight:950;cursor:pointer;text-shadow:0 1px 1px rgba(0,0,0,.18);transition:filter .16s ease,transform .16s ease,box-shadow .16s ease;}
+.dashx-status-seg{appearance:none;border:0;border-top:1px solid rgba(255,255,255,.40);width:100%;min-height:var(--seg-min-height,22px);padding:0;display:flex;flex-basis:0;align-items:center;justify-content:center;color:#fff;font-size:12px;font-weight:950;cursor:pointer;text-shadow:0 1px 1px rgba(0,0,0,.18);transition:filter .16s ease,transform .16s ease,box-shadow .16s ease;}
+.dashx-status-bar.compact .dashx-status-seg{font-size:10px}
 .dashx-status-seg:first-child{border-top:0;}
 .dashx-status-seg:hover{filter:saturate(1.08) brightness(1.02);transform:scaleX(1.035);box-shadow:inset 0 0 0 999px rgba(255,255,255,.08);}
 .dashx-status-seg.tone-andamento,.dashx-status-seg.tone-parado{color:#15231c;text-shadow:none;}
@@ -12239,13 +12240,16 @@ function dashRenderStatusStack(items) {
     var total = Number(item.total || 0);
     overallTotal += total;
     order.forEach(function(key){ overallCounts[key] += Number((item.counts && item.counts[key]) || 0); });
+    var activeSegments = order.filter(function(key){ return Number((item.counts && item.counts[key]) || 0) > 0; });
     var barHeight = total ? Math.max(8, Math.round((total / axisMax) * 100)) : 0;
-    var segs = order.map(function(key){
+    var barPixels = total ? Math.max(26, Math.round((barHeight / 100) * 320)) : 0;
+    var segmentMinHeight = activeSegments.length ? Math.max(12, Math.floor(barPixels / activeSegments.length)) : 12;
+    var compactBar = segmentMinHeight < 18;
+    var segs = activeSegments.map(function(key){
       var count = Number((item.counts && item.counts[key]) || 0);
-      if (!count) return '';
       return '<button type="button" class="dashx-status-seg tone-'+key+'" style="flex-grow:'+count+';background:'+colors[key]+'" title="'+labels[key]+': '+count+' projeto(s)" onclick="return dashOpenStatusMonthAudit(\''+jsQuote(item.mes)+'\',\''+key+'\')"><span>'+count+'</span></button>';
     }).join('');
-    return '<div class="dashx-status-col"><div class="dashx-status-total">'+total+'<span>proj.</span></div><div class="dashx-status-bar-wrap"><div class="dashx-status-bar" style="--bar-height:'+barHeight+'%">'+segs+'</div></div><div class="dashx-status-name">'+item.mes+'</div></div>';
+    return '<div class="dashx-status-col"><div class="dashx-status-total">'+total+'<span>proj.</span></div><div class="dashx-status-bar-wrap"><div class="dashx-status-bar '+(compactBar?'compact':'')+'" style="--bar-height:'+barHeight+'%;--seg-min-height:'+segmentMinHeight+'px">'+segs+'</div></div><div class="dashx-status-name">'+item.mes+'</div></div>';
   }).join('');
   var axis = '<div class="dashx-status-axis">'+axisTicks.map(function(value){ return '<span>'+value+'</span>'; }).join('')+'</div>';
   var overallSegs = order.map(function(key) {

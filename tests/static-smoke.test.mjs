@@ -95,3 +95,9 @@ test('uses one canonical name for Anita in milestone closing', () => {
   assert.match(html, /key==='ANITA'\|\|key==='ANITA CRISTINA RODRIGUES TAVARES'/);
   assert.match(html, /return 'Anita Cristina Rodrigues Tavares'/);
 });
+
+test('keeps labels visible in short stacked status bars', () => {
+  assert.match(html, /--seg-min-height,22px/);
+  assert.match(html, /var segmentMinHeight = activeSegments\.length/);
+  assert.match(html, /--seg-min-height:'\+segmentMinHeight\+'px/);
+});
