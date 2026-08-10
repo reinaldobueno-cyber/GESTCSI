@@ -74,3 +74,16 @@ test('invalidates expired browser sessions without replacing the portfolio', () 
   assert.match(html, /Carga parcial bloqueada sem base íntegra de substituição/);
   assert.doesNotMatch(html, /Carga parcial exibida\. A planilha ainda não retornou a base completa/);
 });
+
+test('keeps operational CMAX statuses visible while paying only positive events', async () => {
+  const appsScript = await readFile(new URL('../apps_script/ClickUpSync.gs', import.meta.url), 'utf8');
+
+  assert.match(html, /function cmaxIsPositiveResult\(item\)/);
+  assert.match(html, /if\(!cmaxIsPositiveResult\(item\)\)return false;/);
+  assert.match(html, /Status da agenda/);
+  assert.match(html, /Registros exibidos/);
+  assert.match(html, /cmaxResultLabel\(item\)/);
+  assert.match(appsScript, /A agenda operacional precisa manter todos os resultados do CMAX/);
+  assert.match(appsScript, /return item && item\.mes === month;/);
+  assert.doesNotMatch(appsScript, /item && item\.mes === month && isCmaxPositiveResult_\(item\.resultado\)/);
+});

@@ -9180,7 +9180,10 @@ function fetchCmaxDailyEventsForMonth_(month) {
   var events = candidates.map(function(item) {
     return normalizeCmaxAgendaEvent_(item, syncedAt);
   }).filter(function(item) {
-    return item && item.mes === month && isCmaxPositiveResult_(item.resultado);
+    // A agenda operacional precisa manter todos os resultados do CMAX. A
+    // elegibilidade financeira é decidida no painel, exclusivamente para
+    // registros positivos, sem descartar pendências e confirmações da agenda.
+    return item && item.mes === month;
   });
 
   var unique = {};
