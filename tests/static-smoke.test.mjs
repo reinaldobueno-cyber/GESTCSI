@@ -90,3 +90,8 @@ test('keeps operational CMAX statuses visible while paying only positive events'
   assert.doesNotMatch(appsScript, /item && item\.mes === month && isCmaxPositiveResult_\(item\.resultado\)/);
   assert.doesNotMatch(appsScript, /eventDate && result !== '' && eventSignal !== ''/);
 });
+
+test('uses one canonical name for Anita in milestone closing', () => {
+  assert.match(html, /key==='ANITA'\|\|key==='ANITA CRISTINA RODRIGUES TAVARES'/);
+  assert.match(html, /return 'Anita Cristina Rodrigues Tavares'/);
+});
