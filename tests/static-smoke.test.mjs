@@ -13,9 +13,9 @@ test('loads the portfolio integrity module before the application script', () =>
 
 test('keeps critical production invariants in the staging build', () => {
   assert.match(html, /PANEL_MIN_2026_PROJECTS = 201/);
-  assert.match(html, /PANEL_APP_VERSION = '2026-08-07-portfolio-auto-refresh-v4'/);
+  assert.match(html, /PANEL_APP_VERSION = '2026-08-09-map-country-validation-v5'/);
   assert.match(html, /@page\{size:A4 portrait/);
-  assert.match(html, /gestcsi_map_geocode_cache_v2_exact/);
+  assert.match(html, /gestcsi_map_geocode_cache_v3_country_validated/);
   assert.doesNotMatch(html, /Fallback por UF/);
 });
 
@@ -26,6 +26,20 @@ test('validates the Apps Script ALL response before accepting it', () => {
   assert.match(html, /apps_script_monthly_validated/);
   assert.doesNotMatch(html, /apps_script_all_merged/);
   assert.doesNotMatch(html, /apps_script_monthly_merged/);
+});
+
+test('validates map geocoding by country and state', () => {
+  assert.match(html, /MAP_COUNTRY_PROFILES/);
+  assert.match(html, /countryCode: 'br'/);
+  assert.match(html, /countryCode: 'py'/);
+  assert.match(html, /countrycodes=' \+ profile\.countryCode/);
+  assert.match(html, /countryCode !== profile\.countryCode/);
+  assert.match(html, /profile\.countryCode === 'br'.+iso\.slice\(-2\) !== info\.uf/);
+  assert.match(html, /CUMARU\|PA/);
+  assert.match(html, /GOGO DA ONCA\|PA/);
+  assert.match(html, /jobs\.push\(info\)/);
+  assert.match(html, /setTimeout\(resolve, 1100\)/);
+  assert.doesNotMatch(html, /\|\| CIDADES_COORDS\[info\.cidadeNorm\]/);
 });
 
 test('uses one authoritative portfolio source and never manufactures a hybrid snapshot', () => {

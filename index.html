@@ -4719,7 +4719,7 @@ var LAST_UPDATE_KEY = 'gestcsi_last_update_label_v1';
 var PANEL_CACHE_KEY = 'gestcsi_panel_cache_v2';
 var PANEL_SNAPSHOT_KEY = 'gestcsi_portfolio_snapshot_v1';
 var PANEL_SNAPSHOT_SCHEMA = 1;
-var PANEL_APP_VERSION = '2026-08-07-portfolio-auto-refresh-v4';
+var PANEL_APP_VERSION = '2026-08-09-map-country-validation-v5';
 var PANEL_EXPECTED_TOTAL_KEY = 'gestcsi_portfolio_expected_total_v1';
 var PANEL_AUTO_REFRESH_INTERVAL_MS = 5 * 60 * 1000;
 var PANEL_AUTO_REFRESH_MIN_GAP_MS = 60 * 1000;
@@ -13513,30 +13513,43 @@ var CIDADES_UF_COORDS = {
   'BARRA DO GARCAS|MT':[-15.8901,-52.2567],
   'BARREIRAS|TO':[-12.1500,-46.0900],
   'BARREIRAS DO TOCANTINS|TO':[-12.1500,-46.0900],
+  'BELEM|PA':[-1.4558,-48.5039],
   'CABIXI|RO':[-13.4945,-60.5440],
   'CACERES|MT':[-16.0706,-57.6789],
+  'CAMPO GRANDE|MS':[-20.4697,-54.6201],
   'CASSILANDIA|MS':[-19.1133,-51.7342],
   'CHAPADAO DO SUL|MS':[-18.7942,-52.6228],
   'COCALINHO|MT':[-14.3972,-50.9958],
+  'CUIABA|MT':[-15.6014,-56.0979],
+  'CUMARU DO NORTE|PA':[-7.8100,-50.7700],
+  'DOM ELISEU|PA':[-4.2900,-47.5500],
   'FIGUEIROPOLIS|TO':[-12.1308,-49.1742],
   'FORMOSA|GO':[-15.5372,-47.3344],
+  'FRUTAL|MG':[-20.0247,-48.9409],
   'GONGOCI|BA':[-14.3194,-39.4692],
   'GONGOGI|BA':[-14.3194,-39.4692],
+  'GOIANIA|GO':[-16.6869,-49.2648],
   'GRAJAU|MA':[-5.8194,-46.1386],
   'GURUPI|TO':[-11.7292,-49.0686],
   'ITAGIBA|BA':[-14.2836,-39.8428],
+  'ITIQUIRA|MT':[-17.2147,-54.1422],
+  'JUARA|MT':[-11.2539,-57.5067],
+  'LUCAS DO RIO VERDE|MT':[-13.0588,-55.9042],
   'LUCELIA|SP':[-21.7203,-51.0189],
   'MARABA|PA':[-5.3686,-49.1178],
   'MATOSINHOS|MG':[-19.5578,-44.0814],
   'MATOZINHOS|MG':[-19.5578,-44.0814],
   'MOZARLANDIA|GO':[-14.7447,-50.5706],
+  'MUQUEM DO SAO FRANCISCO|BA':[-12.0656,-43.5497],
   'NAVIRAI|MS':[-23.0650,-54.1907],
   'PARAGOMINAS|PA':[-2.9956,-47.3549],
   'PARAISO DO TOCANTINS|TO':[-10.1761,-48.8667],
   'PARANAIGUARA|GO':[-18.9158,-50.6539],
+  'PEIXOTO DE AZEVEDO|MT':[-10.2262,-54.9794],
   'PICARRA|PA':[-6.4381,-48.8717],
   'PIRACANJUBA|GO':[-17.3028,-49.0166],
   'PIRES DO RIO|GO':[-17.2997,-48.2794],
+  'PIUM|TO':[-10.4420,-49.1870],
   'QUERENCIA|MT':[-12.5969,-52.1997],
   'REDENCAO|PA':[-8.0286,-50.0314],
   'ROSARIO OESTE|MT':[-14.8361,-56.4275],
@@ -13544,16 +13557,55 @@ var CIDADES_UF_COORDS = {
   'SAO FELIX DO XINGU|PA':[-6.6425,-51.9904],
   'SAO GONCALO DOS CAMPOS|BA':[-12.4339,-38.9506],
   'SAO JOAO NEPOMUCENO|MG':[-21.5400,-43.0106],
+  'SAO LUIZ DO NORTE|GO':[-14.8619,-49.3286],
   'SAO SEBASTIAO DA GRAMA|SP':[-21.7041,-46.8208],
+  'SANTA ISABEL|GO':[-15.2950,-49.4260],
   'SANTO ANTONIO DO CAIUA|PR':[-22.7347,-52.3422],
   'SAPUCAIA|PA':[-6.9408,-49.6836],
   'SIDROLANDIA|MS':[-20.9319,-54.9614],
   'TAPURAH|MT':[-12.7388,-56.5158],
   'TOME ACU|PA':[-2.4189,-48.1522],
+  'VILA BELA DA SANTISSIMA TRINDADE|MT':[-15.0068,-59.9504],
+  'VILA GENERAL CARNEIRO|MT':[-15.7090,-52.7570],
+  'VITORIA|ES':[-20.3222,-40.3386],
   'XINGUARA|PA':[-7.1006,-49.9433]
 };
 
-var MAP_GEOCODE_CACHE_KEY = 'gestcsi_map_geocode_cache_v2_exact';
+// Localidades rurais ou abreviadas que chegam da planilha e precisam ser
+// vinculadas ao municipio correto antes de aparecer no mapa.
+var CIDADES_UF_ALIASES = {
+  'CUMARU|PA': {
+    coords: [-7.8100,-50.7700],
+    resolvedLabel: 'Cumaru do Norte - PA',
+    fonte: 'IBGE'
+  },
+  'GOGO DA ONCA|PA': {
+    coords: [-4.2900,-47.5500],
+    resolvedLabel: 'Dom Eliseu - PA',
+    fonte: 'IBGE'
+  }
+};
+
+var MAP_COUNTRY_PROFILES = {
+  BR: {
+    label: 'Brasil',
+    countryCode: 'br',
+    minLat: -34.0,
+    maxLat: 6.0,
+    minLon: -74.0,
+    maxLon: -28.0
+  },
+  PY: {
+    label: 'Paraguai',
+    countryCode: 'py',
+    minLat: -27.7,
+    maxLat: -19.2,
+    minLon: -62.7,
+    maxLon: -54.1
+  }
+};
+
+var MAP_GEOCODE_CACHE_KEY = 'gestcsi_map_geocode_cache_v3_country_validated';
 var _mapGeocodeCache = null;
 var _mapGeocodeInFlight = {};
 var _mapGeocodeRefreshTimer = null;
@@ -13579,11 +13631,38 @@ function getMapGeocodeKey_(info) {
   return (info.cidadeNorm || '') + '|' + (info.uf || '');
 }
 
-function getKnownCidadeCoords_(info) {
+function getMapCountryProfile_(uf) {
+  return uf === 'PY' ? MAP_COUNTRY_PROFILES.PY : MAP_COUNTRY_PROFILES.BR;
+}
+
+function mapCoordsInsideProfile_(profile, lat, lon) {
+  return !!profile &&
+    lat >= profile.minLat && lat <= profile.maxLat &&
+    lon >= profile.minLon && lon <= profile.maxLon;
+}
+
+function getKnownCidadeLocation_(info) {
   if (!info || !info.cidadeNorm) return null;
   var ufKey = getMapGeocodeKey_(info);
-  if (ufKey && CIDADES_UF_COORDS[ufKey]) return CIDADES_UF_COORDS[ufKey];
-  return CIDADES_COORDS[info.cidadeNorm] || null;
+  var alias = ufKey ? CIDADES_UF_ALIASES[ufKey] : null;
+  if (alias) {
+    return {
+      coords: alias.coords,
+      aproximado: false,
+      tipo: 'referencia_municipal',
+      resolvedLabel: alias.resolvedLabel || '',
+      fonte: alias.fonte || 'IBGE'
+    };
+  }
+  // Com UF informada, nunca reaproveita uma cidade homonima de outro estado.
+  // Sem UF, o mapa nao inventa uma localizacao: o cadastro permanece em alerta.
+  var coords = ufKey ? CIDADES_UF_COORDS[ufKey] : null;
+  return coords ? { coords: coords, aproximado: false, tipo: 'cidade' } : null;
+}
+
+function getKnownCidadeCoords_(info) {
+  var loc = getKnownCidadeLocation_(info);
+  return loc ? loc.coords : null;
 }
 
 function getCachedMapGeocode_(info) {
@@ -13593,6 +13672,10 @@ function getCachedMapGeocode_(info) {
   var lat = Number(hit.coords[0]);
   var lon = Number(hit.coords[1]);
   if (isNaN(lat) || isNaN(lon)) return null;
+  var profile = getMapCountryProfile_(info.uf);
+  if (hit.country_code !== profile.countryCode) return null;
+  if (hit.uf && hit.uf !== info.uf) return null;
+  if (!mapCoordsInsideProfile_(profile, lat, lon)) return null;
   return {
     coords: [lat, lon],
     aproximado: false,
@@ -13602,13 +13685,14 @@ function getCachedMapGeocode_(info) {
   };
 }
 
-function cacheMapGeocode_(info, coords, fonte) {
+function cacheMapGeocode_(info, coords, fonte, countryCode) {
   var key = getMapGeocodeKey_(info);
   if (!key || !coords) return;
   getMapGeocodeCache_()[key] = {
     cidade: info.cidade,
     uf: info.uf,
     coords: coords,
+    country_code: countryCode || getMapCountryProfile_(info.uf).countryCode,
     fonte: fonte || 'OpenStreetMap',
     cached_at: new Date().toISOString()
   };
@@ -13626,8 +13710,11 @@ function geocodeCidadeAutomatica_(info) {
   var key = getMapGeocodeKey_(info);
   if (_mapGeocodeInFlight[key]) return _mapGeocodeInFlight[key];
 
-  var query = info.cidade + ' - ' + info.uf + ', Brasil';
-  var url = 'https://nominatim.openstreetmap.org/search?format=jsonv2&limit=1&countrycodes=br&addressdetails=1&q=' + encodeURIComponent(query);
+  var profile = getMapCountryProfile_(info.uf);
+  var query = info.uf === 'PY'
+    ? info.cidade + ', ' + profile.label
+    : info.cidade + ' - ' + info.uf + ', ' + profile.label;
+  var url = 'https://nominatim.openstreetmap.org/search?format=jsonv2&limit=1&countrycodes=' + profile.countryCode + '&addressdetails=1&q=' + encodeURIComponent(query);
   _mapGeocodeInFlight[key] = fetch(url, { headers: { Accept: 'application/json' } })
     .then(function(response) {
       if (!response.ok) return false;
@@ -13640,10 +13727,12 @@ function geocodeCidadeAutomatica_(info) {
       var lon = Number(first.lon);
       if (isNaN(lat) || isNaN(lon)) return false;
       var address = first.address || {};
+      var countryCode = String(address.country_code || '').toLowerCase();
+      if (countryCode !== profile.countryCode) return false;
       var iso = String(address['ISO3166-2-lvl4'] || address['ISO3166-2-lvl3'] || '').toUpperCase();
-      if (info.uf && iso && iso.slice(-2) !== info.uf) return false;
-      if (lat < -34 || lat > 6 || lon < -74 || lon > -28) return false;
-      cacheMapGeocode_(info, [lat, lon], 'OpenStreetMap');
+      if (profile.countryCode === 'br' && info.uf && iso && iso.slice(-2) !== info.uf) return false;
+      if (!mapCoordsInsideProfile_(profile, lat, lon)) return false;
+      cacheMapGeocode_(info, [lat, lon], 'OpenStreetMap', countryCode);
       return true;
     })
     .catch(function() {
@@ -13667,12 +13756,24 @@ function hydrateMapGeocodes_(projList) {
     if (!info.cidadeNorm || !info.uf || seen[key]) return;
     seen[key] = true;
     if (getKnownCidadeCoords_(info) || getCachedMapGeocode_(info)) return;
-    jobs.push(geocodeCidadeAutomatica_(info));
+    jobs.push(info);
   });
   if (!jobs.length) return;
 
-  Promise.all(jobs).then(function(results) {
-    var updated = results.some(function(item) { return !!item; });
+  // Executa em serie para evitar bloqueio/rate limit do geocodificador publico.
+  var updated = false;
+  var chain = Promise.resolve();
+  jobs.forEach(function(info, index) {
+    chain = chain
+      .then(function() { return geocodeCidadeAutomatica_(info); })
+      .then(function(found) {
+        updated = updated || !!found;
+        if (index >= jobs.length - 1) return null;
+        return new Promise(function(resolve) { setTimeout(resolve, 1100); });
+      });
+  });
+
+  chain.then(function() {
     if (!updated) return;
     clearTimeout(_mapGeocodeRefreshTimer);
     _mapGeocodeRefreshTimer = setTimeout(function() {
@@ -13688,9 +13789,9 @@ var _ufLayer = null;
 function getCidadeCoordInfo(cidadeStr) {
   var info = parseCidadeInfo(cidadeStr);
   if (!info.raw) return null;
-  var known = getKnownCidadeCoords_(info);
+  var known = getKnownCidadeLocation_(info);
   if (known) {
-    return { coords: known, aproximado: false, tipo: 'cidade' };
+    return known;
   }
   var cached = getCachedMapGeocode_(info);
   if (cached) return cached;
@@ -13791,7 +13892,8 @@ function initLeafletMap(projList) {
     _lmarkers = [];
     _ufLayer = null;
 
-    var BRAZIL_BOUNDS = L.latLngBounds(L.latLng(-34.0, -74.0), L.latLng(6.0, -28.0));
+    // Area operacional: Brasil e a faixa do Paraguai onde ha projeto cadastrado.
+    var OPERATIONAL_BOUNDS = L.latLngBounds(L.latLng(-34.0, -74.0), L.latLng(6.0, -28.0));
 
     _lmap = L.map(el, {
       zoomControl: true,
@@ -13799,13 +13901,13 @@ function initLeafletMap(projList) {
       scrollWheelZoom: true,
       minZoom: 3,
       maxZoom: 9,
-      maxBounds: BRAZIL_BOUNDS,
+      maxBounds: OPERATIONAL_BOUNDS,
       maxBoundsViscosity: 1.0,
       preferCanvas: true,
       worldCopyJump: false
     });
 
-    _lmap.fitBounds(BRAZIL_BOUNDS, { animate: false });
+    _lmap.fitBounds(OPERATIONAL_BOUNDS, { animate: false });
     _lmap.invalidateSize(true);
 
     L.tileLayer('https://{s}.basemaps.cartocdn.com/light_nolabels/{z}/{x}/{y}{r}.png', {
@@ -13887,7 +13989,7 @@ function initLeafletMap(projList) {
           var fg = L.featureGroup(_lmarkers);
           _lmap.fitBounds(fg.getBounds().pad(0.55), { maxZoom: 5, animate: false });
         } else {
-          _lmap.fitBounds(BRAZIL_BOUNDS, { animate: false });
+          _lmap.fitBounds(OPERATIONAL_BOUNDS, { animate: false });
         }
       } catch(e) {}
     }, 80);
