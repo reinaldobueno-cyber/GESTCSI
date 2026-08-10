@@ -85,5 +85,8 @@ test('keeps operational CMAX statuses visible while paying only positive events'
   assert.match(html, /cmaxResultLabel\(item\)/);
   assert.match(appsScript, /A agenda operacional precisa manter todos os resultados do CMAX/);
   assert.match(appsScript, /return item && item\.mes === month;/);
+  assert.match(appsScript, /Eventos previstos ainda não possuem resultado no CMAX/);
+  assert.match(appsScript, /if \(eventDate && eventSignal !== ''\)/);
   assert.doesNotMatch(appsScript, /item && item\.mes === month && isCmaxPositiveResult_\(item\.resultado\)/);
+  assert.doesNotMatch(appsScript, /eventDate && result !== '' && eventSignal !== ''/);
 });

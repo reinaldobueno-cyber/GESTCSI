@@ -9291,7 +9291,10 @@ function collectCmaxAgendaCandidates_(value, depth, output, seen, inheritedDate)
     'contato', 'contato_texto', 'cliente', 'cliente_nome', 'responsavel', 'responsavel_texto',
     'grupo_evento', 'grupo_evento_texto', 'tipo_evento_texto', 'tipo_comunicacao'
   ]);
-  if (eventDate && result !== '' && eventSignal !== '') {
+  // Eventos previstos ainda não possuem resultado no CMAX. Eles entram na
+  // agenda operacional como "Sem resultado", mas permanecem inelegíveis para
+  // o fechamento, que só contabiliza registros positivos no painel.
+  if (eventDate && eventSignal !== '') {
     if (!ownDate) {
       value = cmaxCloneWithParentDate_(value, eventDate);
     }
