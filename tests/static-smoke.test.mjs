@@ -28,6 +28,15 @@ test('validates the Apps Script ALL response before accepting it', () => {
   assert.doesNotMatch(html, /apps_script_monthly_merged/);
 });
 
+test('allows a cold first access to finish without relying on browser cache', () => {
+  assert.match(html, /PANEL_APPS_SCRIPT_ALL_TIMEOUT_MS = 120000/);
+  assert.match(html, /PANEL_APPS_SCRIPT_MONTH_TIMEOUT_MS = 90000/);
+  assert.match(html, /getMonthlyProjects', \{mes:'ALL'\}, PANEL_APPS_SCRIPT_ALL_TIMEOUT_MS/);
+  assert.match(html, /getMonthlyProjects', \{mes:mes\}, PANEL_APPS_SCRIPT_MONTH_TIMEOUT_MS/);
+  assert.doesNotMatch(html, /getMonthlyProjects', \{mes:'ALL'\}, 25000/);
+  assert.doesNotMatch(html, /getMonthlyProjects', \{mes:mes\}, 18000/);
+});
+
 test('validates map geocoding by country and state', () => {
   assert.match(html, /MAP_COUNTRY_PROFILES/);
   assert.match(html, /countryCode: 'br'/);
