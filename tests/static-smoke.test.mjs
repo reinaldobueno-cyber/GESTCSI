@@ -35,6 +35,9 @@ test('allows a cold first access to finish without relying on browser cache', ()
   assert.match(html, /getMonthlyProjects', \{mes:mes\}, PANEL_APPS_SCRIPT_MONTH_TIMEOUT_MS/);
   assert.doesNotMatch(html, /getMonthlyProjects', \{mes:'ALL'\}, 25000/);
   assert.doesNotMatch(html, /getMonthlyProjects', \{mes:mes\}, 18000/);
+  assert.match(html, /PANEL_LOAD_WATCHDOG_MS = PANEL_APPS_SCRIPT_ALL_TIMEOUT_MS \+ PANEL_APPS_SCRIPT_MONTH_TIMEOUT_MS \+ 30000/);
+  assert.match(html, /Snapshot carregado • atualização ainda processando/);
+  assert.doesNotMatch(html, /\}, 60000\);/);
 });
 
 test('validates map geocoding by country and state', () => {
@@ -86,6 +89,9 @@ test('invalidates expired browser sessions without replacing the portfolio', () 
 
 test('keeps operational CMAX statuses visible while paying only positive events', async () => {
   const appsScript = await readFile(new URL('../apps_script/ClickUpSync.gs', import.meta.url), 'utf8');
+  assert.match(appsScript, /readChunkedCompressedScriptCache_\(cacheKey\)/);
+  assert.match(appsScript, /writeChunkedCompressedScriptCache_\(cacheKey, payload, 900\)/);
+  assert.match(appsScript, /LockService\.getScriptLock\(\)/);
 
   assert.match(html, /function cmaxIsPositiveResult\(item\)/);
   assert.match(html, /if\(!cmaxIsPositiveResult\(item\)\)return false;/);

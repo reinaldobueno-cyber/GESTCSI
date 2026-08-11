@@ -924,6 +924,30 @@ function diagnosticarPrimeiroProjetoClickup() {
 function getMonthlyProjectsPayload_(params) {
   params = params || {};
   var requested = sanitizeMonth_(params.mes || 'ALL');
+  var cacheKey = 'monthly_projects_payload_v1_' + (requested || 'ALL');
+  var cached = readChunkedCompressedScriptCache_(cacheKey);
+  if (cached) {
+    cached.server_cache = 'hit';
+    return cached;
+  }
+  var lock = LockService.getScriptLock();
+  lock.waitLock(180000);
+  try {
+    cached = readChunkedCompressedScriptCache_(cacheKey);
+    if (cached) {
+      cached.server_cache = 'hit_after_wait';
+      return cached;
+    }
+    var payload = buildMonthlyProjectsPayload_(requested);
+    payload.server_cache = 'miss';
+    writeChunkedCompressedScriptCache_(cacheKey, payload, 900);
+    return payload;
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+function buildMonthlyProjectsPayload_(requested) {
   var months = requested && requested !== 'ALL' ? [requested] : MONTHS.slice();
   var projetos = [];
   var byMonth = {};
@@ -940,6 +964,51 @@ function getMonthlyProjectsPayload_(params) {
     projetos_por_mes: byMonth,
     projetos: projetos
   };
+}
+
+function readChunkedCompressedScriptCache_(key) {
+  try {
+    var cache = CacheService.getScriptCache();
+    var metaRaw = cache.get(key + ':meta');
+    if (!metaRaw) return null;
+    var meta = JSON.parse(metaRaw);
+    var count = Number(meta && meta.chunks || 0);
+    if (!count || count > 100) return null;
+    var keys = [];
+    for (var i = 0; i < count; i++) keys.push(key + ':chunk:' + i);
+    var values = cache.getAll(keys);
+    var encoded = '';
+    for (var j = 0; j < keys.length; j++) {
+      if (!values[keys[j]]) return null;
+      encoded += values[keys[j]];
+    }
+    var bytes = Utilities.base64Decode(encoded);
+    var json = Utilities.ungzip(Utilities.newBlob(bytes)).getDataAsString('UTF-8');
+    return JSON.parse(json);
+  } catch (ignored) {
+    return null;
+  }
+}
+
+function writeChunkedCompressedScriptCache_(key, value, seconds) {
+  try {
+    var compressed = Utilities.gzip(Utilities.newBlob(JSON.stringify(value), 'application/json'));
+    var encoded = Utilities.base64Encode(compressed.getBytes());
+    var chunkSize = 80000;
+    var chunks = Math.ceil(encoded.length / chunkSize);
+    if (!chunks || chunks > 100) return false;
+    var ttl = Math.max(60, Math.min(Number(seconds || 900), 21600));
+    var entries = {};
+    for (var i = 0; i < chunks; i++) {
+      entries[key + ':chunk:' + i] = encoded.slice(i * chunkSize, (i + 1) * chunkSize);
+    }
+    var cache = CacheService.getScriptCache();
+    cache.putAll(entries, ttl);
+    cache.put(key + ':meta', JSON.stringify({chunks: chunks}), ttl);
+    return true;
+  } catch (ignored) {
+    return false;
+  }
 }
 
 function getMonthlyProjectsFromSheet_(month) {
