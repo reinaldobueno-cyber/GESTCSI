@@ -924,12 +924,13 @@ function diagnosticarPrimeiroProjetoClickup() {
 function getMonthlyProjectsPayload_(params) {
   params = params || {};
   var requested = sanitizeMonth_(params.mes || 'ALL');
+  var lean = String(params.lean || '') === '1';
   var months = requested && requested !== 'ALL' ? [requested] : MONTHS.slice();
   var projetos = [];
   var byMonth = {};
   months.forEach(function(month) {
     if (MONTHS.indexOf(month) < 0) return;
-    var rows = getMonthlyProjectsFromSheet_(month);
+    var rows = lean ? getMonthlyProjectsLeanFromSheet_(month) : getMonthlyProjectsFromSheet_(month);
     byMonth[month] = rows.length;
     projetos = projetos.concat(rows);
   });
@@ -938,8 +939,43 @@ function getMonthlyProjectsPayload_(params) {
     mes: requested || 'ALL',
     total: projetos.length,
     projetos_por_mes: byMonth,
+    lean: lean,
     projetos: projetos
   };
+}
+
+function monthlyProjectLeanPayload_(project) {
+  var keep = [
+    'mes', 'mes_origem', 'data_venda', 'cliente', 'pacote', 'adicionais', 'tipo',
+    'vendedor', 'consultor', 'consultor2', 'formato', 'cidade', 'data_estimada',
+    'kickoff', 'data_kick', 'clickup', 'data_inicio', 'diarias_cont', 'diarias_real',
+    'diarias_rest', 'acompanhamento', 'data_enc', 'avaliacao_consultor', 'status',
+    'projeto_link', 'link_projeto', 'view_id', 'list_id', '_sheet_row'
+  ];
+  var lean = {};
+  keep.forEach(function(key) {
+    if (project && project[key] !== undefined) lean[key] = project[key];
+  });
+  return lean;
+}
+
+function getMonthlyProjectsLeanFromSheet_(month) {
+  var ss = SpreadsheetApp.openById(getScriptProperty_('SHEET_ID'));
+  var sheet = ss.getSheetByName(month);
+  if (!sheet || sheet.getLastRow() <= 1) return [];
+  var columnCount = Math.min(24, Math.max(1, sheet.getLastColumn()));
+  var values = sheet.getRange(1, 1, sheet.getLastRow(), columnCount).getDisplayValues();
+  var header = normalizeMonthlyHeader_(values[0] || []);
+  var out = [];
+  var ultimaDataVenda = '';
+  values.slice(1).forEach(function(row, index) {
+    var item = monthlyProjectFromRow_(month, header, row, index + 2);
+    if (!item) return;
+    if (item.data_venda) ultimaDataVenda = item.data_venda;
+    else if (ultimaDataVenda) item.data_venda = ultimaDataVenda;
+    out.push(monthlyProjectLeanPayload_(item));
+  });
+  return out;
 }
 
 function getMonthlyProjectsFromSheet_(month) {
