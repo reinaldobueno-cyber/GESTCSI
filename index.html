@@ -4734,7 +4734,6 @@ var PANEL_LOAD_IN_FLIGHT = false;
 // minuto em cold start. Estes limites valem também no primeiro acesso, sem cache.
 var PANEL_APPS_SCRIPT_ALL_TIMEOUT_MS = 120000;
 var PANEL_APPS_SCRIPT_MONTH_TIMEOUT_MS = 90000;
-var PANEL_LOAD_WATCHDOG_MS = PANEL_APPS_SCRIPT_ALL_TIMEOUT_MS + PANEL_APPS_SCRIPT_MONTH_TIMEOUT_MS + 30000;
 var THEME_MODE_KEY = 'gestcsi_theme_mode_v1';
 var AUTH_SESSION_KEY = 'gestcsi_auth_session_v1';
 var AUTH_STATE = { token:'', user:null };
@@ -18053,14 +18052,9 @@ function inicializarPainel() {
     // Watchdog: garante fallback final caso JSONP não conclua em browsers móveis.
     setTimeout(function(){
       if (window._cargaFinalizada) return;
-      if (window._snapshotAtivo && DATA && Array.isArray(DATA.projetos) && DATA.projetos.length) {
-        console.warn('[INIT] Watchdog aguardando atualização; snapshot íntegro continua ativo.');
-        if (ndLocal) ndLocal.textContent = 'Snapshot carregado • atualização ainda processando...';
-        return;
-      }
       console.error('[INIT] Watchdog acionado: carga principal não finalizou.');
       _finalizarLoad([], false, 'watchdog', 'auto');
-    }, PANEL_LOAD_WATCHDOG_MS);
+    }, 60000);
   } catch (error) {
     console.error('[INIT] Erro ao inicializar painel:', error);
     var nd = document.getElementById('nav-date');
