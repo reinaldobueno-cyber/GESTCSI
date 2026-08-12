@@ -16856,7 +16856,7 @@ function carregarProjetosDiretoPlanilha() {
   function carregarAba(aba, tentativa) {
     tentativa = tentativa || 1;
     var url = 'https://docs.google.com/spreadsheets/d/' + SHEET_ID + '/gviz/tq?gid=' + aba.gid + '&_ts=' + Date.now() + '_' + tentativa;
-    return loadGvizTableJsonp(url, 20000).then(function(table){
+    return loadGvizTableJsonp(url, 35000).then(function(table){
       if (!table) throw new Error('Aba respondeu sem tabela');
       var normalizada = normalizarTabelaGviz(table);
       var ultimaDataVendaAba = '';
@@ -17564,15 +17564,9 @@ function loadAll(tipoAtualizacao) {
   var rb = document.getElementById('refresh-bar');
   var isRefresh = window._jaCarregou === true;
   window._lastUpdateTrigger = tipoAtualizacao || (isRefresh ? 'manual' : 'auto');
-  // Uma unica fonte decide a carteira: o manifesto ALL do Apps Script.
-  // A requisicao começa imediatamente para não esperar a varredura Gviz aba a aba.
-  var appsScriptAllPrefetch = APPS_SCRIPT_URL && APPS_SCRIPT_URL.indexOf('AK') >= 0
-    ? chamarAppsScriptJsonp('getMonthlyProjects', {mes:'ALL', lean:1}, 25000).then(function(response){
-        return {ok:true, response:response};
-      }, function(error){
-        return {ok:false, error:error};
-      })
-    : null;
+  // A carteira inicial usa diretamente as abas públicas do Sheets. O Apps Script
+  // permanece como contingência, pois o gateway pode encerrar respostas grandes.
+  var appsScriptAllPrefetch = null;
 
   if (!isRefresh) {
     // Primeiro acesso: mostra overlay, nao renderiza nada ainda
@@ -17599,7 +17593,7 @@ function loadAll(tipoAtualizacao) {
       if (nd) nd.textContent = 'Atualizando por mês...';
       console.warn('[INIT] Apps Script ALL indisponivel/parcial. Buscando por mês:', motivoOrigem || '-');
       return Promise.all(meses.map(function(mes){
-        return chamarAppsScriptJsonp('getMonthlyProjects', {mes:mes, lean:1}, 18000).then(function(respMes){
+        return chamarAppsScriptJsonp('getMonthlyProjects', {mes:mes}, 18000).then(function(respMes){
           var rows = respMes && Array.isArray(respMes.projetos) ? respMes.projetos : [];
           var monthIntegrity = window.PortfolioIntegrity.validateSnapshot(respMes || {}, {
             minimumTotal: 0,
@@ -17664,7 +17658,7 @@ function loadAll(tipoAtualizacao) {
           if (!result || !result.ok) throw (result && result.error) || new Error('Apps Script indisponivel');
           return result.response;
         })
-      : chamarAppsScriptJsonp('getMonthlyProjects', {mes:'ALL', lean:1}, 25000);
+      : chamarAppsScriptJsonp('getMonthlyProjects', {mes:'ALL'}, 25000);
     allRequest.then(function(resp) {
       var qtd = resp && Array.isArray(resp.projetos) ? resp.projetos.length : 0;
       console.log('[2B] Resposta Apps Script recebida. Projetos brutos:', qtd);
@@ -17705,8 +17699,43 @@ function loadAll(tipoAtualizacao) {
   }
 
   try {
-    console.log('[1] Aguardando manifesto oficial completo da carteira');
-    buscarViaAppsScript();
+    console.log('[1] Lendo carteira diretamente das abas mensais');
+    carregarProjetosDiretoPlanilha().then(function(projetosDiretos){
+      var falhas = (projetosDiretos && projetosDiretos._falhas_abas) || [];
+      var byMonth = {};
+      Object.keys(ABAS_GID_FIXAS).forEach(function(mes){ byMonth[mes] = 0; });
+      (projetosDiretos || []).forEach(function(item){
+        var mes = String((item && (item.mes || item.mes_origem)) || '').toUpperCase().trim();
+        if (byMonth.hasOwnProperty(mes)) byMonth[mes] += 1;
+      });
+      var integrity = window.PortfolioIntegrity.validateSnapshot({
+        projetos: projetosDiretos,
+        total: (projetosDiretos || []).length,
+        projetos_por_mes: byMonth,
+        failedMonths: falhas
+      }, {
+        minimumTotal: painelMinimoCarteiraAtual(),
+        months: Object.keys(ABAS_GID_FIXAS),
+        requireDeclaredTotal: true
+      });
+      if (!integrity.ok) {
+        console.error('[CARTEIRA] Leitura direta rejeitada:', integrity.errors, integrity.manifest || {});
+        buscarViaAppsScript(projetosDiretos, 'sheet_direct_invalid');
+        return;
+      }
+      window._portfolioLoadAudit = {
+        source: 'sheet_direct_validated',
+        declared: projetosDiretos.length,
+        received: projetosDiretos.length,
+        by_month: byMonth,
+        validated_at: new Date().toISOString()
+      };
+      painelRegistrarTotalCarteira(projetosDiretos.length, 'sheet_direct_validated');
+      _finalizarLoad(projetosDiretos, isRefresh, 'sheet_direct_validated', window._lastUpdateTrigger);
+    }).catch(function(errorDireto){
+      console.error('[INIT] Leitura direta indisponível; tentando Apps Script:', errorDireto);
+      buscarViaAppsScript([], 'sheet_direct_error');
+    });
   } catch (error) {
     console.error('[INIT] Erro inesperado na inicialização da carga principal:', error);
     _finalizarLoad([], isRefresh, 'init_error', window._lastUpdateTrigger);
@@ -17908,7 +17937,7 @@ function reconciliarCarteiraAutomatica(gatilho) {
   PANEL_AUTO_REFRESH_LAST_CHECK_AT = now;
   PANEL_AUTO_REFRESH_IN_FLIGHT = true;
   PANEL_LOAD_IN_FLIGHT = true;
-  return chamarAppsScriptJsonp('getMonthlyProjects', {mes:'ALL', lean:1}, 25000).then(function(response){
+  return chamarAppsScriptJsonp('getMonthlyProjects', {mes:'ALL'}, 25000).then(function(response){
     var integrity = window.PortfolioIntegrity.validateSnapshot(response || {}, {
       minimumTotal: painelMinimoCarteiraAtual(),
       months: Object.keys(ABAS_GID_FIXAS),
@@ -18049,8 +18078,13 @@ function inicializarPainel() {
     setTimeout(function(){
       if (window._cargaFinalizada) return;
       console.error('[INIT] Watchdog acionado: carga principal não finalizou.');
+      if (window._snapshotAtivo && DATA && Array.isArray(DATA.projetos) && DATA.projetos.length) {
+        console.warn('[INIT] Watchdog preservou o snapshot íntegro já renderizado.');
+        if (ndLocal) ndLocal.textContent = 'Snapshot íntegro preservado • atualização ainda processando';
+        return;
+      }
       _finalizarLoad([], false, 'watchdog', 'auto');
-    }, 60000);
+    }, 150000);
   } catch (error) {
     console.error('[INIT] Erro ao inicializar painel:', error);
     var nd = document.getElementById('nav-date');

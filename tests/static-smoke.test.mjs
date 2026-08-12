@@ -42,13 +42,20 @@ test('validates map geocoding by country and state', () => {
   assert.doesNotMatch(html, /\|\| CIDADES_COORDS\[info\.cidadeNorm\]/);
 });
 
-test('uses one authoritative portfolio source and never manufactures a hybrid snapshot', () => {
-  assert.match(html, /Aguardando manifesto oficial completo da carteira/);
+test('validates the direct monthly-sheet portfolio and never manufactures a hybrid snapshot', () => {
+  assert.match(html, /Lendo carteira diretamente das abas mensais/);
+  assert.match(html, /sheet_direct_validated/);
   assert.match(html, /Fonte oficial indisponível; nenhuma base parcial será promovida/);
   assert.match(html, /Planilha validada:[^\n]+DATA\.projetos\.length[^\n]+projetos/);
-  assert.doesNotMatch(html, /_finalizarLoad\(projetosDiretos/);
+  assert.match(html, /_finalizarLoad\(projetosDiretos, isRefresh, 'sheet_direct_validated'/);
   assert.doesNotMatch(html, /painelMesclarBaseParcialComPreservada/);
   assert.doesNotMatch(html, /Carga parcial complementada/);
+});
+
+test('allows slow monthly tabs without letting the watchdog erase a valid snapshot', () => {
+  assert.match(html, /loadGvizTableJsonp\(url, 35000\)/);
+  assert.match(html, /Watchdog preservou o snapshot íntegro já renderizado/);
+  assert.match(html, /\}, 150000\);/);
 });
 
 test('discovers new spreadsheet rows automatically without overlapping full loads', () => {
@@ -78,17 +85,6 @@ test('shows the same consultant follow-up notifications to every authenticated v
   assert.doesNotMatch(source, /canUserAccessProjectItem_/);
   assert.match(appsScript, /function getSharedProjectFollowups_\(limit\)/);
   assert.match(appsScript, /kanban_states: getProjectKanbanStates_\(\)/);
-});
-
-test('loads the portfolio from a private materialized lean snapshot', async () => {
-  const appsScript = await readFile(new URL('../apps_script/ClickUpSync.gs', import.meta.url), 'utf8');
-  assert.match(html, /getMonthlyProjects', \{mes:'ALL', lean:1\}, 25000/);
-  assert.match(appsScript, /MONTHLY_LEAN_SNAPSHOT_SHEET = 'PANEL_MONTHLY_LEAN'/);
-  assert.match(appsScript, /function monthlyLeanSnapshotIsValid_\(snapshot\)/);
-  assert.match(appsScript, /return sum === snapshot\.projetos\.length/);
-  assert.match(appsScript, /function refreshMonthlyLeanSnapshot\(\)/);
-  assert.match(appsScript, /sheet\.hideSheet\(\)/);
-  assert.match(html, /if \(m\.clickup_json && !p\.clickup_json\) p\.clickup_json = m\.clickup_json/);
 });
 
 test('invalidates expired browser sessions without replacing the portfolio', () => {
