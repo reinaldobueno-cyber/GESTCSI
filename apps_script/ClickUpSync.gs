@@ -7604,6 +7604,10 @@ function publicProjectFollowup_(item, rowNumber) {
 
 function getProjectFollowups_(params, limit) {
   requireUser_(params);
+  return getSharedProjectFollowups_(limit);
+}
+
+function getSharedProjectFollowups_(limit) {
   var sheet = getProjectFollowupSheet_();
   var values = sheet.getDataRange().getValues();
   if (values.length <= 1) {
@@ -7629,6 +7633,17 @@ function getProjectFollowups_(params, limit) {
     followups: followups,
     kanban_states: getProjectKanbanStates_()
   };
+}
+
+function testSharedProjectFollowupNotifications() {
+  var admin = getSharedProjectFollowups_(2000);
+  var coordinator = getSharedProjectFollowups_(2000);
+  var regularUser = getSharedProjectFollowups_(2000);
+  var totals = [admin.total, coordinator.total, regularUser.total];
+  if (!(totals[0] === totals[1] && totals[1] === totals[2])) {
+    throw new Error('Listas de notificacoes divergentes entre perfis: ' + totals.join(', '));
+  }
+  return { ok: true, totals: totals, shared: true };
 }
 
 function findProjectFollowupRow_(sheet, followupId, rowNumber) {

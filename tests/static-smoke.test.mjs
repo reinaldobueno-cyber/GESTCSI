@@ -74,8 +74,11 @@ test('shows the same consultant follow-up notifications to every authenticated v
   const end = appsScript.indexOf('\nfunction findProjectFollowupRow_', start);
   const source = appsScript.slice(start, end);
   assert.match(source, /requireUser_\(params\)/);
+  assert.match(source, /return getSharedProjectFollowups_\(limit\)/);
   assert.doesNotMatch(source, /canUserAccessProjectItem_/);
-  assert.match(source, /kanban_states: getProjectKanbanStates_\(\)/);
+  assert.match(appsScript, /function getSharedProjectFollowups_\(limit\)/);
+  assert.match(appsScript, /kanban_states: getProjectKanbanStates_\(\)/);
+  assert.match(appsScript, /function testSharedProjectFollowupNotifications\(\)/);
 });
 
 test('invalidates expired browser sessions without replacing the portfolio', () => {
