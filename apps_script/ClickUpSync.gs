@@ -35,6 +35,10 @@ var CLICKUP_PROJECT_DELIVERY_CUSTOM_ITEM_IDS = ['1001'];
 var CLICKUP_MILESTONE_AUDIT_TASK_IDS = [];
 var CLICKUP_MILESTONE_CLOSING_SCHEMA_VERSION = 'strict-milestones-v2';
 var MONTHS = ['JAN', 'FEV', 'MAR', 'ABR', 'MAI', 'JUN', 'JUL', 'AGO', 'SET', 'OUT', 'NOV', 'DEZ'];
+var MONTHLY_LEAN_SNAPSHOT_SCHEMA = 1;
+var MONTHLY_LEAN_SNAPSHOT_SHEET = 'PANEL_MONTHLY_LEAN';
+var MONTHLY_LEAN_SNAPSHOT_MAX_AGE_MS = 5 * 60 * 1000;
+var MONTHLY_LEAN_SNAPSHOT_CHUNK_SIZE = 40000;
 var HISTORICAL_CLICKUP_SPACES = [
   { name: 'CSI-PROJETOS-ENGORDA', space_id: '90130063112', url: 'https://app.clickup.com/9007083069/v/s/90130063112' },
   { name: 'CSI-PROJETOS-CICLO COMPLETO', space_id: '90130064659', url: 'https://app.clickup.com/9007083069/v/s/90130064659' },
@@ -924,6 +928,8 @@ function diagnosticarPrimeiroProjetoClickup() {
 function getMonthlyProjectsPayload_(params) {
   params = params || {};
   var requested = sanitizeMonth_(params.mes || 'ALL');
+  var lean = String(params.lean || '') === '1';
+  if (lean) return getMonthlyProjectsLeanPayload_(requested, params);
   var months = requested && requested !== 'ALL' ? [requested] : MONTHS.slice();
   var projetos = [];
   var byMonth = {};
@@ -940,6 +946,183 @@ function getMonthlyProjectsPayload_(params) {
     projetos_por_mes: byMonth,
     projetos: projetos
   };
+}
+
+function getMonthlyProjectsLeanPayload_(requested, params) {
+  var namespace = String(params && params.snapshot_namespace || '').toUpperCase() === 'HOMO' ? 'HOMO' : 'PROD';
+  var snapshot = readMonthlyLeanSnapshot_(namespace);
+  if (!snapshot) {
+    var lock = LockService.getScriptLock();
+    lock.waitLock(180000);
+    try {
+      snapshot = readMonthlyLeanSnapshot_(namespace);
+      if (!snapshot) {
+        snapshot = buildMonthlyLeanSnapshot_();
+        writeMonthlyLeanSnapshot_(snapshot, namespace);
+      }
+    } finally {
+      lock.releaseLock();
+    }
+  } else if (monthlyLeanSnapshotIsStale_(snapshot) && namespace === 'PROD') {
+    scheduleMonthlyLeanSnapshotRefresh_();
+  }
+  return monthlyLeanPayloadFromSnapshot_(snapshot, requested);
+}
+
+function monthlyProjectLeanPayload_(project) {
+  var keep = [
+    'mes', 'mes_origem', 'data_venda', 'cliente', 'pacote', 'adicionais', 'tipo',
+    'vendedor', 'consultor', 'consultor2', 'formato', 'cidade', 'data_estimada',
+    'kickoff', 'data_kick', 'clickup', 'data_inicio', 'diarias_cont', 'diarias_real',
+    'diarias_rest', 'acompanhamento', 'data_enc', 'avaliacao_consultor', 'status',
+    'projeto_link', 'link_projeto', 'view_id', 'list_id', '_sheet_row'
+  ];
+  var lean = {};
+  keep.forEach(function(key) {
+    if (project && project[key] !== undefined) lean[key] = project[key];
+  });
+  return lean;
+}
+
+function getMonthlyProjectsLeanFromSheet_(month) {
+  var ss = SpreadsheetApp.openById(getScriptProperty_('SHEET_ID'));
+  var sheet = ss.getSheetByName(month);
+  if (!sheet || sheet.getLastRow() <= 1) return [];
+  var columnCount = Math.min(24, Math.max(1, sheet.getLastColumn()));
+  var values = sheet.getRange(1, 1, sheet.getLastRow(), columnCount).getDisplayValues();
+  var header = normalizeMonthlyHeader_(values[0] || []);
+  var out = [];
+  var ultimaDataVenda = '';
+  values.slice(1).forEach(function(row, index) {
+    var item = monthlyProjectFromRow_(month, header, row, index + 2);
+    if (!item) return;
+    if (item.data_venda) ultimaDataVenda = item.data_venda;
+    else if (ultimaDataVenda) item.data_venda = ultimaDataVenda;
+    out.push(monthlyProjectLeanPayload_(item));
+  });
+  return out;
+}
+
+function buildMonthlyLeanSnapshot_() {
+  var projects = [];
+  var byMonth = {};
+  MONTHS.forEach(function(month) {
+    var rows = getMonthlyProjectsLeanFromSheet_(month);
+    byMonth[month] = rows.length;
+    projects = projects.concat(rows);
+  });
+  return {
+    schema_version: MONTHLY_LEAN_SNAPSHOT_SCHEMA,
+    status: 'complete',
+    generated_at: new Date().toISOString(),
+    total: projects.length,
+    projetos_por_mes: byMonth,
+    projetos: projects
+  };
+}
+
+function monthlyLeanSnapshotSheetName_(namespace) {
+  return MONTHLY_LEAN_SNAPSHOT_SHEET + (namespace === 'HOMO' ? '_HOMO' : '');
+}
+
+function monthlyLeanSnapshotIsValid_(snapshot) {
+  if (!snapshot || snapshot.schema_version !== MONTHLY_LEAN_SNAPSHOT_SCHEMA || snapshot.status !== 'complete') return false;
+  if (!Array.isArray(snapshot.projetos) || Number(snapshot.total) !== snapshot.projetos.length) return false;
+  var sum = MONTHS.reduce(function(total, month) {
+    return total + Number((snapshot.projetos_por_mes || {})[month] || 0);
+  }, 0);
+  return sum === snapshot.projetos.length;
+}
+
+function monthlyLeanSnapshotIsStale_(snapshot) {
+  var generatedAt = Date.parse(String(snapshot && snapshot.generated_at || ''));
+  return !isFinite(generatedAt) || (new Date().getTime() - generatedAt) > MONTHLY_LEAN_SNAPSHOT_MAX_AGE_MS;
+}
+
+function monthlyLeanPayloadFromSnapshot_(snapshot, requested) {
+  var month = requested && requested !== 'ALL' ? requested : 'ALL';
+  var projects = month === 'ALL' ? snapshot.projetos : snapshot.projetos.filter(function(project) {
+    return sanitizeMonth_(project && (project.mes || project.mes_origem)) === month;
+  });
+  var byMonth = {};
+  if (month === 'ALL') {
+    MONTHS.forEach(function(item) { byMonth[item] = Number(snapshot.projetos_por_mes[item] || 0); });
+  } else if (MONTHS.indexOf(month) >= 0) {
+    byMonth[month] = projects.length;
+  }
+  return {
+    ok: true,
+    mes: month,
+    total: projects.length,
+    projetos_por_mes: byMonth,
+    projetos: projects,
+    lean: true,
+    materialized: true,
+    generated_at: snapshot.generated_at
+  };
+}
+
+function readMonthlyLeanSnapshot_(namespace) {
+  try {
+    var ss = SpreadsheetApp.openById(getScriptProperty_('SHEET_ID'));
+    var sheet = ss.getSheetByName(monthlyLeanSnapshotSheetName_(namespace));
+    if (!sheet || sheet.getLastRow() < 2) return null;
+    var values = sheet.getRange(1, 1, sheet.getLastRow(), 1).getDisplayValues();
+    var meta = JSON.parse(String(values[0][0] || '{}'));
+    var chunks = Number(meta.chunks || 0);
+    if (meta.schema_version !== MONTHLY_LEAN_SNAPSHOT_SCHEMA || meta.status !== 'complete' || !chunks || values.length < chunks + 1) return null;
+    var json = values.slice(1, chunks + 1).map(function(row) { return String(row[0] || ''); }).join('');
+    var snapshot = JSON.parse(json);
+    return monthlyLeanSnapshotIsValid_(snapshot) ? snapshot : null;
+  } catch (error) {
+    Logger.log('Snapshot leve indisponivel: ' + simplifyErrorMessage_(error));
+    return null;
+  }
+}
+
+function writeMonthlyLeanSnapshot_(snapshot, namespace) {
+  if (!monthlyLeanSnapshotIsValid_(snapshot)) throw new Error('Snapshot leve incompleto; gravacao recusada.');
+  var json = JSON.stringify(snapshot);
+  var chunks = [];
+  for (var offset = 0; offset < json.length; offset += MONTHLY_LEAN_SNAPSHOT_CHUNK_SIZE) {
+    chunks.push([json.slice(offset, offset + MONTHLY_LEAN_SNAPSHOT_CHUNK_SIZE)]);
+  }
+  var ss = SpreadsheetApp.openById(getScriptProperty_('SHEET_ID'));
+  var name = monthlyLeanSnapshotSheetName_(namespace);
+  var sheet = ss.getSheetByName(name) || ss.insertSheet(name);
+  sheet.clearContents();
+  sheet.getRange(1, 1).setValue(JSON.stringify({
+    schema_version: MONTHLY_LEAN_SNAPSHOT_SCHEMA,
+    status: 'complete',
+    generated_at: snapshot.generated_at,
+    total: snapshot.total,
+    chunks: chunks.length
+  }));
+  if (chunks.length) sheet.getRange(2, 1, chunks.length, 1).setValues(chunks);
+  try { sheet.hideSheet(); } catch (ignored) {}
+  return { ok: true, total: snapshot.total, chunks: chunks.length, namespace: namespace };
+}
+
+function scheduleMonthlyLeanSnapshotRefresh_() {
+  var props = PropertiesService.getScriptProperties();
+  if (props.getProperty('MONTHLY_LEAN_REFRESH_SCHEDULED') === '1') return;
+  props.setProperty('MONTHLY_LEAN_REFRESH_SCHEDULED', '1');
+  ScriptApp.newTrigger('refreshMonthlyLeanSnapshot').timeBased().after(1000).create();
+}
+
+function refreshMonthlyLeanSnapshot() {
+  var props = PropertiesService.getScriptProperties();
+  var lock = LockService.getScriptLock();
+  try {
+    lock.waitLock(180000);
+    return writeMonthlyLeanSnapshot_(buildMonthlyLeanSnapshot_(), 'PROD');
+  } finally {
+    props.deleteProperty('MONTHLY_LEAN_REFRESH_SCHEDULED');
+    ScriptApp.getProjectTriggers().forEach(function(trigger) {
+      if (trigger.getHandlerFunction() === 'refreshMonthlyLeanSnapshot') ScriptApp.deleteTrigger(trigger);
+    });
+    try { lock.releaseLock(); } catch (ignored) {}
+  }
 }
 
 function getMonthlyProjectsFromSheet_(month) {
