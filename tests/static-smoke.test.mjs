@@ -80,6 +80,19 @@ test('shows the same consultant follow-up notifications to every authenticated v
   assert.match(appsScript, /kanban_states: getProjectKanbanStates_\(\)/);
 });
 
+test('serves the complete monthly portfolio from a private validated snapshot', async () => {
+  const appsScript = await readFile(new URL('../apps_script/ClickUpSync.gs', import.meta.url), 'utf8');
+  assert.match(appsScript, /MONTHLY_PROJECTS_SNAPSHOT_SHEET = 'PANEL_MONTHLY_SNAPSHOT'/);
+  assert.match(appsScript, /function monthlyProjectsSnapshotIsValid_\(snapshot\)/);
+  assert.match(appsScript, /Number\(snapshot\.total\) !== snapshot\.projetos\.length/);
+  assert.match(appsScript, /return sum === snapshot\.projetos\.length/);
+  assert.match(appsScript, /Utilities\.gzip/);
+  assert.match(appsScript, /Utilities\.ungzip/);
+  assert.match(appsScript, /sheet\.hideSheet\(\)/);
+  assert.match(appsScript, /function refreshMonthlyProjectsSnapshot\(\)/);
+  assert.match(appsScript, /snapshot_namespace/);
+});
+
 test('invalidates expired browser sessions without replacing the portfolio', () => {
   assert.match(html, /function authInvalidateExpiredSession\(\)/);
   assert.match(html, /a carteira íntegra foi preservada/);
