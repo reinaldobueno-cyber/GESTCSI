@@ -35,10 +35,6 @@ var CLICKUP_PROJECT_DELIVERY_CUSTOM_ITEM_IDS = ['1001'];
 var CLICKUP_MILESTONE_AUDIT_TASK_IDS = [];
 var CLICKUP_MILESTONE_CLOSING_SCHEMA_VERSION = 'strict-milestones-v2';
 var MONTHS = ['JAN', 'FEV', 'MAR', 'ABR', 'MAI', 'JUN', 'JUL', 'AGO', 'SET', 'OUT', 'NOV', 'DEZ'];
-var MONTHLY_PROJECTS_SNAPSHOT_SCHEMA = 1;
-var MONTHLY_PROJECTS_SNAPSHOT_SHEET = 'PANEL_MONTHLY_SNAPSHOT';
-var MONTHLY_PROJECTS_SNAPSHOT_MAX_AGE_MS = 5 * 60 * 1000;
-var MONTHLY_PROJECTS_SNAPSHOT_CHUNK_SIZE = 40000;
 var HISTORICAL_CLICKUP_SPACES = [
   { name: 'CSI-PROJETOS-ENGORDA', space_id: '90130063112', url: 'https://app.clickup.com/9007083069/v/s/90130063112' },
   { name: 'CSI-PROJETOS-CICLO COMPLETO', space_id: '90130064659', url: 'https://app.clickup.com/9007083069/v/s/90130064659' },
@@ -928,153 +924,22 @@ function diagnosticarPrimeiroProjetoClickup() {
 function getMonthlyProjectsPayload_(params) {
   params = params || {};
   var requested = sanitizeMonth_(params.mes || 'ALL');
-  var namespace = String(params.snapshot_namespace || '').toUpperCase() === 'HOMO' ? 'HOMO' : 'PROD';
-  var snapshot = readMonthlyProjectsSnapshot_(namespace);
-  if (snapshot) {
-    if (monthlyProjectsSnapshotIsStale_(snapshot) && namespace === 'PROD') {
-      scheduleMonthlyProjectsSnapshotRefresh_();
-    }
-    return monthlyProjectsPayloadFromSnapshot_(snapshot, requested);
-  }
-
-  var lock = LockService.getScriptLock();
-  lock.waitLock(180000);
-  try {
-    snapshot = readMonthlyProjectsSnapshot_(namespace);
-    if (!snapshot) {
-      snapshot = buildMonthlyProjectsSnapshot_();
-      writeMonthlyProjectsSnapshot_(snapshot, namespace);
-    }
-    return monthlyProjectsPayloadFromSnapshot_(snapshot, requested);
-  } finally {
-    lock.releaseLock();
-  }
-}
-
-function buildMonthlyProjectsSnapshot_() {
+  var months = requested && requested !== 'ALL' ? [requested] : MONTHS.slice();
   var projetos = [];
   var byMonth = {};
-  MONTHS.forEach(function(month) {
+  months.forEach(function(month) {
+    if (MONTHS.indexOf(month) < 0) return;
     var rows = getMonthlyProjectsFromSheet_(month);
     byMonth[month] = rows.length;
     projetos = projetos.concat(rows);
   });
   return {
     ok: true,
-    schema_version: MONTHLY_PROJECTS_SNAPSHOT_SCHEMA,
-    status: 'complete',
-    generated_at: new Date().toISOString(),
+    mes: requested || 'ALL',
     total: projetos.length,
     projetos_por_mes: byMonth,
     projetos: projetos
   };
-}
-
-function monthlyProjectsSnapshotSheetName_(namespace) {
-  return MONTHLY_PROJECTS_SNAPSHOT_SHEET + (namespace === 'HOMO' ? '_HOMO' : '');
-}
-
-function monthlyProjectsSnapshotIsValid_(snapshot) {
-  if (!snapshot || snapshot.schema_version !== MONTHLY_PROJECTS_SNAPSHOT_SCHEMA || snapshot.status !== 'complete') return false;
-  if (!Array.isArray(snapshot.projetos) || Number(snapshot.total) !== snapshot.projetos.length) return false;
-  var declared = snapshot.projetos_por_mes || {};
-  var sum = MONTHS.reduce(function(total, month) { return total + Number(declared[month] || 0); }, 0);
-  return sum === snapshot.projetos.length;
-}
-
-function monthlyProjectsSnapshotIsStale_(snapshot) {
-  var generatedAt = Date.parse(String(snapshot && snapshot.generated_at || ''));
-  return !isFinite(generatedAt) || (new Date().getTime() - generatedAt) > MONTHLY_PROJECTS_SNAPSHOT_MAX_AGE_MS;
-}
-
-function monthlyProjectsPayloadFromSnapshot_(snapshot, requested) {
-  var month = requested && requested !== 'ALL' ? requested : 'ALL';
-  var projects = month === 'ALL' ? snapshot.projetos : snapshot.projetos.filter(function(project) {
-    return sanitizeMonth_(project && (project.mes || project.mes_origem)) === month;
-  });
-  var byMonth = {};
-  if (month === 'ALL') {
-    MONTHS.forEach(function(item) { byMonth[item] = Number(snapshot.projetos_por_mes[item] || 0); });
-  } else if (MONTHS.indexOf(month) >= 0) {
-    byMonth[month] = projects.length;
-  }
-  return {
-    ok: true,
-    mes: month,
-    total: projects.length,
-    projetos_por_mes: byMonth,
-    projetos: projects,
-    snapshot: true,
-    snapshot_generated_at: snapshot.generated_at
-  };
-}
-
-function readMonthlyProjectsSnapshot_(namespace) {
-  try {
-    var ss = SpreadsheetApp.openById(getScriptProperty_('SHEET_ID'));
-    var sheet = ss.getSheetByName(monthlyProjectsSnapshotSheetName_(namespace));
-    if (!sheet || sheet.getLastRow() < 2) return null;
-    var values = sheet.getRange(1, 1, sheet.getLastRow(), 1).getDisplayValues();
-    var meta = JSON.parse(String(values[0][0] || '{}'));
-    if (meta.schema_version !== MONTHLY_PROJECTS_SNAPSHOT_SCHEMA || meta.status !== 'complete') return null;
-    var chunks = Number(meta.chunks || 0);
-    if (!chunks || values.length < chunks + 1) return null;
-    var encoded = values.slice(1, chunks + 1).map(function(row) { return String(row[0] || ''); }).join('');
-    var bytes = Utilities.base64Decode(encoded);
-    var snapshot = JSON.parse(Utilities.ungzip(Utilities.newBlob(bytes)).getDataAsString('UTF-8'));
-    return monthlyProjectsSnapshotIsValid_(snapshot) ? snapshot : null;
-  } catch (error) {
-    Logger.log('Snapshot mensal indisponivel: ' + simplifyErrorMessage_(error));
-    return null;
-  }
-}
-
-function writeMonthlyProjectsSnapshot_(snapshot, namespace) {
-  if (!monthlyProjectsSnapshotIsValid_(snapshot)) throw new Error('Snapshot mensal incompleto; gravacao recusada.');
-  var compressed = Utilities.gzip(Utilities.newBlob(JSON.stringify(snapshot), 'application/json'));
-  var encoded = Utilities.base64Encode(compressed.getBytes());
-  var chunks = [];
-  for (var offset = 0; offset < encoded.length; offset += MONTHLY_PROJECTS_SNAPSHOT_CHUNK_SIZE) {
-    chunks.push([encoded.slice(offset, offset + MONTHLY_PROJECTS_SNAPSHOT_CHUNK_SIZE)]);
-  }
-  var ss = SpreadsheetApp.openById(getScriptProperty_('SHEET_ID'));
-  var name = monthlyProjectsSnapshotSheetName_(namespace);
-  var sheet = ss.getSheetByName(name) || ss.insertSheet(name);
-  var meta = [[JSON.stringify({
-    schema_version: MONTHLY_PROJECTS_SNAPSHOT_SCHEMA,
-    status: 'complete',
-    generated_at: snapshot.generated_at,
-    total: snapshot.total,
-    chunks: chunks.length
-  })]];
-  sheet.clearContents();
-  sheet.getRange(1, 1, 1, 1).setValues(meta);
-  if (chunks.length) sheet.getRange(2, 1, chunks.length, 1).setValues(chunks);
-  try { sheet.hideSheet(); } catch (ignored) {}
-  return { ok: true, total: snapshot.total, chunks: chunks.length, namespace: namespace };
-}
-
-function scheduleMonthlyProjectsSnapshotRefresh_() {
-  var props = PropertiesService.getScriptProperties();
-  if (props.getProperty('MONTHLY_PROJECTS_SNAPSHOT_REFRESH_SCHEDULED') === '1') return;
-  props.setProperty('MONTHLY_PROJECTS_SNAPSHOT_REFRESH_SCHEDULED', '1');
-  ScriptApp.newTrigger('refreshMonthlyProjectsSnapshot').timeBased().after(1000).create();
-}
-
-function refreshMonthlyProjectsSnapshot() {
-  var props = PropertiesService.getScriptProperties();
-  var lock = LockService.getScriptLock();
-  try {
-    lock.waitLock(180000);
-    var snapshot = buildMonthlyProjectsSnapshot_();
-    return writeMonthlyProjectsSnapshot_(snapshot, 'PROD');
-  } finally {
-    props.deleteProperty('MONTHLY_PROJECTS_SNAPSHOT_REFRESH_SCHEDULED');
-    ScriptApp.getProjectTriggers().forEach(function(trigger) {
-      if (trigger.getHandlerFunction() === 'refreshMonthlyProjectsSnapshot') ScriptApp.deleteTrigger(trigger);
-    });
-    try { lock.releaseLock(); } catch (ignored) {}
-  }
 }
 
 function getMonthlyProjectsFromSheet_(month) {
