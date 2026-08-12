@@ -7603,7 +7603,7 @@ function publicProjectFollowup_(item, rowNumber) {
 }
 
 function getProjectFollowups_(params, limit) {
-  var user = requireUser_(params);
+  requireUser_(params);
   var sheet = getProjectFollowupSheet_();
   var values = sheet.getDataRange().getValues();
   if (values.length <= 1) {
@@ -7612,27 +7612,22 @@ function getProjectFollowups_(params, limit) {
   var header = values[0];
   var rows = values.slice(1);
   var max = Math.max(1, Math.min(Number(limit || 1000), 5000));
-  var visibleProjectKeys = {};
   var visibleEntries = rows.map(function(row, index) {
     var item = rowToObject_(header, row);
     return {
       item: item,
       row_number: index + 2
     };
-  }).filter(function(entry) {
-    return canUserAccessProjectItem_(user, entry.item);
   });
   var start = Math.max(0, visibleEntries.length - max);
   var followups = visibleEntries.slice(start).map(function(entry) {
-    var projectKey = sanitizeText_(entry.item.project_key).toUpperCase();
-    if (projectKey) visibleProjectKeys[projectKey] = true;
     return publicProjectFollowup_(entry.item, entry.row_number);
   }).reverse();
   return {
     ok: true,
     total: visibleEntries.length,
     followups: followups,
-    kanban_states: getProjectKanbanStates_(userHasFullProjectAccess_(user) ? null : visibleProjectKeys)
+    kanban_states: getProjectKanbanStates_()
   };
 }
 

@@ -68,6 +68,16 @@ test('keeps approved project-closing bonuses readable from the immutable sheet',
   assert.match(html, /item\.decision === 'approved' \|\| item\.decision === 'rejected'/);
 });
 
+test('shows the same consultant follow-up notifications to every authenticated viewer', async () => {
+  const appsScript = await readFile(new URL('../apps_script/ClickUpSync.gs', import.meta.url), 'utf8');
+  const start = appsScript.indexOf('function getProjectFollowups_(');
+  const end = appsScript.indexOf('\nfunction findProjectFollowupRow_', start);
+  const source = appsScript.slice(start, end);
+  assert.match(source, /requireUser_\(params\)/);
+  assert.doesNotMatch(source, /canUserAccessProjectItem_/);
+  assert.match(source, /kanban_states: getProjectKanbanStates_\(\)/);
+});
+
 test('invalidates expired browser sessions without replacing the portfolio', () => {
   assert.match(html, /function authInvalidateExpiredSession\(\)/);
   assert.match(html, /a carteira íntegra foi preservada/);
