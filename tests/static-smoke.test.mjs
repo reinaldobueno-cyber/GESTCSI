@@ -13,7 +13,8 @@ test('loads the portfolio integrity module before the application script', () =>
 
 test('keeps critical production invariants in the staging build', () => {
   assert.match(html, /PANEL_MIN_2026_PROJECTS = 201/);
-  assert.match(html, /PANEL_APP_VERSION = '2026-08-09-map-country-validation-v5'/);
+  assert.match(html, /PANEL_SNAPSHOT_SCHEMA = 2/);
+  assert.match(html, /PANEL_APP_VERSION = '2026-08-12-materialized-portfolio-v1'/);
   assert.match(html, /@page\{size:A4 portrait/);
   assert.match(html, /gestcsi_map_geocode_cache_v3_country_validated/);
   assert.doesNotMatch(html, /Fallback por UF/);
@@ -42,12 +43,18 @@ test('validates map geocoding by country and state', () => {
   assert.doesNotMatch(html, /\|\| CIDADES_COORDS\[info\.cidadeNorm\]/);
 });
 
-test('validates the direct monthly-sheet portfolio and never manufactures a hybrid snapshot', () => {
-  assert.match(html, /Lendo carteira diretamente das abas mensais/);
-  assert.match(html, /sheet_direct_validated/);
+test('validates the materialized portfolio sheet and never manufactures a hybrid snapshot', () => {
+  assert.match(html, /Lendo aba técnica consolidada da carteira/);
+  assert.match(html, /MONTHLY_PORTFOLIO_BROWSER_GID = '1667939534'/);
+  assert.match(html, /snapshot_generation/);
+  assert.match(html, /snapshot_month_counts/);
+  assert.match(html, /sheet_materialized_validated/);
+  assert.match(html, /\{mes:'ALL', lean:1, compressed:1\}/);
+  assert.match(html, /new DecompressionStream\('gzip'\)/);
+  assert.match(html, /\{mes:'ALL', lean:1\}/);
   assert.match(html, /Fonte oficial indisponível; nenhuma base parcial será promovida/);
   assert.match(html, /Planilha validada:[^\n]+DATA\.projetos\.length[^\n]+projetos/);
-  assert.match(html, /_finalizarLoad\(projetosDiretos, isRefresh, 'sheet_direct_validated'/);
+  assert.match(html, /_finalizarLoad\(resp\.projetos, isRefresh, 'apps_script_all_validated'/);
   assert.doesNotMatch(html, /painelMesclarBaseParcialComPreservada/);
   assert.doesNotMatch(html, /Carga parcial complementada/);
 });
@@ -61,8 +68,8 @@ test('allows slow monthly tabs without letting the watchdog erase a valid snapsh
 test('discovers new spreadsheet rows automatically without overlapping full loads', () => {
   assert.match(html, /PANEL_AUTO_REFRESH_INTERVAL_MS = 5 \* 60 \* 1000/);
   assert.match(html, /function reconciliarCarteiraAutomatica\(gatilho\)/);
-  assert.match(html, /apps_script_auto_validated/);
-  assert.match(html, /_finalizarLoad\(response\.projetos, true, 'apps_script_auto_validated', 'auto_monitor'\)/);
+  assert.match(html, /sheet_materialized_auto_validated/);
+  assert.match(html, /_finalizarLoad\(response, true, 'sheet_materialized_auto_validated', 'auto_monitor'\)/);
   assert.match(html, /visibilitychange/);
   assert.match(html, /if \(PANEL_LOAD_IN_FLIGHT\)/);
   assert.doesNotMatch(html, /source: 'google_sheets_client_column'/);

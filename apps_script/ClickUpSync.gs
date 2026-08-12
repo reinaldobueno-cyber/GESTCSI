@@ -35,6 +35,14 @@ var CLICKUP_PROJECT_DELIVERY_CUSTOM_ITEM_IDS = ['1001'];
 var CLICKUP_MILESTONE_AUDIT_TASK_IDS = [];
 var CLICKUP_MILESTONE_CLOSING_SCHEMA_VERSION = 'strict-milestones-v2';
 var MONTHS = ['JAN', 'FEV', 'MAR', 'ABR', 'MAI', 'JUN', 'JUL', 'AGO', 'SET', 'OUT', 'NOV', 'DEZ'];
+var MONTHLY_PORTFOLIO_SNAPSHOT_SCHEMA = 1;
+var MONTHLY_PORTFOLIO_SNAPSHOT_MANIFEST_KEY = 'MONTHLY_PORTFOLIO_SNAPSHOT_MANIFEST_V1';
+var MONTHLY_PORTFOLIO_SNAPSHOT_REFRESH_FLAG = 'MONTHLY_PORTFOLIO_SNAPSHOT_REFRESH_SCHEDULED_V1';
+var MONTHLY_PORTFOLIO_SNAPSHOT_CHUNK_SIZE = 4000;
+var MONTHLY_PORTFOLIO_SNAPSHOT_MAX_AGE_MS = 5 * 60 * 1000;
+var MONTHLY_PORTFOLIO_BROWSER_SHEET = 'PANEL_MONTHLY_BROWSER';
+var MONTHLY_PORTFOLIO_BROWSER_BUILD_SHEET = 'PANEL_MONTHLY_BROWSER_BUILD';
+var MONTHLY_PORTFOLIO_BROWSER_BACKUP_SHEET = 'PANEL_MONTHLY_BROWSER_BACKUP';
 var HISTORICAL_CLICKUP_SPACES = [
   { name: 'CSI-PROJETOS-ENGORDA', space_id: '90130063112', url: 'https://app.clickup.com/9007083069/v/s/90130063112' },
   { name: 'CSI-PROJETOS-CICLO COMPLETO', space_id: '90130064659', url: 'https://app.clickup.com/9007083069/v/s/90130064659' },
@@ -924,6 +932,43 @@ function diagnosticarPrimeiroProjetoClickup() {
 function getMonthlyProjectsPayload_(params) {
   params = params || {};
   var requested = sanitizeMonth_(params.mes || 'ALL');
+  if (String(params.lean || '') === '1') {
+    if (String(params.compressed || '') === '1') {
+      var compressedPayload = getMonthlyPortfolioCompressedPayload_();
+      if (compressedPayload && (String(params.refresh || '') === '1' || monthlyPortfolioSnapshotIsStale_(compressedPayload.generated_at))) {
+        scheduleMonthlyPortfolioSnapshotRefresh_();
+      }
+      if (compressedPayload) return compressedPayload;
+      scheduleMonthlyPortfolioSnapshotRefresh_();
+      return { ok:false, snapshot_pending:true, total:0, projetos_por_mes:{}, error:'Snapshot compacto em preparação.' };
+    }
+    if (String(params.manifest || '') === '1') {
+      var manifestPayload = getMonthlyPortfolioSnapshotManifest_();
+      if (manifestPayload && (String(params.refresh || '') === '1' || monthlyPortfolioSnapshotIsStale_(manifestPayload.generated_at))) {
+        scheduleMonthlyPortfolioSnapshotRefresh_();
+      }
+      if (manifestPayload) return manifestPayload;
+      scheduleMonthlyPortfolioSnapshotRefresh_();
+      return { ok:false, snapshot_pending:true, total:0, projetos_por_mes:{}, error:'Snapshot mensal em preparação.' };
+    }
+    var snapshotPayload = getMonthlyPortfolioSnapshotPayload_(requested);
+    if (snapshotPayload) {
+      if (String(params.refresh || '') === '1' || monthlyPortfolioSnapshotIsStale_(snapshotPayload.generated_at)) {
+        scheduleMonthlyPortfolioSnapshotRefresh_();
+      }
+      return snapshotPayload;
+    }
+    scheduleMonthlyPortfolioSnapshotRefresh_();
+    return {
+      ok: false,
+      mes: requested || 'ALL',
+      total: 0,
+      projetos_por_mes: {},
+      projetos: [],
+      snapshot_pending: true,
+      error: 'Snapshot mensal em preparação.'
+    };
+  }
   var months = requested && requested !== 'ALL' ? [requested] : MONTHS.slice();
   var projetos = [];
   var byMonth = {};
@@ -940,6 +985,293 @@ function getMonthlyProjectsPayload_(params) {
     projetos_por_mes: byMonth,
     projetos: projetos
   };
+}
+
+function monthlyPortfolioSnapshotProject_(project) {
+  var keep = [
+    'mes', 'mes_origem', 'data_venda', 'cliente', 'pacote', 'adicionais', 'tipo',
+    'vendedor', 'consultor', 'consultor2', 'formato', 'cidade', 'data_estimada',
+    'kickoff', 'data_kick', 'clickup', 'data_inicio', 'diarias_cont', 'diarias_real',
+    'diarias_rest', 'acompanhamento', 'data_enc', 'avaliacao_consultor', 'status',
+    'projeto_link', 'link_projeto', 'view_id', 'list_id', '_sheet_row'
+  ];
+  var out = {};
+  keep.forEach(function(key) {
+    if (project && project[key] !== undefined) out[key] = project[key];
+  });
+  return out;
+}
+
+function getMonthlyPortfolioRowsLean_(month) {
+  var ss = SpreadsheetApp.openById(getScriptProperty_('SHEET_ID'));
+  var sheet = ss.getSheetByName(month);
+  if (!sheet || sheet.getLastRow() <= 1) return [];
+  var columns = Math.min(24, Math.max(1, sheet.getLastColumn()));
+  var values = sheet.getRange(1, 1, sheet.getLastRow(), columns).getDisplayValues();
+  var header = normalizeMonthlyHeader_(values[0] || []);
+  var out = [];
+  var ultimaDataVenda = '';
+  values.slice(1).forEach(function(row, index) {
+    var item = monthlyProjectFromRow_(month, header, row, index + 2);
+    if (!item) return;
+    if (item.data_venda) ultimaDataVenda = item.data_venda;
+    else if (ultimaDataVenda) item.data_venda = ultimaDataVenda;
+    out.push(monthlyPortfolioSnapshotProject_(item));
+  });
+  return out;
+}
+
+function monthlyPortfolioSnapshotPrefix_(generation, month) {
+  return 'MONTHLY_PORTFOLIO_SNAPSHOT_V1_' + generation + '_' + month + '_';
+}
+
+function writeMonthlyPortfolioSnapshot_() {
+  var props = PropertiesService.getScriptProperties();
+  var previous = null;
+  try { previous = JSON.parse(props.getProperty(MONTHLY_PORTFOLIO_SNAPSHOT_MANIFEST_KEY) || 'null'); } catch (ignored) {}
+  var generation = String(new Date().getTime());
+  var byMonth = {};
+  var chunksByMonth = {};
+  var total = 0;
+  var pending = {};
+  var allRows = [];
+  MONTHS.forEach(function(month) {
+    var rows = getMonthlyPortfolioRowsLean_(month);
+    var json = JSON.stringify(rows);
+    var chunks = Math.max(1, Math.ceil(json.length / MONTHLY_PORTFOLIO_SNAPSHOT_CHUNK_SIZE));
+    byMonth[month] = rows.length;
+    chunksByMonth[month] = chunks;
+    total += rows.length;
+    allRows = allRows.concat(rows);
+    for (var index = 0; index < chunks; index += 1) {
+      pending[monthlyPortfolioSnapshotPrefix_(generation, month) + index] = json.slice(
+        index * MONTHLY_PORTFOLIO_SNAPSHOT_CHUNK_SIZE,
+        (index + 1) * MONTHLY_PORTFOLIO_SNAPSHOT_CHUNK_SIZE
+      );
+    }
+  });
+  if (total < 201) throw new Error('Snapshot mensal incompleto; total ' + total + ' abaixo do piso 201.');
+  writeMonthlyPortfolioBrowserSheet_(allRows, byMonth, generation);
+  var compressed = Utilities.base64Encode(Utilities.gzip(Utilities.newBlob(JSON.stringify(allRows), 'application/json')).getBytes());
+  var compressedChunks = Math.max(1, Math.ceil(compressed.length / MONTHLY_PORTFOLIO_SNAPSHOT_CHUNK_SIZE));
+  for (var compressedIndex = 0; compressedIndex < compressedChunks; compressedIndex += 1) {
+    pending[monthlyPortfolioSnapshotPrefix_(generation, 'ALL_GZIP') + compressedIndex] = compressed.slice(
+      compressedIndex * MONTHLY_PORTFOLIO_SNAPSHOT_CHUNK_SIZE,
+      (compressedIndex + 1) * MONTHLY_PORTFOLIO_SNAPSHOT_CHUNK_SIZE
+    );
+  }
+  props.setProperties(pending, false);
+  var manifest = {
+    schema_version: MONTHLY_PORTFOLIO_SNAPSHOT_SCHEMA,
+    status: 'complete',
+    generation: generation,
+    generated_at: new Date().toISOString(),
+    total: total,
+    projetos_por_mes: byMonth,
+    chunks_por_mes: chunksByMonth,
+    compressed_chunks: compressedChunks
+  };
+  props.setProperty(MONTHLY_PORTFOLIO_SNAPSHOT_MANIFEST_KEY, JSON.stringify(manifest));
+  if (previous && previous.generation && previous.generation !== generation) {
+    MONTHS.forEach(function(month) {
+      var oldChunks = Number((previous.chunks_por_mes || {})[month] || 0);
+      for (var index = 0; index < oldChunks; index += 1) {
+        props.deleteProperty(monthlyPortfolioSnapshotPrefix_(previous.generation, month) + index);
+      }
+    });
+    var oldCompressedChunks = Number(previous.compressed_chunks || 0);
+    for (var compressedIndex = 0; compressedIndex < oldCompressedChunks; compressedIndex += 1) {
+      props.deleteProperty(monthlyPortfolioSnapshotPrefix_(previous.generation, 'ALL_GZIP') + compressedIndex);
+    }
+  }
+  return manifest;
+}
+
+function writeMonthlyPortfolioBrowserSheet_(rows, byMonth, generation) {
+  var headers = [
+    'data_venda', 'cliente', 'pacote', 'adicionais', 'tipo', 'vendedor', 'observacoes',
+    'consultor', 'consultor2', 'formato', 'cidade', 'data_estimada', 'kickoff', 'data_kick',
+    'clickup', 'data_inicio', 'diarias_cont', 'diarias_real', 'diarias_rest', 'acompanhamento',
+    'data_enc', 'avaliacao_consultor', 'status', 'projeto_link', 'mes',
+    'snapshot_generation', 'snapshot_total', 'snapshot_month_counts', 'source_sheet_row'
+  ];
+  rows = Array.isArray(rows) ? rows : [];
+  if (rows.length < 201) throw new Error('Aba técnica incompleta; gravação recusada.');
+  var ss = SpreadsheetApp.openById(getScriptProperty_('SHEET_ID'));
+  var build = ss.getSheetByName(MONTHLY_PORTFOLIO_BROWSER_BUILD_SHEET) || ss.insertSheet(MONTHLY_PORTFOLIO_BROWSER_BUILD_SHEET);
+  build.clearContents();
+  var monthCountsJson = JSON.stringify(byMonth || {});
+  var values = [headers].concat(rows.map(function(project) {
+    return headers.map(function(header) {
+      if (header === 'observacoes') return '';
+      if (header === 'snapshot_generation') return generation;
+      if (header === 'snapshot_total') return rows.length;
+      if (header === 'snapshot_month_counts') return monthCountsJson;
+      if (header === 'source_sheet_row') return project && project._sheet_row || '';
+      return project && project[header] !== undefined && project[header] !== null ? project[header] : '';
+    });
+  }));
+  build.getRange(1, 1, values.length, headers.length).setValues(values);
+  SpreadsheetApp.flush();
+  if (build.getLastRow() !== values.length || build.getLastColumn() < headers.length) {
+    throw new Error('Validação da aba técnica falhou antes da troca.');
+  }
+  try { build.setFrozenRows(1); } catch (ignoredFreeze) {}
+  try { build.setTabColor('#2d6e4e'); } catch (ignoredColor) {}
+
+  var active = ss.getSheetByName(MONTHLY_PORTFOLIO_BROWSER_SHEET) || ss.insertSheet(MONTHLY_PORTFOLIO_BROWSER_SHEET);
+  var backup = ss.getSheetByName(MONTHLY_PORTFOLIO_BROWSER_BACKUP_SHEET) || ss.insertSheet(MONTHLY_PORTFOLIO_BROWSER_BACKUP_SHEET);
+  var activeRows = active.getLastRow();
+  var activeColumns = active.getLastColumn();
+  backup.clearContents();
+  if (activeRows && activeColumns) {
+    var activeValues = active.getRange(1, 1, activeRows, activeColumns).getValues();
+    backup.getRange(1, 1, activeRows, activeColumns).setValues(activeValues);
+  }
+  try {
+    active.getRange(1, 1, values.length, headers.length).setValues(values);
+    if (activeRows > values.length) active.getRange(values.length + 1, 1, activeRows - values.length, Math.max(activeColumns, headers.length)).clearContent();
+    SpreadsheetApp.flush();
+    if (active.getLastRow() !== values.length || String(active.getRange(2, 26).getDisplayValue()) !== String(generation)) {
+      throw new Error('Validação da aba técnica ativa falhou após a atualização.');
+    }
+  } catch (writeError) {
+    if (activeRows && activeColumns) {
+      var backupValues = backup.getRange(1, 1, activeRows, activeColumns).getValues();
+      active.clearContents();
+      active.getRange(1, 1, activeRows, activeColumns).setValues(backupValues);
+      SpreadsheetApp.flush();
+    }
+    throw writeError;
+  }
+  build.clearContents();
+  try { backup.hideSheet(); } catch (ignoredBackupVisibility) {}
+  try { build.hideSheet(); } catch (ignoredBuildVisibility) {}
+  return { sheet:MONTHLY_PORTFOLIO_BROWSER_SHEET, sheet_id:active.getSheetId(), rows:rows.length, generation:generation };
+}
+
+function getMonthlyPortfolioCompressedPayload_() {
+  var props = PropertiesService.getScriptProperties();
+  var values = props.getProperties();
+  var manifest;
+  try { manifest = JSON.parse(values[MONTHLY_PORTFOLIO_SNAPSHOT_MANIFEST_KEY] || 'null'); } catch (ignored) { return null; }
+  if (!manifest || manifest.schema_version !== MONTHLY_PORTFOLIO_SNAPSHOT_SCHEMA || manifest.status !== 'complete') return null;
+  var chunks = Number(manifest.compressed_chunks || 0);
+  if (!chunks) return null;
+  var compressed = '';
+  for (var index = 0; index < chunks; index += 1) {
+    var chunk = values[monthlyPortfolioSnapshotPrefix_(manifest.generation, 'ALL_GZIP') + index];
+    if (chunk === undefined || chunk === null) return null;
+    compressed += chunk;
+  }
+  var byMonth = {};
+  var sum = 0;
+  MONTHS.forEach(function(month) {
+    byMonth[month] = Number((manifest.projetos_por_mes || {})[month] || 0);
+    sum += byMonth[month];
+  });
+  if (sum !== Number(manifest.total || 0) || sum < 201) return null;
+  return {
+    ok: true,
+    mes: 'ALL',
+    total: sum,
+    projetos_por_mes: byMonth,
+    projetos_gzip_base64: compressed,
+    encoding: 'gzip-base64',
+    materialized: true,
+    generated_at: manifest.generated_at
+  };
+}
+
+function getMonthlyPortfolioSnapshotPayload_(requested) {
+  var props = PropertiesService.getScriptProperties();
+  var manifest;
+  try { manifest = JSON.parse(props.getProperty(MONTHLY_PORTFOLIO_SNAPSHOT_MANIFEST_KEY) || 'null'); } catch (ignored) { return null; }
+  if (!manifest || manifest.schema_version !== MONTHLY_PORTFOLIO_SNAPSHOT_SCHEMA || manifest.status !== 'complete') return null;
+  var months = requested && requested !== 'ALL' ? [requested] : MONTHS.slice();
+  var projects = [];
+  for (var monthIndex = 0; monthIndex < months.length; monthIndex += 1) {
+    var month = months[monthIndex];
+    if (MONTHS.indexOf(month) < 0) continue;
+    var chunks = Number((manifest.chunks_por_mes || {})[month] || 0);
+    if (!chunks) return null;
+    var json = '';
+    for (var index = 0; index < chunks; index += 1) {
+      var chunk = props.getProperty(monthlyPortfolioSnapshotPrefix_(manifest.generation, month) + index);
+      if (chunk === null) return null;
+      json += chunk;
+    }
+    var rows;
+    try { rows = JSON.parse(json); } catch (ignoredParse) { return null; }
+    if (!Array.isArray(rows) || rows.length !== Number((manifest.projetos_por_mes || {})[month] || 0)) return null;
+    projects = projects.concat(rows);
+  }
+  var byMonth = {};
+  months.forEach(function(month) { if (MONTHS.indexOf(month) >= 0) byMonth[month] = Number(manifest.projetos_por_mes[month] || 0); });
+  return {
+    ok: true,
+    mes: requested || 'ALL',
+    total: projects.length,
+    projetos_por_mes: byMonth,
+    projetos: projects,
+    lean: true,
+    materialized: true,
+    generated_at: manifest.generated_at
+  };
+}
+
+function getMonthlyPortfolioSnapshotManifest_() {
+  var manifest;
+  try {
+    manifest = JSON.parse(PropertiesService.getScriptProperties().getProperty(MONTHLY_PORTFOLIO_SNAPSHOT_MANIFEST_KEY) || 'null');
+  } catch (ignored) {
+    return null;
+  }
+  if (!manifest || manifest.schema_version !== MONTHLY_PORTFOLIO_SNAPSHOT_SCHEMA || manifest.status !== 'complete') return null;
+  var byMonth = {};
+  var sum = 0;
+  MONTHS.forEach(function(month) {
+    byMonth[month] = Number((manifest.projetos_por_mes || {})[month] || 0);
+    sum += byMonth[month];
+  });
+  if (sum !== Number(manifest.total || 0) || sum < 201) return null;
+  return {
+    ok: true,
+    mes: 'ALL',
+    total: sum,
+    projetos_por_mes: byMonth,
+    projetos: [],
+    manifest_only: true,
+    materialized: true,
+    generated_at: manifest.generated_at
+  };
+}
+
+function monthlyPortfolioSnapshotIsStale_(generatedAt) {
+  var value = Date.parse(String(generatedAt || ''));
+  return !isFinite(value) || (new Date().getTime() - value) > MONTHLY_PORTFOLIO_SNAPSHOT_MAX_AGE_MS;
+}
+
+function scheduleMonthlyPortfolioSnapshotRefresh_() {
+  var props = PropertiesService.getScriptProperties();
+  if (props.getProperty(MONTHLY_PORTFOLIO_SNAPSHOT_REFRESH_FLAG) === '1') return;
+  props.setProperty(MONTHLY_PORTFOLIO_SNAPSHOT_REFRESH_FLAG, '1');
+  ScriptApp.newTrigger('refreshMonthlyPortfolioSnapshot').timeBased().after(1000).create();
+}
+
+function refreshMonthlyPortfolioSnapshot() {
+  var props = PropertiesService.getScriptProperties();
+  var lock = LockService.getScriptLock();
+  try {
+    lock.waitLock(300000);
+    return writeMonthlyPortfolioSnapshot_();
+  } finally {
+    props.deleteProperty(MONTHLY_PORTFOLIO_SNAPSHOT_REFRESH_FLAG);
+    ScriptApp.getProjectTriggers().forEach(function(trigger) {
+      if (trigger.getHandlerFunction() === 'refreshMonthlyPortfolioSnapshot') ScriptApp.deleteTrigger(trigger);
+    });
+    try { lock.releaseLock(); } catch (ignored) {}
+  }
 }
 
 

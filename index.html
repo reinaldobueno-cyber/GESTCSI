@@ -4720,8 +4720,8 @@ var UPDATE_ACTOR_KEY = 'gestcsi_update_actor_v1';
 var LAST_UPDATE_KEY = 'gestcsi_last_update_label_v1';
 var PANEL_CACHE_KEY = 'gestcsi_panel_cache_v2';
 var PANEL_SNAPSHOT_KEY = 'gestcsi_portfolio_snapshot_v1';
-var PANEL_SNAPSHOT_SCHEMA = 1;
-var PANEL_APP_VERSION = '2026-08-09-map-country-validation-v5';
+var PANEL_SNAPSHOT_SCHEMA = 2;
+var PANEL_APP_VERSION = '2026-08-12-materialized-portfolio-v1';
 var PANEL_EXPECTED_TOTAL_KEY = 'gestcsi_portfolio_expected_total_v1';
 var PANEL_AUTO_REFRESH_INTERVAL_MS = 5 * 60 * 1000;
 var PANEL_AUTO_REFRESH_MIN_GAP_MS = 60 * 1000;
@@ -16253,6 +16253,7 @@ var ABAS_GID_FIXAS = {
   NOV: '1289316977',
   DEZ: '1602075507'
 };
+var MONTHLY_PORTFOLIO_BROWSER_GID = '1667939534';
 var _resumoLinksPorAba = {};
 
 function normalizeClienteKey(v) {
@@ -16855,7 +16856,7 @@ function carregarProjetosDiretoPlanilha() {
   var falhas = [];
   function carregarAba(aba, tentativa) {
     tentativa = tentativa || 1;
-    var url = 'https://docs.google.com/spreadsheets/d/' + SHEET_ID + '/gviz/tq?gid=' + aba.gid + '&_ts=' + Date.now() + '_' + tentativa;
+    var url = 'https://docs.google.com/spreadsheets/d/' + SHEET_ID + '/gviz/tq?gid=' + aba.gid + '&range=A:X&_ts=' + Date.now() + '_' + tentativa;
     return loadGvizTableJsonp(url, 35000).then(function(table){
       if (!table) throw new Error('Aba respondeu sem tabela');
       var normalizada = normalizarTabelaGviz(table);
@@ -16909,6 +16910,65 @@ function carregarProjetosDiretoPlanilha() {
     }, falhas.length === 0 && projetos.length > 0);
     return projetos;
   });
+}
+
+function carregarPortfolioConsolidadoNavegador() {
+  var performanceStarted = performanceNowMs();
+  function tentar(tentativa) {
+    var url = 'https://docs.google.com/spreadsheets/d/' + SHEET_ID + '/gviz/tq?gid=' + MONTHLY_PORTFOLIO_BROWSER_GID + '&range=A:AC&_ts=' + Date.now() + '_' + tentativa;
+    return loadGvizTableJsonp(url, 15000).then(function(table) {
+      if (!table) throw new Error('Aba técnica respondeu sem tabela.');
+      var normalizada = normalizarTabelaGviz(table);
+      var rows = (normalizada.rows || []).map(function(row) { return mapearGvizRow(normalizada.cols, row); });
+      if (!rows.length) throw new Error('Aba técnica respondeu sem projetos.');
+      var generation = String(rows[0].snapshot_generation || '').trim();
+      var declared = Number(rows[0].snapshot_total || 0);
+      var byMonth;
+      try { byMonth = JSON.parse(String(rows[0].snapshot_month_counts || '{}')); } catch (ignored) { byMonth = null; }
+      if (!generation || !byMonth || declared !== rows.length) throw new Error('Metadados da aba técnica inválidos.');
+      var generationMismatch = rows.some(function(row) {
+        return String(row.snapshot_generation || '').trim() !== generation || Number(row.snapshot_total || 0) !== declared;
+      });
+      if (generationMismatch) throw new Error('Atualização da aba técnica ainda em andamento.');
+      var actualByMonth = {};
+      Object.keys(ABAS_GID_FIXAS).forEach(function(mes){ actualByMonth[mes] = 0; });
+      rows.forEach(function(project, index) {
+        var mes = String(project.mes || '').toUpperCase().trim();
+        if (actualByMonth.hasOwnProperty(mes)) actualByMonth[mes] += 1;
+        project.mes = mes;
+        project.mes_origem = mes;
+        project._aba_origem = mes;
+        project._sheet_row = Number(project.source_sheet_row || 0) || (index + 2);
+        project._sheet_order = (indiceMesPainel(mes) * 10000) + project._sheet_row;
+      });
+      var manifestMismatch = Object.keys(ABAS_GID_FIXAS).some(function(mes) {
+        return Number(byMonth[mes] || 0) !== Number(actualByMonth[mes] || 0);
+      });
+      if (manifestMismatch) throw new Error('Contagens mensais da aba técnica divergiram do manifesto.');
+      var integrity = window.PortfolioIntegrity.validateSnapshot({
+        projetos: rows,
+        total: declared,
+        projetos_por_mes: actualByMonth,
+        failedMonths: []
+      }, {
+        minimumTotal: painelMinimoCarteiraAtual(),
+        months: Object.keys(ABAS_GID_FIXAS),
+        requireDeclaredTotal: true
+      });
+      if (!integrity.ok) throw new Error('Integridade da aba técnica recusada: ' + integrity.errors.join(', '));
+      painelAplicarChavesCarteira(rows);
+      performanceRecord('dados.portfolio_consolidado', performanceStarted, {
+        project_count: rows.length,
+        generation: generation,
+        source: 'google_sheets_materialized'
+      }, true);
+      return { projetos:rows, manifesto:{total:declared, projetos_por_mes:actualByMonth, generated_at:generation} };
+    }).catch(function(error) {
+      if (tentativa >= 3) throw error;
+      return new Promise(function(resolve){ setTimeout(resolve, 500 * tentativa); }).then(function(){ return tentar(tentativa + 1); });
+    });
+  }
+  return tentar(1);
 }
 
 function loadMetricasFromSheet() {
@@ -17564,8 +17624,8 @@ function loadAll(tipoAtualizacao) {
   var rb = document.getElementById('refresh-bar');
   var isRefresh = window._jaCarregou === true;
   window._lastUpdateTrigger = tipoAtualizacao || (isRefresh ? 'manual' : 'auto');
-  // A carteira inicial usa diretamente as abas públicas do Sheets. O Apps Script
-  // permanece como contingência, pois o gateway pode encerrar respostas grandes.
+  // O snapshot privado e compacto evita abrir as 12 abas a cada acesso. Todos os
+  // perfis recebem exatamente o mesmo manifesto validado.
   var appsScriptAllPrefetch = null;
 
   if (!isRefresh) {
@@ -17593,7 +17653,7 @@ function loadAll(tipoAtualizacao) {
       if (nd) nd.textContent = 'Atualizando por mês...';
       console.warn('[INIT] Apps Script ALL indisponivel/parcial. Buscando por mês:', motivoOrigem || '-');
       return Promise.all(meses.map(function(mes){
-        return chamarAppsScriptJsonp('getMonthlyProjects', {mes:mes}, 18000).then(function(respMes){
+        return chamarAppsScriptJsonp('getMonthlyProjects', {mes:mes, lean:1}, 18000).then(function(respMes){
           var rows = respMes && Array.isArray(respMes.projetos) ? respMes.projetos : [];
           var monthIntegrity = window.PortfolioIntegrity.validateSnapshot(respMes || {}, {
             minimumTotal: 0,
@@ -17658,7 +17718,7 @@ function loadAll(tipoAtualizacao) {
           if (!result || !result.ok) throw (result && result.error) || new Error('Apps Script indisponivel');
           return result.response;
         })
-      : chamarAppsScriptJsonp('getMonthlyProjects', {mes:'ALL'}, 25000);
+      : chamarAppsScriptJsonp('getMonthlyProjects', {mes:'ALL', lean:1}, 25000);
     allRequest.then(function(resp) {
       var qtd = resp && Array.isArray(resp.projetos) ? resp.projetos.length : 0;
       console.log('[2B] Resposta Apps Script recebida. Projetos brutos:', qtd);
@@ -17698,43 +17758,75 @@ function loadAll(tipoAtualizacao) {
     });
   }
 
-  try {
-    console.log('[1] Lendo carteira diretamente das abas mensais');
-    carregarProjetosDiretoPlanilha().then(function(projetosDiretos){
-      var falhas = (projetosDiretos && projetosDiretos._falhas_abas) || [];
-      var byMonth = {};
-      Object.keys(ABAS_GID_FIXAS).forEach(function(mes){ byMonth[mes] = 0; });
-      (projetosDiretos || []).forEach(function(item){
-        var mes = String((item && (item.mes || item.mes_origem)) || '').toUpperCase().trim();
-        if (byMonth.hasOwnProperty(mes)) byMonth[mes] += 1;
-      });
-      var integrity = window.PortfolioIntegrity.validateSnapshot({
-        projetos: projetosDiretos,
-        total: (projetosDiretos || []).length,
-        projetos_por_mes: byMonth,
-        failedMonths: falhas
-      }, {
-        minimumTotal: painelMinimoCarteiraAtual(),
-        months: Object.keys(ABAS_GID_FIXAS),
-        requireDeclaredTotal: true
-      });
-      if (!integrity.ok) {
-        console.error('[CARTEIRA] Leitura direta rejeitada:', integrity.errors, integrity.manifest || {});
-        buscarViaAppsScript(projetosDiretos, 'sheet_direct_invalid');
-        return;
+  function descompactarSnapshotPrivado(payload) {
+    if (!payload || payload.encoding !== 'gzip-base64' || !payload.projetos_gzip_base64) {
+      return Promise.reject(new Error('Resposta compacta ausente.'));
+    }
+    if (typeof DecompressionStream === 'undefined') {
+      return Promise.reject(new Error('Navegador sem suporte a descompactação segura.'));
+    }
+    var binary = atob(payload.projetos_gzip_base64);
+    var bytes = new Uint8Array(binary.length);
+    for (var index = 0; index < binary.length; index += 1) bytes[index] = binary.charCodeAt(index);
+    var stream = new Blob([bytes]).stream().pipeThrough(new DecompressionStream('gzip'));
+    return new Response(stream).text().then(function(json) {
+      var projetos = JSON.parse(json);
+      if (!Array.isArray(projetos)) throw new Error('Snapshot descompactado inválido.');
+      return projetos;
+    });
+  }
+
+  function carregarSnapshotPrivadoMensal() {
+    var meses = Object.keys(ABAS_GID_FIXAS);
+    function chamarComRetry(params, timeoutMs, tentativas) {
+      function executar(tentativa) {
+        return chamarAppsScriptJsonp('getMonthlyProjects', params, timeoutMs).catch(function(error) {
+          if (tentativa >= tentativas) throw error;
+          return new Promise(function(resolve){ setTimeout(resolve, 500 * tentativa); }).then(function(){
+            return executar(tentativa + 1);
+          });
+        });
       }
+      return executar(1);
+    }
+    return chamarComRetry({mes:'ALL', lean:1, compressed:1}, 20000, 3).then(function(manifest) {
+      var byMonth = manifest && manifest.projetos_por_mes || {};
+      var sum = meses.reduce(function(total, mes){ return total + Number(byMonth[mes] || 0); }, 0);
+      if (!manifest || manifest.ok === false || sum !== Number(manifest.total) || sum < painelMinimoCarteiraAtual()) {
+        throw new Error('Snapshot compacto inválido ou ainda em preparação.');
+      }
+      return descompactarSnapshotPrivado(manifest).then(function(projetos) {
+        if (projetos.length !== Number(manifest.total)) throw new Error('Snapshot compacto divergiu do manifesto.');
+        return { projetos:projetos, manifesto:manifest };
+      });
+    });
+  }
+
+  try {
+    console.log('[1] Lendo aba técnica consolidada da carteira');
+    carregarPortfolioConsolidadoNavegador().then(function(result) {
+      var projetos = result.projetos;
+      var manifest = result.manifesto;
       window._portfolioLoadAudit = {
-        source: 'sheet_direct_validated',
-        declared: projetosDiretos.length,
-        received: projetosDiretos.length,
-        by_month: byMonth,
+        source: 'sheet_materialized_validated',
+        declared: Number(manifest.total),
+        received: projetos.length,
+        by_month: manifest.projetos_por_mes,
         validated_at: new Date().toISOString()
       };
-      painelRegistrarTotalCarteira(projetosDiretos.length, 'sheet_direct_validated');
-      _finalizarLoad(projetosDiretos, isRefresh, 'sheet_direct_validated', window._lastUpdateTrigger);
-    }).catch(function(errorDireto){
-      console.error('[INIT] Leitura direta indisponível; tentando Apps Script:', errorDireto);
-      buscarViaAppsScript([], 'sheet_direct_error');
+      painelRegistrarTotalCarteira(projetos.length, 'sheet_materialized_validated');
+      _finalizarLoad(projetos, isRefresh, 'sheet_materialized_validated', window._lastUpdateTrigger);
+      chamarAppsScriptJsonp('getMonthlyProjects', {mes:'ALL', lean:1, manifest:1}, 8000).catch(function(errorRefresh) {
+        console.warn('[CARTEIRA] Atualização materializada agendada para nova tentativa:', errorRefresh);
+      });
+    }).catch(function(errorSnapshot) {
+      console.error('[INIT] Aba técnica consolidada indisponível:', errorSnapshot);
+      carregarSnapshotPrivadoMensal().then(function(result) {
+        _finalizarLoad(result.projetos, isRefresh, 'apps_script_private_monthly_snapshot', window._lastUpdateTrigger);
+      }).catch(function(errorPrivado) {
+        console.error('[INIT] Snapshot privado também indisponível:', errorPrivado);
+        buscarViaAppsScript([], 'snapshot_consolidado_indisponivel');
+      });
     });
   } catch (error) {
     console.error('[INIT] Erro inesperado na inicialização da carga principal:', error);
@@ -17903,7 +17995,7 @@ function _finalizarLoad(projetos, isRefresh, motivo, tipoAtualizacao) {
   window._jaCarregou = true;
   window._cargaFinalizada = true;
   window._snapshotAtivo = false;
-  if (String(motivo || '').indexOf('apps_script') === 0) {
+  if (String(motivo || '').indexOf('apps_script') === 0 || motivo === 'sheet_materialized_validated' || motivo === 'sheet_materialized_auto_validated') {
     PANEL_AUTO_REFRESH_LAST_CHECK_AT = Date.now();
   }
   performanceRecord('painel.carga', performanceLoadStarted, {
@@ -17937,25 +18029,17 @@ function reconciliarCarteiraAutomatica(gatilho) {
   PANEL_AUTO_REFRESH_LAST_CHECK_AT = now;
   PANEL_AUTO_REFRESH_IN_FLIGHT = true;
   PANEL_LOAD_IN_FLIGHT = true;
-  return chamarAppsScriptJsonp('getMonthlyProjects', {mes:'ALL'}, 25000).then(function(response){
-    var integrity = window.PortfolioIntegrity.validateSnapshot(response || {}, {
-      minimumTotal: painelMinimoCarteiraAtual(),
-      months: Object.keys(ABAS_GID_FIXAS),
-      requireDeclaredTotal: true
-    });
-    if (!integrity.ok) {
-      console.warn('[CARTEIRA AUTO] Resposta automática recusada:', integrity.errors, integrity.manifest || {});
-      return false;
-    }
-    var manifest = integrity.manifest;
+  return carregarPortfolioConsolidadoNavegador().then(function(result){
+    var response = result && result.projetos || [];
+    var manifest = result && result.manifesto || {};
     var totalAtual = DATA && Array.isArray(DATA.projetos) ? DATA.projetos.length : 0;
-    var mudouMes = painelContagemMensalMudou(manifest.byMonth, painelContagemAtualPorMes());
+    var mudouMes = painelContagemMensalMudou(manifest.projetos_por_mes, painelContagemAtualPorMes());
     window._portfolioCountAudit = {
-      source: 'apps_script_all_validated',
+      source: 'sheet_materialized_validated',
       trigger: gatilho || 'timer',
-      declared: Number(response.total),
+      declared: Number(manifest.total),
       current: totalAtual,
-      by_month: manifest.byMonth,
+      by_month: manifest.projetos_por_mes,
       checked_at: new Date().toISOString()
     };
     if (manifest.total < totalAtual) {
@@ -17964,15 +18048,15 @@ function reconciliarCarteiraAutomatica(gatilho) {
     }
     if (manifest.total > totalAtual || mudouMes || !totalAtual) {
       console.warn('[CARTEIRA AUTO] Mudança detectada:', totalAtual, '->', manifest.total, 'gatilho:', gatilho || 'timer');
-      painelRegistrarTotalCarteira(manifest.total, 'apps_script_auto_validated');
+      painelRegistrarTotalCarteira(manifest.total, 'sheet_materialized_auto_validated');
       window._portfolioLoadAudit = {
-        source: 'apps_script_auto_validated',
-        declared: Number(response.total),
+        source: 'sheet_materialized_auto_validated',
+        declared: Number(manifest.total),
         received: manifest.total,
-        by_month: manifest.byMonth,
+        by_month: manifest.projetos_por_mes,
         validated_at: new Date().toISOString()
       };
-      _finalizarLoad(response.projetos, true, 'apps_script_auto_validated', 'auto_monitor');
+      _finalizarLoad(response, true, 'sheet_materialized_auto_validated', 'auto_monitor');
       return true;
     }
     console.log('[CARTEIRA AUTO] Carteira conferida sem alterações:', totalAtual);
