@@ -924,7 +924,8 @@ function diagnosticarPrimeiroProjetoClickup() {
 function getMonthlyProjectsPayload_(params) {
   params = params || {};
   var requested = sanitizeMonth_(params.mes || 'ALL');
-  var cacheKey = 'monthly_projects_payload_v1_' + (requested || 'ALL');
+  var compact = String(params.compact || '') === '1';
+  var cacheKey = 'monthly_projects_payload_v2_' + (compact ? 'compact_' : 'full_') + (requested || 'ALL');
   var cached = readChunkedCompressedScriptCache_(cacheKey);
   if (cached) {
     cached.server_cache = 'hit';
@@ -938,7 +939,7 @@ function getMonthlyProjectsPayload_(params) {
       cached.server_cache = 'hit_after_wait';
       return cached;
     }
-    var payload = buildMonthlyProjectsPayload_(requested);
+    var payload = buildMonthlyProjectsPayload_(requested, compact);
     payload.server_cache = 'miss';
     writeChunkedCompressedScriptCache_(cacheKey, payload, 900);
     return payload;
@@ -947,13 +948,20 @@ function getMonthlyProjectsPayload_(params) {
   }
 }
 
-function buildMonthlyProjectsPayload_(requested) {
+function buildMonthlyProjectsPayload_(requested, compact) {
   var months = requested && requested !== 'ALL' ? [requested] : MONTHS.slice();
   var projetos = [];
   var byMonth = {};
   months.forEach(function(month) {
     if (MONTHS.indexOf(month) < 0) return;
     var rows = getMonthlyProjectsFromSheet_(month);
+    if (compact) rows = rows.map(function(project) {
+      var lean = {};
+      Object.keys(project || {}).forEach(function(key) {
+        if (key !== 'clickup_json') lean[key] = project[key];
+      });
+      return lean;
+    });
     byMonth[month] = rows.length;
     projetos = projetos.concat(rows);
   });
@@ -962,6 +970,7 @@ function buildMonthlyProjectsPayload_(requested) {
     mes: requested || 'ALL',
     total: projetos.length,
     projetos_por_mes: byMonth,
+    compact: !!compact,
     projetos: projetos
   };
 }
