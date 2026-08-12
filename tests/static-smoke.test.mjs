@@ -80,18 +80,6 @@ test('shows the same consultant follow-up notifications to every authenticated v
   assert.match(appsScript, /kanban_states: getProjectKanbanStates_\(\)/);
 });
 
-test('loads a lean portfolio first and enriches ClickUp details from the monthly sheets', async () => {
-  const appsScript = await readFile(new URL('../apps_script/ClickUpSync.gs', import.meta.url), 'utf8');
-  assert.match(html, /getMonthlyProjects', \{mes:'ALL', lean:1\}, 25000/);
-  assert.match(html, /getMonthlyProjects', \{mes:mes, lean:1\}, 18000/);
-  assert.match(appsScript, /function monthlyProjectLeanPayload_\(project\)/);
-  assert.match(appsScript, /function getMonthlyProjectsLeanFromSheet_\(month\)/);
-  assert.match(appsScript, /getRange\(1, 1, sheet\.getLastRow\(\), columnCount\)/);
-  assert.doesNotMatch(appsScript.slice(appsScript.indexOf('function monthlyProjectLeanPayload_'), appsScript.indexOf('\nfunction getMonthlyProjectsFromSheet_', appsScript.indexOf('function monthlyProjectLeanPayload_'))), /clickup_json/);
-  assert.match(html, /if \(m\.clickup_json && !p\.clickup_json\) p\.clickup_json = m\.clickup_json/);
-  assert.match(html, /loadMetricasFromSheet\(\)/);
-});
-
 test('invalidates expired browser sessions without replacing the portfolio', () => {
   assert.match(html, /function authInvalidateExpiredSession\(\)/);
   assert.match(html, /a carteira íntegra foi preservada/);

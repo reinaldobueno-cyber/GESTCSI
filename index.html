@@ -17567,7 +17567,7 @@ function loadAll(tipoAtualizacao) {
   // Uma unica fonte decide a carteira: o manifesto ALL do Apps Script.
   // A requisicao começa imediatamente para não esperar a varredura Gviz aba a aba.
   var appsScriptAllPrefetch = APPS_SCRIPT_URL && APPS_SCRIPT_URL.indexOf('AK') >= 0
-    ? chamarAppsScriptJsonp('getMonthlyProjects', {mes:'ALL', lean:1}, 25000).then(function(response){
+    ? chamarAppsScriptJsonp('getMonthlyProjects', {mes:'ALL'}, 25000).then(function(response){
         return {ok:true, response:response};
       }, function(error){
         return {ok:false, error:error};
@@ -17599,7 +17599,7 @@ function loadAll(tipoAtualizacao) {
       if (nd) nd.textContent = 'Atualizando por mês...';
       console.warn('[INIT] Apps Script ALL indisponivel/parcial. Buscando por mês:', motivoOrigem || '-');
       return Promise.all(meses.map(function(mes){
-        return chamarAppsScriptJsonp('getMonthlyProjects', {mes:mes, lean:1}, 18000).then(function(respMes){
+        return chamarAppsScriptJsonp('getMonthlyProjects', {mes:mes}, 18000).then(function(respMes){
           var rows = respMes && Array.isArray(respMes.projetos) ? respMes.projetos : [];
           var monthIntegrity = window.PortfolioIntegrity.validateSnapshot(respMes || {}, {
             minimumTotal: 0,
@@ -17664,7 +17664,7 @@ function loadAll(tipoAtualizacao) {
           if (!result || !result.ok) throw (result && result.error) || new Error('Apps Script indisponivel');
           return result.response;
         })
-      : chamarAppsScriptJsonp('getMonthlyProjects', {mes:'ALL', lean:1}, 25000);
+      : chamarAppsScriptJsonp('getMonthlyProjects', {mes:'ALL'}, 25000);
     allRequest.then(function(resp) {
       var qtd = resp && Array.isArray(resp.projetos) ? resp.projetos.length : 0;
       console.log('[2B] Resposta Apps Script recebida. Projetos brutos:', qtd);
@@ -17908,7 +17908,7 @@ function reconciliarCarteiraAutomatica(gatilho) {
   PANEL_AUTO_REFRESH_LAST_CHECK_AT = now;
   PANEL_AUTO_REFRESH_IN_FLIGHT = true;
   PANEL_LOAD_IN_FLIGHT = true;
-  return chamarAppsScriptJsonp('getMonthlyProjects', {mes:'ALL', lean:1}, 25000).then(function(response){
+  return chamarAppsScriptJsonp('getMonthlyProjects', {mes:'ALL'}, 25000).then(function(response){
     var integrity = window.PortfolioIntegrity.validateSnapshot(response || {}, {
       minimumTotal: painelMinimoCarteiraAtual(),
       months: Object.keys(ABAS_GID_FIXAS),
