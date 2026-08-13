@@ -479,6 +479,17 @@ function continueProjectSyncBackgroundStep_(options) {
     props.setProperty('CLICKUP_PROJECT_SYNC_ERRORS', String(errors));
     props.setProperty('CLICKUP_PROJECT_SYNC_UPDATED_AT', new Date().toISOString());
     props.deleteProperty('CLICKUP_PROJECT_SYNC_ERROR');
+    if (!result.done && props.getProperty('CLICKUP_PROJECT_SYNC_PAUSE_FOR_ACTIVITY') === '1') {
+      props.setProperty('CLICKUP_PROJECT_SYNC_ACTIVE', '0');
+      props.setProperty('CLICKUP_PROJECT_SYNC_RESUME_PENDING', '1');
+      props.deleteProperty('CLICKUP_PROJECT_SYNC_PAUSE_FOR_ACTIVITY');
+      clearProjectSyncBackgroundTriggers_();
+      var pausedStatus = getProjectSyncBackgroundStatus_();
+      pausedStatus.paused = true;
+      pausedStatus.waiting_for = 'clickup-user-activity';
+      startPendingClickUpUserActivityIfAny_(props);
+      return pausedStatus;
+    }
     if (result.done) {
       props.setProperty('CLICKUP_PROJECT_SYNC_ACTIVE', '0');
       props.setProperty('CLICKUP_PROJECT_SYNC_COMPLETED_AT', new Date().toISOString());
@@ -515,6 +526,8 @@ function normalizeProjectSyncBackgroundQueue_(props) {
 
 function getProjectSyncBackgroundStatus_() {
   var props = PropertiesService.getScriptProperties();
+  var pending = props.getProperty('CLICKUP_PROJECT_SYNC_PENDING') === '1';
+  var resumePending = props.getProperty('CLICKUP_PROJECT_SYNC_RESUME_PENDING') === '1';
   return {
     ok: true,
     active: props.getProperty('CLICKUP_PROJECT_SYNC_ACTIVE') === '1',
@@ -526,23 +539,35 @@ function getProjectSyncBackgroundStatus_() {
     updated_at: props.getProperty('CLICKUP_PROJECT_SYNC_UPDATED_AT') || '',
     completed_at: props.getProperty('CLICKUP_PROJECT_SYNC_COMPLETED_AT') || '',
     error: props.getProperty('CLICKUP_PROJECT_SYNC_ERROR') || '',
-    queued: props.getProperty('CLICKUP_PROJECT_SYNC_PENDING') === '1',
-    waiting_for: props.getProperty('CLICKUP_PROJECT_SYNC_PENDING') === '1' ? 'clickup-user-activity' : ''
+    paused: resumePending,
+    queued: pending || resumePending,
+    waiting_for: pending || resumePending ? 'clickup-user-activity' : ''
   };
 }
 
 function startPendingClickUpUserActivityIfAny_(props) {
   props = props || PropertiesService.getScriptProperties();
   if (props.getProperty('CLICKUP_ACTIVITY_BACKGROUND_PENDING') !== '1') return null;
-  var forceRestart = props.getProperty('CLICKUP_ACTIVITY_BACKGROUND_PENDING_FORCE') === '1';
   props.deleteProperty('CLICKUP_ACTIVITY_BACKGROUND_PENDING');
   props.deleteProperty('CLICKUP_ACTIVITY_BACKGROUND_PENDING_FORCE');
   props.deleteProperty('CLICKUP_ACTIVITY_BACKGROUND_PENDING_AT');
-  return startClickUpUserActivityBackground_({ force_restart: forceRestart ? '1' : '0', from_queue: '1' });
+  // Uma retomada automática nunca pode apagar o cursor existente. Mesmo que o
+  // pedido original tenha vindo do botão Forçar, a fila preserva o progresso.
+  return startClickUpUserActivityBackground_({ force_restart: '0', from_queue: '1' });
 }
 
 function startPendingProjectSyncIfAny_(props) {
   props = props || PropertiesService.getScriptProperties();
+  if (props.getProperty('CLICKUP_PROJECT_SYNC_RESUME_PENDING') === '1') {
+    props.deleteProperty('CLICKUP_PROJECT_SYNC_RESUME_PENDING');
+    props.deleteProperty('CLICKUP_PROJECT_SYNC_PAUSE_FOR_ACTIVITY');
+    props.setProperty('CLICKUP_PROJECT_SYNC_ACTIVE', '1');
+    props.setProperty('CLICKUP_PROJECT_SYNC_UPDATED_AT', new Date().toISOString());
+    scheduleProjectSyncBackground_(1000);
+    var resumedStatus = getProjectSyncBackgroundStatus_();
+    resumedStatus.resumed = true;
+    return resumedStatus;
+  }
   if (props.getProperty('CLICKUP_PROJECT_SYNC_PENDING') !== '1') return null;
   props.deleteProperty('CLICKUP_PROJECT_SYNC_PENDING');
   props.deleteProperty('CLICKUP_PROJECT_SYNC_PENDING_AT');
@@ -5141,16 +5166,16 @@ function startClickUpUserActivityBackground_(params) {
   params = params || {};
   var props = PropertiesService.getScriptProperties();
   var alreadyActive = props.getProperty('CLICKUP_ACTIVITY_BACKGROUND_ACTIVE') === '1';
-  var existingRows = readClickUpUserActivityRows_();
-  var previousComplete = existingRows.length &&
-    String(existingRows[0].sincronizacao_completa_controle || '').toLowerCase() === 'sim';
+  var progress = readClickUpUserActivityProgress_();
+  var previousComplete = String(progress.sincronizacao_completa_controle || '').toLowerCase() === 'sim';
   if (alreadyActive && previousComplete) {
     props.setProperty('CLICKUP_ACTIVITY_BACKGROUND_ACTIVE', '0');
     clearClickUpUserActivityBackgroundTriggers_();
     alreadyActive = false;
   }
   var forceRestart = String(params.force_restart || '') === '1';
-  var completedAt = Date.parse(existingRows.length && existingRows[0].sincronizado_em || props.getProperty('CLICKUP_ACTIVITY_BACKGROUND_COMPLETED_AT') || '');
+  if (String(params.from_queue || '') === '1') forceRestart = false;
+  var completedAt = Date.parse(progress.sincronizado_em || props.getProperty('CLICKUP_ACTIVITY_BACKGROUND_COMPLETED_AT') || '');
   var recentComplete = previousComplete && isFinite(completedAt) && (new Date().getTime() - completedAt) < 6 * 60 * 60 * 1000;
   if (!alreadyActive && recentComplete && !forceRestart) {
     return {
@@ -5163,8 +5188,9 @@ function startClickUpUserActivityBackground_(params) {
   }
   if (props.getProperty('CLICKUP_PROJECT_SYNC_ACTIVE') === '1') {
     props.setProperty('CLICKUP_ACTIVITY_BACKGROUND_PENDING', '1');
-    props.setProperty('CLICKUP_ACTIVITY_BACKGROUND_PENDING_FORCE', forceRestart ? '1' : '0');
+    props.setProperty('CLICKUP_ACTIVITY_BACKGROUND_PENDING_FORCE', '0');
     props.setProperty('CLICKUP_ACTIVITY_BACKGROUND_PENDING_AT', new Date().toISOString());
+    props.setProperty('CLICKUP_PROJECT_SYNC_PAUSE_FOR_ACTIVITY', '1');
     var queuedStatus = getClickUpUserActivityBackgroundStatus_();
     queuedStatus.queued = true;
     queuedStatus.waiting_for = 'clickup-sync';
@@ -5172,6 +5198,7 @@ function startClickUpUserActivityBackground_(params) {
     return queuedStatus;
   }
   if (!alreadyActive && previousComplete) {
+    var existingRows = readClickUpUserActivityRows_();
     existingRows.forEach(function(row) {
       row.projetos_lidos_controle = 0;
       row.projetos_com_erro_controle = 0;
@@ -5408,6 +5435,10 @@ function getClickUpUserActivityBackgroundStatus_() {
   var complete = String(progress.sincronizacao_completa_controle || '').toLowerCase() === 'sim';
   var active = props.getProperty('CLICKUP_ACTIVITY_BACKGROUND_ACTIVE') === '1' && !complete;
   preservePreQueueProjectSyncRequest_(props, complete);
+  if (props.getProperty('CLICKUP_ACTIVITY_BACKGROUND_PENDING') === '1' &&
+      props.getProperty('CLICKUP_PROJECT_SYNC_ACTIVE') === '1') {
+    props.setProperty('CLICKUP_PROJECT_SYNC_PAUSE_FOR_ACTIVITY', '1');
+  }
   return {
     ok: true,
     service: 'clickup-user-activity',

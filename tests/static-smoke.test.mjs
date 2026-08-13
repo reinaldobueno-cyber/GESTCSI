@@ -153,12 +153,13 @@ test('does not restart a recent completed estimate unless force is explicit', as
     let writes = 0;
     let schedules = 0;
     const factory = new Function(
-      'PropertiesService', 'readClickUpUserActivityRows_', 'clearClickUpUserActivityBackgroundTriggers_',
+      'PropertiesService', 'readClickUpUserActivityProgress_', 'readClickUpUserActivityRows_', 'clearClickUpUserActivityBackgroundTriggers_',
       'writeClickUpUserActivitySummary_', 'scheduleClickUpUserActivityBackground_',
       `return (${source.replace(/^function startClickUpUserActivityBackground_/, 'function')});`
     );
     const fn = factory(
       { getScriptProperties: () => props },
+      () => ({ sincronizacao_completa_controle: 'sim', sincronizado_em: new Date().toISOString() }),
       () => [{ sincronizacao_completa_controle: 'sim', sincronizado_em: new Date().toISOString() }],
       () => {},
       () => { writes += 1; },
@@ -180,10 +181,16 @@ test('queues ClickUp sync and estimate instead of reporting mutual exclusion as 
   const appsScript = await readFile(new URL('../apps_script/ClickUpSync.gs', import.meta.url), 'utf8');
   assert.match(appsScript, /CLICKUP_PROJECT_SYNC_PENDING/);
   assert.match(appsScript, /CLICKUP_ACTIVITY_BACKGROUND_PENDING/);
+  assert.match(appsScript, /CLICKUP_PROJECT_SYNC_PAUSE_FOR_ACTIVITY/);
+  assert.match(appsScript, /CLICKUP_PROJECT_SYNC_RESUME_PENDING/);
   assert.match(appsScript, /function startPendingProjectSyncIfAny_\(/);
   assert.match(appsScript, /function startPendingClickUpUserActivityIfAny_\(/);
   assert.match(appsScript, /startPendingProjectSyncIfAny_\(props\)/);
   assert.match(appsScript, /startPendingClickUpUserActivityIfAny_\(props\)/);
+  assert.match(appsScript, /pausedStatus\.paused = true/);
+  assert.match(appsScript, /resumedStatus\.resumed = true/);
+  assert.match(appsScript, /startClickUpUserActivityBackground_\(\{ force_restart: '0', from_queue: '1' \}\)/);
+  assert.match(appsScript, /if \(String\(params\.from_queue \|\| ''\) === '1'\) forceRestart = false/);
   assert.match(appsScript, /function preservePreQueueProjectSyncRequest_\(/);
   assert.match(appsScript, /CLICKUP_QUEUE_MIGRATION_V269/);
   assert.match(appsScript, /preservePreQueueProjectSyncRequest_\(props, complete\)/);
@@ -194,6 +201,21 @@ test('queues ClickUp sync and estimate instead of reporting mutual exclusion as 
   assert.match(html, /Estimativa aguardando o Sync ClickUp; continuará automaticamente do projeto/);
   assert.match(html, /queuedUsers\._backgroundSync=bg/);
   assert.match(html, /GESTAO_CLICKUP_ACTIVITY_QUEUE_TOASTED/);
+});
+
+test('pauses and resumes the project sync without resetting its saved cursor', async () => {
+  const appsScript = await readFile(new URL('../apps_script/ClickUpSync.gs', import.meta.url), 'utf8');
+  const stepStart = appsScript.indexOf('function continueProjectSyncBackgroundStep_(');
+  const stepEnd = appsScript.indexOf('\nfunction normalizeProjectSyncBackgroundQueue_(', stepStart);
+  const stepSource = appsScript.slice(stepStart, stepEnd);
+  const saveOffset = stepSource.indexOf("setProperty('CLICKUP_PROJECT_SYNC_OFFSET', String(result.next_offset))");
+  const pause = stepSource.indexOf("getProperty('CLICKUP_PROJECT_SYNC_PAUSE_FOR_ACTIVITY') === '1'");
+  assert.ok(saveOffset > 0 && pause > saveOffset, 'the new offset must be saved before pausing');
+  const resumeStart = appsScript.indexOf('function startPendingProjectSyncIfAny_(');
+  const resumeEnd = appsScript.indexOf('\nfunction scheduleProjectSyncBackground_(', resumeStart);
+  const resumeSource = appsScript.slice(resumeStart, resumeEnd);
+  assert.match(resumeSource, /CLICKUP_PROJECT_SYNC_RESUME_PENDING/);
+  assert.doesNotMatch(resumeSource, /CLICKUP_PROJECT_SYNC_OFFSET', '0'/);
 });
 
 test('keeps operational CMAX statuses visible while paying only positive events', async () => {
