@@ -5108,6 +5108,12 @@ function pollSyncClickupGeral(btn, labelOriginal, immediate) {
       }
       if (!status || status.ok === false) throw new Error((status && (status.error || status.message)) || 'Status do sync indisponivel');
       var label = clickupProjectSyncLabel(status);
+      if (status.queued) {
+        if (btn) btn.textContent = 'Sync na fila';
+        showToast('Sync ClickUp na fila. Ele iniciará automaticamente quando a estimativa terminar.', 'ok');
+        CLICKUP_PROJECT_SYNC_POLL_TIMER = setTimeout(poll, 10000);
+        return;
+      }
       if (status.active) {
         if (btn) btn.textContent = 'Sync ' + label;
         showToast('Sync ClickUp em andamento: ' + label, 'ok');
@@ -5175,6 +5181,12 @@ window.sincronizarTodosProjetosClickup = function(btn) {
     force: '1'
   }, 30000).then(function(resp) {
     assertProjectSyncBackgroundReady(resp);
+    if (resp.queued) {
+      if (btn) btn.textContent = 'Sync na fila';
+      showToast('Sync ClickUp adicionado à fila. Ele iniciará automaticamente após a estimativa.', 'ok');
+      pollSyncClickupGeral(btn, labelOriginal, true);
+      return;
+    }
     if (btn) btn.textContent = 'Preparando...';
     showToast('Sync ClickUp iniciado. Pode acompanhar o progresso no botao.', 'ok');
     pollSyncClickupGeral(btn, labelOriginal, true);
@@ -15168,6 +15180,11 @@ function gestaoSyncClickUpUserActivity(btn) {
   if (btn) { btn.disabled = true; btn.textContent = 'Iniciando...'; }
   chamarAppsScriptJsonp('startClickUpUserActivityBackground',{auth_token:authTokenParam()},30000).then(function(resp){
     if(!resp||resp.ok===false)throw new Error((resp&&(resp.error||resp.message))||'Não foi possível iniciar a estimativa');
+    if(resp.queued){
+      showToast('Estimativa adicionada à fila. Ela iniciará automaticamente após o Sync ClickUp.','ok');
+      gestaoPollClickUpUserActivity(true);
+      return;
+    }
     if(resp.already_complete){
       showToast('A estimativa já está atualizada. Use Forçar somente se precisar recalcular agora.','ok');
       return gestaoReloadClickUpUserActivity(true);
@@ -15186,6 +15203,11 @@ function gestaoPollClickUpUserActivity(immediate) {
   function poll(){
     chamarAppsScriptJsonp('getClickUpUserActivityStatus',{auth_token:authTokenParam()},15000).then(function(bg){
       if(!bg||bg.ok===false)throw new Error((bg&&(bg.error||bg.message))||'Status da estimativa indisponível');
+      if(bg.queued){
+        showToast('Estimativa na fila. Ela iniciará automaticamente quando o Sync ClickUp terminar.','ok');
+        GESTAO_CLICKUP_ACTIVITY_POLL_TIMER=setTimeout(poll,10000);
+        return;
+      }
       if(bg.active){
         var read=gestaoActivityNum(bg.projects_read),total=gestaoActivityNum(bg.projects_total);
         var users=Array.isArray(GESTAO_CLICKUP_USER_ACTIVITY)?GESTAO_CLICKUP_USER_ACTIVITY:[];
@@ -15222,6 +15244,11 @@ function gestaoForceClickUpUserActivity(btn) {
     force_restart:'1'
   }, 30000).then(function(resp) {
     if (!resp || resp.ok === false) throw new Error((resp && (resp.error || resp.message)) || 'Não foi possível agendar a estimativa');
+    if (resp.queued) {
+      showToast('Estimativa forçada adicionada à fila. Ela iniciará após o Sync ClickUp.', 'ok');
+      gestaoPollClickUpUserActivity(true);
+      return;
+    }
     showToast(resp.already_active?'Estimativa já estava em andamento. Acompanhando progresso...':'Estimativa forçada em segundo plano. Pode fechar a página.','ok');
     gestaoPollClickUpUserActivity(true);
   }).catch(function(error) {

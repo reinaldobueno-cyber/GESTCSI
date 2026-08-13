@@ -391,15 +391,19 @@ function startProjectSyncBackground_(params) {
   if (props.getProperty('CLICKUP_ACTIVITY_BACKGROUND_ACTIVE') === '1') {
     var activityStatus = getClickUpUserActivityBackgroundStatus_();
     if (activityStatus.active) {
-      return {
-        ok: false,
-        busy: true,
-        error: 'A estimativa de adoção ClickUp está em andamento. Aguarde a conclusão antes de iniciar o Sync ClickUp.'
-      };
+      props.setProperty('CLICKUP_PROJECT_SYNC_PENDING', '1');
+      props.setProperty('CLICKUP_PROJECT_SYNC_PENDING_AT', new Date().toISOString());
+      var queuedStatus = getProjectSyncBackgroundStatus_();
+      queuedStatus.queued = true;
+      queuedStatus.waiting_for = 'clickup-user-activity';
+      queuedStatus.message = 'Sync ClickUp adicionado à fila. Ele iniciará automaticamente após a estimativa.';
+      return queuedStatus;
     }
     props.setProperty('CLICKUP_ACTIVITY_BACKGROUND_ACTIVE', '0');
     clearClickUpUserActivityBackgroundTriggers_();
   }
+  props.deleteProperty('CLICKUP_PROJECT_SYNC_PENDING');
+  props.deleteProperty('CLICKUP_PROJECT_SYNC_PENDING_AT');
   if (props.getProperty('CLICKUP_PROJECT_SYNC_ACTIVE') === '1') {
     props.setProperty('CLICKUP_PROJECT_SYNC_UPDATED_AT', new Date().toISOString());
     scheduleProjectSyncBackground_(1000);
@@ -479,7 +483,9 @@ function continueProjectSyncBackgroundStep_(options) {
       props.setProperty('CLICKUP_PROJECT_SYNC_ACTIVE', '0');
       props.setProperty('CLICKUP_PROJECT_SYNC_COMPLETED_AT', new Date().toISOString());
       clearProjectSyncBackgroundTriggers_();
-      return getProjectSyncBackgroundStatus_();
+      var completedStatus = getProjectSyncBackgroundStatus_();
+      startPendingClickUpUserActivityIfAny_(props);
+      return completedStatus;
     }
     if (!options.defer_schedule) scheduleProjectSyncBackground_(8000);
     return getProjectSyncBackgroundStatus_();
@@ -487,7 +493,9 @@ function continueProjectSyncBackgroundStep_(options) {
     props.setProperty('CLICKUP_PROJECT_SYNC_ERROR', simplifyErrorMessage_(error));
     props.setProperty('CLICKUP_PROJECT_SYNC_ACTIVE', '0');
     clearProjectSyncBackgroundTriggers_();
-    return getProjectSyncBackgroundStatus_();
+    var failedStatus = getProjectSyncBackgroundStatus_();
+    startPendingClickUpUserActivityIfAny_(props);
+    return failedStatus;
   }
 }
 
@@ -517,8 +525,28 @@ function getProjectSyncBackgroundStatus_() {
     started_at: props.getProperty('CLICKUP_PROJECT_SYNC_STARTED_AT') || '',
     updated_at: props.getProperty('CLICKUP_PROJECT_SYNC_UPDATED_AT') || '',
     completed_at: props.getProperty('CLICKUP_PROJECT_SYNC_COMPLETED_AT') || '',
-    error: props.getProperty('CLICKUP_PROJECT_SYNC_ERROR') || ''
+    error: props.getProperty('CLICKUP_PROJECT_SYNC_ERROR') || '',
+    queued: props.getProperty('CLICKUP_PROJECT_SYNC_PENDING') === '1',
+    waiting_for: props.getProperty('CLICKUP_PROJECT_SYNC_PENDING') === '1' ? 'clickup-user-activity' : ''
   };
+}
+
+function startPendingClickUpUserActivityIfAny_(props) {
+  props = props || PropertiesService.getScriptProperties();
+  if (props.getProperty('CLICKUP_ACTIVITY_BACKGROUND_PENDING') !== '1') return null;
+  var forceRestart = props.getProperty('CLICKUP_ACTIVITY_BACKGROUND_PENDING_FORCE') === '1';
+  props.deleteProperty('CLICKUP_ACTIVITY_BACKGROUND_PENDING');
+  props.deleteProperty('CLICKUP_ACTIVITY_BACKGROUND_PENDING_FORCE');
+  props.deleteProperty('CLICKUP_ACTIVITY_BACKGROUND_PENDING_AT');
+  return startClickUpUserActivityBackground_({ force_restart: forceRestart ? '1' : '0', from_queue: '1' });
+}
+
+function startPendingProjectSyncIfAny_(props) {
+  props = props || PropertiesService.getScriptProperties();
+  if (props.getProperty('CLICKUP_PROJECT_SYNC_PENDING') !== '1') return null;
+  props.deleteProperty('CLICKUP_PROJECT_SYNC_PENDING');
+  props.deleteProperty('CLICKUP_PROJECT_SYNC_PENDING_AT');
+  return startProjectSyncBackground_({ force: '1', from_queue: '1' });
 }
 
 function scheduleProjectSyncBackground_(delayMs) {
@@ -5112,13 +5140,6 @@ function syncClickUpUserActivity_(params) {
 function startClickUpUserActivityBackground_(params) {
   params = params || {};
   var props = PropertiesService.getScriptProperties();
-  if (props.getProperty('CLICKUP_PROJECT_SYNC_ACTIVE') === '1') {
-    return {
-      ok: false,
-      busy: true,
-      error: 'O Sync ClickUp está em andamento. Aguarde a conclusão antes de gerar a estimativa.'
-    };
-  }
   var alreadyActive = props.getProperty('CLICKUP_ACTIVITY_BACKGROUND_ACTIVE') === '1';
   var existingRows = readClickUpUserActivityRows_();
   var previousComplete = existingRows.length &&
@@ -5140,6 +5161,16 @@ function startClickUpUserActivityBackground_(params) {
       message: 'A estimativa ja esta atualizada. Use Forcar em segundo plano para refazer agora.'
     };
   }
+  if (props.getProperty('CLICKUP_PROJECT_SYNC_ACTIVE') === '1') {
+    props.setProperty('CLICKUP_ACTIVITY_BACKGROUND_PENDING', '1');
+    props.setProperty('CLICKUP_ACTIVITY_BACKGROUND_PENDING_FORCE', forceRestart ? '1' : '0');
+    props.setProperty('CLICKUP_ACTIVITY_BACKGROUND_PENDING_AT', new Date().toISOString());
+    var queuedStatus = getClickUpUserActivityBackgroundStatus_();
+    queuedStatus.queued = true;
+    queuedStatus.waiting_for = 'clickup-sync';
+    queuedStatus.message = 'Estimativa adicionada à fila. Ela iniciará automaticamente após o Sync ClickUp.';
+    return queuedStatus;
+  }
   if (!alreadyActive && previousComplete) {
     existingRows.forEach(function(row) {
       row.projetos_lidos_controle = 0;
@@ -5151,6 +5182,9 @@ function startClickUpUserActivityBackground_(params) {
     writeClickUpUserActivitySummary_(existingRows, { auto_resize: false });
   }
   props.setProperty('CLICKUP_ACTIVITY_BACKGROUND_ACTIVE', '1');
+  props.deleteProperty('CLICKUP_ACTIVITY_BACKGROUND_PENDING');
+  props.deleteProperty('CLICKUP_ACTIVITY_BACKGROUND_PENDING_FORCE');
+  props.deleteProperty('CLICKUP_ACTIVITY_BACKGROUND_PENDING_AT');
   props.setProperty('CLICKUP_ACTIVITY_BACKGROUND_FAILURES', '0');
   if (!alreadyActive) props.setProperty('CLICKUP_ACTIVITY_BACKGROUND_STARTED_AT', new Date().toISOString());
   props.deleteProperty('CLICKUP_ACTIVITY_BACKGROUND_ERROR');
@@ -5167,6 +5201,7 @@ function startClickUpUserActivityBackground_(params) {
 
 function continueClickUpUserActivityBackgroundTrigger() {
   var props = PropertiesService.getScriptProperties();
+  preservePreQueueProjectSyncRequest_(props);
   if (props.getProperty('CLICKUP_ACTIVITY_BACKGROUND_ACTIVE') !== '1') {
     clearClickUpUserActivityBackgroundTriggers_();
     return;
@@ -5192,6 +5227,7 @@ function continueClickUpUserActivityBackgroundTrigger() {
       props.setProperty('CLICKUP_ACTIVITY_BACKGROUND_ACTIVE', '0');
       props.setProperty('CLICKUP_ACTIVITY_BACKGROUND_COMPLETED_AT', new Date().toISOString());
       clearClickUpUserActivityBackgroundTriggers_();
+      startPendingProjectSyncIfAny_(props);
       return;
     }
     scheduleClickUpUserActivityBackground_(3000);
@@ -5202,6 +5238,7 @@ function continueClickUpUserActivityBackgroundTrigger() {
     if (failures >= 20) {
       props.setProperty('CLICKUP_ACTIVITY_BACKGROUND_ACTIVE', '0');
       clearClickUpUserActivityBackgroundTriggers_();
+      startPendingProjectSyncIfAny_(props);
       return;
     }
     scheduleClickUpUserActivityBackground_(30000);
@@ -5370,6 +5407,7 @@ function getClickUpUserActivityBackgroundStatus_() {
   var progress = readClickUpUserActivityProgress_();
   var complete = String(progress.sincronizacao_completa_controle || '').toLowerCase() === 'sim';
   var active = props.getProperty('CLICKUP_ACTIVITY_BACKGROUND_ACTIVE') === '1' && !complete;
+  preservePreQueueProjectSyncRequest_(props, complete);
   return {
     ok: true,
     service: 'clickup-user-activity',
@@ -5380,8 +5418,25 @@ function getClickUpUserActivityBackgroundStatus_() {
     error: props.getProperty('CLICKUP_ACTIVITY_BACKGROUND_ERROR') || '',
     projects_read: toInt_(progress.projetos_lidos_controle, 0),
     projects_total: toInt_(progress.projetos_selecionados_controle, 0),
-    projects_errors: toInt_(progress.projetos_com_erro_controle, 0)
+    projects_errors: toInt_(progress.projetos_com_erro_controle, 0),
+    queued: props.getProperty('CLICKUP_ACTIVITY_BACKGROUND_PENDING') === '1',
+    waiting_for: props.getProperty('CLICKUP_ACTIVITY_BACKGROUND_PENDING') === '1' ? 'clickup-sync' : ''
   };
+}
+
+function preservePreQueueProjectSyncRequest_(props, activityComplete) {
+  props = props || PropertiesService.getScriptProperties();
+  var migrationKey = 'CLICKUP_QUEUE_MIGRATION_V269';
+  if (props.getProperty(migrationKey) === '1') return;
+  props.setProperty(migrationKey, '1');
+  if (props.getProperty('CLICKUP_PROJECT_SYNC_ACTIVE') === '1') return;
+  props.setProperty('CLICKUP_PROJECT_SYNC_PENDING', '1');
+  props.setProperty('CLICKUP_PROJECT_SYNC_PENDING_AT', new Date().toISOString());
+  if (activityComplete || props.getProperty('CLICKUP_ACTIVITY_BACKGROUND_ACTIVE') !== '1') {
+    props.setProperty('CLICKUP_ACTIVITY_BACKGROUND_ACTIVE', '0');
+    clearClickUpUserActivityBackgroundTriggers_();
+    startPendingProjectSyncIfAny_(props);
+  }
 }
 
 function readClickUpUserActivityProgress_() {

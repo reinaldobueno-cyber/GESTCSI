@@ -176,6 +176,23 @@ test('does not restart a recent completed estimate unless force is explicit', as
   assert.equal(forced.schedules, 1);
 });
 
+test('queues ClickUp sync and estimate instead of reporting mutual exclusion as an error', async () => {
+  const appsScript = await readFile(new URL('../apps_script/ClickUpSync.gs', import.meta.url), 'utf8');
+  assert.match(appsScript, /CLICKUP_PROJECT_SYNC_PENDING/);
+  assert.match(appsScript, /CLICKUP_ACTIVITY_BACKGROUND_PENDING/);
+  assert.match(appsScript, /function startPendingProjectSyncIfAny_\(/);
+  assert.match(appsScript, /function startPendingClickUpUserActivityIfAny_\(/);
+  assert.match(appsScript, /startPendingProjectSyncIfAny_\(props\)/);
+  assert.match(appsScript, /startPendingClickUpUserActivityIfAny_\(props\)/);
+  assert.match(appsScript, /function preservePreQueueProjectSyncRequest_\(/);
+  assert.match(appsScript, /CLICKUP_QUEUE_MIGRATION_V269/);
+  assert.match(appsScript, /preservePreQueueProjectSyncRequest_\(props, complete\)/);
+  assert.doesNotMatch(appsScript, /error: 'A estimativa de adoção ClickUp está em andamento/);
+  assert.doesNotMatch(appsScript, /error: 'O Sync ClickUp está em andamento/);
+  assert.match(html, /Sync ClickUp adicionado à fila/);
+  assert.match(html, /Estimativa adicionada à fila/);
+});
+
 test('keeps operational CMAX statuses visible while paying only positive events', async () => {
   const appsScript = await readFile(new URL('../apps_script/ClickUpSync.gs', import.meta.url), 'utf8');
 
