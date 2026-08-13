@@ -104,6 +104,7 @@ function doGet(e) {
       return jsonOutput_(result, params.callback);
     }
     if (action === 'syncAll') {
+      requireAdmin_(params);
       var allResult = syncAllProjects({
         force: String(params.force || '') === '1',
         limit: toInt_(params.limit, null),
@@ -117,7 +118,7 @@ function doGet(e) {
     }
     if (action === 'getProjectSyncBackgroundStatus') {
       requireAdmin_(params);
-      return jsonOutput_(advanceProjectSyncBackgroundFromStatus_(), params.callback);
+      return jsonOutput_(getProjectSyncBackgroundStatus_(), params.callback);
     }
     if (action === 'startProjectClosingSync') {
       requireAdmin_(params);
@@ -212,6 +213,10 @@ function doGet(e) {
     if (action === 'getClickUpUserActivity') {
       requireAdmin_(params);
       return jsonOutput_(getClickUpUserActivity_(params), params.callback);
+    }
+    if (action === 'getClickUpUserActivityStatus') {
+      requireAdmin_(params);
+      return jsonOutput_(getClickUpUserActivityBackgroundStatus_(), params.callback);
     }
     if (action === 'getCmaxDailyEvents') {
       return jsonOutput_(getCmaxDailyEvents_(params), params.callback);
@@ -340,12 +345,20 @@ function syncAllProjects(options) {
   var force = !!options.force;
   var processed = [];
   var errors = [];
+  var attempted = 0;
+  var executionDeadlineMs = Number(options.execution_deadline_ms || 0);
 
-  mappings.slice(offset, offset + limit).forEach(function(mapping) {
+  var batch = mappings.slice(offset, offset + limit);
+  for (var mappingIndex = 0; mappingIndex < batch.length; mappingIndex += 1) {
+    if (executionDeadlineMs && new Date().getTime() >= executionDeadlineMs - 5000) break;
+    var mapping = batch[mappingIndex];
+    attempted += 1;
     try {
       processed.push(syncProjectMapping_(mapping, {
         force: force,
-        deadline_ms: new Date().getTime() + Math.max(15000, Math.min(toInt_(options.project_timeout_ms, 45000), 90000))
+        deadline_ms: executionDeadlineMs
+          ? Math.min(executionDeadlineMs, new Date().getTime() + Math.max(15000, Math.min(toInt_(options.project_timeout_ms, 45000), 90000)))
+          : new Date().getTime() + Math.max(15000, Math.min(toInt_(options.project_timeout_ms, 45000), 90000))
       }));
     } catch (error) {
       errors.push({
@@ -354,17 +367,19 @@ function syncAllProjects(options) {
       });
       writeSyncStatus_(mapping, 'error', error.message);
     }
-  });
+  }
+
+  var nextOffset = Math.min(mappings.length, offset + attempted);
 
   return {
     ok: errors.length === 0,
     offset: offset,
     total: mappings.length,
-    batch_total: Math.min(limit, Math.max(0, mappings.length - offset)),
+    batch_total: attempted,
     total_available: mappings.length,
-    next_offset: Math.min(mappings.length, offset + limit),
-    has_more: offset + limit < mappings.length,
-    done: offset + limit >= mappings.length,
+    next_offset: nextOffset,
+    has_more: nextOffset < mappings.length,
+    done: nextOffset >= mappings.length,
     processed: processed,
     errors: errors
   };
@@ -373,6 +388,18 @@ function syncAllProjects(options) {
 function startProjectSyncBackground_(params) {
   params = params || {};
   var props = PropertiesService.getScriptProperties();
+  if (props.getProperty('CLICKUP_ACTIVITY_BACKGROUND_ACTIVE') === '1') {
+    var activityStatus = getClickUpUserActivityBackgroundStatus_();
+    if (activityStatus.active) {
+      return {
+        ok: false,
+        busy: true,
+        error: 'A estimativa de adoção ClickUp está em andamento. Aguarde a conclusão antes de iniciar o Sync ClickUp.'
+      };
+    }
+    props.setProperty('CLICKUP_ACTIVITY_BACKGROUND_ACTIVE', '0');
+    clearClickUpUserActivityBackgroundTriggers_();
+  }
   if (props.getProperty('CLICKUP_PROJECT_SYNC_ACTIVE') === '1') {
     props.setProperty('CLICKUP_PROJECT_SYNC_UPDATED_AT', new Date().toISOString());
     scheduleProjectSyncBackground_(1000);
@@ -396,11 +423,9 @@ function startProjectSyncBackground_(params) {
 }
 
 function continueProjectSyncBackgroundTrigger() {
-  continueProjectSyncBackgroundStepWithLock_();
-}
-
-function advanceProjectSyncBackgroundFromStatus_() {
-  return continueProjectSyncBackgroundStepWithLock_({ status_poll: true });
+  var status = continueProjectSyncBackgroundStepWithLock_({ chained: true });
+  if (status && status.active) scheduleProjectSyncBackground_(5000);
+  return status;
 }
 
 function continueProjectSyncBackgroundStepWithLock_(options) {
@@ -411,20 +436,21 @@ function continueProjectSyncBackgroundStepWithLock_(options) {
     return getProjectSyncBackgroundStatus_();
   }
   var lock = LockService.getScriptLock();
-  if (!lock.tryLock(options.status_poll ? 1000 : 5000)) {
+  if (!lock.tryLock(options.chained ? 1000 : 5000)) {
     var busy = getProjectSyncBackgroundStatus_();
     busy.busy = true;
     return busy;
   }
   try {
     normalizeProjectSyncBackgroundQueue_(props);
-    return continueProjectSyncBackgroundStep_();
+    return continueProjectSyncBackgroundStep_({ defer_schedule: options.chained === true });
   } finally {
     lock.releaseLock();
   }
 }
 
-function continueProjectSyncBackgroundStep_() {
+function continueProjectSyncBackgroundStep_(options) {
+  options = options || {};
   var props = PropertiesService.getScriptProperties();
   if (props.getProperty('CLICKUP_PROJECT_SYNC_ACTIVE') !== '1') {
     clearProjectSyncBackgroundTriggers_();
@@ -432,11 +458,12 @@ function continueProjectSyncBackgroundStep_() {
   }
   try {
     var offset = toInt_(props.getProperty('CLICKUP_PROJECT_SYNC_OFFSET'), 0);
-    var batchSize = Math.max(1, Math.min(toInt_(getScriptProperty_('CLICKUP_PROJECT_SYNC_BATCH_SIZE', '2'), 2), 2));
+    var batchSize = Math.max(3, Math.min(toInt_(getScriptProperty_('CLICKUP_PROJECT_SYNC_BATCH_SIZE', '20'), 20), 20));
     var result = syncAllProjects({
       force: true,
       offset: offset,
       limit: batchSize,
+      execution_deadline_ms: new Date().getTime() + 160000,
       project_timeout_ms: toInt_(getScriptProperty_('CLICKUP_PROJECT_SYNC_PROJECT_TIMEOUT_MS', '30000'), 30000)
     });
     var attempted = Number(result.batch_total || 0) || (result.processed.length + result.errors.length);
@@ -454,7 +481,7 @@ function continueProjectSyncBackgroundStep_() {
       clearProjectSyncBackgroundTriggers_();
       return getProjectSyncBackgroundStatus_();
     }
-    scheduleProjectSyncBackground_(8000);
+    if (!options.defer_schedule) scheduleProjectSyncBackground_(8000);
     return getProjectSyncBackgroundStatus_();
   } catch (error) {
     props.setProperty('CLICKUP_PROJECT_SYNC_ERROR', simplifyErrorMessage_(error));
@@ -5085,6 +5112,13 @@ function syncClickUpUserActivity_(params) {
 function startClickUpUserActivityBackground_(params) {
   params = params || {};
   var props = PropertiesService.getScriptProperties();
+  if (props.getProperty('CLICKUP_PROJECT_SYNC_ACTIVE') === '1') {
+    return {
+      ok: false,
+      busy: true,
+      error: 'O Sync ClickUp está em andamento. Aguarde a conclusão antes de gerar a estimativa.'
+    };
+  }
   var alreadyActive = props.getProperty('CLICKUP_ACTIVITY_BACKGROUND_ACTIVE') === '1';
   var existingRows = readClickUpUserActivityRows_();
   var previousComplete = existingRows.length &&
@@ -5108,7 +5142,9 @@ function startClickUpUserActivityBackground_(params) {
   props.setProperty('CLICKUP_ACTIVITY_BACKGROUND_FAILURES', '0');
   if (!alreadyActive) props.setProperty('CLICKUP_ACTIVITY_BACKGROUND_STARTED_AT', new Date().toISOString());
   props.deleteProperty('CLICKUP_ACTIVITY_BACKGROUND_ERROR');
-  scheduleClickUpUserActivityBackground_(1000);
+  var lastUpdate = Date.parse(props.getProperty('CLICKUP_ACTIVITY_BACKGROUND_UPDATED_AT') || props.getProperty('CLICKUP_ACTIVITY_BACKGROUND_STARTED_AT') || '');
+  var needsRearm = !alreadyActive || !isFinite(lastUpdate) || (new Date().getTime() - lastUpdate) > 5 * 60 * 1000;
+  if (needsRearm) scheduleClickUpUserActivityBackground_(1000);
   return {
     ok: true,
     scheduled: true,
@@ -5124,9 +5160,9 @@ function continueClickUpUserActivityBackgroundTrigger() {
     return;
   }
   try {
-    var batchSize = Math.max(3, Math.min(
-      toInt_(getScriptProperty_('CLICKUP_ACTIVITY_BACKGROUND_BATCH_SIZE', '12'), 12),
-      20
+    var batchSize = Math.max(10, Math.min(
+      toInt_(getScriptProperty_('CLICKUP_ACTIVITY_BACKGROUND_BATCH_SIZE', '30'), 30),
+      30
     ));
     var result = syncClickUpUserActivity_({
       force_estimated: '1',
@@ -5146,7 +5182,7 @@ function continueClickUpUserActivityBackgroundTrigger() {
       clearClickUpUserActivityBackgroundTriggers_();
       return;
     }
-    scheduleClickUpUserActivityBackground_(5000);
+    scheduleClickUpUserActivityBackground_(3000);
   } catch (error) {
     var failures = toInt_(props.getProperty('CLICKUP_ACTIVITY_BACKGROUND_FAILURES'), 0) + 1;
     props.setProperty('CLICKUP_ACTIVITY_BACKGROUND_FAILURES', String(failures));
@@ -5231,7 +5267,8 @@ function syncClickUpUserActivityApprox_(params, meta) {
     ? mergeClickUpActivityErrors_(existingErrorDetails.filter(function(item) { return String(item.project_key || '') !== retryProjectKey; }), approx.errors)
     : mergeClickUpActivityErrors_(scanOffset > 0 ? existingErrorDetails : [], approx.errors);
   var cumulativeErrors = errorDetails.length;
-  var nextOffset = retryMode ? storedNextOffset : scanOffset + mappings.length;
+  var attemptedInBatch = Math.max(0, toInt_(approx.projects_attempted, 0));
+  var nextOffset = retryMode ? storedNextOffset : scanOffset + attemptedInBatch;
   var scanDone = retryMode ? storedComplete : nextOffset >= eligibleMappings.length;
   // Progress represents attempted projects. Failures remain visible separately and
   // must not make a completed scan look permanently stuck below the total.
@@ -5271,7 +5308,7 @@ function syncClickUpUserActivityApprox_(params, meta) {
     projects_selected: eligibleMappings.length,
     projects_read: cumulativeRead,
     projects_errors: cumulativeErrors,
-    batch_projects: mappings.length,
+    batch_projects: attemptedInBatch,
     scan_offset: scanOffset,
     next_offset: nextOffset,
     done: scanDone,
@@ -5323,6 +5360,8 @@ function getClickUpUserActivityBackgroundStatus_() {
   var complete = String(progress.sincronizacao_completa_controle || '').toLowerCase() === 'sim';
   var active = props.getProperty('CLICKUP_ACTIVITY_BACKGROUND_ACTIVE') === '1' && !complete;
   return {
+    ok: true,
+    service: 'clickup-user-activity',
     active: active,
     started_at: props.getProperty('CLICKUP_ACTIVITY_BACKGROUND_STARTED_AT') || '',
     updated_at: props.getProperty('CLICKUP_ACTIVITY_BACKGROUND_UPDATED_AT') || '',
@@ -5543,6 +5582,7 @@ function buildApproxClickUpUserActivityFromTasks_(mappings, options) {
   var errors = [];
   var eventCount = 0;
   var projectsRead = 0;
+  var projectsAttempted = 0;
   options.day_start_ms = startOfDayMillis_(options.fetched_at || new Date());
   options.day_end_ms = options.day_start_ms + 24 * 60 * 60 * 1000 - 1;
   options.seven_day_start_ms = options.day_start_ms - 6 * 24 * 60 * 60 * 1000;
@@ -5555,12 +5595,16 @@ function buildApproxClickUpUserActivityFromTasks_(mappings, options) {
     });
   });
 
-  (mappings || []).forEach(function(mapping) {
+  var activityMappings = mappings || [];
+  for (var mappingIndex = 0; mappingIndex < activityMappings.length; mappingIndex += 1) {
+    if (options.execution_deadline_ms && new Date().getTime() >= Number(options.execution_deadline_ms) - 5000) break;
+    var mapping = activityMappings[mappingIndex];
+    projectsAttempted += 1;
     try {
       associateApproxProjectWithConsultant_(byKey, mapping);
       var projectDeadline = new Date().getTime() + Math.max(30000, Number(options.project_timeout_ms || 150000));
       if (options.execution_deadline_ms) projectDeadline = Math.min(projectDeadline, Number(options.execution_deadline_ms));
-      var payload = fetchProjectTasks_(mapping, { deadline_ms: projectDeadline });
+      var payload = fetchProjectTasksForActivity_(mapping, { deadline_ms: projectDeadline });
       var tasks = payload.tasks || [];
       projectsRead += 1;
       tasks.forEach(function(task) {
@@ -5575,7 +5619,8 @@ function buildApproxClickUpUserActivityFromTasks_(mappings, options) {
         error: simplifyErrorMessage_(error)
       });
     }
-  });
+    if (mappingIndex < activityMappings.length - 1) Utilities.sleep(750);
+  }
 
   var rows = Object.keys(byKey).map(function(key) {
     var item = byKey[key];
@@ -5645,6 +5690,7 @@ function buildApproxClickUpUserActivityFromTasks_(mappings, options) {
     rows: rows,
     events: eventCount,
     projects_read: projectsRead,
+    projects_attempted: projectsAttempted,
     errors: errors
   };
 }
@@ -7281,7 +7327,91 @@ function requireUser_(params) {
   if (!raw) throw new Error('Sessao expirada. Entre novamente.');
   var user = JSON.parse(raw);
   if (!user.enabled) throw new Error('Usuario desativado.');
+  // CacheService limita a sessão a seis horas. Renove a janela sempre que o
+  // usuário estiver ativo para não expirar durante syncs acompanhados no painel.
+  sessionCache_().put('session:' + token, raw, 21600);
   return user;
+}
+
+// A estimativa de adoção não calcula fases nem marcos. Uma única consulta por
+// lista é suficiente e evita as variantes de custom items usadas pelo sync
+// operacional, reduzindo requisições e erros 429 do ClickUp.
+function fetchAllListTasksForActivity_(listId, options) {
+  listId = normalizeClickUpId_(listId);
+  if (!listId) throw new Error('CLICKUP_CONFIG com list_id invalido ou vazio.');
+  var page = 0;
+  var all = [];
+  while (true) {
+    assertClickUpActivityDeadline_(options);
+    var query = [
+      'include_closed=true',
+      'subtasks=true',
+      'page=' + page
+    ].join('&');
+    var response = clickupRequest_('get', '/list/' + listId + '/task?' + query);
+    var batch = response.tasks || [];
+    all = all.concat(batch);
+    if (batch.length < 100) break;
+    page += 1;
+  }
+  return dedupeTasks_(all);
+}
+
+function fetchAllFolderTasksForActivity_(folderId, options) {
+  folderId = normalizeClickUpId_(folderId);
+  if (!folderId) throw new Error('CLICKUP_CONFIG com folder_id invalido ou vazio.');
+  var response = clickupRequest_('get', '/folder/' + folderId + '/list?archived=false');
+  var all = [];
+  (response.lists || []).forEach(function(list) {
+    assertClickUpActivityDeadline_(options);
+    if (list && list.id) all = all.concat(fetchAllListTasksForActivity_(list.id, options));
+  });
+  return dedupeTasks_(all);
+}
+
+function fetchAllSpaceTasksForActivity_(spaceId, options) {
+  spaceId = normalizeClickUpId_(spaceId);
+  if (!spaceId) throw new Error('CLICKUP_CONFIG com space_id invalido ou vazio.');
+  var all = [];
+  var folderResponse = clickupRequest_('get', '/space/' + spaceId + '/folder?archived=false');
+  (folderResponse.folders || []).forEach(function(folder) {
+    assertClickUpActivityDeadline_(options);
+    if (folder && folder.id) all = all.concat(fetchAllFolderTasksForActivity_(folder.id, options));
+  });
+  var listResponse = clickupRequest_('get', '/space/' + spaceId + '/list?archived=false');
+  (listResponse.lists || []).forEach(function(list) {
+    assertClickUpActivityDeadline_(options);
+    if (list && list.id) all = all.concat(fetchAllListTasksForActivity_(list.id, options));
+  });
+  return dedupeTasks_(all);
+}
+
+function fetchProjectTasksForActivity_(mapping, options) {
+  options = options || {};
+  var listError = null;
+  if (mapping.list_id) {
+    try {
+      return { source: 'list_activity', tasks: fetchAllListTasksForActivity_(mapping.list_id, options) };
+    } catch (error) {
+      listError = error;
+      if (!mapping.view_id || !isClickUpRecoverableSyncError_(error)) throw error;
+    }
+  }
+  if (mapping.view_id) {
+    try {
+      return {
+        source: listError ? 'view_activity_fallback' : 'view_activity',
+        tasks: fetchAllViewTasks_(mapping.view_id, options),
+        warning: listError ? simplifyErrorMessage_(listError) : ''
+      };
+    } catch (viewError) {
+      if (listError) throw new Error('List sync failed: ' + simplifyErrorMessage_(listError) + ' | View fallback failed: ' + simplifyErrorMessage_(viewError));
+      throw viewError;
+    }
+  }
+  if (mapping.folder_id) return { source: 'folder_activity', tasks: fetchAllFolderTasksForActivity_(mapping.folder_id, options) };
+  if (mapping.space_id) return { source: 'space_activity', tasks: fetchAllSpaceTasksForActivity_(mapping.space_id, options) };
+  throw new Error('Project mapping must have list_id, view_id, folder_id or space_id: ' + mapping.project_key);
 }
 
 function requireAdmin_(params) {

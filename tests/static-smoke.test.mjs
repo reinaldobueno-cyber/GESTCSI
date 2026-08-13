@@ -101,6 +101,38 @@ test('invalidates expired browser sessions without replacing the portfolio', () 
   assert.doesNotMatch(html, /Carga parcial exibida\. A planilha ainda não retornou a base completa/);
 });
 
+test('stops ClickUp actions immediately when the panel session expires', async () => {
+  const appsScript = await readFile(new URL('../apps_script/ClickUpSync.gs', import.meta.url), 'utf8');
+  assert.match(appsScript, /if \(action === 'syncAll'\) \{\s+requireAdmin_\(params\)/);
+  assert.match(appsScript, /sessionCache_\(\)\.put\('session:' \+ token, raw, 21600\)/);
+  const syncStart = html.indexOf('window.sincronizarTodosProjetosClickup = function');
+  const syncEnd = html.indexOf('\nfunction sleep(', syncStart);
+  const syncSource = html.slice(syncStart, syncEnd);
+  assert.match(syncSource, /Sessão expirada\. Entre novamente para iniciar o Sync ClickUp/);
+  assert.doesNotMatch(syncSource, /sincronizarTodosProjetosClickupEmLotes\(/);
+});
+
+test('keeps ClickUp background status reads lightweight and server driven', async () => {
+  const appsScript = await readFile(new URL('../apps_script/ClickUpSync.gs', import.meta.url), 'utf8');
+  assert.match(appsScript, /action === 'getProjectSyncBackgroundStatus'[\s\S]{0,180}getProjectSyncBackgroundStatus_\(\)/);
+  assert.doesNotMatch(appsScript, /action === 'getProjectSyncBackgroundStatus'[\s\S]{0,180}advanceProjectSyncBackgroundFromStatus_/);
+  assert.match(appsScript, /CLICKUP_PROJECT_SYNC_BATCH_SIZE', '20'/);
+  assert.match(appsScript, /execution_deadline_ms: new Date\(\)\.getTime\(\) \+ 160000/);
+  assert.match(appsScript, /batch_total: attempted/);
+});
+
+test('resumes the adoption estimate with a lightweight ClickUp reader', async () => {
+  const appsScript = await readFile(new URL('../apps_script/ClickUpSync.gs', import.meta.url), 'utf8');
+  assert.match(appsScript, /function fetchProjectTasksForActivity_\(/);
+  assert.match(appsScript, /fetchAllListTasksForActivity_/);
+  assert.match(appsScript, /var payload = fetchProjectTasksForActivity_\(mapping/);
+  assert.match(appsScript, /CLICKUP_ACTIVITY_BACKGROUND_BATCH_SIZE', '30'/);
+  assert.match(appsScript, /projects_attempted: projectsAttempted/);
+  assert.match(appsScript, /scanOffset \+ attemptedInBatch/);
+  assert.match(html, /chamarAppsScriptJsonp\('getClickUpUserActivityStatus'/);
+  assert.doesNotMatch(html, /force_estimated:'1',[\s\S]{0,100}scan_batch_size:'1'/);
+});
+
 test('keeps operational CMAX statuses visible while paying only positive events', async () => {
   const appsScript = await readFile(new URL('../apps_script/ClickUpSync.gs', import.meta.url), 'utf8');
 

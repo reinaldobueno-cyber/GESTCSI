@@ -5179,22 +5179,16 @@ window.sincronizarTodosProjetosClickup = function(btn) {
     showToast('Sync ClickUp iniciado. Pode acompanhar o progresso no botao.', 'ok');
     pollSyncClickupGeral(btn, labelOriginal, true);
   }).catch(function(error) {
-    if (/Apps Script desatualizado/i.test(String(error && error.message || error || ''))) {
-      if (btn) {
-        btn.disabled = false;
-        btn.textContent = labelOriginal || 'Sync ClickUp';
-      }
-      showToast(error.message, 'err');
+    if (btn) {
+      btn.disabled = false;
+      btn.textContent = labelOriginal || 'Sync ClickUp';
+    }
+    var message = String(error && error.message || error || 'Não foi possível iniciar o Sync ClickUp.');
+    if (!AUTH_STATE.user || /sess[aã]o expirada|sessao expirada|login obrigat[oó]rio/i.test(message)) {
+      showToast('Sessão expirada. Entre novamente para iniciar o Sync ClickUp.', 'err');
       return;
     }
-    showToast('Modo segundo plano indisponivel; tentando sync em lotes pequenos...', 'err');
-    sincronizarTodosProjetosClickupEmLotes(btn, labelOriginal).catch(function(batchError) {
-      if (btn) {
-        btn.disabled = false;
-        btn.textContent = labelOriginal || 'Sync ClickUp';
-      }
-      showToast('Erro no sync geral do ClickUp: ' + (batchError && batchError.message || error && error.message || 'tente novamente'), 'err');
-    });
+    showToast('Sync ClickUp não iniciado: ' + message, 'err');
   });
   return false;
 };
@@ -15172,19 +15166,7 @@ function gestaoSyncClickUpUserActivity(btn) {
   }
   var original = btn ? btn.textContent : '';
   if (btn) { btn.disabled = true; btn.textContent = 'Iniciando...'; }
-  var current = Array.isArray(GESTAO_CLICKUP_USER_ACTIVITY) && GESTAO_CLICKUP_USER_ACTIVITY.length ? GESTAO_CLICKUP_USER_ACTIVITY[0] : {};
-  var complete = String((current && current.sincronizacao_completa_controle) || '').toLowerCase() === 'sim';
-  var bootstrap = complete
-    ? chamarAppsScriptJsonp('syncClickUpUserActivity', {
-        auth_token:authTokenParam(),
-        force_estimated:'1',
-        scan_offset:'0',
-        scan_batch_size:'1'
-      }, 90000)
-    : Promise.resolve(null);
-  bootstrap.then(function(){
-    return chamarAppsScriptJsonp('startClickUpUserActivityBackground',{auth_token:authTokenParam()},30000);
-  }).then(function(resp){
+  chamarAppsScriptJsonp('startClickUpUserActivityBackground',{auth_token:authTokenParam()},30000).then(function(resp){
     if(!resp||resp.ok===false)throw new Error((resp&&(resp.error||resp.message))||'Não foi possível iniciar a estimativa');
     showToast(resp.already_active?'Estimativa já estava em andamento. Acompanhando progresso...':'Estimativa iniciada. Os resultados aparecerão automaticamente.','ok');
     gestaoPollClickUpUserActivity(true);
@@ -15198,18 +15180,27 @@ function gestaoSyncClickUpUserActivity(btn) {
 function gestaoPollClickUpUserActivity(immediate) {
   if(GESTAO_CLICKUP_ACTIVITY_POLL_TIMER){clearTimeout(GESTAO_CLICKUP_ACTIVITY_POLL_TIMER);GESTAO_CLICKUP_ACTIVITY_POLL_TIMER=null;}
   function poll(){
-    gestaoLoadClickUpUserActivity(true).then(function(users){
-      var box=document.getElementById('clickup-user-activity-content');
-      if(box)box.innerHTML=gestaoRenderClickUpUserActivity(users);
-      var bg=users._backgroundSync||{};
+    chamarAppsScriptJsonp('getClickUpUserActivityStatus',{auth_token:authTokenParam()},15000).then(function(bg){
+      if(!bg||bg.ok===false)throw new Error((bg&&(bg.error||bg.message))||'Status da estimativa indisponível');
       if(bg.active){
         var read=gestaoActivityNum(bg.projects_read),total=gestaoActivityNum(bg.projects_total);
+        var users=Array.isArray(GESTAO_CLICKUP_USER_ACTIVITY)?GESTAO_CLICKUP_USER_ACTIVITY:[];
+        users._backgroundSync=bg;
+        var box=document.getElementById('clickup-user-activity-content');
+        if(box)box.innerHTML=gestaoRenderClickUpUserActivity(users);
         showToast('Estimativa em andamento: '+read+(total?' de '+total:'')+' projetos processados.','ok');
-        GESTAO_CLICKUP_ACTIVITY_POLL_TIMER=setTimeout(poll,7000);
+        GESTAO_CLICKUP_ACTIVITY_POLL_TIMER=setTimeout(poll,10000);
       }else{
-        showToast('Estimativa ClickUp concluída e carregada.','ok');
+        GESTAO_CLICKUP_USER_ACTIVITY=null;
+        gestaoLoadClickUpUserActivity(true).then(function(users){
+          var box=document.getElementById('clickup-user-activity-content');
+          if(box)box.innerHTML=gestaoRenderClickUpUserActivity(users);
+          showToast(bg.error?('Estimativa interrompida: '+bg.error):'Estimativa ClickUp concluída e carregada.',bg.error?'err':'ok');
+        });
       }
-    }).catch(function(){
+    }).catch(function(error){
+      if(!AUTH_STATE.user)return;
+      console.warn('[GESTAO] Consulta de status da estimativa adiada:',error);
       GESTAO_CLICKUP_ACTIVITY_POLL_TIMER=setTimeout(poll,10000);
     });
   }
@@ -15226,8 +15217,8 @@ function gestaoForceClickUpUserActivity(btn) {
     auth_token:authTokenParam()
   }, 30000).then(function(resp) {
     if (!resp || resp.ok === false) throw new Error((resp && (resp.error || resp.message)) || 'Não foi possível agendar a estimativa');
-    showToast('Estimativa forçada em segundo plano. Pode fechar a página.', 'ok');
-    setTimeout(function(){ gestaoReloadClickUpUserActivity(true); }, 1200);
+    showToast(resp.already_active?'Estimativa já estava em andamento. Acompanhando progresso...':'Estimativa forçada em segundo plano. Pode fechar a página.','ok');
+    gestaoPollClickUpUserActivity(true);
   }).catch(function(error) {
     showToast((error && error.message) || 'Erro ao forçar estimativa em segundo plano', 'err');
   }).finally(function() {
