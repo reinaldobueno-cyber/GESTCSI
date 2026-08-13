@@ -126,7 +126,11 @@ test('resumes the adoption estimate with a lightweight ClickUp reader', async ()
   assert.match(appsScript, /function fetchProjectTasksForActivity_\(/);
   assert.match(appsScript, /fetchAllListTasksForActivity_/);
   assert.match(appsScript, /var payload = fetchProjectTasksForActivity_\(mapping/);
-  assert.match(appsScript, /CLICKUP_ACTIVITY_BACKGROUND_BATCH_SIZE', '30'/);
+  assert.match(appsScript, /CLICKUP_ACTIVITY_BACKGROUND_BATCH_SIZE', '500'/);
+  assert.match(appsScript, /executionDeadlineMs = new Date\(\)\.getTime\(\) \+ 270000/);
+  assert.match(appsScript, /execution_deadline_ms: String\(executionDeadlineMs\)/);
+  assert.match(appsScript, /CLICKUP_ACTIVITY_INTER_PROJECT_DELAY_MS', '550'/);
+  assert.match(appsScript, /Math\.min\(toInt_\(params\.scan_batch_size, 0\), 500\)/);
   assert.match(appsScript, /projects_attempted: projectsAttempted/);
   assert.match(appsScript, /scanOffset \+ attemptedInBatch/);
   assert.match(appsScript, /recentComplete && !forceRestart/);

@@ -5228,20 +5228,22 @@ function startClickUpUserActivityBackground_(params) {
 
 function continueClickUpUserActivityBackgroundTrigger() {
   var props = PropertiesService.getScriptProperties();
+  var executionDeadlineMs = new Date().getTime() + 270000;
   preservePreQueueProjectSyncRequest_(props);
   if (props.getProperty('CLICKUP_ACTIVITY_BACKGROUND_ACTIVE') !== '1') {
     clearClickUpUserActivityBackgroundTriggers_();
     return;
   }
   try {
-    var batchSize = Math.max(10, Math.min(
-      toInt_(getScriptProperty_('CLICKUP_ACTIVITY_BACKGROUND_BATCH_SIZE', '30'), 30),
-      30
+    var batchSize = Math.max(30, Math.min(
+      toInt_(getScriptProperty_('CLICKUP_ACTIVITY_BACKGROUND_BATCH_SIZE', '500'), 500),
+      500
     ));
     var result = syncClickUpUserActivity_({
       force_estimated: '1',
       resume_scan: '1',
-      scan_batch_size: String(batchSize)
+      scan_batch_size: String(batchSize),
+      execution_deadline_ms: String(executionDeadlineMs)
     });
     if (result && result.busy) {
       scheduleClickUpUserActivityBackground_(15000);
@@ -5317,19 +5319,23 @@ function syncClickUpUserActivityApprox_(params, meta) {
   var scanOffset = retryMode ? storedNextOffset : (resumeScan && storedNextOffset > 0 && !storedComplete
     ? storedNextOffset
     : Math.max(0, toInt_(params.scan_offset, 0)));
-  var scanBatchSize = Math.max(0, Math.min(toInt_(params.scan_batch_size, 0), 30));
+  var scanBatchSize = Math.max(0, Math.min(toInt_(params.scan_batch_size, 0), 500));
   var requestedLimit = toInt_(params.max_projects, 0);
   var mappings = retryMode
     ? eligibleMappings.filter(function(mapping) { return String(mapping.project_key || '') === retryProjectKey; }).slice(0, 1)
     : (scanBatchSize > 0
     ? eligibleMappings.slice(scanOffset, scanOffset + scanBatchSize)
     : (requestedLimit > 0 ? eligibleMappings.slice(0, requestedLimit) : eligibleMappings));
+  var requestedExecutionDeadlineMs = Number(params.execution_deadline_ms || 0);
+  var safeExecutionDeadlineMs = requestedExecutionDeadlineMs > 0
+    ? Math.min(requestedExecutionDeadlineMs, new Date().getTime() + 270000)
+    : new Date().getTime() + 240000;
   var approx = buildApproxClickUpUserActivityFromTasks_(mappings, {
     members: meta.members || [],
     start_ms: meta.start_ms,
     end_ms: meta.end_ms,
     fetched_at: meta.fetched_at || new Date(),
-    execution_deadline_ms: new Date().getTime() + 240000,
+    execution_deadline_ms: safeExecutionDeadlineMs,
     project_timeout_ms: Math.max(30000, Math.min(
       toInt_(getScriptProperty_('CLICKUP_ACTIVITY_PROJECT_TIMEOUT_MS', '45000'), 45000),
       90000
@@ -5689,6 +5695,10 @@ function buildApproxClickUpUserActivityFromTasks_(mappings, options) {
   var eventCount = 0;
   var projectsRead = 0;
   var projectsAttempted = 0;
+  var interProjectDelayMs = Math.max(250, Math.min(
+    toInt_(getScriptProperty_('CLICKUP_ACTIVITY_INTER_PROJECT_DELAY_MS', '550'), 550),
+    2000
+  ));
   options.day_start_ms = startOfDayMillis_(options.fetched_at || new Date());
   options.day_end_ms = options.day_start_ms + 24 * 60 * 60 * 1000 - 1;
   options.seven_day_start_ms = options.day_start_ms - 6 * 24 * 60 * 60 * 1000;
@@ -5725,7 +5735,7 @@ function buildApproxClickUpUserActivityFromTasks_(mappings, options) {
         error: simplifyErrorMessage_(error)
       });
     }
-    if (mappingIndex < activityMappings.length - 1) Utilities.sleep(750);
+    if (mappingIndex < activityMappings.length - 1) Utilities.sleep(interProjectDelayMs);
   }
 
   var rows = Object.keys(byKey).map(function(key) {
