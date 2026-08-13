@@ -191,6 +191,9 @@ test('queues ClickUp sync and estimate instead of reporting mutual exclusion as 
   assert.doesNotMatch(appsScript, /error: 'O Sync ClickUp está em andamento/);
   assert.match(html, /Sync ClickUp adicionado à fila/);
   assert.match(html, /Estimativa adicionada à fila/);
+  assert.match(html, /Estimativa aguardando o Sync ClickUp; continuará automaticamente do projeto/);
+  assert.match(html, /queuedUsers\._backgroundSync=bg/);
+  assert.match(html, /GESTAO_CLICKUP_ACTIVITY_QUEUE_TOASTED/);
 });
 
 test('keeps operational CMAX statuses visible while paying only positive events', async () => {
