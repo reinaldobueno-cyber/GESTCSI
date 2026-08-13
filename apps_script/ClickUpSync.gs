@@ -5128,6 +5128,18 @@ function startClickUpUserActivityBackground_(params) {
     clearClickUpUserActivityBackgroundTriggers_();
     alreadyActive = false;
   }
+  var forceRestart = String(params.force_restart || '') === '1';
+  var completedAt = Date.parse(existingRows.length && existingRows[0].sincronizado_em || props.getProperty('CLICKUP_ACTIVITY_BACKGROUND_COMPLETED_AT') || '');
+  var recentComplete = previousComplete && isFinite(completedAt) && (new Date().getTime() - completedAt) < 6 * 60 * 60 * 1000;
+  if (!alreadyActive && recentComplete && !forceRestart) {
+    return {
+      ok: true,
+      scheduled: false,
+      already_complete: true,
+      completed_at: new Date(completedAt).toISOString(),
+      message: 'A estimativa ja esta atualizada. Use Forcar em segundo plano para refazer agora.'
+    };
+  }
   if (!alreadyActive && previousComplete) {
     existingRows.forEach(function(row) {
       row.projetos_lidos_controle = 0;
@@ -5355,8 +5367,7 @@ function getClickUpUserActivity_(params) {
 
 function getClickUpUserActivityBackgroundStatus_() {
   var props = PropertiesService.getScriptProperties();
-  var rows = readClickUpUserActivityRows_();
-  var progress = rows.length ? rows[0] : {};
+  var progress = readClickUpUserActivityProgress_();
   var complete = String(progress.sincronizacao_completa_controle || '').toLowerCase() === 'sim';
   var active = props.getProperty('CLICKUP_ACTIVITY_BACKGROUND_ACTIVE') === '1' && !complete;
   return {
@@ -5371,6 +5382,15 @@ function getClickUpUserActivityBackgroundStatus_() {
     projects_total: toInt_(progress.projetos_selecionados_controle, 0),
     projects_errors: toInt_(progress.projetos_com_erro_controle, 0)
   };
+}
+
+function readClickUpUserActivityProgress_() {
+  var ss = SpreadsheetApp.openById(getScriptProperty_('SHEET_ID'));
+  var sheet = ss.getSheetByName(getClickUpUserActivitySheetName_());
+  if (!sheet || sheet.getLastRow() < 2 || sheet.getLastColumn() < 1) return {};
+  var lastColumn = sheet.getLastColumn();
+  var values = sheet.getRange(1, 1, 2, lastColumn).getValues();
+  return rowToObject_(values[0], values[1]);
 }
 
 function readClickUpUserActivityRows_() {

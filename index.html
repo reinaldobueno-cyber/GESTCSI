@@ -15168,6 +15168,10 @@ function gestaoSyncClickUpUserActivity(btn) {
   if (btn) { btn.disabled = true; btn.textContent = 'Iniciando...'; }
   chamarAppsScriptJsonp('startClickUpUserActivityBackground',{auth_token:authTokenParam()},30000).then(function(resp){
     if(!resp||resp.ok===false)throw new Error((resp&&(resp.error||resp.message))||'Não foi possível iniciar a estimativa');
+    if(resp.already_complete){
+      showToast('A estimativa já está atualizada. Use Forçar somente se precisar recalcular agora.','ok');
+      return gestaoReloadClickUpUserActivity(true);
+    }
     showToast(resp.already_active?'Estimativa já estava em andamento. Acompanhando progresso...':'Estimativa iniciada. Os resultados aparecerão automaticamente.','ok');
     gestaoPollClickUpUserActivity(true);
   }).catch(function(error){
@@ -15214,7 +15218,8 @@ function gestaoForceClickUpUserActivity(btn) {
   var original = btn ? btn.textContent : '';
   if (btn) { btn.disabled = true; btn.textContent = 'Agendando...'; }
   chamarAppsScriptJsonp('startClickUpUserActivityBackground', {
-    auth_token:authTokenParam()
+    auth_token:authTokenParam(),
+    force_restart:'1'
   }, 30000).then(function(resp) {
     if (!resp || resp.ok === false) throw new Error((resp && (resp.error || resp.message)) || 'Não foi possível agendar a estimativa');
     showToast(resp.already_active?'Estimativa já estava em andamento. Acompanhando progresso...':'Estimativa forçada em segundo plano. Pode fechar a página.','ok');

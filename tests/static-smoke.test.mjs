@@ -129,8 +129,51 @@ test('resumes the adoption estimate with a lightweight ClickUp reader', async ()
   assert.match(appsScript, /CLICKUP_ACTIVITY_BACKGROUND_BATCH_SIZE', '30'/);
   assert.match(appsScript, /projects_attempted: projectsAttempted/);
   assert.match(appsScript, /scanOffset \+ attemptedInBatch/);
+  assert.match(appsScript, /recentComplete && !forceRestart/);
+  assert.match(appsScript, /function readClickUpUserActivityProgress_\(/);
+  assert.match(appsScript, /getRange\(1, 1, 2, lastColumn\)\.getValues\(\)/);
   assert.match(html, /chamarAppsScriptJsonp\('getClickUpUserActivityStatus'/);
+  assert.match(html, /force_restart:'1'/);
+  assert.match(html, /if\(resp\.already_complete\)/);
   assert.doesNotMatch(html, /force_estimated:'1',[\s\S]{0,100}scan_batch_size:'1'/);
+});
+
+test('does not restart a recent completed estimate unless force is explicit', async () => {
+  const appsScript = await readFile(new URL('../apps_script/ClickUpSync.gs', import.meta.url), 'utf8');
+  const start = appsScript.indexOf('function startClickUpUserActivityBackground_(');
+  const end = appsScript.indexOf('\nfunction continueClickUpUserActivityBackgroundTrigger(', start);
+  const source = appsScript.slice(start, end);
+  function run(params) {
+    const state = new Map([['CLICKUP_ACTIVITY_BACKGROUND_ACTIVE', '0']]);
+    const props = {
+      getProperty: key => state.get(key) || '',
+      setProperty: (key, value) => state.set(key, value),
+      deleteProperty: key => state.delete(key)
+    };
+    let writes = 0;
+    let schedules = 0;
+    const factory = new Function(
+      'PropertiesService', 'readClickUpUserActivityRows_', 'clearClickUpUserActivityBackgroundTriggers_',
+      'writeClickUpUserActivitySummary_', 'scheduleClickUpUserActivityBackground_',
+      `return (${source.replace(/^function startClickUpUserActivityBackground_/, 'function')});`
+    );
+    const fn = factory(
+      { getScriptProperties: () => props },
+      () => [{ sincronizacao_completa_controle: 'sim', sincronizado_em: new Date().toISOString() }],
+      () => {},
+      () => { writes += 1; },
+      () => { schedules += 1; }
+    );
+    return { result: fn(params), writes, schedules };
+  }
+  const normal = run({});
+  assert.equal(normal.result.already_complete, true);
+  assert.equal(normal.writes, 0);
+  assert.equal(normal.schedules, 0);
+  const forced = run({ force_restart: '1' });
+  assert.equal(forced.result.scheduled, true);
+  assert.equal(forced.writes, 1);
+  assert.equal(forced.schedules, 1);
 });
 
 test('keeps operational CMAX statuses visible while paying only positive events', async () => {
