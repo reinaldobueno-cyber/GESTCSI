@@ -275,3 +275,16 @@ test('uses validation competence consistently for rejected milestone totals', ()
   assert.doesNotMatch(html, /bonus-rejected-print\{display:none/);
   assert.match(html, /body\.bonus-print-admin \.bonus-exec-grid\.validation\{grid-template-columns:repeat\(5/);
 });
+
+test('prints individual bonus reports in landscape without overlapping daily columns', () => {
+  const start = html.indexOf('function bonusPrint(mode)');
+  const end = html.indexOf('\nfunction ', start + 20);
+  const source = html.slice(start, end > start ? end : undefined);
+  assert.match(source, /mode==='individual'[\s\S]+?@page\{size:A4 landscape;margin:8mm\}/);
+  assert.match(source, /max-width:281mm/);
+  assert.match(html, /body\.bonus-print-individual \.bonus-activity-grid\{grid-template-columns:repeat\(6/);
+  assert.match(html, /body\.bonus-print-individual \.bonus-financial\{grid-template-columns:repeat\(4/);
+  assert.match(html, /body\.bonus-print-individual \.bonus-daily-table th:nth-child\(2\)[^\n]+width:32%/);
+  assert.match(html, /body\.bonus-print-individual \.bonus-daily-table \.cmax-special-label[^\n]+display:block/);
+  assert.doesNotMatch(source, /mode==='individual'[\s\S]+?size:A4 portrait/);
+});
