@@ -5052,6 +5052,9 @@ function resetarCachesDerivadosPainel(opcoes) {
 window.recarregarPainelManual = function() {
   resetarCachesDerivadosPainel({ limparCachePainel: true });
   loadAll('manual');
+  // O fechamento e a bonificação possuem uma fonte/cache próprios. O botão
+  // global precisa recarregá-los também para não manter totais antigos na tela.
+  if (typeof fechamentoLoad === 'function') fechamentoLoad(true);
   return true;
 };
 var CLICKUP_PROJECT_SYNC_POLL_TIMER = null;
@@ -6764,7 +6767,7 @@ var FECHAMENTO_LOADING = false;
 var FECHAMENTO_SESSION_REFRESHED = false;
 var FECHAMENTO_POLL_TIMER = null;
 var FECHAMENTO_FILTER = { month:fechamentoCurrentMonth(), consultor:'todos', projetoBusca:'', situacao:'todos' };
-var FECHAMENTO_CACHE_VERSION = 'closing-appscript-primary-v11-deleted-task-filter';
+var FECHAMENTO_CACHE_VERSION = 'closing-appscript-primary-v12-closing-refresh';
 var FECHAMENTO_EXCLUDED_TASK_IDS = {'86ajpvhuc':true};
 var FECHAMENTO_MILESTONE_BONUS_VALUE = 30;
 var PROJECT_CLOSING_RULE_VERSION = 'breakoff-entrega-id-aprovar-v7';
