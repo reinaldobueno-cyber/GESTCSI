@@ -244,7 +244,7 @@ test('uses one canonical name for Anita in milestone closing', () => {
 });
 
 test('keeps August project closings out of the milestone queue and preserves reported rejections', () => {
-  assert.match(html, /FECHAMENTO_CACHE_VERSION = 'closing-appscript-primary-v13-august-decisions'/);
+  assert.match(html, /FECHAMENTO_CACHE_VERSION = 'closing-appscript-primary-v14-breakoff-classification'/);
   for (const taskId of ['86abannct', '86a9rxvqx', '86ab84zce', '86ab84g1u', '86ab84gax']) {
     assert.match(html, new RegExp(`'${taskId}': \\{ status_atual:'reprovado gestão'`));
   }
@@ -253,6 +253,8 @@ test('keeps August project closings out of the milestone queue and preserves rep
   const source = html.slice(start, end);
   assert.match(source, /fechamento_projeto/);
   assert.match(source, /type === 'fechamento de projeto'/);
-  assert.match(source, /fechamentoItemTemFlagEntregaProjeto/);
+  assert.match(source, /fechamentoItemTemMarcadorEntrega/);
   assert.doesNotMatch(source, /fechamentoItemStatusAprovarProjeto/);
+  assert.match(html, /function fechamentoIsProjectClosing\(item\) \{\s+return fechamentoItemEhFechamentoProjeto\(item\);/);
+  assert.match(html, /function bonusOpenWaitingAudit\(\)[\s\S]+?if\(fechamentoItemEhFechamentoProjeto\(item\)\)return false;/);
 });

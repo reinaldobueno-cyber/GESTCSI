@@ -6767,7 +6767,7 @@ var FECHAMENTO_LOADING = false;
 var FECHAMENTO_SESSION_REFRESHED = false;
 var FECHAMENTO_POLL_TIMER = null;
 var FECHAMENTO_FILTER = { month:fechamentoCurrentMonth(), consultor:'todos', projetoBusca:'', situacao:'todos' };
-var FECHAMENTO_CACHE_VERSION = 'closing-appscript-primary-v13-august-decisions';
+var FECHAMENTO_CACHE_VERSION = 'closing-appscript-primary-v14-breakoff-classification';
 var FECHAMENTO_EXCLUDED_TASK_IDS = {'86ajpvhuc':true};
 var FECHAMENTO_MILESTONE_BONUS_VALUE = 30;
 var PROJECT_CLOSING_RULE_VERSION = 'breakoff-entrega-id-aprovar-v7';
@@ -7076,11 +7076,7 @@ function fechamentoMergeClosingRows(primaryRows, historyRows) {
   return Object.keys(byKey).map(function(key) { return byKey[key]; });
 }
 function fechamentoIsProjectClosing(item) {
-  if (String(item && item.fechamento_projeto || '').toLowerCase() === 'sim') return true;
-  var type = fechamentoSearchKey(item && item.item_tipo);
-  var delivery = String(item && item.marcador_entrega || '').toLowerCase() === 'sim' ||
-    type === 'entrega de projeto' || type === 'fechamento de projeto';
-  return delivery && item && item.situacao === 'aprovado';
+  return fechamentoItemEhFechamentoProjeto(item);
 }
 function fechamentoJsonItemAprovaProjeto(item) {
   return fechamentoItemAtendeRegraProjetoEntrega(item);
@@ -7128,7 +7124,7 @@ function fechamentoItemEhFechamentoProjeto(item) {
   if (String(item && item.fechamento_projeto || '').toLowerCase() === 'sim') return true;
   var type = fechamentoSearchKey(item && item.item_tipo);
   if (type === 'fechamento de projeto' || type === 'entrega de projeto') return true;
-  return fechamentoItemEhBreakOff(item) && fechamentoItemTemFlagEntregaProjeto(item);
+  return fechamentoItemEhBreakOff(item) && fechamentoItemTemMarcadorEntrega(item);
 }
 function fechamentoItemPertenceAoProjeto(item, projectKey, projectName) {
   if (projectKey && String(item && item.project_key || '').trim() === projectKey) return true;
@@ -8898,6 +8894,7 @@ function bonusOpenWaitingAudit() {
   var month=BONUS_FILTER.month||fechamentoCurrentMonth();
   var rows=(FECHAMENTO_MARCOS||[]).filter(function(item){
     if(String(item.mes_fechamento||'')!==month)return false;
+    if(fechamentoItemEhFechamentoProjeto(item))return false;
     if(BONUS_FILTER.consultant!=='todos'&&!bonusNamesMatch(fechamentoEffectiveConsultant(item),BONUS_FILTER.consultant))return false;
     return item.situacao!=='aprovado'&&item.situacao!=='reprovado';
   }).sort(function(a,b){
@@ -8982,6 +8979,7 @@ function initBonus() {
   var total=daily+milestones+projects+indications;
   var closedRows=(FECHAMENTO_MARCOS||[]).filter(function(item){
     if(String(item.mes_fechamento||'')!==BONUS_FILTER.month)return false;
+    if(fechamentoItemEhFechamentoProjeto(item))return false;
     return BONUS_FILTER.consultant==='todos'||bonusNamesMatch(fechamentoEffectiveConsultant(item),BONUS_FILTER.consultant);
   });
   var closedStats={
