@@ -244,7 +244,7 @@ test('uses one canonical name for Anita in milestone closing', () => {
 });
 
 test('keeps August project closings out of the milestone queue and preserves reported rejections', () => {
-  assert.match(html, /FECHAMENTO_CACHE_VERSION = 'closing-appscript-primary-v15-validation-competence'/);
+  assert.match(html, /FECHAMENTO_CACHE_VERSION = 'closing-appscript-primary-v16-coherent-validation-report'/);
   for (const taskId of ['86abannct', '86a9rxvqx', '86ab84zce', '86ab84g1u', '86ab84gax']) {
     assert.match(html, new RegExp(`'${taskId}': \\{ status_atual:'reprovado gestão'`));
   }
@@ -266,5 +266,12 @@ test('uses validation competence consistently for rejected milestone totals', ()
   assert.match(source, /<span>Marcos reprovados<\/span><strong>'\+rejected\+'/);
   assert.match(source, /compet&ecirc;ncia da reprova&ccedil;&atilde;o/);
   assert.match(source, /Aten&ccedil;&atilde;o: '\+rejected\+' marco\(s\) reprovado\(s\)/);
+  assert.match(source, /var validationTotal=approved\+rejected;/);
+  assert.match(source, /Valida&ccedil;&otilde;es na compet&ecirc;ncia/);
+  assert.match(source, /'\+approved\+' aprovados \+ '\+rejected\+' reprovados/);
+  assert.match(source, /'\+approved\+' de '\+validationTotal\+' marcos decididos/);
   assert.doesNotMatch(source, /closedStats\.rejected/);
+  assert.doesNotMatch(source, /Closed na compet&ecirc;ncia/);
+  assert.doesNotMatch(html, /bonus-rejected-print\{display:none/);
+  assert.match(html, /body\.bonus-print-admin \.bonus-exec-grid\.validation\{grid-template-columns:repeat\(5/);
 });
