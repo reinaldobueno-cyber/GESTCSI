@@ -242,3 +242,17 @@ test('uses one canonical name for Anita in milestone closing', () => {
   assert.match(html, /key==='ANITA'\|\|key==='ANITA CRISTINA RODRIGUES TAVARES'/);
   assert.match(html, /return 'Anita Cristina Rodrigues Tavares'/);
 });
+
+test('keeps August project closings out of the milestone queue and preserves reported rejections', () => {
+  assert.match(html, /FECHAMENTO_CACHE_VERSION = 'closing-appscript-primary-v13-august-decisions'/);
+  for (const taskId of ['86abannct', '86a9rxvqx', '86ab84zce', '86ab84g1u', '86ab84gax']) {
+    assert.match(html, new RegExp(`'${taskId}': \\{ status_atual:'reprovado gestão'`));
+  }
+  const start = html.indexOf('function fechamentoItemEhFechamentoProjeto(item)');
+  const end = html.indexOf('\nfunction fechamentoItemPertenceAoProjeto', start);
+  const source = html.slice(start, end);
+  assert.match(source, /fechamento_projeto/);
+  assert.match(source, /type === 'fechamento de projeto'/);
+  assert.match(source, /fechamentoItemTemFlagEntregaProjeto/);
+  assert.doesNotMatch(source, /fechamentoItemStatusAprovarProjeto/);
+});

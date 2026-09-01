@@ -6767,7 +6767,7 @@ var FECHAMENTO_LOADING = false;
 var FECHAMENTO_SESSION_REFRESHED = false;
 var FECHAMENTO_POLL_TIMER = null;
 var FECHAMENTO_FILTER = { month:fechamentoCurrentMonth(), consultor:'todos', projetoBusca:'', situacao:'todos' };
-var FECHAMENTO_CACHE_VERSION = 'closing-appscript-primary-v12-closing-refresh';
+var FECHAMENTO_CACHE_VERSION = 'closing-appscript-primary-v13-august-decisions';
 var FECHAMENTO_EXCLUDED_TASK_IDS = {'86ajpvhuc':true};
 var FECHAMENTO_MILESTONE_BONUS_VALUE = 30;
 var PROJECT_CLOSING_RULE_VERSION = 'breakoff-entrega-id-aprovar-v7';
@@ -6996,7 +6996,14 @@ function fechamentoValidatedRecovery(item) {
   var map = {
     '86aguzfdc': { validation_at:'2026-06-30T13:19:00.000Z', justificativa:'Validado no fechamento enviado em JUN/2026; preservado contra retorno para Closed.' },
     '86aguzf0z': { validation_at:'2026-06-30T13:20:00.000Z', justificativa:'Validado no fechamento enviado em JUN/2026; preservado contra retorno para Closed.' },
-    '86ag9bqbt': { validation_at:'2026-06-30T20:31:00.000Z', justificativa:'Validado no fechamento enviado em JUN/2026; preservado contra retorno para Closed.' }
+    '86ag9bqbt': { validation_at:'2026-06-30T20:31:00.000Z', justificativa:'Validado no fechamento enviado em JUN/2026; preservado contra retorno para Closed.' },
+    // Decisões comunicadas no fechamento de AGO/2026 em 01/09. Uma delas é
+    // fechamento de projeto e permanece fora da contagem de marcos.
+    '86abannct': { status_atual:'reprovado gestão', situacao:'reprovado', mes_fechamento:'2026-08', mes_validacao:'2026-08', valor_bonus:0 },
+    '86a9rxvqx': { status_atual:'reprovado gestão', situacao:'reprovado', mes_fechamento:'2026-08', mes_validacao:'2026-08', valor_bonus:0 },
+    '86ab84zce': { status_atual:'reprovado gestão', situacao:'reprovado', mes_fechamento:'2026-08', mes_validacao:'2026-08', valor_bonus:0 },
+    '86ab84g1u': { status_atual:'reprovado gestão', situacao:'reprovado', mes_fechamento:'2026-08', mes_validacao:'2026-08', valor_bonus:0 },
+    '86ab84gax': { status_atual:'reprovado gestão', situacao:'reprovado', mes_fechamento:'2026-08', mes_validacao:'2026-08', valor_bonus:0 }
   };
   if (!map[taskId]) return null;
   return Object.assign({
@@ -7118,7 +7125,10 @@ function fechamentoItemAtendeRegraProjetoEntrega(item) {
     fechamentoItemStatusAprovarProjeto(item);
 }
 function fechamentoItemEhFechamentoProjeto(item) {
-  return fechamentoItemAtendeRegraProjetoEntrega(item);
+  if (String(item && item.fechamento_projeto || '').toLowerCase() === 'sim') return true;
+  var type = fechamentoSearchKey(item && item.item_tipo);
+  if (type === 'fechamento de projeto' || type === 'entrega de projeto') return true;
+  return fechamentoItemEhBreakOff(item) && fechamentoItemTemFlagEntregaProjeto(item);
 }
 function fechamentoItemPertenceAoProjeto(item, projectKey, projectName) {
   if (projectKey && String(item && item.project_key || '').trim() === projectKey) return true;
