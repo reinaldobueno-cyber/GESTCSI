@@ -244,7 +244,7 @@ test('uses one canonical name for Anita in milestone closing', () => {
 });
 
 test('keeps August project closings out of the milestone queue and preserves reported rejections', () => {
-  assert.match(html, /FECHAMENTO_CACHE_VERSION = 'closing-appscript-primary-v14-breakoff-classification'/);
+  assert.match(html, /FECHAMENTO_CACHE_VERSION = 'closing-appscript-primary-v15-validation-competence'/);
   for (const taskId of ['86abannct', '86a9rxvqx', '86ab84zce', '86ab84g1u', '86ab84gax']) {
     assert.match(html, new RegExp(`'${taskId}': \\{ status_atual:'reprovado gestão'`));
   }
@@ -257,4 +257,14 @@ test('keeps August project closings out of the milestone queue and preserves rep
   assert.doesNotMatch(source, /fechamentoItemStatusAprovarProjeto/);
   assert.match(html, /function fechamentoIsProjectClosing\(item\) \{\s+return fechamentoItemEhFechamentoProjeto\(item\);/);
   assert.match(html, /function bonusOpenWaitingAudit\(\)[\s\S]+?if\(fechamentoItemEhFechamentoProjeto\(item\)\)return false;/);
+});
+
+test('uses validation competence consistently for rejected milestone totals', () => {
+  const start = html.indexOf('function bonusExecutivePanel(');
+  const end = html.indexOf('\nfunction bonusAdminRejectedTable', start);
+  const source = html.slice(start, end);
+  assert.match(source, /<span>Marcos reprovados<\/span><strong>'\+rejected\+'/);
+  assert.match(source, /compet&ecirc;ncia da reprova&ccedil;&atilde;o/);
+  assert.match(source, /Aten&ccedil;&atilde;o: '\+rejected\+' marco\(s\) reprovado\(s\)/);
+  assert.doesNotMatch(source, /closedStats\.rejected/);
 });
