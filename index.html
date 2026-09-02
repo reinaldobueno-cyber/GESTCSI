@@ -13939,9 +13939,8 @@ function initLeafletMap(projList) {
     _lmap.fitBounds(OPERATIONAL_BOUNDS, { animate: false });
     _lmap.invalidateSize(true);
 
-    L.tileLayer('https://{s}.basemaps.cartocdn.com/light_nolabels/{z}/{x}/{y}{r}.png', {
-      attribution: '&copy; CARTO',
-      subdomains: 'abcd',
+    L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      attribution: '&copy; <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a> contributors',
       maxZoom: 19,
       noWrap: true
     }).addTo(_lmap);
