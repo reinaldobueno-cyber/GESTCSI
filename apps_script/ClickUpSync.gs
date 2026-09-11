@@ -27,7 +27,7 @@
 
 var CLICKUP_API_BASE = 'https://api.clickup.com/api/v2';
 var CLICKUP_DEFAULT_WORKSPACE_ID = '9007083069';
-var CLICKUP_ACTIVITY_ENGINE_VERSION = 'workspace-recent-v1';
+var CLICKUP_ACTIVITY_ENGINE_VERSION = 'workspace-recent-7d-v2';
 var CLICKUP_MILESTONE_BONUS_VALUE = 30;
 var CLICKUP_PROJECT_CLOSING_BONUS_VALUE = 80;
 var CLICKUP_PROJECT_CLOSING_BONUS_START = '2026-06-15';
@@ -5530,6 +5530,7 @@ function syncClickUpUserActivityApprox_(params, meta) {
     item.projetos_proximo_offset_controle = nextOffset;
     item.sincronizacao_completa_controle = scanDone ? 'sim' : 'nao';
     item.fonte_coleta_controle = approx.collection_mode || 'project_scan';
+    item.motor_controle = CLICKUP_ACTIVITY_ENGINE_VERSION;
     item.tarefas_lidas_controle = toInt_(approx.tasks_read, 0);
     item.resultado_parcial_controle = approx.truncated ? 'sim' : 'nao';
   });
@@ -5596,7 +5597,8 @@ function getClickUpUserActivity_(params) {
     return rowToObject_(header, row);
   });
   var stale = users.length > 0 && !users.some(function(user) {
-    return String(user.modo_controle || '') === 'estimado_por_tarefas';
+    return String(user.modo_controle || '') === 'estimado_por_tarefas' &&
+      String(user.motor_controle || '') === CLICKUP_ACTIVITY_ENGINE_VERSION;
   });
   return {
     ok: true,
@@ -6703,6 +6705,7 @@ function getClickUpUserActivityHeaders_() {
     'modo_controle',
     'atividades_7_dias_json',
     'fonte_coleta_controle',
+    'motor_controle',
     'tarefas_lidas_controle',
     'resultado_parcial_controle'
   ];

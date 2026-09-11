@@ -14,7 +14,7 @@ test('loads the portfolio integrity module before the application script', () =>
 test('keeps critical production invariants in the staging build', () => {
   assert.match(html, /PANEL_MIN_2026_PROJECTS = 201/);
   assert.match(html, /PANEL_SNAPSHOT_SCHEMA = 2/);
-  assert.match(html, /PANEL_APP_VERSION = '2026-09-11-clickup-activity-v1'/);
+  assert.match(html, /PANEL_APP_VERSION = '2026-09-11-clickup-activity-v2'/);
   assert.match(html, /@page\{size:A4 portrait/);
   assert.match(html, /gestcsi_map_geocode_cache_v3_country_validated/);
   assert.doesNotMatch(html, /Fallback por UF/);
@@ -149,6 +149,8 @@ test('builds adoption from one recent workspace query and keeps a project-scan f
   assert.match(appsScript, /'date_updated_gt=' \+ Math\.max/);
   assert.match(appsScript, /options\.seven_day_start_ms/);
   assert.match(appsScript, /'date_updated_lt=' \+ Math\.max/);
+  assert.match(appsScript, /CLICKUP_ACTIVITY_ENGINE_VERSION = 'workspace-recent-7d-v2'/);
+  assert.match(appsScript, /item\.motor_controle = CLICKUP_ACTIVITY_ENGINE_VERSION/);
   assert.match(appsScript, /prefer_workspace_recent: useWorkspaceRecent/);
   assert.match(appsScript, /collection_mode: options\._activity_collection_mode \|\| 'project_scan'/);
   assert.match(appsScript, /workspace_recent_tasks_with_view_fallback/);
