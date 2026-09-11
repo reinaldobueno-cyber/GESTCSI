@@ -1578,6 +1578,7 @@ function buildNormalizedProjectFromClickUp_(mapping, options) {
   options = options || {};
   var payload = fetchProjectTasks_(mapping, options);
   var tasks = payload.tasks || [];
+  var resolvedListId = normalizeClickUpId_(payload.resolved_list_id || mapping.list_id);
   var phaseMap = {};
   var byId = {};
   var ignoredNestedItems = 0;
@@ -1726,7 +1727,7 @@ function buildNormalizedProjectFromClickUp_(mapping, options) {
     consultor: consultorInferido,
     project_url: projectUrl,
     view_id: mapping.view_id,
-    list_id: mapping.list_id,
+    list_id: resolvedListId,
     synced_at: new Date().toISOString(),
     fases: phases.map(function(phase) {
       var tasksTotal = phase.tasks_concluidas + phase.tasks_pendentes;
@@ -1774,7 +1775,9 @@ function buildNormalizedProjectFromClickUp_(mapping, options) {
       warning: payload.warning || '',
       fetched_task_count: tasks.length,
       ignored_nested_items: ignoredNestedItems,
-      list_id: mapping.list_id || '',
+      list_id: resolvedListId,
+      resolved_list_name: payload.resolved_list_name || '',
+      folder_id: mapping.folder_id || '',
       view_id: mapping.view_id || ''
     }
   };
@@ -1820,9 +1823,23 @@ function fetchProjectTasks_(mapping, options) {
     }
   }
   if (mapping.folder_id) {
+    var syncMode = normalizeKey_(mapping.sync_mode || 'list');
+    var useWholeFolder = syncMode === 'FOLDER' || syncMode === 'PASTA';
+    if (!useWholeFolder) {
+      var scheduleList = resolveImplementationScheduleListForFolder_(mapping.folder_id);
+      if (scheduleList && scheduleList.id) {
+        return {
+          source: 'folder_schedule_list',
+          tasks: fetchAllListTasks_(scheduleList.id, options),
+          resolved_list_id: scheduleList.id,
+          resolved_list_name: scheduleList.name || 'Cronograma de Implantacao'
+        };
+      }
+    }
     return {
-      source: 'folder',
-      tasks: fetchAllFolderTasks_(mapping.folder_id, options)
+      source: useWholeFolder ? 'folder' : 'folder_fallback',
+      tasks: fetchAllFolderTasks_(mapping.folder_id, options),
+      warning: useWholeFolder ? '' : 'Lista Cronograma de Implantacao nao encontrada; a pasta inteira foi usada como contingencia.'
     };
   }
   if (mapping.space_id) {
@@ -2190,10 +2207,9 @@ function fetchClickUpValidationSituationForMonth_(situation, month) {
   var workspaceId = getClickUpWorkspaceId_();
   if (!token) throw new Error('Missing CLICKUP_TOKEN script property');
   if (!workspaceId) throw new Error('CLICKUP_TEAM_ID nao configurado.');
-  var since = new Date(month + '-01T00:00:00').getTime();
-  var monthStart = new Date(month + '-01T00:00:00');
-  var untilDate = new Date(monthStart.getFullYear(), monthStart.getMonth() + 1, 1);
-  var until = untilDate.getTime() - 1;
+  var monthRange = clickUpMonthRangeMillis_(month);
+  var since = monthRange.start - 1;
+  var until = monthRange.end;
   var tasks = [];
   var statuses = clickUpMilestoneStatusAliases_(situation);
   for (var page = 0; page < 10; page++) {
@@ -2224,6 +2240,7 @@ function fetchClickUpValidationSituationForMonth_(situation, month) {
       if (response.getResponseCode() < 200 || response.getResponseCode() >= 300) return;
       try {
         var batch = JSON.parse(response.getContentText() || '{}').tasks || [];
+        batch.forEach(function(task) { task._confirmed_milestone = true; });
         tasks = tasks.concat(batch);
         if (batch.length >= 100) hasFullPage = true;
       } catch (error) {}
@@ -2232,7 +2249,7 @@ function fetchClickUpValidationSituationForMonth_(situation, month) {
   }
   return dedupeTasks_(tasks).filter(function(task) {
     return clickUpMilestoneStatusMatchesSituation_(clickUpTaskStatusText_(task), situation) &&
-      normalizeClickUpMonthReference_(task && task.date_updated ? fromMillisIso_(task.date_updated) : '') === month;
+      clickUpMonthReference_(task && task.date_updated ? fromMillisIso_(task.date_updated) : '') === month;
   });
 }
 
@@ -2496,6 +2513,31 @@ function fetchAllFolderTasks_(folderId, options) {
   return dedupeTasks_(all);
 }
 
+var CLICKUP_FOLDER_SCHEDULE_LIST_MEMORY_ = {};
+function resolveImplementationScheduleListForFolder_(folderId) {
+  folderId = normalizeClickUpNumericId_(folderId);
+  if (!folderId) throw new Error('CLICKUP_CONFIG com folder_id invalido ou vazio.');
+  if (Object.prototype.hasOwnProperty.call(CLICKUP_FOLDER_SCHEDULE_LIST_MEMORY_, folderId)) {
+    return CLICKUP_FOLDER_SCHEDULE_LIST_MEMORY_[folderId];
+  }
+
+  var response = clickupRequest_('get', '/folder/' + folderId + '/list?archived=false');
+  var matches = (response.lists || []).filter(function(list) {
+    return list && list.id && isImplementationScheduleList_(list.name);
+  }).sort(function(a, b) {
+    var aExact = normalizeKey_(a && a.name) === 'CRONOGRAMA DE IMPLANTACAO' ? 0 : 1;
+    var bExact = normalizeKey_(b && b.name) === 'CRONOGRAMA DE IMPLANTACAO' ? 0 : 1;
+    if (aExact !== bExact) return aExact - bExact;
+    return sanitizeText_(a && a.name).localeCompare(sanitizeText_(b && b.name));
+  });
+  var found = matches.length ? {
+    id: normalizeClickUpId_(matches[0].id),
+    name: sanitizeText_(matches[0].name)
+  } : null;
+  CLICKUP_FOLDER_SCHEDULE_LIST_MEMORY_[folderId] = found;
+  return found;
+}
+
 function fetchAllSpaceTasks_(spaceId, options) {
   spaceId = normalizeClickUpId_(spaceId);
   if (!spaceId) throw new Error('CLICKUP_CONFIG com space_id invalido ou vazio.');
@@ -2664,8 +2706,9 @@ function fetchClickUpImplementationProjectsFromSpace_(space) {
 
 function isImplementationScheduleList_(name) {
   var key = normalizeKey_(name);
-  return key === 'CRONOGRAMA DE IMPLANTACAO' ||
-    key.indexOf('CRONOGRAMA DE IMPLANTACAO') >= 0;
+  if (key.indexOf('CRONOGRAMA') < 0) return false;
+  return key.indexOf('IMPLANTACAO') >= 0 ||
+    key.indexOf('TREINAMENTO') >= 0;
 }
 
 function buildHistoricalProjectKey_(spaceName, project) {
@@ -3121,9 +3164,27 @@ function clickUpMonthReference_(value) {
   return Utilities.formatDate(date, Session.getScriptTimeZone(), 'yyyy-MM');
 }
 
+function clickUpMonthRangeMillis_(month) {
+  var match = sanitizeText_(month).match(/^(\d{4})-(\d{2})$/);
+  if (!match) throw new Error('Mes de validacao invalido: ' + sanitizeText_(month));
+  var year = Number(match[1]);
+  var monthNumber = Number(match[2]);
+  if (monthNumber < 1 || monthNumber > 12) throw new Error('Mes de validacao invalido: ' + sanitizeText_(month));
+  var nextYear = monthNumber === 12 ? year + 1 : year;
+  var nextMonth = monthNumber === 12 ? 1 : monthNumber + 1;
+  var timeZone = Session.getScriptTimeZone();
+  var format = 'yyyy-MM-dd HH:mm:ss';
+  var startText = String(year).padStart(4, '0') + '-' + String(monthNumber).padStart(2, '0') + '-01 00:00:00';
+  var endText = String(nextYear).padStart(4, '0') + '-' + String(nextMonth).padStart(2, '0') + '-01 00:00:00';
+  return {
+    start: Utilities.parseDate(startText, timeZone, format).getTime(),
+    end: Utilities.parseDate(endText, timeZone, format).getTime()
+  };
+}
+
 function normalizeClickUpMonthReference_(value, fallbackDate) {
   var text = sanitizeText_(value);
-  var isoMatch = text.match(/^(\d{4})-(\d{2})/);
+  var isoMatch = text.match(/^(\d{4})-(\d{2})$/);
   if (isoMatch) return isoMatch[1] + '-' + isoMatch[2];
   var brMatch = text.match(/^(\d{2})\/(\d{4})$/);
   if (brMatch) return brMatch[2] + '-' + brMatch[1];
@@ -7031,11 +7092,16 @@ function projectMappingFromConfigItem_(item) {
   var urlListId = extractClickUpIdFromUrl_(projectUrl, 'list');
   var urlFolderId = extractClickUpIdFromUrl_(projectUrl, 'folder');
   var urlSpaceId = extractClickUpIdFromUrl_(projectUrl, 'space');
-  var urlDefinesSource = !!(urlViewId || urlListId || urlFolderId || urlSpaceId);
-  var viewId = urlDefinesSource ? urlViewId : normalizeClickUpId_(item.view_id);
-  var listId = urlDefinesSource ? urlListId : normalizeClickUpId_(item.list_id);
-  var folderId = urlDefinesSource ? urlFolderId : normalizeClickUpNumericId_(item.folder_id);
-  var spaceId = urlDefinesSource ? urlSpaceId : normalizeClickUpNumericId_(item.space_id);
+  var configuredViewId = normalizeClickUpId_(item.view_id);
+  var configuredListId = normalizeClickUpId_(item.list_id);
+  var configuredFolderId = normalizeClickUpNumericId_(item.folder_id);
+  var configuredSpaceId = normalizeClickUpNumericId_(item.space_id);
+  // Um link de pasta identifica o projeto, enquanto list_id identifica a fonte
+  // exata do cronograma. Preserve o list_id resolvido em sincronizacoes anteriores.
+  var viewId = urlViewId || (!urlListId && !urlFolderId && !urlSpaceId ? configuredViewId : '');
+  var listId = urlListId || (!urlViewId ? configuredListId : '');
+  var folderId = urlFolderId || (!urlViewId && !urlListId ? configuredFolderId : '');
+  var spaceId = urlSpaceId || (!urlViewId && !urlListId && !urlFolderId ? configuredSpaceId : '');
   if (!mes && !cliente && !projectUrl && !viewId && !listId && !folderId && !spaceId) return null;
   return {
     enabled: normalizeBoolean_(item.enabled, true),
