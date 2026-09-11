@@ -4731,7 +4731,7 @@ var LAST_UPDATE_KEY = 'gestcsi_last_update_label_v1';
 var PANEL_CACHE_KEY = 'gestcsi_panel_cache_v2';
 var PANEL_SNAPSHOT_KEY = 'gestcsi_portfolio_snapshot_v1';
 var PANEL_SNAPSHOT_SCHEMA = 2;
-var PANEL_APP_VERSION = '2026-09-11-clickup-activity-v2';
+var PANEL_APP_VERSION = '2026-09-11-clickup-activity-v3';
 var PANEL_EXPECTED_TOTAL_KEY = 'gestcsi_portfolio_expected_total_v1';
 var PANEL_AUTO_REFRESH_INTERVAL_MS = 5 * 60 * 1000;
 var PANEL_AUTO_REFRESH_MIN_GAP_MS = 60 * 1000;
@@ -14843,7 +14843,13 @@ function gestaoLoadClickUpUserActivity(force) {
   if (!AUTH_STATE.user || AUTH_STATE.user.role !== 'admin') return Promise.resolve([]);
   if (!force && GESTAO_CLICKUP_USER_ACTIVITY) return Promise.resolve(GESTAO_CLICKUP_USER_ACTIVITY);
   if (!force && GESTAO_CLICKUP_USER_ACTIVITY_LOADING) return GESTAO_CLICKUP_USER_ACTIVITY_LOADING;
-  GESTAO_CLICKUP_USER_ACTIVITY_LOADING = chamarAppsScriptJsonp('getClickUpUserActivity', {auth_token:authTokenParam()}, 30000).then(function(resp) {
+  function requestActivity() {
+    return chamarAppsScriptJsonp('getClickUpUserActivity', {auth_token:authTokenParam()}, 45000);
+  }
+  GESTAO_CLICKUP_USER_ACTIVITY_LOADING = requestActivity().catch(function(firstError) {
+    if (!/Timeout|Erro ao acessar Apps Script/i.test(String(firstError && firstError.message || ''))) throw firstError;
+    return new Promise(function(resolve) { setTimeout(resolve, 1200); }).then(requestActivity);
+  }).then(function(resp) {
     if (!resp || resp.ok === false) throw new Error((resp && (resp.error || resp.message)) || 'Apps Script nao retornou atividade ClickUp.');
     var users = Array.isArray(resp.users) ? resp.users : [];
     users._needsGenerate = !!(resp.needs_generate || resp.stale_schema);
@@ -15161,12 +15167,14 @@ function gestaoRenderClickUpUserActivity(users, meta) {
     var dayActions = gestaoUserDayActivitiesForDay(u, todayKey);
     var sevenDayActions = gestaoUserSevenDayActivities(u);
     var portfolioProjects = gestaoUserPortfolioProjects(u);
-    var movedTodayRow = dayActions.length > 0;
+    var dayActionCount = Math.max(dayActions.length, gestaoActivityNum(u.atividades_hoje_total_controle));
+    var sevenDayActionCount = Math.max(sevenDayActions.length, gestaoActivityNum(u.atividades_7_dias_total_controle));
+    var movedTodayRow = dayActionCount > 0;
     var lastAction = portfolioTaskLast
       ? gestaoActivitySourceCell(portfolioTaskLast, estimatedMode ? 'Task da carteira atualizada/criada' : (u.tipo_ultima_acao || u.tipo_primeira_acao || 'Último sinal encontrado'), u.ultima_acao_contexto || u.primeira_acao_contexto, u.ultima_acao_link || u.primeira_acao_link)
       : '-';
-    var movedCell = movedTodayRow ? '<button type="button" class="dashx-score-pill action good" onclick="return gestaoOpenUserDayActivity('+idx+')">Sim ('+dayActions.length+')</button>' : '<span class="dashx-score-pill neutral">Não</span>';
-    var sevenDayCell = sevenDayActions.length ? '<button type="button" class="dashx-score-pill action good" onclick="return gestaoOpenUserSevenDayActivity('+idx+')">'+sevenDayActions.length+' tasks</button>' : '<span class="dashx-score-pill neutral">0</span>';
+    var movedCell = movedTodayRow ? '<button type="button" class="dashx-score-pill action good" onclick="return gestaoOpenUserDayActivity('+idx+')">Sim ('+dayActionCount+')</button>' : '<span class="dashx-score-pill neutral">Não</span>';
+    var sevenDayCell = sevenDayActionCount ? '<button type="button" class="dashx-score-pill action good" onclick="return gestaoOpenUserSevenDayActivity('+idx+')">'+sevenDayActionCount+' tasks</button>' : '<span class="dashx-score-pill neutral">0</span>';
     var portfolioCount = portfolioProjects.length || gestaoActivityNum(u.projetos_associados);
     var portfolioCell = portfolioCount ? '<button type="button" class="dashx-score-pill action neutral" onclick="return gestaoOpenUserPortfolio('+idx+')">'+fn(portfolioCount)+'</button>' : '0';
     return '<tr><td><strong>'+escapeHtml(u.nome || u.email || u.user_id || '-')+'</strong><div class="dashx-list-sub">'+escapeHtml(u.email || '-')+'</div></td>'+

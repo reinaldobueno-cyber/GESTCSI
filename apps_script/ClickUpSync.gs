@@ -2793,70 +2793,48 @@ function getClickUpInventory_(params) {
   params = params || {};
   var user = requireUser_(params || {});
   var sheet = getClickUpInventorySheet_();
-  var values = sheet.getDataRange().getValues();
-  if (values.length <= 1) return { ok: true, projetos: [], total: 0 };
-  var header = values[0];
+  var lastRow = sheet.getLastRow();
+  var lastColumn = sheet.getLastColumn();
+  if (lastRow <= 1 || lastColumn <= 0) return { ok: true, projetos: [], total: 0 };
+  var header = sheet.getRange(1, 1, 1, lastColumn).getValues()[0];
   var lean = String(params.lean || '') === '1';
+  var values;
+  var jsonIndex = header.indexOf('clickup_json');
+  if (lean && jsonIndex >= 0) {
+    var rowCount = lastRow - 1;
+    var beforeJson = jsonIndex > 0 ? sheet.getRange(2, 1, rowCount, jsonIndex).getValues() : [];
+    var afterCount = lastColumn - jsonIndex - 1;
+    var afterJson = afterCount > 0 ? sheet.getRange(2, jsonIndex + 2, rowCount, afterCount).getValues() : [];
+    values = [header];
+    for (var rowIndex = 0; rowIndex < rowCount; rowIndex += 1) {
+      values.push((beforeJson[rowIndex] || []).concat([''], afterJson[rowIndex] || []));
+    }
+  } else {
+    values = sheet.getRange(1, 1, lastRow, lastColumn).getValues();
+  }
+  if (values.length <= 1) return { ok: true, projetos: [], total: 0 };
   var projetos = values.slice(1).map(function(row) {
     var item = rowToObject_(header, row);
     if (item.ultima_sync_clickup instanceof Date) item.ultima_sync_clickup = item.ultima_sync_clickup.toISOString();
-    if (lean) item.clickup_json = buildLeanClickUpInventoryJson_(item.clickup_json);
+    if (lean) {
+      item.clickup_json = JSON.stringify({
+        resumo: {
+          tasks_concluidas: toInt_(item.tasks_concluidas, 0),
+          tasks_pendentes: toInt_(item.tasks_pendentes, 0),
+          marcos_concluidos: toInt_(item.marcos_concluidos, 0),
+          marcos_pendentes: toInt_(item.marcos_pendentes, 0),
+          fases_total: toInt_(item.fases_total, 0),
+          progresso: Number(item.progresso || 0),
+          data_ultima_atualizacao: item.data_ultima_atualizacao || ''
+        },
+        compacto_gestao: true
+      });
+    }
     return item;
   }).filter(function(item) {
     return !!sanitizeText_(item.cliente) && canUserAccessProjectItem_(user, item);
   });
   return { ok: true, projetos: projetos, total: projetos.length, lean: lean };
-}
-
-function buildLeanClickUpInventoryJson_(raw) {
-  var payload = {};
-  try {
-    payload = raw && typeof raw === 'object' ? raw : JSON.parse(String(raw || '{}'));
-  } catch (e) {
-    return '';
-  }
-  function compactItem(item) {
-    item = item || {};
-    var out = {
-      id: String(item.id || ''),
-      nome: sanitizeText_(item.nome || item.name || ''),
-      fase_nome: sanitizeText_(item.fase_nome || ''),
-      status_original: sanitizeText_(item.status_original || item.status || ''),
-      updated_at: sanitizeText_(item.updated_at || item.date_updated || ''),
-      due_date: sanitizeText_(item.due_date || '')
-    };
-    if (item.concluido !== undefined) out.concluido = !!item.concluido;
-    if (item.concluida !== undefined) out.concluida = !!item.concluida;
-    return out;
-  }
-  var phases = (Array.isArray(payload.fases) ? payload.fases : []).map(function(phase) {
-    return {
-      id: String(phase && phase.id || ''),
-      nome: sanitizeText_(phase && phase.nome || ''),
-      status_original: sanitizeText_(phase && phase.status_original || ''),
-      updated_at: sanitizeText_(phase && phase.updated_at || ''),
-      progresso: Number(phase && phase.progresso || 0)
-    };
-  });
-  function relevantItems(items, completedField) {
-    items = Array.isArray(items) ? items : [];
-    var relevant = items.filter(function(item) {
-      return !!(item && item.due_date && !item[completedField]);
-    });
-    var latest = items.slice().sort(function(a, b) {
-      return normalizeClickUpDateMillis_(b && (b.updated_at || b.date_updated)) -
-        normalizeClickUpDateMillis_(a && (a.updated_at || a.date_updated));
-    })[0];
-    if (latest && relevant.indexOf(latest) < 0) relevant.push(latest);
-    return relevant.map(compactItem);
-  }
-  return JSON.stringify({
-    resumo: payload.resumo || {},
-    fases: phases,
-    tasks: relevantItems(payload.tasks, 'concluida'),
-    marcos: relevantItems(payload.marcos, 'concluido'),
-    compacto_gestao: true
-  });
 }
 
 function getClickUpMilestoneClosing_(params) {
@@ -5593,8 +5571,22 @@ function getClickUpUserActivity_(params) {
   var values = sheet.getDataRange().getValues();
   if (values.length <= 1) return { ok: true, users: [], total: 0, needs_generate: true, background_sync: backgroundSync, sheet: getClickUpUserActivitySheetName_() };
   var header = values[0];
-  var users = values.slice(1).map(function(row) {
-    return rowToObject_(header, row);
+  var users = values.slice(1).map(function(row, rowIndex) {
+    var user = rowToObject_(header, row);
+    function compactJsonList(field, limit) {
+      var list = [];
+      try {
+        list = Array.isArray(user[field]) ? user[field] : JSON.parse(String(user[field] || '[]'));
+      } catch (e) {}
+      if (!Array.isArray(list)) list = [];
+      user[field.replace('_json', '_total_controle')] = list.length;
+      user[field] = JSON.stringify(list.slice(0, limit));
+    }
+    compactJsonList('atividades_hoje_json', 100);
+    compactJsonList('atividades_7_dias_json', 100);
+    compactJsonList('projetos_carteira_json', 250);
+    if (rowIndex > 0) user.projetos_erros_json_controle = '[]';
+    return user;
   });
   var stale = users.length > 0 && !users.some(function(user) {
     return String(user.modo_controle || '') === 'estimado_por_tarefas' &&
