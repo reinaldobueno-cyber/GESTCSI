@@ -27,6 +27,7 @@
 
 var CLICKUP_API_BASE = 'https://api.clickup.com/api/v2';
 var CLICKUP_DEFAULT_WORKSPACE_ID = '9007083069';
+var CLICKUP_ACTIVITY_ENGINE_VERSION = 'workspace-recent-v1';
 var CLICKUP_MILESTONE_BONUS_VALUE = 30;
 var CLICKUP_PROJECT_CLOSING_BONUS_VALUE = 80;
 var CLICKUP_PROJECT_CLOSING_BONUS_START = '2026-06-15';
@@ -77,6 +78,7 @@ function onOpen() {
     .addItem('Atualizar fechamento de marcos', 'sincronizarFechamentoMarcosClickUp')
     .addItem('Restaurar fechamento pelo histórico mensal', 'restaurarFechamentoMarcosHistoricoMensal')
     .addItem('Sincronizar atividade dos usuários ClickUp', 'sincronizarAtividadeUsuariosClickUp')
+    .addItem('Instalar atualização automática da adoção', 'installClickUpUserActivityRefreshTrigger')
     .addItem('Sincronizar diárias CMAX do mês atual', 'sincronizarDiariasCmaxMesAtual')
     .addItem('Sincronizar histórico de diárias CMAX', 'sincronizarHistoricoDiariasCmax')
     .addItem('Reconstruir visão rápida de diárias CMAX', 'reconstruirVisaoDiariasCmax')
@@ -307,6 +309,7 @@ function doGet(e) {
     var payload = {
       ok: true,
       service: 'clickup-sync',
+      activity_engine_version: CLICKUP_ACTIVITY_ENGINE_VERSION,
       message: 'Use action=getMonthlyProjects|syncProject|syncAll|processDirty|validateConfig|getClickUpInventory|getClickUpMilestoneClosing|startClickUpMilestoneClosingBackground|syncClickUpUserActivity|startClickUpUserActivityBackground|getClickUpUserActivity|getCmaxDailyEvents|getCmaxDailyHistoryStatus|syncCmaxDailyEvents|startCmaxDailyHistoryBackground|logPanelUpdate|getPanelUpdateHistory|login|me|listUsers|createUser|setUserEnabled|logProjectFollowup|getProjectFollowups|setProjectFollowupStatus|setProjectKanbanStage|deleteProjectFollowup'
     };
     return jsonOutput_(payload, params.callback);
@@ -548,12 +551,14 @@ function getProjectSyncBackgroundStatus_() {
 function startPendingClickUpUserActivityIfAny_(props) {
   props = props || PropertiesService.getScriptProperties();
   if (props.getProperty('CLICKUP_ACTIVITY_BACKGROUND_PENDING') !== '1') return null;
+  var pendingForce = props.getProperty('CLICKUP_ACTIVITY_BACKGROUND_PENDING_FORCE') === '1';
   props.deleteProperty('CLICKUP_ACTIVITY_BACKGROUND_PENDING');
   props.deleteProperty('CLICKUP_ACTIVITY_BACKGROUND_PENDING_FORCE');
   props.deleteProperty('CLICKUP_ACTIVITY_BACKGROUND_PENDING_AT');
-  // Uma retomada automática nunca pode apagar o cursor existente. Mesmo que o
-  // pedido original tenha vindo do botão Forçar, a fila preserva o progresso.
-  return startClickUpUserActivityBackground_({ force_restart: '0', from_queue: '1' });
+  return startClickUpUserActivityBackground_({
+    force_restart: pendingForce ? '1' : '0',
+    from_queue: '1'
+  });
 }
 
 function startPendingProjectSyncIfAny_(props) {
@@ -878,7 +883,22 @@ function registerAllWebhooks() {
 function createTimeDrivenTriggers() {
   ScriptApp.newTrigger('processDirtyQueueTrigger').timeBased().everyMinutes(5).create();
   ScriptApp.newTrigger('syncAllProjectsTrigger').timeBased().everyHours(6).create();
+  installClickUpUserActivityRefreshTrigger();
   installClickUpClosedMilestonesTrigger();
+}
+
+function installClickUpUserActivityRefreshTrigger() {
+  ScriptApp.getProjectTriggers().forEach(function(trigger) {
+    if (trigger.getHandlerFunction() === 'refreshClickUpUserActivityTrigger') {
+      ScriptApp.deleteTrigger(trigger);
+    }
+  });
+  ScriptApp.newTrigger('refreshClickUpUserActivityTrigger').timeBased().everyHours(6).create();
+  return { ok: true, handler: 'refreshClickUpUserActivityTrigger', every_hours: 6 };
+}
+
+function refreshClickUpUserActivityTrigger() {
+  return startClickUpUserActivityBackground_({ force_restart: '1', scheduled_refresh: '1' });
 }
 
 function processDirtyQueueTrigger() {
@@ -5174,7 +5194,7 @@ function startClickUpUserActivityBackground_(params) {
     alreadyActive = false;
   }
   var forceRestart = String(params.force_restart || '') === '1';
-  if (String(params.from_queue || '') === '1') forceRestart = false;
+  if (String(params.from_queue || '') === '1' && String(params.force_restart || '') !== '1') forceRestart = false;
   var completedAt = Date.parse(progress.sincronizado_em || props.getProperty('CLICKUP_ACTIVITY_BACKGROUND_COMPLETED_AT') || '');
   var recentComplete = previousComplete && isFinite(completedAt) && (new Date().getTime() - completedAt) < 6 * 60 * 60 * 1000;
   if (!alreadyActive && recentComplete && !forceRestart) {
@@ -5188,7 +5208,7 @@ function startClickUpUserActivityBackground_(params) {
   }
   if (props.getProperty('CLICKUP_PROJECT_SYNC_ACTIVE') === '1') {
     props.setProperty('CLICKUP_ACTIVITY_BACKGROUND_PENDING', '1');
-    props.setProperty('CLICKUP_ACTIVITY_BACKGROUND_PENDING_FORCE', '0');
+    props.setProperty('CLICKUP_ACTIVITY_BACKGROUND_PENDING_FORCE', forceRestart ? '1' : '0');
     props.setProperty('CLICKUP_ACTIVITY_BACKGROUND_PENDING_AT', new Date().toISOString());
     props.setProperty('CLICKUP_PROJECT_SYNC_PAUSE_FOR_ACTIVITY', '1');
     var queuedStatus = getClickUpUserActivityBackgroundStatus_();
@@ -5213,7 +5233,16 @@ function startClickUpUserActivityBackground_(params) {
   props.deleteProperty('CLICKUP_ACTIVITY_BACKGROUND_PENDING_FORCE');
   props.deleteProperty('CLICKUP_ACTIVITY_BACKGROUND_PENDING_AT');
   props.setProperty('CLICKUP_ACTIVITY_BACKGROUND_FAILURES', '0');
-  if (!alreadyActive) props.setProperty('CLICKUP_ACTIVITY_BACKGROUND_STARTED_AT', new Date().toISOString());
+  if (!alreadyActive) {
+    var startedAt = new Date().toISOString();
+    props.setProperty('CLICKUP_ACTIVITY_BACKGROUND_STARTED_AT', startedAt);
+    props.setProperty('CLICKUP_ACTIVITY_BACKGROUND_RUN_ID', 'activity-' + new Date().getTime());
+    props.setProperty('CLICKUP_ACTIVITY_BACKGROUND_UPDATED_AT', startedAt);
+    props.setProperty('CLICKUP_ACTIVITY_BACKGROUND_READ', '0');
+    props.setProperty('CLICKUP_ACTIVITY_BACKGROUND_ERRORS', '0');
+    props.deleteProperty('CLICKUP_ACTIVITY_WORKSPACE_FALLBACK_ACTIVE');
+    props.deleteProperty('CLICKUP_ACTIVITY_BACKGROUND_COMPLETED_AT');
+  }
   props.deleteProperty('CLICKUP_ACTIVITY_BACKGROUND_ERROR');
   var lastUpdate = Date.parse(props.getProperty('CLICKUP_ACTIVITY_BACKGROUND_UPDATED_AT') || props.getProperty('CLICKUP_ACTIVITY_BACKGROUND_STARTED_AT') || '');
   var needsRearm = !alreadyActive || !isFinite(lastUpdate) || (new Date().getTime() - lastUpdate) > 5 * 60 * 1000;
@@ -5235,6 +5264,7 @@ function continueClickUpUserActivityBackgroundTrigger() {
     return;
   }
   try {
+    props.setProperty('CLICKUP_ACTIVITY_BACKGROUND_UPDATED_AT', new Date().toISOString());
     var batchSize = Math.max(30, Math.min(
       toInt_(getScriptProperty_('CLICKUP_ACTIVITY_BACKGROUND_BATCH_SIZE', '500'), 500),
       500
@@ -5251,6 +5281,11 @@ function continueClickUpUserActivityBackgroundTrigger() {
     }
     props.setProperty('CLICKUP_ACTIVITY_BACKGROUND_FAILURES', '0');
     props.setProperty('CLICKUP_ACTIVITY_BACKGROUND_UPDATED_AT', new Date().toISOString());
+    props.setProperty('CLICKUP_ACTIVITY_BACKGROUND_READ', String(result && result.projects_read || 0));
+    props.setProperty('CLICKUP_ACTIVITY_BACKGROUND_TOTAL', String(result && result.projects_selected || 0));
+    props.setProperty('CLICKUP_ACTIVITY_BACKGROUND_ERRORS', String(result && result.projects_errors || 0));
+    props.setProperty('CLICKUP_ACTIVITY_BACKGROUND_TASKS_READ', String(result && result.tasks_read || 0));
+    props.setProperty('CLICKUP_ACTIVITY_BACKGROUND_COLLECTION_MODE', String(result && result.collection_mode || 'project_scan'));
     props.deleteProperty('CLICKUP_ACTIVITY_BACKGROUND_ERROR');
     if (result && result.done) {
       props.setProperty('CLICKUP_ACTIVITY_BACKGROUND_ACTIVE', '0');
@@ -5316,12 +5351,18 @@ function syncClickUpUserActivityApprox_(params, meta) {
   var resumeScan = String(params.resume_scan || '') === '1';
   var storedNextOffset = existingRows.length ? toInt_(existingRows[0].projetos_proximo_offset_controle, 0) : 0;
   var storedComplete = existingRows.length && String(existingRows[0].sincronizacao_completa_controle || '').toLowerCase() === 'sim';
-  var scanOffset = retryMode ? storedNextOffset : (resumeScan && storedNextOffset > 0 && !storedComplete
+  var activityProps = PropertiesService.getScriptProperties();
+  var useWorkspaceRecent = !retryMode &&
+    String(params.disable_workspace_recent || '') !== '1' &&
+    activityProps.getProperty('CLICKUP_ACTIVITY_WORKSPACE_FALLBACK_ACTIVE') !== '1';
+  var scanOffset = useWorkspaceRecent ? 0 : (retryMode ? storedNextOffset : (resumeScan && storedNextOffset > 0 && !storedComplete
     ? storedNextOffset
-    : Math.max(0, toInt_(params.scan_offset, 0)));
+    : Math.max(0, toInt_(params.scan_offset, 0))));
   var scanBatchSize = Math.max(0, Math.min(toInt_(params.scan_batch_size, 0), 500));
   var requestedLimit = toInt_(params.max_projects, 0);
-  var mappings = retryMode
+  var mappings = useWorkspaceRecent
+    ? eligibleMappings
+    : retryMode
     ? eligibleMappings.filter(function(mapping) { return String(mapping.project_key || '') === retryProjectKey; }).slice(0, 1)
     : (scanBatchSize > 0
     ? eligibleMappings.slice(scanOffset, scanOffset + scanBatchSize)
@@ -5335,13 +5376,19 @@ function syncClickUpUserActivityApprox_(params, meta) {
     start_ms: meta.start_ms,
     end_ms: meta.end_ms,
     fetched_at: meta.fetched_at || new Date(),
+    workspace_id: meta.workspace_id || getClickUpWorkspaceId_(),
+    prefer_workspace_recent: useWorkspaceRecent,
     execution_deadline_ms: safeExecutionDeadlineMs,
     project_timeout_ms: Math.max(30000, Math.min(
       toInt_(getScriptProperty_('CLICKUP_ACTIVITY_PROJECT_TIMEOUT_MS', '45000'), 45000),
       90000
     ))
   });
-  var accumulatedRows = (scanOffset > 0 || retryMode)
+  var workspaceRecentSucceeded = useWorkspaceRecent && !approx.workspace_error;
+  if (useWorkspaceRecent && approx.workspace_error) {
+    activityProps.setProperty('CLICKUP_ACTIVITY_WORKSPACE_FALLBACK_ACTIVE', '1');
+  }
+  var accumulatedRows = (!workspaceRecentSucceeded && (scanOffset > 0 || retryMode))
     ? mergeClickUpUserActivityRows_(existingRows, approx.rows, meta.fetched_at || new Date())
     : approx.rows;
   var previousRead = (scanOffset > 0 || retryMode) && existingRows.length ? toInt_(existingRows[0].projetos_lidos_controle, 0) : 0;
@@ -5350,8 +5397,9 @@ function syncClickUpUserActivityApprox_(params, meta) {
     : mergeClickUpActivityErrors_(scanOffset > 0 ? existingErrorDetails : [], approx.errors);
   var cumulativeErrors = errorDetails.length;
   var attemptedInBatch = Math.max(0, toInt_(approx.projects_attempted, 0));
-  var nextOffset = retryMode ? storedNextOffset : scanOffset + attemptedInBatch;
+  var nextOffset = workspaceRecentSucceeded ? eligibleMappings.length : (retryMode ? storedNextOffset : scanOffset + attemptedInBatch);
   var scanDone = retryMode ? storedComplete : nextOffset >= eligibleMappings.length;
+  if (scanDone) activityProps.deleteProperty('CLICKUP_ACTIVITY_WORKSPACE_FALLBACK_ACTIVE');
   // Progress represents attempted projects. Failures remain visible separately and
   // must not make a completed scan look permanently stuck below the total.
   var cumulativeRead = retryMode
@@ -5366,6 +5414,9 @@ function syncClickUpUserActivityApprox_(params, meta) {
     item.projetos_erros_json_controle = JSON.stringify(errorDetails);
     item.projetos_proximo_offset_controle = nextOffset;
     item.sincronizacao_completa_controle = scanDone ? 'sim' : 'nao';
+    item.fonte_coleta_controle = approx.collection_mode || 'project_scan';
+    item.tarefas_lidas_controle = toInt_(approx.tasks_read, 0);
+    item.resultado_parcial_controle = approx.truncated ? 'sim' : 'nao';
   });
 
   writeClickUpUserActivitySummary_(accumulatedRows, { auto_resize: scanDone });
@@ -5397,10 +5448,18 @@ function syncClickUpUserActivityApprox_(params, meta) {
     resumed: scanOffset > 0,
     retry_mode: retryMode,
     remaining_errors: cumulativeErrors,
+    collection_mode: approx.collection_mode || 'project_scan',
+    activity_engine_version: CLICKUP_ACTIVITY_ENGINE_VERSION,
+    tasks_read: toInt_(approx.tasks_read, 0),
+    truncated: !!approx.truncated,
     errors: approx.errors,
     warnings: (meta.audit_warnings || []).concat([
       'Audit Log indisponivel no plano atual. Controle gerado por estimativa usando tarefas, responsaveis, criadores e datas de atualizacao.'
-    ]),
+    ]).concat(approx.workspace_error ? [
+      'A consulta recente do workspace falhou; foi usado o fallback por projeto: ' + approx.workspace_error
+    ] : []).concat(approx.truncated ? [
+      'A consulta recente atingiu o limite configurado de paginas; o resultado foi sinalizado como parcial.'
+    ] : []),
     summary_sheet: getClickUpUserActivitySheetName_(),
     raw_sheet: getClickUpAuditLogSheetName_()
   };
@@ -5440,6 +5499,21 @@ function getClickUpUserActivityBackgroundStatus_() {
   var progress = readClickUpUserActivityProgress_();
   var complete = String(progress.sincronizacao_completa_controle || '').toLowerCase() === 'sim';
   var active = props.getProperty('CLICKUP_ACTIVITY_BACKGROUND_ACTIVE') === '1' && !complete;
+  var projectsSelected = toInt_(progress.projetos_selecionados_controle, 0);
+  var nextOffset = toInt_(progress.projetos_proximo_offset_controle, 0);
+  var orphanedIncomplete = !complete && !active && projectsSelected > 0 && nextOffset < projectsSelected &&
+    props.getProperty('CLICKUP_ACTIVITY_BACKGROUND_PENDING') !== '1' &&
+    props.getProperty('CLICKUP_PROJECT_SYNC_ACTIVE') !== '1';
+  var updatedAt = props.getProperty('CLICKUP_ACTIVITY_BACKGROUND_UPDATED_AT') || '';
+  var updatedMs = Date.parse(updatedAt);
+  var stalled = active && isFinite(updatedMs) && (new Date().getTime() - updatedMs) > 6 * 60 * 1000;
+  if (stalled || orphanedIncomplete) {
+    props.setProperty('CLICKUP_ACTIVITY_BACKGROUND_ACTIVE', '1');
+    scheduleClickUpUserActivityBackground_(1000);
+    props.setProperty('CLICKUP_ACTIVITY_BACKGROUND_UPDATED_AT', new Date().toISOString());
+    active = true;
+    stalled = true;
+  }
   preservePreQueueProjectSyncRequest_(props, complete);
   if (props.getProperty('CLICKUP_ACTIVITY_BACKGROUND_PENDING') === '1' &&
       props.getProperty('CLICKUP_PROJECT_SYNC_ACTIVE') === '1') {
@@ -5448,14 +5522,21 @@ function getClickUpUserActivityBackgroundStatus_() {
   return {
     ok: true,
     service: 'clickup-user-activity',
+    activity_engine_version: CLICKUP_ACTIVITY_ENGINE_VERSION,
     active: active,
+    stalled: stalled,
+    complete: complete,
+    partial: String(progress.resultado_parcial_controle || '').toLowerCase() === 'sim',
+    run_id: props.getProperty('CLICKUP_ACTIVITY_BACKGROUND_RUN_ID') || '',
     started_at: props.getProperty('CLICKUP_ACTIVITY_BACKGROUND_STARTED_AT') || '',
-    updated_at: props.getProperty('CLICKUP_ACTIVITY_BACKGROUND_UPDATED_AT') || '',
+    updated_at: updatedAt,
     completed_at: props.getProperty('CLICKUP_ACTIVITY_BACKGROUND_COMPLETED_AT') || '',
     error: props.getProperty('CLICKUP_ACTIVITY_BACKGROUND_ERROR') || '',
-    projects_read: toInt_(progress.projetos_lidos_controle, 0),
-    projects_total: toInt_(progress.projetos_selecionados_controle, 0),
-    projects_errors: toInt_(progress.projetos_com_erro_controle, 0),
+    projects_read: Math.max(toInt_(props.getProperty('CLICKUP_ACTIVITY_BACKGROUND_READ'), 0), toInt_(progress.projetos_lidos_controle, 0)),
+    projects_total: Math.max(toInt_(props.getProperty('CLICKUP_ACTIVITY_BACKGROUND_TOTAL'), 0), toInt_(progress.projetos_selecionados_controle, 0)),
+    projects_errors: Math.max(toInt_(props.getProperty('CLICKUP_ACTIVITY_BACKGROUND_ERRORS'), 0), toInt_(progress.projetos_com_erro_controle, 0)),
+    tasks_read: Math.max(toInt_(props.getProperty('CLICKUP_ACTIVITY_BACKGROUND_TASKS_READ'), 0), toInt_(progress.tarefas_lidas_controle, 0)),
+    collection_mode: props.getProperty('CLICKUP_ACTIVITY_BACKGROUND_COLLECTION_MODE') || progress.fonte_coleta_controle || '',
     queued: props.getProperty('CLICKUP_ACTIVITY_BACKGROUND_PENDING') === '1',
     waiting_for: props.getProperty('CLICKUP_ACTIVITY_BACKGROUND_PENDING') === '1' ? 'clickup-sync' : ''
   };
@@ -5693,6 +5774,7 @@ function buildApproxClickUpUserActivityFromTasks_(mappings, options) {
   var byKey = {};
   var errors = [];
   var eventCount = 0;
+  var taskCount = 0;
   var projectsRead = 0;
   var projectsAttempted = 0;
   var interProjectDelayMs = Math.max(250, Math.min(
@@ -5712,9 +5794,46 @@ function buildApproxClickUpUserActivityFromTasks_(mappings, options) {
   });
 
   var activityMappings = mappings || [];
-  for (var mappingIndex = 0; mappingIndex < activityMappings.length; mappingIndex += 1) {
+  var projectScanMappings = activityMappings;
+  if (options.prefer_workspace_recent && options.workspace_id) {
+    activityMappings.forEach(function(mapping) {
+      associateApproxProjectWithConsultant_(byKey, mapping);
+    });
+    try {
+      var recent = fetchClickUpWorkspaceActivityTasks_(options.workspace_id, options.start_ms, {
+        deadline_ms: options.execution_deadline_ms
+      });
+      var mappingLookup = buildClickUpActivityMappingIndex_(activityMappings);
+      var matchedProjects = {};
+      (recent.tasks || []).forEach(function(task) {
+        var mapping = findClickUpActivityMappingForTask_(task, mappingLookup);
+        if (!mapping) return;
+        var projectKey = sanitizeText_(mapping.project_key || mapping.cliente);
+        if (projectKey) matchedProjects[projectKey] = true;
+        eventCount += aggregateApproxTaskForUsers_(byKey, task, mapping, options);
+      });
+      taskCount = (recent.tasks || []).length;
+      projectScanMappings = activityMappings.filter(function(mapping) {
+        return !!mapping.view_id && !mapping.list_id && !mapping.folder_id && !mapping.space_id;
+      });
+      projectsAttempted = activityMappings.length - projectScanMappings.length;
+      projectsRead = projectsAttempted;
+      options._activity_collection_mode = projectScanMappings.length
+        ? 'workspace_recent_tasks_with_view_fallback'
+        : 'workspace_recent_tasks';
+      options._activity_tasks_read = (recent.tasks || []).length;
+      options._activity_truncated = !!recent.truncated;
+      options._activity_projects_with_recent_tasks = Object.keys(matchedProjects).length;
+    } catch (workspaceError) {
+      options._activity_collection_mode = 'project_scan_fallback';
+      options._activity_workspace_error = simplifyErrorMessage_(workspaceError);
+    }
+  }
+
+  if (options._activity_collection_mode !== 'workspace_recent_tasks' || projectScanMappings.length) {
+  for (var mappingIndex = 0; mappingIndex < projectScanMappings.length; mappingIndex += 1) {
     if (options.execution_deadline_ms && new Date().getTime() >= Number(options.execution_deadline_ms) - 5000) break;
-    var mapping = activityMappings[mappingIndex];
+    var mapping = projectScanMappings[mappingIndex];
     projectsAttempted += 1;
     try {
       associateApproxProjectWithConsultant_(byKey, mapping);
@@ -5722,6 +5841,7 @@ function buildApproxClickUpUserActivityFromTasks_(mappings, options) {
       if (options.execution_deadline_ms) projectDeadline = Math.min(projectDeadline, Number(options.execution_deadline_ms));
       var payload = fetchProjectTasksForActivity_(mapping, { deadline_ms: projectDeadline });
       var tasks = payload.tasks || [];
+      taskCount += tasks.length;
       projectsRead += 1;
       tasks.forEach(function(task) {
         eventCount += aggregateApproxTaskForUsers_(byKey, task, mapping, options);
@@ -5735,7 +5855,8 @@ function buildApproxClickUpUserActivityFromTasks_(mappings, options) {
         error: simplifyErrorMessage_(error)
       });
     }
-    if (mappingIndex < activityMappings.length - 1) Utilities.sleep(interProjectDelayMs);
+    if (mappingIndex < projectScanMappings.length - 1) Utilities.sleep(interProjectDelayMs);
+  }
   }
 
   var rows = Object.keys(byKey).map(function(key) {
@@ -5807,8 +5928,66 @@ function buildApproxClickUpUserActivityFromTasks_(mappings, options) {
     events: eventCount,
     projects_read: projectsRead,
     projects_attempted: projectsAttempted,
+    tasks_read: taskCount,
+    collection_mode: options._activity_collection_mode || 'project_scan',
+    truncated: !!options._activity_truncated,
+    workspace_error: options._activity_workspace_error || '',
     errors: errors
   };
+}
+
+function fetchClickUpWorkspaceActivityTasks_(workspaceId, startMs, options) {
+  options = options || {};
+  workspaceId = normalizeClickUpId_(workspaceId);
+  if (!workspaceId) throw new Error('CLICKUP_TEAM_ID nao configurado para a leitura recente de atividade.');
+  var page = 0;
+  var all = [];
+  var maxPages = Math.max(1, Math.min(
+    toInt_(getScriptProperty_('CLICKUP_ACTIVITY_WORKSPACE_MAX_PAGES', '80'), 80),
+    100
+  ));
+  var truncated = false;
+  while (page < maxPages) {
+    assertClickUpActivityDeadline_(options);
+    var query = [
+      'include_closed=true',
+      'subtasks=true',
+      'date_updated_gt=' + Math.max(0, Number(startMs || 0) - 1),
+      'order_by=updated',
+      'reverse=true',
+      'page=' + page
+    ].join('&');
+    var response = clickupRequest_('get', '/team/' + workspaceId + '/task?' + query);
+    var batch = response.tasks || [];
+    all = all.concat(batch);
+    if (batch.length < 100) return { tasks: dedupeTasks_(all), truncated: false, pages: page + 1 };
+    page += 1;
+  }
+  truncated = true;
+  return { tasks: dedupeTasks_(all), truncated: truncated, pages: page };
+}
+
+function buildClickUpActivityMappingIndex_(mappings) {
+  var index = { list: {}, folder: {}, space: {} };
+  (mappings || []).forEach(function(mapping) {
+    mapping = mapping || {};
+    var listId = normalizeClickUpId_(mapping.list_id);
+    var folderId = normalizeClickUpId_(mapping.folder_id);
+    var spaceId = normalizeClickUpId_(mapping.space_id);
+    if (listId && !index.list[listId]) index.list[listId] = mapping;
+    if (folderId && !index.folder[folderId]) index.folder[folderId] = mapping;
+    if (spaceId && !index.space[spaceId]) index.space[spaceId] = mapping;
+  });
+  return index;
+}
+
+function findClickUpActivityMappingForTask_(task, index) {
+  task = task || {};
+  index = index || { list: {}, folder: {}, space: {} };
+  var listId = normalizeClickUpId_(task.list && task.list.id);
+  var folderId = normalizeClickUpId_(task.folder && task.folder.id);
+  var spaceId = normalizeClickUpId_(task.space && task.space.id);
+  return index.list[listId] || index.folder[folderId] || index.space[spaceId] || null;
 }
 
 function parseClickUpActivityErrors_(raw) {
@@ -6303,14 +6482,24 @@ function writeClickUpUserActivitySummary_(rows, options) {
   options = options || {};
   var sheet = getClickUpUserActivitySheet_();
   var headers = getClickUpUserActivityHeaders_();
-  sheet.clearContents();
-  sheet.getRange(1, 1, 1, headers.length).setValues([headers]);
+  var previousRows = sheet.getLastRow();
+  var previousColumns = sheet.getLastColumn();
+  var matrix = [headers];
   if (rows && rows.length) {
-    sheet.getRange(2, 1, rows.length, headers.length).setValues(rows.map(function(item) {
+    matrix = matrix.concat(rows.map(function(item) {
       return headers.map(function(header) {
         return item[header] === undefined ? '' : item[header];
       });
     }));
+  }
+  // Escreva a nova geracao antes de limpar sobras. Assim uma leitura concorrente
+  // nunca encontra a planilha completamente vazia entre clearContents e setValues.
+  sheet.getRange(1, 1, matrix.length, headers.length).setValues(matrix);
+  if (previousRows > matrix.length) {
+    sheet.getRange(matrix.length + 1, 1, previousRows - matrix.length, Math.max(previousColumns, headers.length)).clearContent();
+  }
+  if (previousColumns > headers.length) {
+    sheet.getRange(1, headers.length + 1, matrix.length, previousColumns - headers.length).clearContent();
   }
   sheet.setFrozenRows(1);
   if (options.auto_resize !== false) sheet.autoResizeColumns(1, headers.length);
@@ -6394,7 +6583,10 @@ function getClickUpUserActivityHeaders_() {
     'projetos_proximo_offset_controle',
     'sincronizacao_completa_controle',
     'modo_controle',
-    'atividades_7_dias_json'
+    'atividades_7_dias_json',
+    'fonte_coleta_controle',
+    'tarefas_lidas_controle',
+    'resultado_parcial_controle'
   ];
 }
 

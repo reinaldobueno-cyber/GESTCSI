@@ -14,7 +14,7 @@ test('loads the portfolio integrity module before the application script', () =>
 test('keeps critical production invariants in the staging build', () => {
   assert.match(html, /PANEL_MIN_2026_PROJECTS = 201/);
   assert.match(html, /PANEL_SNAPSHOT_SCHEMA = 2/);
-  assert.match(html, /PANEL_APP_VERSION = '2026-08-12-materialized-portfolio-v1'/);
+  assert.match(html, /PANEL_APP_VERSION = '2026-09-11-clickup-activity-v1'/);
   assert.match(html, /@page\{size:A4 portrait/);
   assert.match(html, /gestcsi_map_geocode_cache_v3_country_validated/);
   assert.doesNotMatch(html, /Fallback por UF/);
@@ -142,6 +142,62 @@ test('resumes the adoption estimate with a lightweight ClickUp reader', async ()
   assert.doesNotMatch(html, /force_estimated:'1',[\s\S]{0,100}scan_batch_size:'1'/);
 });
 
+test('builds adoption from one recent workspace query and keeps a project-scan fallback', async () => {
+  const appsScript = await readFile(new URL('../apps_script/ClickUpSync.gs', import.meta.url), 'utf8');
+  assert.match(appsScript, /function fetchClickUpWorkspaceActivityTasks_\(/);
+  assert.match(appsScript, /'\/team\/' \+ workspaceId \+ '\/task\?' \+ query/);
+  assert.match(appsScript, /'date_updated_gt=' \+ Math\.max/);
+  assert.match(appsScript, /prefer_workspace_recent: useWorkspaceRecent/);
+  assert.match(appsScript, /collection_mode: options\._activity_collection_mode \|\| 'project_scan'/);
+  assert.match(appsScript, /workspace_recent_tasks_with_view_fallback/);
+  assert.match(appsScript, /CLICKUP_ACTIVITY_WORKSPACE_FALLBACK_ACTIVE/);
+  assert.match(appsScript, /workspaceRecentSucceeded \? eligibleMappings\.length/);
+  assert.match(appsScript, /findClickUpActivityMappingForTask_/);
+  assert.match(appsScript, /resultado_parcial_controle/);
+  assert.match(html, /Fonte rápida: consulta recente única do workspace/);
+});
+
+test('prioritizes list mappings when associating recent workspace tasks', async () => {
+  const appsScript = await readFile(new URL('../apps_script/ClickUpSync.gs', import.meta.url), 'utf8');
+  const indexStart = appsScript.indexOf('function buildClickUpActivityMappingIndex_(');
+  const findStart = appsScript.indexOf('function findClickUpActivityMappingForTask_(', indexStart);
+  const findEnd = appsScript.indexOf('\nfunction ', findStart + 10);
+  const source = appsScript.slice(indexStart, findEnd);
+  const factory = new Function('normalizeClickUpId_', `${source}; return { buildClickUpActivityMappingIndex_, findClickUpActivityMappingForTask_ };`);
+  const api = factory(value => String(value || ''));
+  const folder = { project_key: 'FOLDER', folder_id: '20' };
+  const list = { project_key: 'LIST', list_id: '10', folder_id: '20' };
+  const lookup = api.buildClickUpActivityMappingIndex_([folder, list]);
+  assert.equal(api.findClickUpActivityMappingForTask_({ list: { id: '10' }, folder: { id: '20' } }, lookup), list);
+  assert.equal(api.findClickUpActivityMappingForTask_({ list: { id: '99' }, folder: { id: '20' } }, lookup), folder);
+});
+
+test('publishes adoption rows without a clear-then-write empty window', async () => {
+  const appsScript = await readFile(new URL('../apps_script/ClickUpSync.gs', import.meta.url), 'utf8');
+  const start = appsScript.indexOf('function writeClickUpUserActivitySummary_(');
+  const end = appsScript.indexOf('\nfunction ', start + 10);
+  const source = appsScript.slice(start, end);
+  assert.match(source, /setValues\(matrix\)/);
+  assert.match(source, /previousRows > matrix\.length/);
+  assert.doesNotMatch(source, /sheet\.clearContents\(\)/);
+});
+
+test('rearms a stalled adoption job and labels inferred task relationships honestly', async () => {
+  const appsScript = await readFile(new URL('../apps_script/ClickUpSync.gs', import.meta.url), 'utf8');
+  const start = appsScript.indexOf('function getClickUpUserActivityBackgroundStatus_(');
+  const end = appsScript.indexOf('\nfunction ', start + 10);
+  const source = appsScript.slice(start, end);
+  assert.match(source, /stalled = active/);
+  assert.match(source, /scheduleClickUpUserActivityBackground_\(1000\)/);
+  assert.match(source, /CLICKUP_ACTIVITY_BACKGROUND_RUN_ID/);
+  assert.match(html, /Com task relacionada hoje/);
+  assert.match(html, /autoria não confirmada/);
+  assert.match(html, /Tasks rel\. 7 dias/);
+  assert.match(html, /needsAutomaticRefresh/);
+  assert.match(html, /Date\.now\(\) - latestSync/);
+  assert.doesNotMatch(html, /<div class="dashx-card-label">Com movimento hoje<\/div>/);
+});
+
 test('does not restart a recent completed estimate unless force is explicit', async () => {
   const appsScript = await readFile(new URL('../apps_script/ClickUpSync.gs', import.meta.url), 'utf8');
   const start = appsScript.indexOf('function startClickUpUserActivityBackground_(');
@@ -193,8 +249,9 @@ test('queues ClickUp sync and estimate instead of reporting mutual exclusion as 
   assert.match(appsScript, /startPendingClickUpUserActivityIfAny_\(props\)/);
   assert.match(appsScript, /pausedStatus\.paused = true/);
   assert.match(appsScript, /resumedStatus\.resumed = true/);
-  assert.match(appsScript, /startClickUpUserActivityBackground_\(\{ force_restart: '0', from_queue: '1' \}\)/);
-  assert.match(appsScript, /if \(String\(params\.from_queue \|\| ''\) === '1'\) forceRestart = false/);
+  assert.match(appsScript, /force_restart: pendingForce \? '1' : '0'/);
+  assert.match(appsScript, /CLICKUP_ACTIVITY_BACKGROUND_PENDING_FORCE', forceRestart \? '1' : '0'/);
+  assert.match(appsScript, /String\(params\.from_queue \|\| ''\) === '1' && String\(params\.force_restart \|\| ''\) !== '1'/);
   assert.match(appsScript, /function preservePreQueueProjectSyncRequest_\(/);
   assert.match(appsScript, /CLICKUP_QUEUE_MIGRATION_V269/);
   assert.match(appsScript, /preservePreQueueProjectSyncRequest_\(props, complete\)/);
