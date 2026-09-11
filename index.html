@@ -15383,7 +15383,13 @@ function gestaoLoadClickUpInventory() {
       return cached.projetos.map(gestaoNormalizeInventoryProject);
     } catch (e) { return null; }
   }
-  GESTAO_CLICKUP_INVENTORY_LOADING = chamarAppsScriptJsonp('getClickUpInventory', {auth_token:authTokenParam(), lean:'1'}, 45000).then(function(resp) {
+  function requestInventory() {
+    return chamarAppsScriptJsonp('getClickUpInventory', {auth_token:authTokenParam(), lean:'1'}, 60000);
+  }
+  GESTAO_CLICKUP_INVENTORY_LOADING = requestInventory().catch(function(firstError) {
+    if (!/Timeout|Erro ao acessar Apps Script/i.test(String(firstError && firstError.message || ''))) throw firstError;
+    return new Promise(function(resolve) { setTimeout(resolve, 1200); }).then(requestInventory);
+  }).then(function(resp) {
     if (!resp || resp.ok === false) {
       throw new Error((resp && (resp.error || resp.message)) || 'Apps Script nao retornou inventario ClickUp.');
     }

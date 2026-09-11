@@ -161,7 +161,7 @@ test('builds adoption from one recent workspace query and keeps a project-scan f
   assert.match(appsScript, /findClickUpActivityMappingForTask_/);
   assert.match(appsScript, /resultado_parcial_controle/);
   assert.match(html, /Fonte rápida: consulta das tarefas atualizadas nos últimos 7 dias no workspace/);
-  assert.match(html, /getClickUpInventory', \{auth_token:authTokenParam\(\), lean:'1'\}, 45000/);
+  assert.match(html, /getClickUpInventory', \{auth_token:authTokenParam\(\), lean:'1'\}, 60000/);
   assert.match(html, /gestcsi_clickup_inventory_v2_/);
   assert.match(html, /setTimeout\(resolve, 1200\)/);
 });
