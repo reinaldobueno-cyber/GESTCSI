@@ -147,6 +147,8 @@ test('builds adoption from one recent workspace query and keeps a project-scan f
   assert.match(appsScript, /function fetchClickUpWorkspaceActivityTasks_\(/);
   assert.match(appsScript, /'\/team\/' \+ workspaceId \+ '\/task\?' \+ query/);
   assert.match(appsScript, /'date_updated_gt=' \+ Math\.max/);
+  assert.match(appsScript, /options\.seven_day_start_ms/);
+  assert.match(appsScript, /'date_updated_lt=' \+ Math\.max/);
   assert.match(appsScript, /prefer_workspace_recent: useWorkspaceRecent/);
   assert.match(appsScript, /collection_mode: options\._activity_collection_mode \|\| 'project_scan'/);
   assert.match(appsScript, /workspace_recent_tasks_with_view_fallback/);
@@ -154,7 +156,9 @@ test('builds adoption from one recent workspace query and keeps a project-scan f
   assert.match(appsScript, /workspaceRecentSucceeded \? eligibleMappings\.length/);
   assert.match(appsScript, /findClickUpActivityMappingForTask_/);
   assert.match(appsScript, /resultado_parcial_controle/);
-  assert.match(html, /Fonte rápida: consulta recente única do workspace/);
+  assert.match(html, /Fonte rápida: consulta das tarefas atualizadas nos últimos 7 dias no workspace/);
+  assert.match(html, /getClickUpInventory', \{auth_token:authTokenParam\(\), lean:'1'\}, 45000/);
+  assert.match(html, /gestcsi_clickup_inventory_v2_/);
 });
 
 test('prioritizes list mappings when associating recent workspace tasks', async () => {

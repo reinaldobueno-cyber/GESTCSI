@@ -2790,19 +2790,73 @@ function inventoryRowFromNormalized_(mapping, normalized, status, errorMessage) 
 }
 
 function getClickUpInventory_(params) {
+  params = params || {};
   var user = requireUser_(params || {});
   var sheet = getClickUpInventorySheet_();
   var values = sheet.getDataRange().getValues();
   if (values.length <= 1) return { ok: true, projetos: [], total: 0 };
   var header = values[0];
+  var lean = String(params.lean || '') === '1';
   var projetos = values.slice(1).map(function(row) {
     var item = rowToObject_(header, row);
     if (item.ultima_sync_clickup instanceof Date) item.ultima_sync_clickup = item.ultima_sync_clickup.toISOString();
+    if (lean) item.clickup_json = buildLeanClickUpInventoryJson_(item.clickup_json);
     return item;
   }).filter(function(item) {
     return !!sanitizeText_(item.cliente) && canUserAccessProjectItem_(user, item);
   });
-  return { ok: true, projetos: projetos, total: projetos.length };
+  return { ok: true, projetos: projetos, total: projetos.length, lean: lean };
+}
+
+function buildLeanClickUpInventoryJson_(raw) {
+  var payload = {};
+  try {
+    payload = raw && typeof raw === 'object' ? raw : JSON.parse(String(raw || '{}'));
+  } catch (e) {
+    return '';
+  }
+  function compactItem(item) {
+    item = item || {};
+    var out = {
+      id: String(item.id || ''),
+      nome: sanitizeText_(item.nome || item.name || ''),
+      fase_nome: sanitizeText_(item.fase_nome || ''),
+      status_original: sanitizeText_(item.status_original || item.status || ''),
+      updated_at: sanitizeText_(item.updated_at || item.date_updated || ''),
+      due_date: sanitizeText_(item.due_date || '')
+    };
+    if (item.concluido !== undefined) out.concluido = !!item.concluido;
+    if (item.concluida !== undefined) out.concluida = !!item.concluida;
+    return out;
+  }
+  var phases = (Array.isArray(payload.fases) ? payload.fases : []).map(function(phase) {
+    return {
+      id: String(phase && phase.id || ''),
+      nome: sanitizeText_(phase && phase.nome || ''),
+      status_original: sanitizeText_(phase && phase.status_original || ''),
+      updated_at: sanitizeText_(phase && phase.updated_at || ''),
+      progresso: Number(phase && phase.progresso || 0)
+    };
+  });
+  function relevantItems(items, completedField) {
+    items = Array.isArray(items) ? items : [];
+    var relevant = items.filter(function(item) {
+      return !!(item && item.due_date && !item[completedField]);
+    });
+    var latest = items.slice().sort(function(a, b) {
+      return normalizeClickUpDateMillis_(b && (b.updated_at || b.date_updated)) -
+        normalizeClickUpDateMillis_(a && (a.updated_at || a.date_updated));
+    })[0];
+    if (latest && relevant.indexOf(latest) < 0) relevant.push(latest);
+    return relevant.map(compactItem);
+  }
+  return JSON.stringify({
+    resumo: payload.resumo || {},
+    fases: phases,
+    tasks: relevantItems(payload.tasks, 'concluida'),
+    marcos: relevantItems(payload.marcos, 'concluido'),
+    compacto_gestao: true
+  });
 }
 
 function getClickUpMilestoneClosing_(params) {
@@ -5861,8 +5915,9 @@ function buildApproxClickUpUserActivityFromTasks_(mappings, options) {
       associateApproxProjectWithConsultant_(byKey, mapping);
     });
     try {
-      var recent = fetchClickUpWorkspaceActivityTasks_(options.workspace_id, options.start_ms, {
-        deadline_ms: options.execution_deadline_ms
+      var recent = fetchClickUpWorkspaceActivityTasks_(options.workspace_id, options.seven_day_start_ms, {
+        deadline_ms: options.execution_deadline_ms,
+        end_ms: options.day_end_ms
       });
       var mappingLookup = buildClickUpActivityMappingIndex_(activityMappings);
       var matchedProjects = {};
@@ -5883,6 +5938,7 @@ function buildApproxClickUpUserActivityFromTasks_(mappings, options) {
         ? 'workspace_recent_tasks_with_view_fallback'
         : 'workspace_recent_tasks';
       options._activity_tasks_read = (recent.tasks || []).length;
+      options._activity_task_window_days = 7;
       options._activity_truncated = !!recent.truncated;
       options._activity_projects_with_recent_tasks = Object.keys(matchedProjects).length;
     } catch (workspaceError) {
@@ -6014,6 +6070,7 @@ function fetchClickUpWorkspaceActivityTasks_(workspaceId, startMs, options) {
       'include_closed=true',
       'subtasks=true',
       'date_updated_gt=' + Math.max(0, Number(startMs || 0) - 1),
+      'date_updated_lt=' + Math.max(0, Number(options.end_ms || new Date().getTime()) + 1),
       'order_by=updated',
       'reverse=true',
       'page=' + page
