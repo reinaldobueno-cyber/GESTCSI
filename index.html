@@ -4731,7 +4731,7 @@ var LAST_UPDATE_KEY = 'gestcsi_last_update_label_v1';
 var PANEL_CACHE_KEY = 'gestcsi_panel_cache_v2';
 var PANEL_SNAPSHOT_KEY = 'gestcsi_portfolio_snapshot_v1';
 var PANEL_SNAPSHOT_SCHEMA = 2;
-var PANEL_APP_VERSION = '2026-09-11-clickup-activity-v3';
+var PANEL_APP_VERSION = '2026-09-11-clickup-activity-v4';
 var PANEL_EXPECTED_TOTAL_KEY = 'gestcsi_portfolio_expected_total_v1';
 var PANEL_AUTO_REFRESH_INTERVAL_MS = 5 * 60 * 1000;
 var PANEL_AUTO_REFRESH_MIN_GAP_MS = 60 * 1000;
@@ -15207,7 +15207,7 @@ function gestaoRenderClickUpUserActivity(users, meta) {
   var errorAction = projectErrorDetails.length
     ? ' <button type="button" class="project-link-btn warn" onclick="return gestaoOpenClickUpErrors()">'+projectErrorDetails.length+' com erro</button>'
     : (projectsWithError ? ' '+projectsWithError+' erro(s) antigos; gere novamente para detalhar.' : '');
-  var sourceNote = collectionMode.indexOf('workspace_recent_tasks') === 0 ? ' Fonte rápida: consulta das tarefas atualizadas nos últimos 7 dias no workspace'+(tasksRead?' ('+tasksRead+' tasks lidas)':'')+(collectionMode.indexOf('view_fallback') >= 0?' com complemento das views isoladas':'')+'.' : '';
+  var sourceNote = collectionMode.indexOf('workspace_recent_tasks') === 0 ? ' Fonte: tarefas atualizadas nos últimos 7 dias no workspace, agrupadas por dia'+(tasksRead?' ('+tasksRead+' tasks lidas)':'')+'.' : '';
   var partialNote = partialResult ? ' Atenção: o limite de páginas da consulta foi atingido; os números são parciais.' : '';
   var coverageNote = projectsConfigured ? ' Cobertura: '+projectsRead+' de '+projectsSelected+' projetos elegíveis'+(projectsWithError ? ', '+projectsWithError+' com erro' : '')+(projectsMissingId ? ', '+projectsMissingId+' habilitados sem ID ClickUp' : '')+'.'+sourceNote+partialNote+coverageState : '';
   return '<div class="dashx-focus-note" style="margin-bottom:14px"><div><strong>Controle de adoção.</strong> '+modeNote+' '+numbersNote+coverageNote+errorAction+'</div><div class="dashx-focus-hint">última sync '+escapeHtml(gestaoActivityDateLabel(synced))+'</div></div>'+cards+'<div class="dashx-table-wrap"><table class="dashx-table"><thead><tr><th>Usuário</th><th>Last active</th><th>Última task relacionada</th><th>Dias sem atividade</th><th>Tasks hoje</th><th>Tasks rel. 7 dias</th><th class="num">Projetos carteira</th></tr></thead><tbody>'+rows+'</tbody></table></div>';

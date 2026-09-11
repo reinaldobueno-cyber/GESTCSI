@@ -27,7 +27,7 @@
 
 var CLICKUP_API_BASE = 'https://api.clickup.com/api/v2';
 var CLICKUP_DEFAULT_WORKSPACE_ID = '9007083069';
-var CLICKUP_ACTIVITY_ENGINE_VERSION = 'workspace-recent-7d-v2';
+var CLICKUP_ACTIVITY_ENGINE_VERSION = 'workspace-recent-7d-v3';
 var CLICKUP_MILESTONE_BONUS_VALUE = 30;
 var CLICKUP_PROJECT_CLOSING_BONUS_VALUE = 80;
 var CLICKUP_PROJECT_CLOSING_BONUS_START = '2026-06-15';
@@ -5917,20 +5917,22 @@ function buildApproxClickUpUserActivityFromTasks_(mappings, options) {
       var matchedProjects = {};
       (recent.tasks || []).forEach(function(task) {
         var mapping = findClickUpActivityMappingForTask_(task, mappingLookup);
-        if (!mapping) return;
-        var projectKey = sanitizeText_(mapping.project_key || mapping.cliente);
+        if (!mapping) {
+          mapping = {
+            project_key: '',
+            cliente: sanitizeText_(task && task.list && task.list.name || task && task.folder && task.folder.name || 'Workspace ClickUp'),
+            project_url: sanitizeText_(task && (task.url || task.permalink || task.link || task.html_url) || '')
+          };
+        }
+        var projectKey = sanitizeText_(mapping.project_key || '');
         if (projectKey) matchedProjects[projectKey] = true;
         eventCount += aggregateApproxTaskForUsers_(byKey, task, mapping, options);
       });
       taskCount = (recent.tasks || []).length;
-      projectScanMappings = activityMappings.filter(function(mapping) {
-        return !!mapping.view_id && !mapping.list_id && !mapping.folder_id && !mapping.space_id;
-      });
-      projectsAttempted = activityMappings.length - projectScanMappings.length;
+      projectScanMappings = [];
+      projectsAttempted = activityMappings.length;
       projectsRead = projectsAttempted;
-      options._activity_collection_mode = projectScanMappings.length
-        ? 'workspace_recent_tasks_with_view_fallback'
-        : 'workspace_recent_tasks';
+      options._activity_collection_mode = 'workspace_recent_tasks';
       options._activity_tasks_read = (recent.tasks || []).length;
       options._activity_task_window_days = 7;
       options._activity_truncated = !!recent.truncated;
@@ -6051,32 +6053,45 @@ function fetchClickUpWorkspaceActivityTasks_(workspaceId, startMs, options) {
   options = options || {};
   workspaceId = normalizeClickUpId_(workspaceId);
   if (!workspaceId) throw new Error('CLICKUP_TEAM_ID nao configurado para a leitura recente de atividade.');
-  var page = 0;
   var all = [];
-  var maxPages = Math.max(1, Math.min(
-    toInt_(getScriptProperty_('CLICKUP_ACTIVITY_WORKSPACE_MAX_PAGES', '80'), 80),
+  var maxPagesPerWindow = Math.max(1, Math.min(
+    toInt_(getScriptProperty_('CLICKUP_ACTIVITY_WORKSPACE_MAX_PAGES_PER_DAY', '40'), 40),
     100
   ));
   var truncated = false;
-  while (page < maxPages) {
-    assertClickUpActivityDeadline_(options);
-    var query = [
-      'include_closed=true',
-      'subtasks=true',
-      'date_updated_gt=' + Math.max(0, Number(startMs || 0) - 1),
-      'date_updated_lt=' + Math.max(0, Number(options.end_ms || new Date().getTime()) + 1),
-      'order_by=updated',
-      'reverse=true',
-      'page=' + page
-    ].join('&');
-    var response = clickupRequest_('get', '/team/' + workspaceId + '/task?' + query);
-    var batch = response.tasks || [];
-    all = all.concat(batch);
-    if (batch.length < 100) return { tasks: dedupeTasks_(all), truncated: false, pages: page + 1 };
-    page += 1;
+  var pagesRead = 0;
+  var dayMs = 24 * 60 * 60 * 1000;
+  var rangeStart = Math.max(0, Number(startMs || 0));
+  var windowEnd = Math.max(rangeStart, Number(options.end_ms || new Date().getTime()));
+  while (windowEnd >= rangeStart) {
+    var windowStart = Math.max(rangeStart, windowEnd - dayMs + 1);
+    var windowComplete = false;
+    for (var page = 0; page < maxPagesPerWindow; page += 1) {
+      if (options.deadline_ms && new Date().getTime() >= Number(options.deadline_ms) - 5000) {
+        return { tasks: dedupeTasks_(all), truncated: true, pages: pagesRead, deadline_reached: true };
+      }
+      var query = [
+        'include_closed=true',
+        'subtasks=true',
+        'date_updated_gt=' + Math.max(0, windowStart - 1),
+        'date_updated_lt=' + Math.max(0, windowEnd + 1),
+        'order_by=updated',
+        'reverse=true',
+        'page=' + page
+      ].join('&');
+      var response = clickupRequest_('get', '/team/' + workspaceId + '/task?' + query);
+      var batch = response.tasks || [];
+      pagesRead += 1;
+      all = all.concat(batch);
+      if (batch.length < 100) {
+        windowComplete = true;
+        break;
+      }
+    }
+    if (!windowComplete) truncated = true;
+    windowEnd = windowStart - 1;
   }
-  truncated = true;
-  return { tasks: dedupeTasks_(all), truncated: truncated, pages: page };
+  return { tasks: dedupeTasks_(all), truncated: truncated, pages: pagesRead };
 }
 
 function buildClickUpActivityMappingIndex_(mappings) {
