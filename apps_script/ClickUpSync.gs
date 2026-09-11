@@ -5289,7 +5289,8 @@ function startClickUpUserActivityBackground_(params) {
   var forceRestart = String(params.force_restart || '') === '1';
   if (String(params.from_queue || '') === '1' && String(params.force_restart || '') !== '1') forceRestart = false;
   var completedAt = Date.parse(progress.sincronizado_em || props.getProperty('CLICKUP_ACTIVITY_BACKGROUND_COMPLETED_AT') || '');
-  var recentComplete = previousComplete && isFinite(completedAt) && (new Date().getTime() - completedAt) < 6 * 60 * 60 * 1000;
+  var currentEngine = String(progress.motor_controle || '') === CLICKUP_ACTIVITY_ENGINE_VERSION;
+  var recentComplete = previousComplete && currentEngine && isFinite(completedAt) && (new Date().getTime() - completedAt) < 6 * 60 * 60 * 1000;
   if (!alreadyActive && recentComplete && !forceRestart) {
     return {
       ok: true,

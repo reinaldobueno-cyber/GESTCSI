@@ -134,6 +134,7 @@ test('resumes the adoption estimate with a lightweight ClickUp reader', async ()
   assert.match(appsScript, /projects_attempted: projectsAttempted/);
   assert.match(appsScript, /scanOffset \+ attemptedInBatch/);
   assert.match(appsScript, /recentComplete && !forceRestart/);
+  assert.match(appsScript, /var currentEngine = String\(progress\.motor_controle \|\| ''\) === CLICKUP_ACTIVITY_ENGINE_VERSION/);
   assert.match(appsScript, /function readClickUpUserActivityProgress_\(/);
   assert.match(appsScript, /getRange\(1, 1, 2, lastColumn\)\.getValues\(\)/);
   assert.match(html, /chamarAppsScriptJsonp\('getClickUpUserActivityStatus'/);
@@ -224,16 +225,17 @@ test('does not restart a recent completed estimate unless force is explicit', as
     let schedules = 0;
     const factory = new Function(
       'PropertiesService', 'readClickUpUserActivityProgress_', 'readClickUpUserActivityRows_', 'clearClickUpUserActivityBackgroundTriggers_',
-      'writeClickUpUserActivitySummary_', 'scheduleClickUpUserActivityBackground_',
+      'writeClickUpUserActivitySummary_', 'scheduleClickUpUserActivityBackground_', 'CLICKUP_ACTIVITY_ENGINE_VERSION',
       `return (${source.replace(/^function startClickUpUserActivityBackground_/, 'function')});`
     );
     const fn = factory(
       { getScriptProperties: () => props },
-      () => ({ sincronizacao_completa_controle: 'sim', sincronizado_em: new Date().toISOString() }),
+      () => ({ sincronizacao_completa_controle: 'sim', sincronizado_em: new Date().toISOString(), motor_controle: 'workspace-recent-7d-v3' }),
       () => [{ sincronizacao_completa_controle: 'sim', sincronizado_em: new Date().toISOString() }],
       () => {},
       () => { writes += 1; },
-      () => { schedules += 1; }
+      () => { schedules += 1; },
+      'workspace-recent-7d-v3'
     );
     return { result: fn(params), writes, schedules };
   }
