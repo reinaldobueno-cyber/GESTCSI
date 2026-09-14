@@ -226,10 +226,11 @@ Ao final deste plano, o GEST CSI deverá:
 
 #### E02 — baseline funcional e financeiro
 
-- **Status:** [ ] PENDENTE
+- **Status:** [x] OK
 - **Entrega:** capturar resultados atuais de carteira, CMAX, marcos, fechamento de projeto e Bonificação em competências de referência anonimizadas.
 - **Critério de OK:** arquivo de baseline contém totais e hashes; 37 testes atuais passam; divergências conhecidas estão registradas.
 - **Testes:** suíte atual, smoke E2E e reconciliação de pelo menos duas competências.
+- **Evidência:** [`BASELINE_FUNCIONAL_FINANCEIRA_E02.md`](./BASELINE_FUNCIONAL_FINANCEIRA_E02.md) e [`baselines/e02-2026-09-14.json`](./baselines/e02-2026-09-14.json); JUL/2026 e AGO/2026 reconciliados; SHA agregado `7dabb942...e014`; 48/48 testes aprovados, incluindo os 37 anteriores, validação de privacidade e smoke HTTP.
 
 #### E03 — matriz de fontes e responsáveis
 

@@ -1,0 +1,196 @@
+{
+  "schema_version": 1,
+  "captured_at": "2026-09-14T14:52:26.246Z",
+  "production_base": {
+    "git_sha": "11e7c2fdc9af2b1f36f1217ae90a061773f19490",
+    "app_version": "2026-09-11-clickup-activity-v4",
+    "branch": "gestcsi/main"
+  },
+  "privacy": "Somente agregados, metadados técnicos e hashes; sem nomes, clientes ou registros individuais.",
+  "sources": {
+    "portfolio": {
+      "status": 200,
+      "bytes": 110541,
+      "rows": 234,
+      "columns": 29,
+      "sha256": "157272d38f1b9b9921c15588c37e933e9c25c1f6f748ef8df0a4396aa949be6b"
+    },
+    "milestones": {
+      "status": 200,
+      "bytes": 1348403,
+      "rows": 2227,
+      "columns": 23,
+      "sha256": "0f2a75ebd56cdd04546a54e53077652116f7838ae159b5e18824d7f75ae08f7b"
+    },
+    "closing_decisions": {
+      "status": 200,
+      "bytes": 599,
+      "rows": 1,
+      "columns": 17,
+      "sha256": "54ae2670cdf173bc1edd802f670a4e370330321ba14d2b076b23a6833ee5f462"
+    },
+    "bonus_indications": {
+      "status": 200,
+      "bytes": 567,
+      "rows": 2,
+      "columns": 11,
+      "sha256": "ec9ec3d49a5ae9c8b6ad79f5a7b9b78b17aa47b39287dc768db2e554e52fa585"
+    },
+    "consultant_compensation": {
+      "status": 200,
+      "bytes": 1422,
+      "rows": 18,
+      "columns": 6,
+      "sha256": "fe02742660928d9de2d93914fb3f9fd97dabb9d0323b7ff280f950f9d37eed33"
+    },
+    "cmax_2026-06": {
+      "status": 200,
+      "bytes": 171769,
+      "events": 372,
+      "sha256": "0529232f5cd7d68d5c678b56d661abe762846d2c06b92d6f9c45d077f01b6a81",
+      "synced_at": "2026-09-11T14:31:41.330Z",
+      "materialized": true,
+      "attempts": 1,
+      "redirects": 1
+    },
+    "cmax_2026-07": {
+      "status": 200,
+      "bytes": 168875,
+      "events": 363,
+      "sha256": "25c0df4d665dac33e5ff43b6cd6ad1262bc3a9a35f490160d90bb54cf7ed61e8",
+      "synced_at": "2026-09-11T14:31:41.330Z",
+      "materialized": true,
+      "attempts": 1,
+      "redirects": 1
+    },
+    "cmax_2026-08": {
+      "status": 200,
+      "bytes": 191354,
+      "events": 414,
+      "sha256": "866a575441cbfd6f3d7b91e0c0ae1972452451ea70585aea51001d3c6ef12549",
+      "synced_at": "2026-09-11T14:31:41.330Z",
+      "materialized": true,
+      "attempts": 1,
+      "redirects": 1
+    }
+  },
+  "competences": {
+    "2026-07": {
+      "portfolio": {
+        "total_rows": 234,
+        "declared_snapshot_totals": [
+          234
+        ],
+        "competence_rows": 29,
+        "distinct_source_row_numbers": 37
+      },
+      "cmax": {
+        "source_events": 363,
+        "unique_events_in_payment_pool": 366,
+        "eligible_events": 197,
+        "payable_equivalent": 153.5,
+        "special_equivalent": 16.5,
+        "consultants_with_eligible_activity": 12,
+        "consultants_without_rate": 0,
+        "daily_value": 14536.25
+      },
+      "milestones": {
+        "closed_rows": 189,
+        "closed_status": {
+          "aprovado": 152,
+          "reprovado": 17,
+          "aguardando": 11,
+          "outro": 9
+        },
+        "approved_for_payment": 153,
+        "rejected_for_payment": 14,
+        "milestone_value": 4590
+      },
+      "project_closing": {
+        "total": 0,
+        "approved": 0,
+        "rejected": 0,
+        "project_value": 0
+      },
+      "indications": {
+        "total": 2,
+        "indication_value": 100
+      },
+      "financial": {
+        "daily_value": 14536.25,
+        "milestone_value": 4590,
+        "project_value": 0,
+        "indication_value": 100,
+        "total_value": 19226.25
+      },
+      "reconciliation": {
+        "component_sum_matches_total": true,
+        "component_sum": 19226.25,
+        "portfolio_declared_total_matches_rows": true,
+        "cmax_has_no_missing_rates": true
+      }
+    },
+    "2026-08": {
+      "portfolio": {
+        "total_rows": 234,
+        "declared_snapshot_totals": [
+          234
+        ],
+        "competence_rows": 25,
+        "distinct_source_row_numbers": 37
+      },
+      "cmax": {
+        "source_events": 414,
+        "unique_events_in_payment_pool": 414,
+        "eligible_events": 172,
+        "payable_equivalent": 126.9999,
+        "special_equivalent": 13.5,
+        "consultants_with_eligible_activity": 11,
+        "consultants_without_rate": 0,
+        "daily_value": 12938.7415
+      },
+      "milestones": {
+        "closed_rows": 191,
+        "closed_status": {
+          "aprovado": 147,
+          "reprovado": 40,
+          "aguardando": 4
+        },
+        "approved_for_payment": 165,
+        "rejected_for_payment": 52,
+        "milestone_value": 4950
+      },
+      "project_closing": {
+        "total": 1,
+        "approved": 1,
+        "rejected": 0,
+        "project_value": 80
+      },
+      "indications": {
+        "total": 0,
+        "indication_value": 0
+      },
+      "financial": {
+        "daily_value": 12938.7415,
+        "milestone_value": 4950,
+        "project_value": 80,
+        "indication_value": 0,
+        "total_value": 17968.7415
+      },
+      "reconciliation": {
+        "component_sum_matches_total": true,
+        "component_sum": 17968.7415,
+        "portfolio_declared_total_matches_rows": true,
+        "cmax_has_no_missing_rates": true
+      }
+    }
+  },
+  "known_divergences": [
+    "A suíte preserva o piso histórico de 201 projetos, enquanto a fonte materializada atual declara e entrega 234 linhas.",
+    "Os hashes representam fontes mutáveis e mudarão quando a operação atualizar as planilhas ou o CMAX.",
+    "A baseline usa as regras financeiras presentes no frontend do SHA-base; observações locais do navegador não fazem parte do cálculo.",
+    "A leitura valida disponibilidade e coerência dos dados, mas não executa comandos de escrita nem sincronizações administrativas.",
+    "Chamadas CMAX paralelas e uma repetição sequencial produziram HTTP 404 intermitente; o capturador usa redirecionamento explícito, sequência e retentativa controlada, mas a origem ainda precisa de monitoramento."
+  ],
+  "aggregate_sha256": "7dabb94282f27fc5948c1a46653ae1c7ef8fbf49e53b993ba238780abf9eb014"
+}

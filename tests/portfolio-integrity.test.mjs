@@ -12,7 +12,7 @@ function projects(count, month = 'JAN') {
   }));
 }
 
-test('accepts the currently verified 201-project portfolio', () => {
+test('accepts the historical 201-project minimum fixture', () => {
   const list = projects(201);
   const result = integrity.validateSnapshot({
     projetos: list,
