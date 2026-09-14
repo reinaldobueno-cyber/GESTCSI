@@ -234,10 +234,11 @@ Ao final deste plano, o GEST CSI deverá:
 
 #### E03 — matriz de fontes e responsáveis
 
-- **Status:** [ ] PENDENTE
+- **Status:** [x] OK
 - **Entrega:** catálogo de Sheets, ClickUp, CMAX, propriedades, tokens, periodicidade, owner, contingência e dados consumidores.
 - **Critério de OK:** 100% das métricas do painel possuem fonte, owner, SLA de frescor e regra de fallback.
 - **Testes:** revisão por responsável operacional e técnico.
+- **Evidência:** [`MATRIZ_FONTES_RESPONSAVEIS_E03.md`](./MATRIZ_FONTES_RESPONSAVEIS_E03.md) e [`governance/data-contract.json`](./governance/data-contract.json); 20 fontes, 52 métricas, 15 áreas, 55 ações, 14 classes de configuração e 6 papéis; 53/53 testes aprovados.
 
 ### Etapa B — segurança e observabilidade imediatas
 

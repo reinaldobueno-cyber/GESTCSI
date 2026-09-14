@@ -1,0 +1,1427 @@
+{
+  "schema_version": 1,
+  "reviewed_at": "2026-09-14",
+  "scope": "GEST CSI production base 11e7c2f",
+  "policy": {
+    "no_secret_values": true,
+    "ownership_model": "Papéis estáveis; nomes pessoais são atribuídos fora do repositório.",
+    "source_priority": "Fonte canônica remota > snapshot válido > fallback explícito; nunca mesclar respostas parciais.",
+    "write_policy": "Comandos exigem autenticação, autorização, idempotência e auditoria.",
+    "privacy": "Catálogo não contém credenciais, clientes, consultores nem valores financeiros."
+  },
+  "owners": {
+    "gestao_csi": {
+      "label": "Gestão CSI / PMO",
+      "responsibility": "Regra operacional, qualidade e aceite do dado."
+    },
+    "administracao_painel": {
+      "label": "Administração do painel",
+      "responsibility": "Usuários, permissões, bonificação e comandos sensíveis."
+    },
+    "administracao_clickup": {
+      "label": "Administração ClickUp",
+      "responsibility": "Estrutura, listas, campos, webhooks e token ClickUp."
+    },
+    "administracao_cmax": {
+      "label": "Administração CMAX",
+      "responsibility": "Credenciais, agenda e qualidade dos eventos CMAX."
+    },
+    "financeiro": {
+      "label": "Financeiro / Diretoria",
+      "responsibility": "Taxas, contratos, indicações e fechamento financeiro."
+    },
+    "engenharia_gest_csi": {
+      "label": "Engenharia GEST CSI",
+      "responsibility": "Integrações, disponibilidade, observabilidade e evolução técnica."
+    }
+  },
+  "sources": [
+    {
+      "id": "sheets.monthly_projects",
+      "label": "Abas mensais JAN–DEZ",
+      "system": "Google Sheets",
+      "classification": "interno",
+      "cadence_current": "edição operacional + leitura sob demanda",
+      "owner_operational": "gestao_csi",
+      "owner_technical": "engenharia_gest_csi",
+      "freshness_slo": "alterações visíveis em até 15 min",
+      "fallback": "último snapshot materializado válido",
+      "consumers": [
+        "dashboard",
+        "executivo",
+        "gestao",
+        "projetos",
+        "consultores",
+        "vendedores",
+        "avulso_novo",
+        "logistica",
+        "prazos",
+        "alertas"
+      ],
+      "target_backend": "D1 projects + import job"
+    },
+    {
+      "id": "sheets.portfolio_materialized",
+      "label": "PANEL_MONTHLY_BROWSER",
+      "system": "Google Sheets",
+      "classification": "interno",
+      "cadence_current": "materialização após mudança",
+      "owner_operational": "gestao_csi",
+      "owner_technical": "engenharia_gest_csi",
+      "freshness_slo": "idade máxima 15 min",
+      "fallback": "snapshot comprimido do Apps Script; depois abas mensais",
+      "consumers": [
+        "dashboard",
+        "executivo",
+        "gestao",
+        "projetos",
+        "consultores",
+        "vendedores",
+        "avulso_novo",
+        "logistica",
+        "prazos",
+        "alertas"
+      ],
+      "target_backend": "KV snapshot + D1"
+    },
+    {
+      "id": "apps.portfolio_snapshot",
+      "label": "Snapshot mensal comprimido",
+      "system": "Apps Script Properties",
+      "classification": "interno",
+      "cadence_current": "após mudança, TTL atual 5 min",
+      "owner_operational": "gestao_csi",
+      "owner_technical": "engenharia_gest_csi",
+      "freshness_slo": "idade máxima 15 min",
+      "fallback": "PANEL_MONTHLY_BROWSER ou leitura mensal direta",
+      "consumers": [
+        "dashboard",
+        "projetos"
+      ],
+      "target_backend": "KV snapshot versionado"
+    },
+    {
+      "id": "file.contracts_mrr",
+      "label": "contracts_mrr.json",
+      "system": "Artefato estático",
+      "classification": "confidencial_agregado",
+      "cadence_current": "publicação manual",
+      "owner_operational": "financeiro",
+      "owner_technical": "engenharia_gest_csi",
+      "freshness_slo": "atualização mensal e antes do fechamento",
+      "fallback": "campos MRR da carteira; caso ausente, exibir não localizado",
+      "consumers": [
+        "gestao",
+        "executivo"
+      ],
+      "target_backend": "D1 contracts com acesso restrito"
+    },
+    {
+      "id": "clickup.projects",
+      "label": "Projetos, tarefas, fases e campos",
+      "system": "ClickUp API",
+      "classification": "interno",
+      "cadence_current": "webhook + fila 5 min + reconciliação 6 h",
+      "owner_operational": "administracao_clickup",
+      "owner_technical": "engenharia_gest_csi",
+      "freshness_slo": "mudança crítica em até 15 min; reconciliação em 6 h",
+      "fallback": "último JSON mensal válido e fila para retentativa",
+      "consumers": [
+        "dashboard",
+        "executivo",
+        "gestao",
+        "projetos",
+        "prazos",
+        "alertas"
+      ],
+      "target_backend": "Queue + D1 tasks/projects"
+    },
+    {
+      "id": "sheets.clickup_config",
+      "label": "CLICKUP_CONFIG e inventário",
+      "system": "Google Sheets",
+      "classification": "confidencial",
+      "cadence_current": "manutenção administrativa",
+      "owner_operational": "administracao_clickup",
+      "owner_technical": "engenharia_gest_csi",
+      "freshness_slo": "revisão a cada alteração estrutural",
+      "fallback": "descoberta por inventário ClickUp, sem gravar automaticamente",
+      "consumers": [
+        "administracao",
+        "projetos"
+      ],
+      "target_backend": "D1 integration_mappings"
+    },
+    {
+      "id": "clickup.milestones",
+      "label": "Marcos e status de fechamento",
+      "system": "ClickUp API",
+      "classification": "confidencial",
+      "cadence_current": "incremental + reconciliação 12 h",
+      "owner_operational": "gestao_csi",
+      "owner_technical": "engenharia_gest_csi",
+      "freshness_slo": "mudança em até 30 min; varredura em 12 h",
+      "fallback": "histórico mensal e CLICKUP_FECHAMENTO_MARCOS",
+      "consumers": [
+        "fechamento",
+        "bonificacao",
+        "alertas"
+      ],
+      "target_backend": "Queue + D1 milestones"
+    },
+    {
+      "id": "sheets.milestone_closing",
+      "label": "CLICKUP_FECHAMENTO_MARCOS",
+      "system": "Google Sheets",
+      "classification": "confidencial_financeiro",
+      "cadence_current": "materialização incremental",
+      "owner_operational": "gestao_csi",
+      "owner_technical": "engenharia_gest_csi",
+      "freshness_slo": "idade máxima 30 min",
+      "fallback": "histórico de marcos salvo nos JSONs mensais",
+      "consumers": [
+        "fechamento",
+        "bonificacao",
+        "dashboard"
+      ],
+      "target_backend": "D1 milestone_closings"
+    },
+    {
+      "id": "sheets.project_closing",
+      "label": "CLICKUP_PROJECT_CLOSING_DECISIONS/CANDIDATES",
+      "system": "Google Sheets",
+      "classification": "confidencial_financeiro",
+      "cadence_current": "sob comando + processamento em lotes",
+      "owner_operational": "gestao_csi",
+      "owner_technical": "engenharia_gest_csi",
+      "freshness_slo": "decisão visível em até 5 min",
+      "fallback": "última decisão persistida; candidato pode ser recalculado",
+      "consumers": [
+        "fechamento",
+        "bonificacao"
+      ],
+      "target_backend": "D1 project_closing_decisions"
+    },
+    {
+      "id": "clickup.user_activity",
+      "label": "Atividade e adoção de usuários",
+      "system": "ClickUp API v2/v3",
+      "classification": "confidencial",
+      "cadence_current": "job a cada 6 h",
+      "owner_operational": "administracao_clickup",
+      "owner_technical": "engenharia_gest_csi",
+      "freshness_slo": "idade máxima 8 h",
+      "fallback": "última leitura CLICKUP_USER_ACTIVITY com rótulo de defasagem",
+      "consumers": [
+        "administracao",
+        "executivo"
+      ],
+      "target_backend": "Queue + D1 clickup_activity"
+    },
+    {
+      "id": "sheets.followups",
+      "label": "ACOMPANHAMENTOS_PROJETOS",
+      "system": "Google Sheets",
+      "classification": "confidencial",
+      "cadence_current": "por ação do usuário",
+      "owner_operational": "gestao_csi",
+      "owner_technical": "engenharia_gest_csi",
+      "freshness_slo": "gravação em até 30 s",
+      "fallback": "manter última leitura e sinalizar falha; nunca inventar acompanhamento",
+      "consumers": [
+        "acompanhamento",
+        "gestao",
+        "projetos",
+        "alertas"
+      ],
+      "target_backend": "D1 followups"
+    },
+    {
+      "id": "sheets.kanban",
+      "label": "ACOMPANHAMENTOS_KANBAN",
+      "system": "Google Sheets",
+      "classification": "interno",
+      "cadence_current": "por ação do usuário",
+      "owner_operational": "gestao_csi",
+      "owner_technical": "engenharia_gest_csi",
+      "freshness_slo": "gravação em até 30 s",
+      "fallback": "estado derivado de acompanhamento, marcado como não persistido",
+      "consumers": [
+        "acompanhamento",
+        "projetos"
+      ],
+      "target_backend": "D1 project_cycle_state"
+    },
+    {
+      "id": "cmax.agenda",
+      "label": "Agenda/eventos do CMAX",
+      "system": "CMAX API",
+      "classification": "confidencial_financeiro",
+      "cadence_current": "sob comando + histórico em lotes",
+      "owner_operational": "administracao_cmax",
+      "owner_technical": "engenharia_gest_csi",
+      "freshness_slo": "mês corrente em até 6 h; histórico imutável após fechamento",
+      "fallback": "última visão materializada por competência",
+      "consumers": [
+        "cmax",
+        "bonificacao",
+        "executivo"
+      ],
+      "target_backend": "Queue + D1 cmax_events"
+    },
+    {
+      "id": "sheets.cmax_materialized",
+      "label": "CMAX_DIARIAS, CMAX_DIARIAS_VIEW e CMAX_M_*",
+      "system": "Google Sheets",
+      "classification": "confidencial_financeiro",
+      "cadence_current": "materialização após sincronização",
+      "owner_operational": "administracao_cmax",
+      "owner_technical": "engenharia_gest_csi",
+      "freshness_slo": "idade máxima 6 h no mês corrente",
+      "fallback": "último mês completo; não substituir por resposta vazia",
+      "consumers": [
+        "cmax",
+        "bonificacao"
+      ],
+      "target_backend": "D1 cmax_events + KV summary"
+    },
+    {
+      "id": "sheets.compensation",
+      "label": "CONSULTORES_REMUNERACAO",
+      "system": "Google Sheets",
+      "classification": "restrito_financeiro",
+      "cadence_current": "por alteração administrativa",
+      "owner_operational": "financeiro",
+      "owner_technical": "engenharia_gest_csi",
+      "freshness_slo": "efeito em até 5 min",
+      "fallback": "taxa do usuário; exceção explicitamente versionada; sem taxa = não pagar",
+      "consumers": [
+        "consultores",
+        "bonificacao",
+        "administracao"
+      ],
+      "target_backend": "D1 compensation_rates"
+    },
+    {
+      "id": "sheets.indications",
+      "label": "BONUS_INDICACOES",
+      "system": "Google Sheets",
+      "classification": "restrito_financeiro",
+      "cadence_current": "por lançamento administrativo",
+      "owner_operational": "financeiro",
+      "owner_technical": "engenharia_gest_csi",
+      "freshness_slo": "efeito em até 5 min",
+      "fallback": "última leitura válida; não duplicar lançamento",
+      "consumers": [
+        "bonificacao",
+        "administracao"
+      ],
+      "target_backend": "D1 sales_indications"
+    },
+    {
+      "id": "sheets.users",
+      "label": "PAINEL_USUARIOS",
+      "system": "Google Sheets",
+      "classification": "restrito_seguranca",
+      "cadence_current": "por ação administrativa",
+      "owner_operational": "administracao_painel",
+      "owner_technical": "engenharia_gest_csi",
+      "freshness_slo": "efeito em até 1 min",
+      "fallback": "negar acesso se estado não puder ser confirmado",
+      "consumers": [
+        "administracao"
+      ],
+      "target_backend": "D1 users + sessão assinada"
+    },
+    {
+      "id": "sheets.panel_history",
+      "label": "PANEL_UPDATE_HISTORY e diagnósticos",
+      "system": "Google Sheets",
+      "classification": "interno",
+      "cadence_current": "por carga/atualização",
+      "owner_operational": "engenharia_gest_csi",
+      "owner_technical": "engenharia_gest_csi",
+      "freshness_slo": "evento em até 1 min",
+      "fallback": "telemetria local identificada como parcial",
+      "consumers": [
+        "administracao",
+        "executivo"
+      ],
+      "target_backend": "D1 telemetry + Logs"
+    },
+    {
+      "id": "geo.nominatim",
+      "label": "Geocodificação Nominatim/OSM",
+      "system": "Serviço público externo",
+      "classification": "publico",
+      "cadence_current": "sob demanda e serializado",
+      "owner_operational": "gestao_csi",
+      "owner_technical": "engenharia_gest_csi",
+      "freshness_slo": "cache sem vencimento até mudança da cidade",
+      "fallback": "aliases IBGE e cache local validado por país/UF",
+      "consumers": [
+        "logistica"
+      ],
+      "target_backend": "KV geocode cache"
+    },
+    {
+      "id": "browser.local_state",
+      "label": "Cache, sessão e preferências do navegador",
+      "system": "localStorage",
+      "classification": "local_confidencial",
+      "cadence_current": "por interação",
+      "owner_operational": "administracao_painel",
+      "owner_technical": "engenharia_gest_csi",
+      "freshness_slo": "imediato, sem garantia multi-dispositivo",
+      "fallback": "fonte canônica remota; preferências podem voltar ao padrão",
+      "consumers": [
+        "dashboard",
+        "fechamento",
+        "bonificacao",
+        "logistica",
+        "administracao"
+      ],
+      "target_backend": "reduzir a preferências; estado operacional em D1/KV"
+    }
+  ],
+  "configuration": [
+    {
+      "name": "SHEET_ID",
+      "class": "identifier",
+      "owner": "engenharia_gest_csi",
+      "rotation": "quando a planilha canônica mudar",
+      "target": "binding/secret por ambiente"
+    },
+    {
+      "name": "CLICKUP_TOKEN",
+      "class": "secret",
+      "owner": "administracao_clickup",
+      "rotation": "90 dias ou incidente",
+      "target": "Workers Secret"
+    },
+    {
+      "name": "CLICKUP_WEBHOOK_TOKEN",
+      "class": "secret",
+      "owner": "administracao_clickup",
+      "rotation": "90 dias ou incidente",
+      "target": "Workers Secret com assinatura"
+    },
+    {
+      "name": "CLICKUP_TEAM_ID",
+      "class": "identifier",
+      "owner": "administracao_clickup",
+      "rotation": "quando o workspace mudar",
+      "target": "config por ambiente"
+    },
+    {
+      "name": "CLICKUP_WEBHOOK_ENDPOINT",
+      "class": "endpoint",
+      "owner": "engenharia_gest_csi",
+      "rotation": "por mudança de ambiente",
+      "target": "config por ambiente"
+    },
+    {
+      "name": "CMAX_JWT_TOKEN",
+      "class": "ephemeral_secret",
+      "owner": "administracao_cmax",
+      "rotation": "automática por expiração",
+      "target": "Workers Secret/cache de curta duração"
+    },
+    {
+      "name": "CMAX_EMAIL|CMAX_USERNAME",
+      "class": "secret",
+      "owner": "administracao_cmax",
+      "rotation": "90 dias ou incidente",
+      "target": "Workers Secret"
+    },
+    {
+      "name": "CMAX_PASSWORD",
+      "class": "secret",
+      "owner": "administracao_cmax",
+      "rotation": "90 dias ou incidente",
+      "target": "Workers Secret"
+    },
+    {
+      "name": "CMAX_TOKEN_AUTH_URL|CMAX_TOKEN_REFRESH_URL",
+      "class": "endpoint",
+      "owner": "administracao_cmax",
+      "rotation": "quando o fornecedor mudar",
+      "target": "config por ambiente"
+    },
+    {
+      "name": "PANEL_USERS_SHEET",
+      "class": "configuration",
+      "owner": "administracao_painel",
+      "rotation": "quando o armazenamento mudar",
+      "target": "remover após migração D1"
+    },
+    {
+      "name": "*_BATCH_SIZE|*_TIMEOUT_MS|*_DELAY_MS",
+      "class": "tuning",
+      "owner": "engenharia_gest_csi",
+      "rotation": "por SLO e rate limit",
+      "target": "vars versionadas por ambiente"
+    },
+    {
+      "name": "*_ACTIVE|*_CURSOR|*_PROCESSED|*_ERROR|*_UPDATED_AT",
+      "class": "runtime_state",
+      "owner": "engenharia_gest_csi",
+      "rotation": "por execução; nunca segredo",
+      "target": "D1 job_runs + Queue"
+    },
+    {
+      "name": "MONTHLY_PORTFOLIO_SNAPSHOT_*|CMAX_VIEW_META_JSON",
+      "class": "cache_state",
+      "owner": "engenharia_gest_csi",
+      "rotation": "por geração/TTL",
+      "target": "KV com versão e TTL"
+    },
+    {
+      "name": "auth_token no localStorage",
+      "class": "session_secret",
+      "owner": "administracao_painel",
+      "rotation": "por login/expiração",
+      "target": "cookie HttpOnly Secure SameSite"
+    }
+  ],
+  "interfaces": {
+    "apps_script_actions": [
+      "confirmClickUpMilestoneStatuses",
+      "continueCmaxDailyHistoryBatch",
+      "createUser",
+      "deleteBonusSalesIndication",
+      "deleteProjectFollowup",
+      "diagnoseClickUpMilestoneTask",
+      "diagnoseProjectClosing",
+      "diagnoseProjectClosingCandidateCounts",
+      "getBonusSalesIndications",
+      "getClickUpInventory",
+      "getClickUpMilestoneClosing",
+      "getClickUpUserActivity",
+      "getClickUpUserActivityStatus",
+      "getCmaxDailyEvents",
+      "getCmaxDailyHistoryStatus",
+      "getConsultantCompensation",
+      "getMonthlyProjects",
+      "getPanelUpdateHistory",
+      "getProjectClosingCandidates",
+      "getProjectClosingDecisions",
+      "getProjectClosingSyncStatus",
+      "getProjectFollowups",
+      "getProjectSyncBackgroundStatus",
+      "listUsers",
+      "login",
+      "logPanelUpdate",
+      "logProjectFollowup",
+      "me",
+      "processDirty",
+      "resetUserPassword",
+      "restoreMilestoneClosingFromMonthlyHistory",
+      "saveBonusSalesIndication",
+      "setConsultantSeniority",
+      "setProjectClosingDecision",
+      "setProjectFollowupStatus",
+      "setProjectKanbanStage",
+      "setUserEnabled",
+      "setUserSeniority",
+      "startClickUpMilestoneClosingBackground",
+      "startClickUpUserActivityBackground",
+      "startCmaxDailyHistoryBackground",
+      "startProjectClosingSync",
+      "startProjectSyncBackground",
+      "stopLegacyClickUpMilestoneAudit",
+      "stopProjectClosingSync",
+      "syncAll",
+      "syncClickUpApprovedMilestones",
+      "syncClickUpClosedMilestones",
+      "syncClickUpMilestoneRecent",
+      "syncClickUpMilestoneTask",
+      "syncClickUpRejectedMilestones",
+      "syncClickUpUserActivity",
+      "syncCmaxDailyEvents",
+      "syncProject",
+      "validateConfig"
+    ]
+  },
+  "metrics": [
+    {
+      "id": "portfolio.total",
+      "label": "Projetos totais",
+      "area": "carteira",
+      "source_ids": [
+        "sheets.portfolio_materialized",
+        "apps.portfolio_snapshot"
+      ],
+      "owner_operational": "gestao_csi",
+      "owner_technical": "engenharia_gest_csi",
+      "freshness_slo": "15 min",
+      "fallback": "último snapshot íntegro",
+      "consumer_views": [
+        "dashboard",
+        "executivo",
+        "projetos"
+      ]
+    },
+    {
+      "id": "portfolio.by_month",
+      "label": "Projetos por mês de entrada",
+      "area": "carteira",
+      "source_ids": [
+        "sheets.portfolio_materialized",
+        "sheets.monthly_projects"
+      ],
+      "owner_operational": "gestao_csi",
+      "owner_technical": "engenharia_gest_csi",
+      "freshness_slo": "15 min",
+      "fallback": "contagem do último snapshot íntegro",
+      "consumer_views": [
+        "dashboard",
+        "projetos"
+      ]
+    },
+    {
+      "id": "portfolio.by_status",
+      "label": "Projetos por status",
+      "area": "carteira",
+      "source_ids": [
+        "sheets.portfolio_materialized",
+        "clickup.projects"
+      ],
+      "owner_operational": "gestao_csi",
+      "owner_technical": "engenharia_gest_csi",
+      "freshness_slo": "30 min",
+      "fallback": "status mensal salvo",
+      "consumer_views": [
+        "dashboard",
+        "executivo",
+        "projetos"
+      ]
+    },
+    {
+      "id": "portfolio.by_type",
+      "label": "Projetos por tipo/pacote",
+      "area": "carteira",
+      "source_ids": [
+        "sheets.monthly_projects"
+      ],
+      "owner_operational": "gestao_csi",
+      "owner_technical": "engenharia_gest_csi",
+      "freshness_slo": "15 min",
+      "fallback": "última leitura válida",
+      "consumer_views": [
+        "dashboard",
+        "projetos",
+        "avulso_novo"
+      ]
+    },
+    {
+      "id": "portfolio.by_format",
+      "label": "Projetos por formato",
+      "area": "carteira",
+      "source_ids": [
+        "sheets.monthly_projects"
+      ],
+      "owner_operational": "gestao_csi",
+      "owner_technical": "engenharia_gest_csi",
+      "freshness_slo": "15 min",
+      "fallback": "última leitura válida",
+      "consumer_views": [
+        "dashboard",
+        "logistica"
+      ]
+    },
+    {
+      "id": "portfolio.daily_balance",
+      "label": "Diárias contratadas, realizadas e restantes",
+      "area": "carteira",
+      "source_ids": [
+        "sheets.monthly_projects",
+        "clickup.projects"
+      ],
+      "owner_operational": "gestao_csi",
+      "owner_technical": "engenharia_gest_csi",
+      "freshness_slo": "30 min",
+      "fallback": "valores mensais salvos",
+      "consumer_views": [
+        "dashboard",
+        "executivo",
+        "projetos",
+        "prazos"
+      ]
+    },
+    {
+      "id": "portfolio.progress",
+      "label": "Progresso de projeto",
+      "area": "entrega",
+      "source_ids": [
+        "clickup.projects",
+        "sheets.monthly_projects"
+      ],
+      "owner_operational": "gestao_csi",
+      "owner_technical": "engenharia_gest_csi",
+      "freshness_slo": "30 min",
+      "fallback": "clickup_json mensal válido",
+      "consumer_views": [
+        "dashboard",
+        "executivo",
+        "projetos"
+      ]
+    },
+    {
+      "id": "portfolio.tasks",
+      "label": "Tarefas concluídas e pendentes",
+      "area": "entrega",
+      "source_ids": [
+        "clickup.projects"
+      ],
+      "owner_operational": "gestao_csi",
+      "owner_technical": "engenharia_gest_csi",
+      "freshness_slo": "30 min",
+      "fallback": "último resumo ClickUp salvo",
+      "consumer_views": [
+        "dashboard",
+        "projetos",
+        "alertas"
+      ]
+    },
+    {
+      "id": "portfolio.milestones",
+      "label": "Marcos concluídos e pendentes",
+      "area": "entrega",
+      "source_ids": [
+        "clickup.projects",
+        "clickup.milestones"
+      ],
+      "owner_operational": "gestao_csi",
+      "owner_technical": "engenharia_gest_csi",
+      "freshness_slo": "30 min",
+      "fallback": "último resumo ClickUp salvo",
+      "consumer_views": [
+        "dashboard",
+        "projetos",
+        "alertas"
+      ]
+    },
+    {
+      "id": "management.health_score",
+      "label": "Health score de projetos",
+      "area": "gestao",
+      "source_ids": [
+        "sheets.portfolio_materialized",
+        "clickup.projects",
+        "sheets.followups",
+        "file.contracts_mrr"
+      ],
+      "owner_operational": "gestao_csi",
+      "owner_technical": "engenharia_gest_csi",
+      "freshness_slo": "30 min",
+      "fallback": "calcular sem MRR e sinalizar confiança",
+      "consumer_views": [
+        "gestao",
+        "executivo"
+      ]
+    },
+    {
+      "id": "management.action_today",
+      "label": "Prioridades de ação",
+      "area": "gestao",
+      "source_ids": [
+        "clickup.projects",
+        "sheets.followups",
+        "file.contracts_mrr"
+      ],
+      "owner_operational": "gestao_csi",
+      "owner_technical": "engenharia_gest_csi",
+      "freshness_slo": "30 min",
+      "fallback": "última análise válida",
+      "consumer_views": [
+        "gestao",
+        "alertas"
+      ]
+    },
+    {
+      "id": "management.forgotten",
+      "label": "Clientes esquecidos",
+      "area": "gestao",
+      "source_ids": [
+        "clickup.projects",
+        "sheets.followups"
+      ],
+      "owner_operational": "gestao_csi",
+      "owner_technical": "engenharia_gest_csi",
+      "freshness_slo": "30 min",
+      "fallback": "dias sem atualização do último snapshot",
+      "consumer_views": [
+        "gestao",
+        "alertas"
+      ]
+    },
+    {
+      "id": "management.mrr_monitored",
+      "label": "MRR monitorado",
+      "area": "financeiro",
+      "source_ids": [
+        "file.contracts_mrr",
+        "sheets.portfolio_materialized"
+      ],
+      "owner_operational": "financeiro",
+      "owner_technical": "engenharia_gest_csi",
+      "freshness_slo": "mensal",
+      "fallback": "exibir indisponível; nunca assumir zero como valor real",
+      "consumer_views": [
+        "gestao",
+        "executivo"
+      ]
+    },
+    {
+      "id": "management.mrr_at_risk",
+      "label": "MRR em risco",
+      "area": "financeiro",
+      "source_ids": [
+        "file.contracts_mrr",
+        "clickup.projects",
+        "sheets.followups"
+      ],
+      "owner_operational": "financeiro",
+      "owner_technical": "engenharia_gest_csi",
+      "freshness_slo": "mensal + operação 30 min",
+      "fallback": "último MRR com data de referência",
+      "consumer_views": [
+        "gestao",
+        "executivo",
+        "alertas"
+      ]
+    },
+    {
+      "id": "management.consultant_capacity",
+      "label": "Carga por consultor",
+      "area": "gestao",
+      "source_ids": [
+        "sheets.portfolio_materialized",
+        "clickup.projects"
+      ],
+      "owner_operational": "gestao_csi",
+      "owner_technical": "engenharia_gest_csi",
+      "freshness_slo": "30 min",
+      "fallback": "último snapshot íntegro",
+      "consumer_views": [
+        "gestao",
+        "consultores"
+      ]
+    },
+    {
+      "id": "followup.coverage",
+      "label": "Cobertura de acompanhamentos",
+      "area": "acompanhamento",
+      "source_ids": [
+        "sheets.followups",
+        "sheets.portfolio_materialized"
+      ],
+      "owner_operational": "gestao_csi",
+      "owner_technical": "engenharia_gest_csi",
+      "freshness_slo": "1 min para escrita; 15 min leitura",
+      "fallback": "manter última leitura e marcar defasagem",
+      "consumer_views": [
+        "acompanhamento",
+        "gestao"
+      ]
+    },
+    {
+      "id": "followup.recency",
+      "label": "Recência do último acompanhamento",
+      "area": "acompanhamento",
+      "source_ids": [
+        "sheets.followups"
+      ],
+      "owner_operational": "gestao_csi",
+      "owner_technical": "engenharia_gest_csi",
+      "freshness_slo": "1 min",
+      "fallback": "último acompanhamento confirmado",
+      "consumer_views": [
+        "acompanhamento",
+        "gestao",
+        "alertas"
+      ]
+    },
+    {
+      "id": "followup.kanban",
+      "label": "Estágio do ciclo mensal",
+      "area": "acompanhamento",
+      "source_ids": [
+        "sheets.kanban",
+        "sheets.followups"
+      ],
+      "owner_operational": "gestao_csi",
+      "owner_technical": "engenharia_gest_csi",
+      "freshness_slo": "1 min",
+      "fallback": "derivar e marcar como não persistido",
+      "consumer_views": [
+        "acompanhamento",
+        "projetos"
+      ]
+    },
+    {
+      "id": "followup.pending",
+      "label": "Acompanhamentos pendentes",
+      "area": "acompanhamento",
+      "source_ids": [
+        "sheets.followups",
+        "sheets.portfolio_materialized"
+      ],
+      "owner_operational": "gestao_csi",
+      "owner_technical": "engenharia_gest_csi",
+      "freshness_slo": "15 min",
+      "fallback": "última fila válida",
+      "consumer_views": [
+        "acompanhamento",
+        "alertas"
+      ]
+    },
+    {
+      "id": "clickup.adoption",
+      "label": "Adoção do ClickUp",
+      "area": "adocao",
+      "source_ids": [
+        "clickup.user_activity"
+      ],
+      "owner_operational": "administracao_clickup",
+      "owner_technical": "engenharia_gest_csi",
+      "freshness_slo": "8 h",
+      "fallback": "última leitura com idade visível",
+      "consumer_views": [
+        "executivo",
+        "administracao"
+      ]
+    },
+    {
+      "id": "clickup.active_users",
+      "label": "Usuários ativos no ClickUp",
+      "area": "adocao",
+      "source_ids": [
+        "clickup.user_activity"
+      ],
+      "owner_operational": "administracao_clickup",
+      "owner_technical": "engenharia_gest_csi",
+      "freshness_slo": "8 h",
+      "fallback": "última leitura com idade visível",
+      "consumer_views": [
+        "executivo",
+        "administracao"
+      ]
+    },
+    {
+      "id": "clickup.recent_movements",
+      "label": "Movimentações recentes",
+      "area": "adocao",
+      "source_ids": [
+        "clickup.user_activity",
+        "clickup.projects"
+      ],
+      "owner_operational": "administracao_clickup",
+      "owner_technical": "engenharia_gest_csi",
+      "freshness_slo": "8 h",
+      "fallback": "último snapshot sem inferir atividade ausente",
+      "consumer_views": [
+        "executivo",
+        "administracao"
+      ]
+    },
+    {
+      "id": "clickup.sync_health",
+      "label": "Saúde das sincronizações",
+      "area": "confiabilidade",
+      "source_ids": [
+        "sheets.panel_history",
+        "clickup.projects"
+      ],
+      "owner_operational": "gestao_csi",
+      "owner_technical": "engenharia_gest_csi",
+      "freshness_slo": "5 min",
+      "fallback": "telemetria local parcial",
+      "consumer_views": [
+        "administracao",
+        "alertas"
+      ]
+    },
+    {
+      "id": "cmax.events",
+      "label": "Registros da agenda CMAX",
+      "area": "cmax",
+      "source_ids": [
+        "cmax.agenda",
+        "sheets.cmax_materialized"
+      ],
+      "owner_operational": "administracao_cmax",
+      "owner_technical": "engenharia_gest_csi",
+      "freshness_slo": "6 h",
+      "fallback": "última visão não vazia",
+      "consumer_views": [
+        "cmax",
+        "bonificacao"
+      ]
+    },
+    {
+      "id": "cmax.positive_events",
+      "label": "Eventos positivos",
+      "area": "cmax",
+      "source_ids": [
+        "cmax.agenda",
+        "sheets.cmax_materialized"
+      ],
+      "owner_operational": "administracao_cmax",
+      "owner_technical": "engenharia_gest_csi",
+      "freshness_slo": "6 h",
+      "fallback": "última visão não vazia",
+      "consumer_views": [
+        "cmax",
+        "bonificacao"
+      ]
+    },
+    {
+      "id": "cmax.daily_equivalent",
+      "label": "Diárias equivalentes pagáveis",
+      "area": "cmax",
+      "source_ids": [
+        "sheets.cmax_materialized",
+        "sheets.compensation"
+      ],
+      "owner_operational": "financeiro",
+      "owner_technical": "engenharia_gest_csi",
+      "freshness_slo": "6 h",
+      "fallback": "não pagar item sem taxa confirmada",
+      "consumer_views": [
+        "cmax",
+        "bonificacao"
+      ]
+    },
+    {
+      "id": "cmax.special_equivalent",
+      "label": "Diárias especiais 1,5x",
+      "area": "cmax",
+      "source_ids": [
+        "sheets.cmax_materialized"
+      ],
+      "owner_operational": "financeiro",
+      "owner_technical": "engenharia_gest_csi",
+      "freshness_slo": "6 h",
+      "fallback": "recalcular por calendário versionado",
+      "consumer_views": [
+        "cmax",
+        "bonificacao"
+      ]
+    },
+    {
+      "id": "cmax.clients",
+      "label": "Clientes atendidos no CMAX",
+      "area": "cmax",
+      "source_ids": [
+        "sheets.cmax_materialized"
+      ],
+      "owner_operational": "administracao_cmax",
+      "owner_technical": "engenharia_gest_csi",
+      "freshness_slo": "6 h",
+      "fallback": "última visão não vazia",
+      "consumer_views": [
+        "cmax",
+        "executivo"
+      ]
+    },
+    {
+      "id": "cmax.sync_freshness",
+      "label": "Frescor da agenda CMAX",
+      "area": "confiabilidade",
+      "source_ids": [
+        "sheets.cmax_materialized",
+        "sheets.panel_history"
+      ],
+      "owner_operational": "gestao_csi",
+      "owner_technical": "engenharia_gest_csi",
+      "freshness_slo": "6 h",
+      "fallback": "exibir timestamp e erro",
+      "consumer_views": [
+        "cmax",
+        "administracao"
+      ]
+    },
+    {
+      "id": "closing.milestones_waiting",
+      "label": "Marcos aguardando validação",
+      "area": "fechamento",
+      "source_ids": [
+        "sheets.milestone_closing",
+        "clickup.milestones"
+      ],
+      "owner_operational": "gestao_csi",
+      "owner_technical": "engenharia_gest_csi",
+      "freshness_slo": "30 min",
+      "fallback": "último consolidado + histórico mensal",
+      "consumer_views": [
+        "fechamento",
+        "bonificacao",
+        "alertas"
+      ]
+    },
+    {
+      "id": "closing.milestones_approved",
+      "label": "Marcos aprovados",
+      "area": "fechamento",
+      "source_ids": [
+        "sheets.milestone_closing"
+      ],
+      "owner_operational": "gestao_csi",
+      "owner_technical": "engenharia_gest_csi",
+      "freshness_slo": "30 min",
+      "fallback": "último consolidado",
+      "consumer_views": [
+        "fechamento",
+        "bonificacao"
+      ]
+    },
+    {
+      "id": "closing.milestones_rejected",
+      "label": "Marcos reprovados",
+      "area": "fechamento",
+      "source_ids": [
+        "sheets.milestone_closing"
+      ],
+      "owner_operational": "gestao_csi",
+      "owner_technical": "engenharia_gest_csi",
+      "freshness_slo": "30 min",
+      "fallback": "último consolidado",
+      "consumer_views": [
+        "fechamento",
+        "bonificacao"
+      ]
+    },
+    {
+      "id": "closing.milestone_value",
+      "label": "Valor de marcos",
+      "area": "financeiro",
+      "source_ids": [
+        "sheets.milestone_closing",
+        "sheets.compensation"
+      ],
+      "owner_operational": "financeiro",
+      "owner_technical": "engenharia_gest_csi",
+      "freshness_slo": "30 min",
+      "fallback": "última decisão persistida",
+      "consumer_views": [
+        "fechamento",
+        "bonificacao"
+      ]
+    },
+    {
+      "id": "closing.projects_pending",
+      "label": "Fechamentos de projeto pendentes",
+      "area": "fechamento",
+      "source_ids": [
+        "sheets.project_closing",
+        "clickup.milestones"
+      ],
+      "owner_operational": "gestao_csi",
+      "owner_technical": "engenharia_gest_csi",
+      "freshness_slo": "30 min",
+      "fallback": "última lista de candidatos",
+      "consumer_views": [
+        "fechamento",
+        "alertas"
+      ]
+    },
+    {
+      "id": "closing.projects_approved",
+      "label": "Fechamentos de projeto aprovados",
+      "area": "fechamento",
+      "source_ids": [
+        "sheets.project_closing"
+      ],
+      "owner_operational": "gestao_csi",
+      "owner_technical": "engenharia_gest_csi",
+      "freshness_slo": "5 min",
+      "fallback": "última decisão persistida",
+      "consumer_views": [
+        "fechamento",
+        "bonificacao"
+      ]
+    },
+    {
+      "id": "closing.projects_rejected",
+      "label": "Fechamentos de projeto reprovados",
+      "area": "fechamento",
+      "source_ids": [
+        "sheets.project_closing"
+      ],
+      "owner_operational": "gestao_csi",
+      "owner_technical": "engenharia_gest_csi",
+      "freshness_slo": "5 min",
+      "fallback": "última decisão persistida",
+      "consumer_views": [
+        "fechamento",
+        "bonificacao"
+      ]
+    },
+    {
+      "id": "closing.project_value",
+      "label": "Valor de fechamento de projeto",
+      "area": "financeiro",
+      "source_ids": [
+        "sheets.project_closing"
+      ],
+      "owner_operational": "financeiro",
+      "owner_technical": "engenharia_gest_csi",
+      "freshness_slo": "5 min",
+      "fallback": "última decisão persistida",
+      "consumer_views": [
+        "fechamento",
+        "bonificacao"
+      ]
+    },
+    {
+      "id": "bonus.daily_value",
+      "label": "Valor das diárias",
+      "area": "bonificacao",
+      "source_ids": [
+        "sheets.cmax_materialized",
+        "sheets.compensation"
+      ],
+      "owner_operational": "financeiro",
+      "owner_technical": "engenharia_gest_csi",
+      "freshness_slo": "6 h",
+      "fallback": "última competência íntegra; sem taxa = bloquear pagamento",
+      "consumer_views": [
+        "bonificacao",
+        "executivo"
+      ]
+    },
+    {
+      "id": "bonus.milestone_value",
+      "label": "Valor dos marcos",
+      "area": "bonificacao",
+      "source_ids": [
+        "sheets.milestone_closing"
+      ],
+      "owner_operational": "financeiro",
+      "owner_technical": "engenharia_gest_csi",
+      "freshness_slo": "30 min",
+      "fallback": "última decisão persistida",
+      "consumer_views": [
+        "bonificacao",
+        "executivo"
+      ]
+    },
+    {
+      "id": "bonus.project_value",
+      "label": "Valor dos fechamentos de projeto",
+      "area": "bonificacao",
+      "source_ids": [
+        "sheets.project_closing"
+      ],
+      "owner_operational": "financeiro",
+      "owner_technical": "engenharia_gest_csi",
+      "freshness_slo": "5 min",
+      "fallback": "última decisão persistida",
+      "consumer_views": [
+        "bonificacao",
+        "executivo"
+      ]
+    },
+    {
+      "id": "bonus.indication_value",
+      "label": "Valor das indicações",
+      "area": "bonificacao",
+      "source_ids": [
+        "sheets.indications"
+      ],
+      "owner_operational": "financeiro",
+      "owner_technical": "engenharia_gest_csi",
+      "freshness_slo": "5 min",
+      "fallback": "último lançamento persistido",
+      "consumer_views": [
+        "bonificacao",
+        "executivo"
+      ]
+    },
+    {
+      "id": "bonus.total_value",
+      "label": "Total previsto da bonificação",
+      "area": "bonificacao",
+      "source_ids": [
+        "sheets.cmax_materialized",
+        "sheets.compensation",
+        "sheets.milestone_closing",
+        "sheets.project_closing",
+        "sheets.indications"
+      ],
+      "owner_operational": "financeiro",
+      "owner_technical": "engenharia_gest_csi",
+      "freshness_slo": "6 h e componentes críticos 30 min",
+      "fallback": "não fechar se algum componente estiver inválido",
+      "consumer_views": [
+        "bonificacao",
+        "executivo"
+      ]
+    },
+    {
+      "id": "consultants.portfolio",
+      "label": "Carteira por consultor",
+      "area": "pessoas",
+      "source_ids": [
+        "sheets.portfolio_materialized"
+      ],
+      "owner_operational": "gestao_csi",
+      "owner_technical": "engenharia_gest_csi",
+      "freshness_slo": "15 min",
+      "fallback": "último snapshot íntegro",
+      "consumer_views": [
+        "consultores"
+      ]
+    },
+    {
+      "id": "sellers.portfolio",
+      "label": "Carteira por vendedor",
+      "area": "comercial",
+      "source_ids": [
+        "sheets.monthly_projects"
+      ],
+      "owner_operational": "gestao_csi",
+      "owner_technical": "engenharia_gest_csi",
+      "freshness_slo": "15 min",
+      "fallback": "última leitura válida",
+      "consumer_views": [
+        "vendedores"
+      ]
+    },
+    {
+      "id": "sales.one_off_new",
+      "label": "Avulso e projeto novo",
+      "area": "comercial",
+      "source_ids": [
+        "sheets.monthly_projects"
+      ],
+      "owner_operational": "gestao_csi",
+      "owner_technical": "engenharia_gest_csi",
+      "freshness_slo": "15 min",
+      "fallback": "última leitura válida",
+      "consumer_views": [
+        "avulso_novo",
+        "executivo"
+      ]
+    },
+    {
+      "id": "logistics.locations",
+      "label": "Distribuição geográfica",
+      "area": "logistica",
+      "source_ids": [
+        "sheets.monthly_projects",
+        "geo.nominatim",
+        "browser.local_state"
+      ],
+      "owner_operational": "gestao_csi",
+      "owner_technical": "engenharia_gest_csi",
+      "freshness_slo": "15 min; geocode sob demanda",
+      "fallback": "alias IBGE/cache validado; omitir ponto incerto",
+      "consumer_views": [
+        "logistica"
+      ]
+    },
+    {
+      "id": "deadlines.late_projects",
+      "label": "Projetos atrasados",
+      "area": "prazos",
+      "source_ids": [
+        "sheets.monthly_projects",
+        "clickup.projects"
+      ],
+      "owner_operational": "gestao_csi",
+      "owner_technical": "engenharia_gest_csi",
+      "freshness_slo": "30 min",
+      "fallback": "última data estimada válida",
+      "consumer_views": [
+        "prazos",
+        "alertas"
+      ]
+    },
+    {
+      "id": "deadlines.exceeded_days",
+      "label": "Diárias excedidas",
+      "area": "prazos",
+      "source_ids": [
+        "sheets.monthly_projects"
+      ],
+      "owner_operational": "gestao_csi",
+      "owner_technical": "engenharia_gest_csi",
+      "freshness_slo": "15 min",
+      "fallback": "último saldo íntegro",
+      "consumer_views": [
+        "prazos",
+        "alertas"
+      ]
+    },
+    {
+      "id": "alerts.total",
+      "label": "Alertas operacionais",
+      "area": "alertas",
+      "source_ids": [
+        "sheets.portfolio_materialized",
+        "clickup.projects",
+        "sheets.followups",
+        "sheets.milestone_closing"
+      ],
+      "owner_operational": "gestao_csi",
+      "owner_technical": "engenharia_gest_csi",
+      "freshness_slo": "30 min",
+      "fallback": "último conjunto válido com idade",
+      "consumer_views": [
+        "alertas",
+        "dashboard"
+      ]
+    },
+    {
+      "id": "panel.update_success",
+      "label": "Taxa de atualização do painel",
+      "area": "confiabilidade",
+      "source_ids": [
+        "sheets.panel_history",
+        "browser.local_state"
+      ],
+      "owner_operational": "gestao_csi",
+      "owner_technical": "engenharia_gest_csi",
+      "freshness_slo": "5 min",
+      "fallback": "histórico local marcado como parcial",
+      "consumer_views": [
+        "administracao",
+        "executivo"
+      ]
+    },
+    {
+      "id": "panel.load_performance",
+      "label": "Tempo e falha de carga",
+      "area": "confiabilidade",
+      "source_ids": [
+        "browser.local_state",
+        "sheets.panel_history"
+      ],
+      "owner_operational": "gestao_csi",
+      "owner_technical": "engenharia_gest_csi",
+      "freshness_slo": "5 min",
+      "fallback": "diagnóstico local sem agregação",
+      "consumer_views": [
+        "administracao"
+      ]
+    },
+    {
+      "id": "auth.enabled_users",
+      "label": "Usuários habilitados e papéis",
+      "area": "seguranca",
+      "source_ids": [
+        "sheets.users"
+      ],
+      "owner_operational": "administracao_painel",
+      "owner_technical": "engenharia_gest_csi",
+      "freshness_slo": "1 min",
+      "fallback": "fail closed",
+      "consumer_views": [
+        "administracao"
+      ]
+    }
+  ]
+}
