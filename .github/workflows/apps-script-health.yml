@@ -1,0 +1,76 @@
+name: Apps Script health
+
+on:
+  schedule:
+    - cron: '*/15 * * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  health:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Probe deployment three times
+        id: probe
+        continue-on-error: true
+        run: node scripts/check-apps-script-health.mjs
+        env:
+          GESTCSI_HEALTH_ATTEMPTS: '3'
+          GESTCSI_HEALTH_TIMEOUT_MS: '10000'
+          GESTCSI_HEALTH_RETRY_MS: '15000'
+      - name: Open incident after consecutive failures
+        if: steps.probe.outcome == 'failure'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const title = '[Health] Apps Script indisponível ou desatualizado';
+            const { data } = await github.rest.issues.listForRepo({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              state: 'open',
+              per_page: 100
+            });
+            if (!data.some(issue => issue.title === title)) {
+              await github.rest.issues.create({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                title,
+                body: `O monitor externo falhou três vezes consecutivas. Execução: ${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`
+              });
+            }
+      - name: Close recovered incident
+        if: steps.probe.outcome == 'success'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const title = '[Health] Apps Script indisponível ou desatualizado';
+            const { data } = await github.rest.issues.listForRepo({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              state: 'open',
+              per_page: 100
+            });
+            for (const issue of data.filter(issue => issue.title === title)) {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: issue.number,
+                body: 'O endpoint voltou a responder com a versão esperada.'
+              });
+              await github.rest.issues.update({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: issue.number,
+                state: 'closed'
+              });
+            }
+      - name: Keep the workflow failed while the incident is active
+        if: steps.probe.outcome == 'failure'
+        run: exit 1

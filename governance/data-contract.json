@@ -502,6 +502,7 @@
       "getCmaxDailyEvents",
       "getCmaxDailyHistoryStatus",
       "getConsultantCompensation",
+      "health",
       "getMonthlyProjects",
       "getPanelUpdateHistory",
       "getProjectClosingCandidates",

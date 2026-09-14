@@ -27,6 +27,7 @@
 
 var CLICKUP_API_BASE = 'https://api.clickup.com/api/v2';
 var CLICKUP_DEFAULT_WORKSPACE_ID = '9007083069';
+var GESTCSI_APPS_SCRIPT_VERSION = '2026-09-14-health-v1';
 var CLICKUP_ACTIVITY_ENGINE_VERSION = 'workspace-recent-7d-v3';
 var CLICKUP_MILESTONE_BONUS_VALUE = 30;
 var CLICKUP_PROJECT_CLOSING_BONUS_VALUE = 80;
@@ -93,6 +94,9 @@ function doGet(e) {
   var action = String(params.action || '').trim();
 
   try {
+    if (action === 'health') {
+      return jsonOutput_(getHealthPayload_(params), params.callback);
+    }
     if (!action && params.mes) {
       return jsonOutput_(getMonthlyProjectsPayload_(params), params.callback);
     }
@@ -322,6 +326,59 @@ function doGet(e) {
       at: new Date().toISOString()
     }, params.callback);
   }
+}
+
+/**
+ * Lightweight deployment probe. The public response is deliberately limited
+ * to release metadata and never reads Sheets or calls third-party APIs.
+ * Administrators can request detail=1 to see configuration presence and
+ * background-job state without exposing property values.
+ */
+function getHealthPayload_(params) {
+  params = params || {};
+  var detailed = String(params.detail || '') === '1';
+  var props = PropertiesService.getScriptProperties();
+  var required = ['SHEET_ID', 'CLICKUP_TOKEN'];
+  var missing = required.filter(function(name) {
+    return !String(props.getProperty(name) || '').trim();
+  });
+  var payload = {
+    ok: true,
+    service: 'gestcsi-apps-script',
+    status: missing.length ? 'degraded' : 'ready',
+    schema_version: 1,
+    version: GESTCSI_APPS_SCRIPT_VERSION,
+    checked_at: new Date().toISOString(),
+    visibility: detailed ? 'authenticated' : 'public'
+  };
+
+  if (!detailed) return payload;
+
+  requireAdmin_(params);
+  payload.dependencies = {
+    required_configuration: {
+      ok: missing.length === 0,
+      configured: required.length - missing.length,
+      required: required.length,
+      missing: missing
+    },
+    project_sync: {
+      active: props.getProperty('CLICKUP_PROJECT_SYNC_ACTIVE') === '1',
+      updated_at: String(props.getProperty('CLICKUP_PROJECT_SYNC_UPDATED_AT') || ''),
+      has_error: !!String(props.getProperty('CLICKUP_PROJECT_SYNC_ERROR') || '')
+    },
+    activity_sync: {
+      active: props.getProperty('CLICKUP_ACTIVITY_BACKGROUND_ACTIVE') === '1',
+      updated_at: String(props.getProperty('CLICKUP_ACTIVITY_BACKGROUND_UPDATED_AT') || ''),
+      has_error: !!String(props.getProperty('CLICKUP_ACTIVITY_BACKGROUND_ERROR') || '')
+    },
+    cmax_history: {
+      active: props.getProperty('CMAX_HISTORY_BACKGROUND_ACTIVE') === '1',
+      updated_at: String(props.getProperty('CMAX_HISTORY_BACKGROUND_UPDATED_AT') || ''),
+      has_error: !!String(props.getProperty('CMAX_HISTORY_BACKGROUND_ERROR') || '')
+    }
+  };
+  return payload;
 }
 
 function doPost(e) {
