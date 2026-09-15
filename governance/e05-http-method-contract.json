@@ -20,13 +20,12 @@
     "getPanelUpdateHistory",
     "me",
     "listUsers",
-    "getProjectFollowups"
-  ],
-  "conditional_effect_get": [
+    "getProjectFollowups",
     "getMonthlyProjects",
     "getProjectClosingCandidates",
     "getCmaxDailyEvents"
   ],
+  "conditional_effect_get": [],
   "post_required": [
     "syncProject",
     "syncAll",

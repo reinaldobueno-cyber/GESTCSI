@@ -94,7 +94,8 @@ function doGet(e) {
   var action = String(params.action || '').trim();
 
   try {
-    if (legacyPostOnlyAction_(action) || (!action && String(params.log_update || '') === '1')) {
+    if (legacyPostOnlyAction_(action) || (!action && String(params.log_update || '') === '1') ||
+        (legacyRefreshAction_(action) && String(params.refresh || params.force || '') === '1')) {
       return jsonOutput_({ ok: false, action: action, error: 'method_not_allowed', required_method: 'POST' }, params.callback);
     }
     authorizeLegacyAction_(action, params);
@@ -260,9 +261,23 @@ function legacyPostOnlyAction_(action) {
   ].indexOf(action) >= 0;
 }
 
+function legacyRefreshAction_(action) {
+  return ['getMonthlyProjects', 'getProjectClosingCandidates', 'getCmaxDailyEvents'].indexOf(action) >= 0;
+}
+
 function dispatchLegacyPostCommand_(action, params) {
-  if (!legacyPostOnlyAction_(action)) throw new Error('Acao POST nao reconhecida.');
+  var refresh = legacyRefreshAction_(action) && String(params.refresh || params.force || '') === '1';
+  if (!legacyPostOnlyAction_(action) && !refresh) throw new Error('Acao POST nao reconhecida.');
   authorizeLegacyAction_(action, params);
+  if (refresh && action === 'getMonthlyProjects') {
+    scheduleMonthlyPortfolioSnapshotRefresh_();
+    return { ok: true, scheduled: true, source: 'monthly_portfolio_snapshot' };
+  }
+  if (refresh && action === 'getProjectClosingCandidates') return refreshProjectClosingCandidates_(params);
+  if (refresh && action === 'getCmaxDailyEvents') {
+    scheduleCmaxDailyViewBuild_();
+    return { ok: true, scheduled: true, source: 'cmax_daily_view' };
+  }
   if (action === 'login') return loginUser_(params);
   if (action === 'syncProject') {
     var result = syncProjectByKey(String(params.project_key || '').trim());
@@ -1093,30 +1108,16 @@ function getMonthlyProjectsPayload_(params) {
   if (String(params.lean || '') === '1') {
     if (String(params.compressed || '') === '1') {
       var compressedPayload = getMonthlyPortfolioCompressedPayload_();
-      if (compressedPayload && (String(params.refresh || '') === '1' || monthlyPortfolioSnapshotIsStale_(compressedPayload.generated_at))) {
-        scheduleMonthlyPortfolioSnapshotRefresh_();
-      }
       if (compressedPayload) return compressedPayload;
-      scheduleMonthlyPortfolioSnapshotRefresh_();
-      return { ok:false, snapshot_pending:true, total:0, projetos_por_mes:{}, error:'Snapshot compacto em preparação.' };
+      return { ok:false, snapshot_pending:true, total:0, projetos_por_mes:{}, error:'Snapshot compacto indisponível; solicite atualização por POST.' };
     }
     if (String(params.manifest || '') === '1') {
       var manifestPayload = getMonthlyPortfolioSnapshotManifest_();
-      if (manifestPayload && (String(params.refresh || '') === '1' || monthlyPortfolioSnapshotIsStale_(manifestPayload.generated_at))) {
-        scheduleMonthlyPortfolioSnapshotRefresh_();
-      }
       if (manifestPayload) return manifestPayload;
-      scheduleMonthlyPortfolioSnapshotRefresh_();
-      return { ok:false, snapshot_pending:true, total:0, projetos_por_mes:{}, error:'Snapshot mensal em preparação.' };
+      return { ok:false, snapshot_pending:true, total:0, projetos_por_mes:{}, error:'Snapshot mensal indisponível; solicite atualização por POST.' };
     }
     var snapshotPayload = getMonthlyPortfolioSnapshotPayload_(requested);
-    if (snapshotPayload) {
-      if (String(params.refresh || '') === '1' || monthlyPortfolioSnapshotIsStale_(snapshotPayload.generated_at)) {
-        scheduleMonthlyPortfolioSnapshotRefresh_();
-      }
-      return snapshotPayload;
-    }
-    scheduleMonthlyPortfolioSnapshotRefresh_();
+    if (snapshotPayload) return snapshotPayload;
     return {
       ok: false,
       mes: requested || 'ALL',
@@ -1124,7 +1125,7 @@ function getMonthlyProjectsPayload_(params) {
       projetos_por_mes: {},
       projetos: [],
       snapshot_pending: true,
-      error: 'Snapshot mensal em preparação.'
+      error: 'Snapshot mensal indisponível; solicite atualização por POST.'
     };
   }
   var months = requested && requested !== 'ALL' ? [requested] : MONTHS.slice();
@@ -3440,7 +3441,9 @@ function normalizeProjectClosingCandidateRow_(item) {
 }
 
 function getProjectClosingCandidateRows_() {
-  var sheet = getProjectClosingCandidateSheet_();
+  var sheet = SpreadsheetApp.openById(getScriptProperty_('SHEET_ID'))
+    .getSheetByName('CLICKUP_PROJECT_CLOSING_CANDIDATES');
+  if (!sheet || sheet.getLastRow() <= 1) return [];
   var values = sheet.getDataRange().getValues();
   var header = values[0] || [];
   return values.slice(1).map(function(row) {
@@ -3715,35 +3718,36 @@ function projectClosingDirectApprovalCandidates_(errors) {
 
 function getProjectClosingCandidates_(params) {
   requireUser_(params || {});
+  var offset = Math.max(0, toInt_((params || {}).offset, 0));
+  var limit = Math.max(1, Math.min(toInt_((params || {}).limit, 50), 100));
+  var saved = getProjectClosingCandidateRows_();
+  var savedItems = saved.slice(offset, offset + limit);
+  var savedNextOffset = Math.min(saved.length, offset + savedItems.length);
+  return {
+    ok: true,
+    source: 'clickup_project_closing_shared_snapshot',
+    saved: true,
+    project_closing_rule_version: CLICKUP_PROJECT_CLOSING_RULE_VERSION,
+    offset: offset,
+    limit: limit,
+    processed: savedNextOffset,
+    total: saved.length,
+    scanned: saved.length,
+    next_offset: savedNextOffset,
+    has_more: savedNextOffset < saved.length,
+    done: savedNextOffset >= saved.length,
+    errors: 0,
+    error_details: [],
+    items: savedItems,
+    generated_at: saved[0] && saved[0].detected_at || ''
+  };
+}
+
+function refreshProjectClosingCandidates_(params) {
+  requireUser_(params || {});
   var started = new Date();
   var offset = Math.max(0, toInt_((params || {}).offset, 0));
   var limit = Math.max(1, Math.min(toInt_((params || {}).limit, 50), 100));
-  var refresh = String((params || {}).refresh || (params || {}).force || '') === '1';
-  if (!refresh || offset > 0) {
-    var saved = getProjectClosingCandidateRows_();
-    if (saved.length || !refresh) {
-      var savedItems = saved.slice(offset, offset + limit);
-      var savedNextOffset = Math.min(saved.length, offset + savedItems.length);
-      return {
-        ok: true,
-        source: 'clickup_project_closing_shared_snapshot',
-        saved: true,
-        project_closing_rule_version: CLICKUP_PROJECT_CLOSING_RULE_VERSION,
-        offset: offset,
-        limit: limit,
-        processed: savedNextOffset,
-        total: saved.length,
-        scanned: saved.length,
-        next_offset: savedNextOffset,
-        has_more: savedNextOffset < saved.length,
-        done: savedNextOffset >= saved.length,
-        errors: 0,
-        error_details: [],
-        items: savedItems,
-        generated_at: saved[0] && saved[0].detected_at || ''
-      };
-    }
-  }
   var errors = [];
   var allCandidates = projectClosingDirectApprovalCandidates_(errors)
     .concat(projectClosingSavedBreakOffCandidates_());
@@ -9456,7 +9460,6 @@ function getCmaxDailyEvents_(params) {
   var meta;
   try { meta = JSON.parse(props.getProperty('CMAX_VIEW_META_JSON') || 'null'); } catch (ignored) { meta = null; }
   if (!meta || !meta.ranges) {
-    scheduleCmaxDailyViewBuild_();
     return {
       ok: true,
       events: [],
@@ -9468,7 +9471,7 @@ function getCmaxDailyEvents_(params) {
       consultant_daily_rates: CONSULTANT_SENIORITY_RATES,
       history_sync: getCmaxDailyHistoryStatus_().history_sync,
       building_view: true,
-      message: 'Preparando visão rápida CMAX em segundo plano.'
+      message: 'Visão rápida CMAX indisponível; solicite atualização por POST.'
     };
   }
   var events = [];
@@ -9506,7 +9509,6 @@ function getCmaxDailyEvents_(params) {
     materialized: true,
     sheet: CMAX_DAILY_VIEW_SHEET
   };
-  writeCompressedScriptCache_(cmaxViewCacheKey_({ month: month, consultant: consultant }), result, CMAX_VIEW_CACHE_SECONDS);
   return result;
 }
 

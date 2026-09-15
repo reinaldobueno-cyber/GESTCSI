@@ -104,7 +104,8 @@ test('invalidates expired browser sessions without replacing the portfolio', () 
 test('stops ClickUp actions immediately when the panel session expires', async () => {
   const appsScript = await readFile(new URL('../apps_script/ClickUpSync.gs', import.meta.url), 'utf8');
   assert.match(appsScript, /if \(action === 'syncAll'\) return syncAllProjects\(/);
-  assert.match(appsScript, /function dispatchLegacyPostCommand_\(action, params\) \{\s+if \(!legacyPostOnlyAction_\(action\)\) throw new Error\('Acao POST nao reconhecida.'\);\s+authorizeLegacyAction_\(action, params\)/);
+  assert.match(appsScript, /function dispatchLegacyPostCommand_\(action, params\) \{\s+var refresh = legacyRefreshAction_\(action\)/);
+  assert.match(appsScript, /if \(!legacyPostOnlyAction_\(action\) && !refresh\) throw new Error\('Acao POST nao reconhecida.'\);\s+authorizeLegacyAction_\(action, params\)/);
   assert.match(appsScript, /sessionCache_\(\)\.put\('session:' \+ token, raw, 21600\)/);
   const syncStart = html.indexOf('window.sincronizarTodosProjetosClickup = function');
   const syncEnd = html.indexOf('\nfunction sleep(', syncStart);

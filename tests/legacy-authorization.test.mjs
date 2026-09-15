@@ -17,6 +17,9 @@ const context = {
   syncProjectByKey: (key) => ({ project_key: key }),
   processDirtyQueue: ({ limit }) => ({ ok: true, limit }),
   validarClickUpConfig: () => ({ ok: true, sheet: 'diagnostic' }),
+  scheduleMonthlyPortfolioSnapshotRefresh_: () => ({ scheduled: 'monthly' }),
+  scheduleCmaxDailyViewBuild_: () => ({ scheduled: 'cmax' }),
+  refreshProjectClosingCandidates_: () => ({ ok: true, refreshed: 'candidates' }),
   toInt_: (value, fallback) => Number.parseInt(value, 10) || fallback
 };
 vm.runInNewContext(source.slice(policyStart, policyEnd), context);
@@ -79,4 +82,17 @@ test('routes every mutating command through POST only', () => {
   assert.equal(context.dispatchLegacyPostCommand_('validateConfig', { auth_token: 'admin' }).sheet, 'diagnostic');
   assert.throws(() => context.dispatchLegacyPostCommand_('syncProject', { auth_token: 'consultant' }));
   assert.throws(() => context.dispatchLegacyPostCommand_('unknown', { auth_token: 'admin' }));
+});
+
+test('keeps the three refresh commands on POST while GET remains a read', () => {
+  const getRouter = source.slice(source.indexOf('function doGet(e)'), source.indexOf('function legacyActionPolicy_'));
+  for (const action of ['getMonthlyProjects', 'getProjectClosingCandidates', 'getCmaxDailyEvents']) {
+    assert.equal(context.legacyRefreshAction_(action), true);
+    assert.match(getRouter, /legacyRefreshAction_\(action\) && String\(params\.refresh/);
+    assert.throws(() => context.dispatchLegacyPostCommand_(action, { auth_token: 'admin' }));
+  }
+  assert.equal(context.dispatchLegacyPostCommand_('getMonthlyProjects', { auth_token: 'consultant', refresh: '1' }).scheduled, true);
+  assert.equal(context.dispatchLegacyPostCommand_('getCmaxDailyEvents', { auth_token: 'consultant', refresh: '1' }).scheduled, true);
+  assert.equal(context.dispatchLegacyPostCommand_('getProjectClosingCandidates', { auth_token: 'consultant', refresh: '1' }).refreshed, 'candidates');
+  assert.throws(() => context.dispatchLegacyPostCommand_('getMonthlyProjects', { refresh: '1' }));
 });
