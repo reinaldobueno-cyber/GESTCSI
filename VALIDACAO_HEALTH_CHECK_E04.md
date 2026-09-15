@@ -62,7 +62,7 @@ Antes da promoção, o deployment de homologação foi atualizado para `285` e v
 - página pública do Gestão CSI: HTTP 200;
 - suíte automatizada: `60/60` testes aprovados;
 - monitor CLI: resposta aprovada contra a URL de produção;
-- workflow no branch principal: execução manual aprovada e agenda de 15 minutos ativa.
+- workflow no branch principal: [execução manual 34976250817](https://github.com/reinaldobueno-cyber/GESTCSI/actions/runs/34976250817) aprovada e agenda de 15 minutos ativa.
 
 ## Rollback
 
