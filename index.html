@@ -15383,13 +15383,45 @@ function gestaoLoadClickUpInventory() {
       return cached.projetos.map(gestaoNormalizeInventoryProject);
     } catch (e) { return null; }
   }
-  function requestInventory() {
-    return chamarAppsScriptJsonp('getClickUpInventory', {auth_token:authTokenParam(), lean:'1'}, 60000);
+  function requestInventoryPage(offset) {
+    function send() {
+      return chamarAppsScriptJsonp('getClickUpInventory', {
+        auth_token:authTokenParam(),
+        lean:'1',
+        paged:'1',
+        offset:offset,
+        limit:100
+      }, 45000);
+    }
+    return send().catch(function(firstError) {
+      if (!/Timeout|Erro ao acessar Apps Script/i.test(String(firstError && firstError.message || ''))) throw firstError;
+      return new Promise(function(resolve) { setTimeout(resolve, 1200); }).then(send);
+    });
   }
-  GESTAO_CLICKUP_INVENTORY_LOADING = requestInventory().catch(function(firstError) {
-    if (!/Timeout|Erro ao acessar Apps Script/i.test(String(firstError && firstError.message || ''))) throw firstError;
-    return new Promise(function(resolve) { setTimeout(resolve, 1200); }).then(requestInventory);
-  }).then(function(resp) {
+  function requestInventory() {
+    var collected = [];
+    var pageCount = 0;
+    function loadPage(offset) {
+      return requestInventoryPage(offset).then(function(resp) {
+        if (!resp || resp.ok === false) {
+          throw new Error((resp && (resp.error || resp.message)) || 'Apps Script nao retornou inventario ClickUp.');
+        }
+        if (!Array.isArray(resp.projetos)) {
+          throw new Error('Apps Script publicado ainda nao possui a action getClickUpInventory paginada.');
+        }
+        collected = collected.concat(resp.projetos);
+        pageCount += 1;
+        if (!resp.has_more) return {ok:true, projetos:collected, total:collected.length, paged:true};
+        var nextOffset = Number(resp.next_offset);
+        if (!isFinite(nextOffset) || nextOffset <= offset || pageCount >= 20) {
+          throw new Error('Paginação inválida ao carregar o inventário ClickUp.');
+        }
+        return loadPage(nextOffset);
+      });
+    }
+    return loadPage(0);
+  }
+  GESTAO_CLICKUP_INVENTORY_LOADING = requestInventory().then(function(resp) {
     if (!resp || resp.ok === false) {
       throw new Error((resp && (resp.error || resp.message)) || 'Apps Script nao retornou inventario ClickUp.');
     }
