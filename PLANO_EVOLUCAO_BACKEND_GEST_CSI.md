@@ -253,11 +253,11 @@ Ao final deste plano, o GEST CSI deverá:
 
 #### E05 — autorização uniforme no legado
 
-- **Status:** [ ] EM EXECUÇÃO (guarda e testes na branch; não publicado)
+- **Status:** [~] EM ANDAMENTO (guarda e testes na branch; não publicado)
 - **Entrega:** proteger todas as rotas de leitura sensível e mutação antes da migração.
 - **Critério de OK:** inventário de rotas revisado; zero comando mutável anônimo; papéis testados; GET não altera estado.
 - **Testes:** matriz anônimo/consultor/gestor/admin por rota.
-- **Progresso em 15/09/2026:** [`MATRIZ_AUTORIZACAO_LEGADO_E05.md`](./MATRIZ_AUTORIZACAO_LEGADO_E05.md) registra as 56 ações, aliases, papéis e pendências de transporte. Guarda HTTP default-deny e teste de quatro perfis implementados na branch. Auditoria executável registra 32 comandos por GET após o primeiro lote POST (`login`, `syncProject`, `processDirty`, `validateConfig`), 3 GETs com efeito condicional e 17 candidatos de leitura não verificados. Webhook falha fechado sem token, mas não foi publicado. O guia oficial do Google restringe JSONP a dados não sensíveis; o corte exige transporte autenticado compatível com a origem do painel. Ainda faltam migração completa, adaptação do painel, regra de visibilidade e smoke real, portanto E05 não está OK.
+- **Progresso em 15/09/2026:** [`MATRIZ_AUTORIZACAO_LEGADO_E05.md`](./MATRIZ_AUTORIZACAO_LEGADO_E05.md) registra as 56 ações, aliases, papéis e pendências de transporte. Guarda HTTP default-deny e teste de quatro perfis implementados na branch. Auditoria executável registra 32 comandos por GET após o primeiro lote POST (`login`, `syncProject`, `processDirty`, `validateConfig`), 3 GETs com efeito condicional e 17 candidatos de leitura não verificados. Webhook falha fechado sem token, mas não foi publicado. O guia oficial do Google restringe JSONP a dados não sensíveis; o corte exige transporte autenticado compatível com a origem do painel. [`DECISAO_TRANSPORTE_E05_E09.md`](./DECISAO_TRANSPORTE_E05_E09.md) explicita que a ponte de mesma origem depende de servir painel e API no mesmo domínio, além de sessão, CSRF, auditoria e smoke antes do corte. Ainda faltam migração completa, adaptação do painel, regra de visibilidade e smoke real, portanto E05 não está OK.
 
 #### E06 — proteção da origem Google Sheets
 
