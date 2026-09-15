@@ -37,11 +37,12 @@ const sheet = {
   }
 };
 const context = {
+  SpreadsheetApp: { openById: () => ({ getSheetByName: () => sheet }) },
+  getScriptProperty_: (_name, fallback) => fallback || 'fake-sheet-id',
   requireUser_: (params) => {
     if (!params.auth_token) throw new Error('login required');
     return { role: 'user' };
   },
-  getClickUpInventorySheet_: () => sheet,
   toInt_: (value, fallback) => {
     const parsed = Number.parseInt(value, 10);
     return Number.isFinite(parsed) ? parsed : fallback;
@@ -76,4 +77,20 @@ test('reads the 337 historical projects in bounded pages without reading clickup
 
 test('requires login for the general historical inventory view', () => {
   assert.throws(() => context.getClickUpInventory_({ lean: '1', paged: '1' }), /login required/);
+});
+
+test('does not present a missing or empty inventory sheet as zero historical projects', () => {
+  const original = context.SpreadsheetApp;
+  try {
+    context.SpreadsheetApp = { openById: () => ({ getSheetByName: () => null }) };
+    const missing = context.getClickUpInventory_({ auth_token: 'consultant', lean: '1', paged: '1' });
+    assert.equal(missing.ok, false);
+    assert.equal(missing.source_unavailable, true);
+    context.SpreadsheetApp = { openById: () => ({ getSheetByName: () => ({ getLastRow: () => 1, getLastColumn: () => headers.length }) }) };
+    const empty = context.getClickUpInventory_({ auth_token: 'consultant', lean: '1', paged: '1' });
+    assert.equal(empty.ok, false);
+    assert.equal(empty.source_unavailable, true);
+  } finally {
+    context.SpreadsheetApp = original;
+  }
 });

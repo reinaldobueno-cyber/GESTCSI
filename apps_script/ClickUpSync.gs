@@ -262,7 +262,7 @@ function legacyPostOnlyAction_(action) {
 }
 
 function legacyRefreshAction_(action) {
-  return ['getMonthlyProjects', 'getProjectClosingCandidates', 'getCmaxDailyEvents'].indexOf(action) >= 0;
+  return ['getMonthlyProjects', 'getProjectClosingCandidates', 'getCmaxDailyEvents', 'me'].indexOf(action) >= 0;
 }
 
 function dispatchLegacyPostCommand_(action, params) {
@@ -278,6 +278,7 @@ function dispatchLegacyPostCommand_(action, params) {
     scheduleCmaxDailyViewBuild_();
     return { ok: true, scheduled: true, source: 'cmax_daily_view' };
   }
+  if (refresh && action === 'me') return refreshUserSession_(params);
   if (action === 'login') return loginUser_(params);
   if (action === 'syncProject') {
     var result = syncProjectByKey(String(params.project_key || '').trim());
@@ -2847,10 +2848,20 @@ function inventoryRowFromNormalized_(mapping, normalized, status, errorMessage) 
 function getClickUpInventory_(params) {
   params = params || {};
   requireUser_(params || {});
-  var sheet = getClickUpInventorySheet_();
+  var ss = SpreadsheetApp.openById(getScriptProperty_('SHEET_ID'));
+  var sheet = ss.getSheetByName(getScriptProperty_('CLICKUP_INVENTORY_SHEET', 'CLICKUP_INVENTARIO'));
+  if (!sheet) return {
+    ok: false,
+    source_unavailable: true,
+    error: 'Inventario historico indisponivel: aba CLICKUP_INVENTARIO ausente.'
+  };
   var lastRow = sheet.getLastRow();
   var lastColumn = sheet.getLastColumn();
-  if (lastRow <= 1 || lastColumn <= 0) return { ok: true, projetos: [], total: 0 };
+  if (lastRow <= 1 || lastColumn <= 0) return {
+    ok: false,
+    source_unavailable: true,
+    error: 'Inventario historico indisponivel: aba vazia ou sem cabecalho.'
+  };
   var header = sheet.getRange(1, 1, 1, lastColumn).getValues()[0];
   var lean = String(params.lean || '') === '1';
   var paged = lean && String(params.paged || '') === '1';
@@ -2911,7 +2922,13 @@ function getClickUpInventory_(params) {
 
 function getClickUpMilestoneClosing_(params) {
   requireUser_(params || {});
-  var sheet = getClickUpMilestoneClosingSheet_();
+  var ss = SpreadsheetApp.openById(getScriptProperty_('SHEET_ID'));
+  var sheet = ss.getSheetByName(getScriptProperty_('CLICKUP_MILESTONE_CLOSING_SHEET', 'CLICKUP_FECHAMENTO_MARCOS'));
+  if (!sheet) return {
+    ok: false,
+    source_unavailable: true,
+    error: 'Fechamento de marcos indisponivel: aba CLICKUP_FECHAMENTO_MARCOS ausente.'
+  };
   var values = sheet.getDataRange().getDisplayValues();
   var rows = values.length > 1 ? values.slice(1).map(function(row) {
     var item = rowToObject_(values[0], row);
@@ -3498,7 +3515,9 @@ function projectClosingDecisionDateText_(value) {
 
 function getProjectClosingDecisions_(params) {
   requireUser_(params || {});
-  var sheet = getProjectClosingDecisionSheet_();
+  var sheet = SpreadsheetApp.openById(getScriptProperty_('SHEET_ID'))
+    .getSheetByName('CLICKUP_PROJECT_CLOSING_DECISIONS');
+  if (!sheet) return { ok: false, source_unavailable: true, error: 'Decisoes de fechamento indisponiveis.' };
   var values = sheet.getDataRange().getValues();
   var header = values[0] || [];
   var items = values.slice(1).map(function(row) {
@@ -5695,24 +5714,12 @@ function getClickUpUserActivityBackgroundStatus_() {
   var updatedAt = props.getProperty('CLICKUP_ACTIVITY_BACKGROUND_UPDATED_AT') || '';
   var updatedMs = Date.parse(updatedAt);
   var stalled = active && isFinite(updatedMs) && (new Date().getTime() - updatedMs) > 6 * 60 * 1000;
-  if (stalled || orphanedIncomplete) {
-    props.setProperty('CLICKUP_ACTIVITY_BACKGROUND_ACTIVE', '1');
-    scheduleClickUpUserActivityBackground_(1000);
-    props.setProperty('CLICKUP_ACTIVITY_BACKGROUND_UPDATED_AT', new Date().toISOString());
-    active = true;
-    stalled = true;
-  }
-  preservePreQueueProjectSyncRequest_(props, complete);
-  if (props.getProperty('CLICKUP_ACTIVITY_BACKGROUND_PENDING') === '1' &&
-      props.getProperty('CLICKUP_PROJECT_SYNC_ACTIVE') === '1') {
-    props.setProperty('CLICKUP_PROJECT_SYNC_PAUSE_FOR_ACTIVITY', '1');
-  }
   return {
     ok: true,
     service: 'clickup-user-activity',
     activity_engine_version: CLICKUP_ACTIVITY_ENGINE_VERSION,
     active: active,
-    stalled: stalled,
+    stalled: stalled || orphanedIncomplete,
     complete: complete,
     partial: String(progress.resultado_parcial_controle || '').toLowerCase() === 'sim',
     run_id: props.getProperty('CLICKUP_ACTIVITY_BACKGROUND_RUN_ID') || '',
@@ -7079,8 +7086,9 @@ function startOfDayMillis_(date) {
 }
 
 function loadProjectMappings_() {
-  var sheet = getConfigSheet_();
-  var values = sheet.getDataRange().getValues();
+  var ss = SpreadsheetApp.openById(getScriptProperty_('SHEET_ID'));
+  var sheet = ss.getSheetByName(getScriptProperty_('CLICKUP_CONFIG_SHEET', 'CLICKUP_CONFIG'));
+  var values = sheet ? sheet.getDataRange().getValues() : [];
   var seen = {};
   var out = [];
 
@@ -7611,7 +7619,9 @@ function logPanelUpdate_(params) {
 }
 
 function getPanelUpdateHistory_(limit) {
-  var sheet = getPanelUpdateHistorySheet_();
+  var ss = SpreadsheetApp.openById(getScriptProperty_('SHEET_ID'));
+  var sheet = ss.getSheetByName(getScriptProperty_('PANEL_UPDATE_HISTORY_SHEET', 'PANEL_UPDATE_HISTORY'));
+  if (!sheet || sheet.getLastRow() <= 1) return { ok: true, history: [], total: 0 };
   var values = sheet.getDataRange().getValues();
   if (values.length <= 1) {
     return { ok: true, history: [], total: 0 };
@@ -7845,10 +7855,14 @@ function requireUser_(params) {
   if (!raw) throw new Error('Sessao expirada. Entre novamente.');
   var user = JSON.parse(raw);
   if (!user.enabled) throw new Error('Usuario desativado.');
-  // CacheService limita a sessão a seis horas. Renove a janela sempre que o
-  // usuário estiver ativo para não expirar durante syncs acompanhados no painel.
-  sessionCache_().put('session:' + token, raw, 21600);
   return user;
+}
+
+function refreshUserSession_(params) {
+  var user = requireUser_(params);
+  var token = sanitizeText_(params && params.auth_token);
+  sessionCache_().put('session:' + token, JSON.stringify(user), 21600);
+  return { ok: true, user: user, refreshed: true };
 }
 
 // A estimativa de adoção não calcula fases nem marcos. Uma única consulta por
@@ -8020,7 +8034,9 @@ function getCurrentUser_(params) {
 
 function listUsers_(params) {
   requireAdmin_(params);
-  var sheet = getUsersSheet_();
+  var ss = SpreadsheetApp.openById(getScriptProperty_('SHEET_ID'));
+  var sheet = ss.getSheetByName(getScriptProperty_('PANEL_USERS_SHEET', 'PAINEL_USUARIOS'));
+  if (!sheet || sheet.getLastRow() <= 1) return { ok: true, users: [] };
   var values = sheet.getDataRange().getValues();
   if (values.length <= 1) return { ok: true, users: [] };
   var header = values[0];
@@ -8242,9 +8258,10 @@ function getConsultantCompensation_(params) {
 }
 
 function getConsultantCompensationData_() {
-  var sheet = getConsultantCompensationSheet_();
-  var values = sheet.getDataRange().getValues();
-  var header = values[0];
+  var ss = SpreadsheetApp.openById(getScriptProperty_('SHEET_ID'));
+  var sheet = ss.getSheetByName(CONSULTANT_COMPENSATION_SHEET);
+  var values = sheet ? sheet.getDataRange().getValues() : [];
+  var header = values[0] || [];
   var byKey = {};
   var consultants = values.length > 1 ? values.slice(1).map(function(row) {
     var item = rowToObject_(header, row);
@@ -8263,8 +8280,8 @@ function getConsultantCompensationData_() {
   consultants.forEach(function(item) {
     byKey[normalizeKey_(item.consultant_key || item.consultant_name)] = item;
   });
-  var usersSheet = getUsersSheet_();
-  var userValues = usersSheet.getDataRange().getValues();
+  var usersSheet = ss.getSheetByName(getScriptProperty_('PANEL_USERS_SHEET', 'PAINEL_USUARIOS'));
+  var userValues = usersSheet ? usersSheet.getDataRange().getValues() : [];
   if (userValues.length > 1) {
     var userHeader = userValues[0];
     userValues.slice(1).forEach(function(row) {
@@ -8379,7 +8396,9 @@ function bonusSalesDateText_(value) {
 function getBonusSalesIndications_(params) {
   requireAdmin_(params || {});
   var month = sanitizeMonth_(params.month);
-  var sheet = getBonusSalesIndicationsSheet_();
+  var sheet = SpreadsheetApp.openById(getScriptProperty_('SHEET_ID'))
+    .getSheetByName(BONUS_SALES_INDICATIONS_SHEET);
+  if (!sheet) return { ok: false, source_unavailable: true, error: 'Indicacoes de bonus indisponiveis.' };
   var values = sheet.getDataRange().getValues();
   var header = values[0] || [];
   var items = values.slice(1).map(function(row) {
@@ -8589,10 +8608,14 @@ function getProjectFollowups_(params, limit) {
 }
 
 function getSharedProjectFollowups_(limit) {
-  var sheet = getProjectFollowupSheet_();
+  var ss = SpreadsheetApp.openById(getScriptProperty_('SHEET_ID'));
+  var sheet = ss.getSheetByName(getScriptProperty_('PROJECT_FOLLOWUP_SHEET', 'ACOMPANHAMENTOS_PROJETOS'));
+  if (!sheet || sheet.getLastRow() <= 1) {
+    return { ok: true, followups: [], total: 0, kanban_states: getProjectKanbanStates_() };
+  }
   var values = sheet.getDataRange().getValues();
   if (values.length <= 1) {
-    return { ok: true, followups: [], total: 0 };
+    return { ok: true, followups: [], total: 0, kanban_states: getProjectKanbanStates_() };
   }
   var header = values[0];
   var rows = values.slice(1);
@@ -8683,7 +8706,9 @@ function normalizeKanbanStage_(value) {
 }
 
 function getProjectKanbanStates_(allowedProjectKeys) {
-  var sheet = getProjectKanbanStateSheet_();
+  var ss = SpreadsheetApp.openById(getScriptProperty_('SHEET_ID'));
+  var sheet = ss.getSheetByName(getScriptProperty_('PROJECT_KANBAN_STATE_SHEET', 'ACOMPANHAMENTOS_KANBAN'));
+  if (!sheet || sheet.getLastRow() <= 1) return {};
   var values = sheet.getDataRange().getValues();
   if (values.length <= 1) return {};
   var header = values[0];
@@ -9481,7 +9506,13 @@ function getCmaxDailyEvents_(params) {
   }
   var rangeInfo = month ? meta.ranges[month] : meta.all;
   if (!snapshotEvents && rangeInfo && rangeInfo.count > 0) {
-    var sheet = getOrCreateSheet_(CMAX_DAILY_VIEW_SHEET);
+    var sheet = SpreadsheetApp.openById(getScriptProperty_('SHEET_ID'))
+      .getSheetByName(CMAX_DAILY_VIEW_SHEET);
+    if (!sheet) return {
+      ok: false,
+      source_unavailable: true,
+      error: 'Visao diaria CMAX indisponivel: aba materializada ausente.'
+    };
     var headers = getCmaxDailyViewHeaders_();
     var values = sheet.getRange(rangeInfo.start, 1, rangeInfo.count, headers.length).getValues();
     events = values.map(function(row) {

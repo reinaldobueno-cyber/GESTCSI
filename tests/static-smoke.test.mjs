@@ -106,7 +106,7 @@ test('stops ClickUp actions immediately when the panel session expires', async (
   assert.match(appsScript, /if \(action === 'syncAll'\) return syncAllProjects\(/);
   assert.match(appsScript, /function dispatchLegacyPostCommand_\(action, params\) \{\s+var refresh = legacyRefreshAction_\(action\)/);
   assert.match(appsScript, /if \(!legacyPostOnlyAction_\(action\) && !refresh\) throw new Error\('Acao POST nao reconhecida.'\);\s+authorizeLegacyAction_\(action, params\)/);
-  assert.match(appsScript, /sessionCache_\(\)\.put\('session:' \+ token, raw, 21600\)/);
+  assert.match(appsScript, /function refreshUserSession_\(params\)[\s\S]{0,240}sessionCache_\(\)\.put\('session:' \+ token, JSON\.stringify\(user\), 21600\)/);
   const syncStart = html.indexOf('window.sincronizarTodosProjetosClickup = function');
   const syncEnd = html.indexOf('\nfunction sleep(', syncStart);
   const syncSource = html.slice(syncStart, syncEnd);
@@ -201,13 +201,14 @@ test('publishes adoption rows without a clear-then-write empty window', async ()
   assert.doesNotMatch(source, /sheet\.clearContents\(\)/);
 });
 
-test('rearms a stalled adoption job and labels inferred task relationships honestly', async () => {
+test('reports a stalled adoption job without rearming it on GET and labels inferred task relationships honestly', async () => {
   const appsScript = await readFile(new URL('../apps_script/ClickUpSync.gs', import.meta.url), 'utf8');
   const start = appsScript.indexOf('function getClickUpUserActivityBackgroundStatus_(');
   const end = appsScript.indexOf('\nfunction ', start + 10);
   const source = appsScript.slice(start, end);
   assert.match(source, /stalled = active/);
-  assert.match(source, /scheduleClickUpUserActivityBackground_\(1000\)/);
+  assert.doesNotMatch(source, /scheduleClickUpUserActivityBackground_\(1000\)/);
+  assert.doesNotMatch(source, /props\.setProperty\(/);
   assert.match(source, /CLICKUP_ACTIVITY_BACKGROUND_RUN_ID/);
   assert.match(html, /Com task relacionada hoje/);
   assert.match(html, /autoria não confirmada/);

@@ -15,7 +15,7 @@ function functionBody(name, nextName) {
 test('moves known refresh-on-read effects to explicit POST dispatch', () => {
   assert.deepEqual(contract.conditional_effect_get, []);
   for (const action of ['getMonthlyProjects', 'getProjectClosingCandidates', 'getCmaxDailyEvents']) {
-    assert.ok(contract.read_candidate.includes(action), `${action} still needs complete read audit`);
+    assert.ok(contract.read_verified.includes(action), `${action} read audit is complete`);
   }
   const router = source.slice(source.indexOf('function doGet(e)'), source.indexOf('function legacyActionPolicy_'));
   assert.match(router, /legacyRefreshAction_\(action\) && String\(params\.refresh/);

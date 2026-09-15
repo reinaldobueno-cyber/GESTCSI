@@ -20,6 +20,7 @@ const context = {
   scheduleMonthlyPortfolioSnapshotRefresh_: () => ({ scheduled: 'monthly' }),
   scheduleCmaxDailyViewBuild_: () => ({ scheduled: 'cmax' }),
   refreshProjectClosingCandidates_: () => ({ ok: true, refreshed: 'candidates' }),
+  refreshUserSession_: () => ({ ok: true, refreshed: 'session' }),
   toInt_: (value, fallback) => Number.parseInt(value, 10) || fallback
 };
 vm.runInNewContext(source.slice(policyStart, policyEnd), context);
@@ -95,4 +96,7 @@ test('keeps the three refresh commands on POST while GET remains a read', () => 
   assert.equal(context.dispatchLegacyPostCommand_('getCmaxDailyEvents', { auth_token: 'consultant', refresh: '1' }).scheduled, true);
   assert.equal(context.dispatchLegacyPostCommand_('getProjectClosingCandidates', { auth_token: 'consultant', refresh: '1' }).refreshed, 'candidates');
   assert.throws(() => context.dispatchLegacyPostCommand_('getMonthlyProjects', { refresh: '1' }));
+  assert.equal(context.legacyRefreshAction_('me'), true);
+  assert.equal(context.dispatchLegacyPostCommand_('me', { auth_token: 'consultant', refresh: '1' }).refreshed, 'session');
+  assert.throws(() => context.dispatchLegacyPostCommand_('me', { refresh: '1' }));
 });
