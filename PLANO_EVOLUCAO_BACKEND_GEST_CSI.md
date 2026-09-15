@@ -253,10 +253,11 @@ Ao final deste plano, o GEST CSI deverá:
 
 #### E05 — autorização uniforme no legado
 
-- **Status:** [ ] PENDENTE
+- **Status:** [ ] EM EXECUÇÃO (guarda e testes na branch; não publicado)
 - **Entrega:** proteger todas as rotas de leitura sensível e mutação antes da migração.
 - **Critério de OK:** inventário de rotas revisado; zero comando mutável anônimo; papéis testados; GET não altera estado.
 - **Testes:** matriz anônimo/consultor/gestor/admin por rota.
+- **Progresso em 15/09/2026:** [`MATRIZ_AUTORIZACAO_LEGADO_E05.md`](./MATRIZ_AUTORIZACAO_LEGADO_E05.md) registra as 56 ações, aliases, papéis e pendências de transporte. Guarda HTTP default-deny e teste de quatro perfis implementados na branch; ainda faltam migração de comandos para POST, adaptação do painel e smoke real, portanto E05 não está OK.
 
 #### E06 — proteção da origem Google Sheets
 

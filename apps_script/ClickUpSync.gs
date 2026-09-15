@@ -94,6 +94,7 @@ function doGet(e) {
   var action = String(params.action || '').trim();
 
   try {
+    authorizeLegacyAction_(action, params);
     if (action === 'health') {
       return jsonOutput_(getHealthPayload_(params), params.callback);
     }
@@ -132,7 +133,7 @@ function doGet(e) {
     }
     if (action === 'getProjectClosingSyncStatus') {
       requireUser_(params);
-      return jsonOutput_(advanceProjectClosingSyncBackgroundFromStatus_(), params.callback);
+      return jsonOutput_(getProjectClosingSyncBackgroundStatus_(), params.callback);
     }
     if (action === 'stopProjectClosingSync') {
       requireAdmin_(params);
@@ -326,6 +327,58 @@ function doGet(e) {
       at: new Date().toISOString()
     }, params.callback);
   }
+}
+
+/**
+ * Default-deny gate for the web-app router. Internal triggers/menu functions
+ * remain callable by Apps Script and are not treated as anonymous HTTP calls.
+ * This is a staging guard: mutable actions still need POST migration before E05
+ * can be accepted as complete.
+ */
+function legacyActionPolicy_(action) {
+  if (action === 'health' || action === 'login') return 'public';
+  if (!action) return arguments[1] ? 'user' : 'public';
+  var adminActions = [
+    'syncProject', 'syncAll', 'startProjectSyncBackground', 'getProjectSyncBackgroundStatus',
+    'startProjectClosingSync', 'stopProjectClosingSync', 'processDirty', 'validateConfig',
+    'diagnoseClickUpMilestoneTask', 'syncClickUpMilestoneTask',
+    'diagnoseProjectClosingCandidateCounts', 'setProjectClosingDecision',
+    'startClickUpMilestoneClosingBackground', 'restoreMilestoneClosingFromMonthlyHistory',
+    'syncClickUpMilestoneRecent', 'confirmClickUpMilestoneStatuses',
+    'syncClickUpClosedMilestones', 'syncClickUpApprovedMilestones',
+    'syncClickUpRejectedMilestones', 'stopLegacyClickUpMilestoneAudit',
+    'syncClickUpUserActivity', 'startClickUpUserActivityBackground',
+    'getClickUpUserActivity', 'getClickUpUserActivityStatus',
+    'setConsultantSeniority', 'getBonusSalesIndications',
+    'saveBonusSalesIndication', 'deleteBonusSalesIndication',
+    'syncCmaxDailyEvents', 'startCmaxDailyHistoryBackground',
+    'continueCmaxDailyHistoryBatch', 'listUsers', 'createUser',
+    'setUserEnabled', 'resetUserPassword', 'setUserSeniority',
+    'deleteProjectFollowup'
+  ];
+  if (adminActions.indexOf(action) >= 0) return 'admin';
+  var userActions = [
+    'getMonthlyProjects', 'getClickUpInventory', 'getClickUpMilestoneClosing',
+    'diagnoseProjectClosing', 'getProjectClosingDecisions',
+    'getProjectClosingCandidates', 'getProjectClosingSyncStatus',
+    'getCmaxDailyEvents', 'getConsultantCompensation',
+    'getCmaxDailyHistoryStatus', 'logPanelUpdate',
+    'getPanelUpdateHistory', 'me', 'logProjectFollowup',
+    'getProjectFollowups', 'setProjectFollowupStatus',
+    'setProjectKanbanStage'
+  ];
+  return userActions.indexOf(action) >= 0 ? 'user' : 'unknown';
+}
+
+function authorizeLegacyAction_(action, params) {
+  var effectiveAction = action;
+  if (!effectiveAction && String(params && params.log_update || '') === '1') effectiveAction = 'logPanelUpdate';
+  if (!effectiveAction && String(params && params.history || '') === '1') effectiveAction = 'getPanelUpdateHistory';
+  var role = legacyActionPolicy_(effectiveAction, !effectiveAction && params && params.mes);
+  if (role === 'unknown') throw new Error('Acao nao reconhecida.');
+  if (role === 'admin') return requireAdmin_(params);
+  if (role === 'user') return requireUser_(params);
+  return null;
 }
 
 /**
@@ -1963,10 +2016,6 @@ function continueProjectClosingSyncBackgroundTrigger() {
   continueProjectClosingSyncBackgroundStepWithLock_();
 }
 
-function advanceProjectClosingSyncBackgroundFromStatus_() {
-  return continueProjectClosingSyncBackgroundStepWithLock_({ status_poll: true });
-}
-
 function continueProjectClosingSyncBackgroundStepWithLock_(options) {
   options = options || {};
   var props = PropertiesService.getScriptProperties();
@@ -1975,7 +2024,7 @@ function continueProjectClosingSyncBackgroundStepWithLock_(options) {
     return getProjectClosingSyncBackgroundStatus_();
   }
   var lock = LockService.getScriptLock();
-  if (!lock.tryLock(options.status_poll ? 1000 : 5000)) {
+  if (!lock.tryLock(5000)) {
     var busy = getProjectClosingSyncBackgroundStatus_();
     busy.busy = true;
     return busy;
