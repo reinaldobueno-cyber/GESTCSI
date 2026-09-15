@@ -94,7 +94,7 @@ function doGet(e) {
   var action = String(params.action || '').trim();
 
   try {
-    if (legacyPostOnlyAction_(action)) {
+    if (legacyPostOnlyAction_(action) || (!action && String(params.log_update || '') === '1')) {
       return jsonOutput_({ ok: false, action: action, error: 'method_not_allowed', required_method: 'POST' }, params.callback);
     }
     authorizeLegacyAction_(action, params);
@@ -107,34 +107,13 @@ function doGet(e) {
     if (action === 'getMonthlyProjects') {
       return jsonOutput_(getMonthlyProjectsPayload_(params), params.callback);
     }
-    if (action === 'syncAll') {
-      requireAdmin_(params);
-      var allResult = syncAllProjects({
-        force: String(params.force || '') === '1',
-        limit: toInt_(params.limit, null),
-        offset: toInt_(params.offset, 0)
-      });
-      return jsonOutput_(allResult, params.callback);
-    }
-    if (action === 'startProjectSyncBackground') {
-      requireAdmin_(params);
-      return jsonOutput_(startProjectSyncBackground_(params), params.callback);
-    }
     if (action === 'getProjectSyncBackgroundStatus') {
       requireAdmin_(params);
       return jsonOutput_(getProjectSyncBackgroundStatus_(), params.callback);
     }
-    if (action === 'startProjectClosingSync') {
-      requireAdmin_(params);
-      return jsonOutput_(startProjectClosingSyncBackground_(), params.callback);
-    }
     if (action === 'getProjectClosingSyncStatus') {
       requireUser_(params);
       return jsonOutput_(getProjectClosingSyncBackgroundStatus_(), params.callback);
-    }
-    if (action === 'stopProjectClosingSync') {
-      requireAdmin_(params);
-      return jsonOutput_(stopProjectClosingSyncBackground_(), params.callback);
     }
     if (action === 'getClickUpInventory') {
       return jsonOutput_(getClickUpInventory_(params), params.callback);
@@ -142,16 +121,9 @@ function doGet(e) {
     if (action === 'getClickUpMilestoneClosing') {
       return jsonOutput_(getClickUpMilestoneClosing_(params), params.callback);
     }
-    if (action === 'diagnoseProjectClosing') {
-      return jsonOutput_(diagnoseProjectClosing_(params), params.callback);
-    }
     if (action === 'diagnoseClickUpMilestoneTask') {
       requireAdmin_(params);
       return jsonOutput_(diagnoseClickUpMilestoneTask_(params), params.callback);
-    }
-    if (action === 'syncClickUpMilestoneTask') {
-      requireAdmin_(params);
-      return jsonOutput_(syncClickUpMilestoneTask_(params), params.callback);
     }
     if (action === 'getProjectClosingDecisions') {
       return jsonOutput_(getProjectClosingDecisions_(params), params.callback);
@@ -161,49 +133,6 @@ function doGet(e) {
     }
     if (action === 'diagnoseProjectClosingCandidateCounts') {
       return jsonOutput_(diagnoseProjectClosingCandidateCounts_(), params.callback);
-    }
-    if (action === 'setProjectClosingDecision') {
-      return jsonOutput_(setProjectClosingDecision_(params), params.callback);
-    }
-    if (action === 'startClickUpMilestoneClosingBackground') {
-      requireAdmin_(params);
-      return jsonOutput_(startClickUpMilestoneClosingBackground_(params), params.callback);
-    }
-    if (action === 'restoreMilestoneClosingFromMonthlyHistory') {
-      requireAdmin_(params);
-      return jsonOutput_(restoreClickUpMilestoneClosingFromMonthlyHistory_(params), params.callback);
-    }
-    if (action === 'syncClickUpMilestoneRecent') {
-      requireAdmin_(params);
-      return jsonOutput_(syncClickUpRecentMilestoneAndGetClosing_(params), params.callback);
-    }
-    if (action === 'confirmClickUpMilestoneStatuses') {
-      requireAdmin_(params);
-      return jsonOutput_(confirmClickUpMilestoneStatuses_(params), params.callback);
-    }
-    if (action === 'syncClickUpClosedMilestones') {
-      requireAdmin_(params);
-      return jsonOutput_(syncClickUpClosedMilestones_(params), params.callback);
-    }
-    if (action === 'syncClickUpApprovedMilestones') {
-      requireAdmin_(params);
-      return jsonOutput_(syncClickUpValidationSituation_(params, 'aprovado'), params.callback);
-    }
-    if (action === 'syncClickUpRejectedMilestones') {
-      requireAdmin_(params);
-      return jsonOutput_(syncClickUpValidationSituation_(params, 'reprovado'), params.callback);
-    }
-    if (action === 'stopLegacyClickUpMilestoneAudit') {
-      requireAdmin_(params);
-      return jsonOutput_(stopLegacyClickUpMilestoneAudit_(), params.callback);
-    }
-    if (action === 'syncClickUpUserActivity') {
-      requireAdmin_(params);
-      return jsonOutput_(syncClickUpUserActivity_(params), params.callback);
-    }
-    if (action === 'startClickUpUserActivityBackground') {
-      requireAdmin_(params);
-      return jsonOutput_(startClickUpUserActivityBackground_(params), params.callback);
     }
     if (action === 'getClickUpUserActivity') {
       requireAdmin_(params);
@@ -219,39 +148,12 @@ function doGet(e) {
     if (action === 'getConsultantCompensation') {
       return jsonOutput_(getConsultantCompensation_(params), params.callback);
     }
-    if (action === 'setConsultantSeniority') {
-      return jsonOutput_(setConsultantSeniority_(params), params.callback);
-    }
     if (action === 'getBonusSalesIndications') {
       requireAdmin_(params);
       return jsonOutput_(getBonusSalesIndications_(params), params.callback);
     }
-    if (action === 'saveBonusSalesIndication') {
-      requireAdmin_(params);
-      return jsonOutput_(saveBonusSalesIndication_(params), params.callback);
-    }
-    if (action === 'deleteBonusSalesIndication') {
-      requireAdmin_(params);
-      return jsonOutput_(deleteBonusSalesIndication_(params), params.callback);
-    }
     if (action === 'getCmaxDailyHistoryStatus') {
       return jsonOutput_(getCmaxDailyHistoryStatus_(), params.callback);
-    }
-    if (action === 'syncCmaxDailyEvents') {
-      requireAdmin_(params);
-      return jsonOutput_(syncCmaxDailyEvents_(params), params.callback);
-    }
-    if (action === 'startCmaxDailyHistoryBackground') {
-      requireAdmin_(params);
-      return jsonOutput_(startCmaxDailyHistoryBackground_(params), params.callback);
-    }
-    if (action === 'continueCmaxDailyHistoryBatch') {
-      requireAdmin_(params);
-      return jsonOutput_(continueCmaxDailyHistoryBatch_(params), params.callback);
-    }
-    if (action === 'logPanelUpdate' || String(params.log_update || '') === '1') {
-      var logResult = logPanelUpdate_(params);
-      return jsonOutput_(logResult, params.callback);
     }
     if (action === 'getPanelUpdateHistory' || String(params.history || '') === '1') {
       var historyResult = getPanelUpdateHistory_(toInt_(params.limit, 20));
@@ -263,37 +165,9 @@ function doGet(e) {
     if (action === 'listUsers') {
       return jsonOutput_(listUsers_(params), params.callback);
     }
-    if (action === 'createUser') {
-      return jsonOutput_(createUser_(params), params.callback);
-    }
-    if (action === 'setUserEnabled') {
-      return jsonOutput_(setUserEnabled_(params), params.callback);
-    }
-    if (action === 'resetUserPassword') {
-      return jsonOutput_(resetUserPassword_(params), params.callback);
-    }
-    if (action === 'setUserSeniority') {
-      return jsonOutput_(setUserSeniority_(params), params.callback);
-    }
-    if (action === 'logProjectFollowup') {
-      var followupResult = logProjectFollowup_(params);
-      return jsonOutput_(followupResult, params.callback);
-    }
     if (action === 'getProjectFollowups') {
       var followupsResult = getProjectFollowups_(params, toInt_(params.limit, 1000));
       return jsonOutput_(followupsResult, params.callback);
-    }
-    if (action === 'setProjectFollowupStatus') {
-      var followupStatusResult = setProjectFollowupStatus_(params);
-      return jsonOutput_(followupStatusResult, params.callback);
-    }
-    if (action === 'setProjectKanbanStage') {
-      var kanbanResult = setProjectKanbanStage_(params);
-      return jsonOutput_(kanbanResult, params.callback);
-    }
-    if (action === 'deleteProjectFollowup') {
-      var deleteFollowupResult = deleteProjectFollowup_(params);
-      return jsonOutput_(deleteFollowupResult, params.callback);
     }
 
     var payload = {
@@ -367,7 +241,23 @@ function authorizeLegacyAction_(action, params) {
 }
 
 function legacyPostOnlyAction_(action) {
-  return ['login', 'syncProject', 'processDirty', 'validateConfig'].indexOf(action) >= 0;
+  return [
+    'login', 'syncProject', 'syncAll', 'startProjectSyncBackground',
+    'startProjectClosingSync', 'stopProjectClosingSync', 'processDirty',
+    'validateConfig', 'diagnoseProjectClosing', 'syncClickUpMilestoneTask',
+    'setProjectClosingDecision', 'startClickUpMilestoneClosingBackground',
+    'restoreMilestoneClosingFromMonthlyHistory', 'syncClickUpMilestoneRecent',
+    'confirmClickUpMilestoneStatuses', 'syncClickUpClosedMilestones',
+    'syncClickUpApprovedMilestones', 'syncClickUpRejectedMilestones',
+    'stopLegacyClickUpMilestoneAudit', 'syncClickUpUserActivity',
+    'startClickUpUserActivityBackground', 'setConsultantSeniority',
+    'saveBonusSalesIndication', 'deleteBonusSalesIndication',
+    'syncCmaxDailyEvents', 'startCmaxDailyHistoryBackground',
+    'continueCmaxDailyHistoryBatch', 'logPanelUpdate', 'createUser',
+    'setUserEnabled', 'resetUserPassword', 'setUserSeniority',
+    'logProjectFollowup', 'setProjectFollowupStatus',
+    'setProjectKanbanStage', 'deleteProjectFollowup'
+  ].indexOf(action) >= 0;
 }
 
 function dispatchLegacyPostCommand_(action, params) {
@@ -379,8 +269,44 @@ function dispatchLegacyPostCommand_(action, params) {
     result.ok = true;
     return result;
   }
+  if (action === 'syncAll') return syncAllProjects({
+    force: String(params.force || '') === '1',
+    limit: toInt_(params.limit, null),
+    offset: toInt_(params.offset, 0)
+  });
+  if (action === 'startProjectSyncBackground') return startProjectSyncBackground_(params);
+  if (action === 'startProjectClosingSync') return startProjectClosingSyncBackground_();
+  if (action === 'stopProjectClosingSync') return stopProjectClosingSyncBackground_();
   if (action === 'processDirty') return processDirtyQueue({ limit: toInt_(params.limit, null) });
   if (action === 'validateConfig') return validarClickUpConfig();
+  if (action === 'diagnoseProjectClosing') return diagnoseProjectClosing_(params);
+  if (action === 'syncClickUpMilestoneTask') return syncClickUpMilestoneTask_(params);
+  if (action === 'setProjectClosingDecision') return setProjectClosingDecision_(params);
+  if (action === 'startClickUpMilestoneClosingBackground') return startClickUpMilestoneClosingBackground_(params);
+  if (action === 'restoreMilestoneClosingFromMonthlyHistory') return restoreClickUpMilestoneClosingFromMonthlyHistory_(params);
+  if (action === 'syncClickUpMilestoneRecent') return syncClickUpRecentMilestoneAndGetClosing_(params);
+  if (action === 'confirmClickUpMilestoneStatuses') return confirmClickUpMilestoneStatuses_(params);
+  if (action === 'syncClickUpClosedMilestones') return syncClickUpClosedMilestones_(params);
+  if (action === 'syncClickUpApprovedMilestones') return syncClickUpValidationSituation_(params, 'aprovado');
+  if (action === 'syncClickUpRejectedMilestones') return syncClickUpValidationSituation_(params, 'reprovado');
+  if (action === 'stopLegacyClickUpMilestoneAudit') return stopLegacyClickUpMilestoneAudit_();
+  if (action === 'syncClickUpUserActivity') return syncClickUpUserActivity_(params);
+  if (action === 'startClickUpUserActivityBackground') return startClickUpUserActivityBackground_(params);
+  if (action === 'setConsultantSeniority') return setConsultantSeniority_(params);
+  if (action === 'saveBonusSalesIndication') return saveBonusSalesIndication_(params);
+  if (action === 'deleteBonusSalesIndication') return deleteBonusSalesIndication_(params);
+  if (action === 'syncCmaxDailyEvents') return syncCmaxDailyEvents_(params);
+  if (action === 'startCmaxDailyHistoryBackground') return startCmaxDailyHistoryBackground_(params);
+  if (action === 'continueCmaxDailyHistoryBatch') return continueCmaxDailyHistoryBatch_(params);
+  if (action === 'logPanelUpdate') return logPanelUpdate_(params);
+  if (action === 'createUser') return createUser_(params);
+  if (action === 'setUserEnabled') return setUserEnabled_(params);
+  if (action === 'resetUserPassword') return resetUserPassword_(params);
+  if (action === 'setUserSeniority') return setUserSeniority_(params);
+  if (action === 'logProjectFollowup') return logProjectFollowup_(params);
+  if (action === 'setProjectFollowupStatus') return setProjectFollowupStatus_(params);
+  if (action === 'setProjectKanbanStage') return setProjectKanbanStage_(params);
+  if (action === 'deleteProjectFollowup') return deleteProjectFollowup_(params);
   throw new Error('Acao POST nao reconhecida.');
 }
 

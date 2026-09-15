@@ -5,6 +5,7 @@ import { readFile } from 'node:fs/promises';
 
 const source = await readFile(new URL('../apps_script/ClickUpSync.gs', import.meta.url), 'utf8');
 const contract = JSON.parse(await readFile(new URL('../governance/data-contract.json', import.meta.url), 'utf8'));
+const methodContract = JSON.parse(await readFile(new URL('../governance/e05-http-method-contract.json', import.meta.url), 'utf8'));
 const policyStart = source.indexOf('function legacyActionPolicy_(action)');
 const policyEnd = source.indexOf('\n/**\n * Lightweight deployment probe.', policyStart);
 assert.ok(policyStart >= 0 && policyEnd > policyStart);
@@ -52,7 +53,7 @@ test('does not let query aliases bypass the history write guard', () => {
 
 test('keeps project-closing status polling read-only', () => {
   const routeStart = source.indexOf("if (action === 'getProjectClosingSyncStatus')");
-  const routeEnd = source.indexOf("if (action === 'stopProjectClosingSync')", routeStart);
+  const routeEnd = source.indexOf("if (action === 'getClickUpInventory')", routeStart);
   const route = source.slice(routeStart, routeEnd);
   assert.match(route, /getProjectClosingSyncBackgroundStatus_\(\)/);
   assert.doesNotMatch(route, /advanceProjectClosingSyncBackgroundFromStatus_\(\)/);
@@ -65,13 +66,13 @@ test('passes the administrative session into the protected milestone readback', 
   assert.match(route, /diagnosis\.after = getClickUpMilestoneClosing_\(\{\s*auth_token: params\.auth_token/);
 });
 
-test('routes login and the first three administrative commands through POST only', () => {
+test('routes every mutating command through POST only', () => {
   const getRouter = source.slice(source.indexOf('function doGet(e)'), source.indexOf('function legacyActionPolicy_'));
-  for (const action of ['login', 'syncProject', 'processDirty', 'validateConfig']) {
+  for (const action of methodContract.post_required) {
     assert.equal(context.legacyPostOnlyAction_(action), true);
     assert.doesNotMatch(getRouter, new RegExp(`if \\(action === '${action}'\\)`));
   }
-  assert.match(getRouter, /if \(legacyPostOnlyAction_\(action\)\)/);
+  assert.match(getRouter, /if \(legacyPostOnlyAction_\(action\) \|\|/);
   assert.equal(context.dispatchLegacyPostCommand_('login', {}).token, 'new-session');
   assert.equal(context.dispatchLegacyPostCommand_('syncProject', { auth_token: 'admin', project_key: 'A' }).project_key, 'A');
   assert.equal(context.dispatchLegacyPostCommand_('processDirty', { auth_token: 'admin', limit: '5' }).limit, 5);
