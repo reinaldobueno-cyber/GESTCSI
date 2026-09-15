@@ -257,7 +257,7 @@ Ao final deste plano, o GEST CSI deverá:
 - **Entrega:** proteger todas as rotas de leitura sensível e mutação antes da migração.
 - **Critério de OK:** inventário de rotas revisado; zero comando mutável anônimo; papéis testados; GET não altera estado.
 - **Testes:** matriz anônimo/consultor/gestor/admin por rota.
-- **Progresso em 15/09/2026:** [`MATRIZ_AUTORIZACAO_LEGADO_E05.md`](./MATRIZ_AUTORIZACAO_LEGADO_E05.md) registra as 56 ações, aliases, papéis e pendências de transporte. Guarda HTTP default-deny e teste de quatro perfis implementados na branch. Auditoria executável registra 36 comandos por GET, 3 GETs com efeito condicional e 17 candidatos de leitura não verificados. O guia oficial do Google restringe JSONP a dados não sensíveis; o corte exige transporte autenticado compatível com a origem do painel. Ainda faltam migração para POST, adaptação do painel, regra de visibilidade e smoke real, portanto E05 não está OK.
+- **Progresso em 15/09/2026:** [`MATRIZ_AUTORIZACAO_LEGADO_E05.md`](./MATRIZ_AUTORIZACAO_LEGADO_E05.md) registra as 56 ações, aliases, papéis e pendências de transporte. Guarda HTTP default-deny e teste de quatro perfis implementados na branch. Auditoria executável registra 32 comandos por GET após o primeiro lote POST (`login`, `syncProject`, `processDirty`, `validateConfig`), 3 GETs com efeito condicional e 17 candidatos de leitura não verificados. Webhook falha fechado sem token, mas não foi publicado. O guia oficial do Google restringe JSONP a dados não sensíveis; o corte exige transporte autenticado compatível com a origem do painel. Ainda faltam migração completa, adaptação do painel, regra de visibilidade e smoke real, portanto E05 não está OK.
 
 #### E06 — proteção da origem Google Sheets
 

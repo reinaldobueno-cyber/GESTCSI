@@ -11,7 +11,12 @@ assert.ok(policyStart >= 0 && policyEnd > policyStart);
 const context = {
   requireAdmin_: ({ auth_token: token }) => token === 'admin' ? { role: 'admin' } : (() => { throw new Error('admin required'); })(),
   requireUser_: ({ auth_token: token }) => ['admin', 'manager', 'consultant'].includes(token)
-    ? { role: token } : (() => { throw new Error('login required'); })()
+    ? { role: token } : (() => { throw new Error('login required'); })(),
+  loginUser_: () => ({ ok: true, token: 'new-session' }),
+  syncProjectByKey: (key) => ({ project_key: key }),
+  processDirtyQueue: ({ limit }) => ({ ok: true, limit }),
+  validarClickUpConfig: () => ({ ok: true, sheet: 'diagnostic' }),
+  toInt_: (value, fallback) => Number.parseInt(value, 10) || fallback
 };
 vm.runInNewContext(source.slice(policyStart, policyEnd), context);
 const actions = contract.interfaces.apps_script_actions;
@@ -58,4 +63,19 @@ test('passes the administrative session into the protected milestone readback', 
   const end = source.indexOf('\nfunction confirmClickUpMilestoneStatuses_', start);
   const route = source.slice(start, end);
   assert.match(route, /diagnosis\.after = getClickUpMilestoneClosing_\(\{\s*auth_token: params\.auth_token/);
+});
+
+test('routes login and the first three administrative commands through POST only', () => {
+  const getRouter = source.slice(source.indexOf('function doGet(e)'), source.indexOf('function legacyActionPolicy_'));
+  for (const action of ['login', 'syncProject', 'processDirty', 'validateConfig']) {
+    assert.equal(context.legacyPostOnlyAction_(action), true);
+    assert.doesNotMatch(getRouter, new RegExp(`if \\(action === '${action}'\\)`));
+  }
+  assert.match(getRouter, /if \(legacyPostOnlyAction_\(action\)\)/);
+  assert.equal(context.dispatchLegacyPostCommand_('login', {}).token, 'new-session');
+  assert.equal(context.dispatchLegacyPostCommand_('syncProject', { auth_token: 'admin', project_key: 'A' }).project_key, 'A');
+  assert.equal(context.dispatchLegacyPostCommand_('processDirty', { auth_token: 'admin', limit: '5' }).limit, 5);
+  assert.equal(context.dispatchLegacyPostCommand_('validateConfig', { auth_token: 'admin' }).sheet, 'diagnostic');
+  assert.throws(() => context.dispatchLegacyPostCommand_('syncProject', { auth_token: 'consultant' }));
+  assert.throws(() => context.dispatchLegacyPostCommand_('unknown', { auth_token: 'admin' }));
 });

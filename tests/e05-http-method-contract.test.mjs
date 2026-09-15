@@ -26,8 +26,9 @@ test('does not silently accept E05 while mutable GET routes remain', () => {
     assert.deepEqual(methodContract.conditional_effect_get, []);
     assert.deepEqual(methodContract.read_candidate, []);
   } else {
-    assert.ok(outstanding.includes('login'));
-    assert.ok(outstanding.includes('syncProject'));
+    assert.ok(outstanding.length + methodContract.conditional_effect_get.length + methodContract.read_candidate.length > 0);
+    assert.ok(!outstanding.includes('login'));
+    assert.ok(!outstanding.includes('syncProject'));
     assert.ok(outstanding.includes('logPanelUpdate'));
   }
 });

@@ -37,7 +37,10 @@ const sheet = {
   }
 };
 const context = {
-  requireUser_: () => ({ role: 'admin' }),
+  requireUser_: (params) => {
+    if (!params.auth_token) throw new Error('login required');
+    return { role: 'user' };
+  },
   getClickUpInventorySheet_: () => sheet,
   toInt_: (value, fallback) => {
     const parsed = Number.parseInt(value, 10);
@@ -45,7 +48,7 @@ const context = {
   },
   rowToObject_: (header, row) => Object.fromEntries(header.map((name, index) => [name, row[index]])),
   sanitizeText_: (value) => String(value ?? '').trim(),
-  canUserAccessProjectItem_: () => true
+  canUserAccessProjectItem_: () => { throw new Error('read must not use write-scope policy'); }
 };
 vm.runInNewContext(source.slice(start, end), context);
 
@@ -54,7 +57,7 @@ test('reads the 337 historical projects in bounded pages without reading clickup
   let offset = 0;
   let response;
   do {
-    response = context.getClickUpInventory_({ lean: '1', paged: '1', offset, limit: 100 });
+    response = context.getClickUpInventory_({ auth_token: 'consultant', lean: '1', paged: '1', offset, limit: 100 });
     collected.push(...response.projetos);
     offset = response.next_offset;
   } while (response.has_more);
@@ -69,4 +72,8 @@ test('reads the 337 historical projects in bounded pages without reading clickup
   const dataReads = rangeCalls.filter((call) => call.row > 1);
   assert.ok(dataReads.every((call) => jsonColumn < call.column || jsonColumn >= call.column + call.columnCount));
   assert.ok(collected.every((item) => JSON.parse(item.clickup_json).compacto_gestao === true));
+});
+
+test('requires login for the general historical inventory view', () => {
+  assert.throws(() => context.getClickUpInventory_({ lean: '1', paged: '1' }), /login required/);
 });

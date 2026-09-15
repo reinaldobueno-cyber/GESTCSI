@@ -19,7 +19,7 @@
  * - CLICKUP_SYNC_BATCH_SIZE     default: 10
  * - CLICKUP_WEBHOOK_ENDPOINT    full deployed Apps Script web app URL
  * - CLICKUP_TEAM_ID             required for webhook registration and user activity audit
- * - CLICKUP_WEBHOOK_TOKEN       shared token appended to webhook endpoint
+ * - CLICKUP_WEBHOOK_TOKEN       required for webhook registration/receipt; shared token appended to endpoint
  * - CLICKUP_USER_ACTIVITY_SHEET default: CLICKUP_USER_ACTIVITY
  * - CLICKUP_AUDIT_LOG_SHEET     default: CLICKUP_AUDIT_LOGS
  * - CLICKUP_ACTIVITY_DAYS       default: 90
@@ -94,6 +94,9 @@ function doGet(e) {
   var action = String(params.action || '').trim();
 
   try {
+    if (legacyPostOnlyAction_(action)) {
+      return jsonOutput_({ ok: false, action: action, error: 'method_not_allowed', required_method: 'POST' }, params.callback);
+    }
     authorizeLegacyAction_(action, params);
     if (action === 'health') {
       return jsonOutput_(getHealthPayload_(params), params.callback);
@@ -103,12 +106,6 @@ function doGet(e) {
     }
     if (action === 'getMonthlyProjects') {
       return jsonOutput_(getMonthlyProjectsPayload_(params), params.callback);
-    }
-    if (action === 'syncProject') {
-      var projectKey = String(params.project_key || '').trim();
-      var result = syncProjectByKey(projectKey);
-      result.ok = true;
-      return jsonOutput_(result, params.callback);
     }
     if (action === 'syncAll') {
       requireAdmin_(params);
@@ -138,15 +135,6 @@ function doGet(e) {
     if (action === 'stopProjectClosingSync') {
       requireAdmin_(params);
       return jsonOutput_(stopProjectClosingSyncBackground_(), params.callback);
-    }
-    if (action === 'processDirty') {
-      var dirtyResult = processDirtyQueue({
-        limit: toInt_(params.limit, null)
-      });
-      return jsonOutput_(dirtyResult, params.callback);
-    }
-    if (action === 'validateConfig') {
-      return jsonOutput_(validarClickUpConfig(), params.callback);
     }
     if (action === 'getClickUpInventory') {
       return jsonOutput_(getClickUpInventory_(params), params.callback);
@@ -269,9 +257,6 @@ function doGet(e) {
       var historyResult = getPanelUpdateHistory_(toInt_(params.limit, 20));
       return jsonOutput_(historyResult, params.callback);
     }
-    if (action === 'login') {
-      return jsonOutput_(loginUser_(params), params.callback);
-    }
     if (action === 'me') {
       return jsonOutput_(getCurrentUser_(params), params.callback);
     }
@@ -381,6 +366,24 @@ function authorizeLegacyAction_(action, params) {
   return null;
 }
 
+function legacyPostOnlyAction_(action) {
+  return ['login', 'syncProject', 'processDirty', 'validateConfig'].indexOf(action) >= 0;
+}
+
+function dispatchLegacyPostCommand_(action, params) {
+  if (!legacyPostOnlyAction_(action)) throw new Error('Acao POST nao reconhecida.');
+  authorizeLegacyAction_(action, params);
+  if (action === 'login') return loginUser_(params);
+  if (action === 'syncProject') {
+    var result = syncProjectByKey(String(params.project_key || '').trim());
+    result.ok = true;
+    return result;
+  }
+  if (action === 'processDirty') return processDirtyQueue({ limit: toInt_(params.limit, null) });
+  if (action === 'validateConfig') return validarClickUpConfig();
+  throw new Error('Acao POST nao reconhecida.');
+}
+
 /**
  * Lightweight deployment probe. The public response is deliberately limited
  * to release metadata and never reads Sheets or calls third-party APIs.
@@ -436,9 +439,27 @@ function getHealthPayload_(params) {
 
 function doPost(e) {
   var rawBody = ((e || {}).postData || {}).contents || '';
-  var event = rawBody ? JSON.parse(rawBody) : {};
+  var body;
+  try { body = rawBody ? JSON.parse(rawBody) : null; } catch (error) { body = null; }
+  var action = String(body && body.action || ((e || {}).parameter || {}).action || '').trim();
+  if (action) {
+    try {
+      if (!body || typeof body !== 'object' || Array.isArray(body)) throw new Error('invalid_payload');
+      var params = Object.assign({}, ((e || {}).parameter || {}), body);
+      delete params.callback;
+      return jsonOutput_(dispatchLegacyPostCommand_(action, params));
+    } catch (commandError) {
+      return jsonOutput_({ ok: false, action: action, error: simplifyErrorMessage_(commandError) });
+    }
+  }
   if (!verifyWebhookRequest_(e, rawBody)) {
     return ContentService.createTextOutput(JSON.stringify({ ok: false, error: 'invalid_signature' }))
+      .setMimeType(ContentService.MimeType.JSON);
+  }
+
+  var event = body;
+  if (!event || typeof event !== 'object' || Array.isArray(event) || !String(event.event || '').trim()) {
+    return ContentService.createTextOutput(JSON.stringify({ ok: false, error: 'invalid_payload' }))
       .setMimeType(ContentService.MimeType.JSON);
   }
 
@@ -958,6 +979,7 @@ function registerAllWebhooks() {
   var webhookToken = getScriptProperty_('CLICKUP_WEBHOOK_TOKEN', '');
   if (!endpoint) throw new Error('CLICKUP_WEBHOOK_ENDPOINT is required');
   if (!teamId) throw new Error('CLICKUP_TEAM_ID is required');
+  if (!webhookToken) throw new Error('CLICKUP_WEBHOOK_TOKEN is required for webhook registration');
 
   var mappings = loadProjectMappings_().filter(function(item) {
     return item.enabled && item.list_id;
@@ -2897,7 +2919,7 @@ function inventoryRowFromNormalized_(mapping, normalized, status, errorMessage) 
 
 function getClickUpInventory_(params) {
   params = params || {};
-  var user = requireUser_(params || {});
+  requireUser_(params || {});
   var sheet = getClickUpInventorySheet_();
   var lastRow = sheet.getLastRow();
   var lastColumn = sheet.getLastColumn();
@@ -2942,7 +2964,7 @@ function getClickUpInventory_(params) {
     }
     return item;
   }).filter(function(item) {
-    return !!sanitizeText_(item.cliente) && canUserAccessProjectItem_(user, item);
+    return !!sanitizeText_(item.cliente);
   });
   var nextOffset = Math.min(availableRows, offset + rowCount);
   return {
@@ -7535,11 +7557,9 @@ function verifyWebhookSignature_(body, signature) {
 
 function verifyWebhookRequest_(e, body) {
   var expectedToken = getScriptProperty_('CLICKUP_WEBHOOK_TOKEN', '');
-  if (expectedToken) {
-    var actualToken = String(((e || {}).parameter || {}).webhook_token || '');
-    return actualToken === expectedToken;
-  }
-  return true;
+  if (!expectedToken) return false;
+  var actualToken = String(((e || {}).parameter || {}).webhook_token || '');
+  return actualToken === expectedToken;
 }
 
 function getMonthSheet_(month) {
