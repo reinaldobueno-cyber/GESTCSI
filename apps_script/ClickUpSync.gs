@@ -4779,7 +4779,10 @@ function syncClickUpMilestoneTask_(params) {
     preserve_closed_history: true
   });
   diagnosis.synced = true;
-  diagnosis.after = getClickUpMilestoneClosing_({ month: sanitizeText_(params.month || params.mes).slice(0, 7) });
+  diagnosis.after = getClickUpMilestoneClosing_({
+    auth_token: params.auth_token,
+    month: sanitizeText_(params.month || params.mes).slice(0, 7)
+  });
   return diagnosis;
 }
 

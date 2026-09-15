@@ -23,6 +23,10 @@ O catálogo E03 contém 56 ações HTTP no `doGet`; há ainda entrada sem `actio
 
 As “consultas” que chamam `getOrCreateSheet_`, `ensureHeaders_` ou renovam a sessão no `CacheService` ainda precisam de revisão de efeito observável. O aceite não pode ser inferido apenas pelo verbo `get`.
 
+O contrato executável [`governance/e05-http-method-contract.json`](./governance/e05-http-method-contract.json) classifica as 56 actions sem duplicatas. `npm run audit:e05` aponta atualmente **36 comandos por GET**, **3 GETs com efeito condicional** e **17 candidatos de leitura ainda sem prova de efeito zero**. `ready=false` até zerar os três grupos pendentes. O teste do plano falha se alguém marcar E05 como OK sem limpar essas categorias.
+
+Foi corrigido na branch um erro adicional de sessão: `syncClickUpMilestoneTask_` agora repassa `auth_token` ao consultar o resultado protegido depois de gravar o marco. Sem isso, a chamada podia devolver erro após ter modificado a base.
+
 ## Pendências que impedem o aceite E05
 
 1. O painel publicado ainda chama sem `auth_token` a carteira mensal, CMAX, status CMAX, histórico global, registro de atualização e `syncProject`; ativar a guarda integral agora quebraria consultas e bootstrap antes do login. Adaptar os consumidores e smoke autenticado antes de publicar a guarda. Não usar um token de admin fixo no navegador.

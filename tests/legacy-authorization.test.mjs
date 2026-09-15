@@ -52,3 +52,10 @@ test('keeps project-closing status polling read-only', () => {
   assert.match(route, /getProjectClosingSyncBackgroundStatus_\(\)/);
   assert.doesNotMatch(route, /advanceProjectClosingSyncBackgroundFromStatus_\(\)/);
 });
+
+test('passes the administrative session into the protected milestone readback', () => {
+  const start = source.indexOf('function syncClickUpMilestoneTask_(params)');
+  const end = source.indexOf('\nfunction confirmClickUpMilestoneStatuses_', start);
+  const route = source.slice(start, end);
+  assert.match(route, /diagnosis\.after = getClickUpMilestoneClosing_\(\{\s*auth_token: params\.auth_token/);
+});
