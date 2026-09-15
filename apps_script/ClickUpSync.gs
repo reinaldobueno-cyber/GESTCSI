@@ -27,7 +27,7 @@
 
 var CLICKUP_API_BASE = 'https://api.clickup.com/api/v2';
 var CLICKUP_DEFAULT_WORKSPACE_ID = '9007083069';
-var GESTCSI_APPS_SCRIPT_VERSION = '2026-09-15-health-v1';
+var GESTCSI_APPS_SCRIPT_VERSION = '2026-09-15-inventory-paging-v1';
 var CLICKUP_ACTIVITY_ENGINE_VERSION = 'workspace-recent-7d-v3';
 var CLICKUP_MILESTONE_BONUS_VALUE = 30;
 var CLICKUP_PROJECT_CLOSING_BONUS_VALUE = 80;
@@ -2855,21 +2855,25 @@ function getClickUpInventory_(params) {
   if (lastRow <= 1 || lastColumn <= 0) return { ok: true, projetos: [], total: 0 };
   var header = sheet.getRange(1, 1, 1, lastColumn).getValues()[0];
   var lean = String(params.lean || '') === '1';
+  var paged = lean && String(params.paged || '') === '1';
+  var availableRows = Math.max(0, lastRow - 1);
+  var offset = paged ? Math.max(0, toInt_(params.offset, 0)) : 0;
+  var limit = paged ? Math.max(25, Math.min(toInt_(params.limit, 100), 150)) : availableRows;
+  var rowCount = paged ? Math.min(limit, Math.max(0, availableRows - offset)) : availableRows;
+  var startRow = 2 + offset;
   var values;
   var jsonIndex = header.indexOf('clickup_json');
   if (lean && jsonIndex >= 0) {
-    var rowCount = lastRow - 1;
-    var beforeJson = jsonIndex > 0 ? sheet.getRange(2, 1, rowCount, jsonIndex).getValues() : [];
+    var beforeJson = rowCount && jsonIndex > 0 ? sheet.getRange(startRow, 1, rowCount, jsonIndex).getValues() : [];
     var afterCount = lastColumn - jsonIndex - 1;
-    var afterJson = afterCount > 0 ? sheet.getRange(2, jsonIndex + 2, rowCount, afterCount).getValues() : [];
+    var afterJson = rowCount && afterCount > 0 ? sheet.getRange(startRow, jsonIndex + 2, rowCount, afterCount).getValues() : [];
     values = [header];
     for (var rowIndex = 0; rowIndex < rowCount; rowIndex += 1) {
       values.push((beforeJson[rowIndex] || []).concat([''], afterJson[rowIndex] || []));
     }
   } else {
-    values = sheet.getRange(1, 1, lastRow, lastColumn).getValues();
+    values = rowCount ? [header].concat(sheet.getRange(startRow, 1, rowCount, lastColumn).getValues()) : [header];
   }
-  if (values.length <= 1) return { ok: true, projetos: [], total: 0 };
   var projetos = values.slice(1).map(function(row) {
     var item = rowToObject_(header, row);
     if (item.ultima_sync_clickup instanceof Date) item.ultima_sync_clickup = item.ultima_sync_clickup.toISOString();
@@ -2891,7 +2895,20 @@ function getClickUpInventory_(params) {
   }).filter(function(item) {
     return !!sanitizeText_(item.cliente) && canUserAccessProjectItem_(user, item);
   });
-  return { ok: true, projetos: projetos, total: projetos.length, lean: lean };
+  var nextOffset = Math.min(availableRows, offset + rowCount);
+  return {
+    ok: true,
+    projetos: projetos,
+    total: projetos.length,
+    lean: lean,
+    paged: paged,
+    offset: offset,
+    limit: limit,
+    scanned_total: availableRows,
+    next_offset: nextOffset,
+    has_more: paged && nextOffset < availableRows,
+    done: !paged || nextOffset >= availableRows
+  };
 }
 
 function getClickUpMilestoneClosing_(params) {
