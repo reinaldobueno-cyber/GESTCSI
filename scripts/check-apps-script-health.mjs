@@ -1,7 +1,7 @@
 import { pathToFileURL } from 'node:url';
 
 export const DEFAULT_APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbxtbpwBZEHDHCtU7lovmFHQ6R-MDgff-CB-yAyH6DfRwo0SjR9WXU6B4EYrgCcza6Kj/exec';
-export const EXPECTED_APPS_SCRIPT_VERSION = '2026-09-14-health-v1';
+export const EXPECTED_APPS_SCRIPT_VERSION = '2026-09-15-health-v1';
 
 function wait(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));

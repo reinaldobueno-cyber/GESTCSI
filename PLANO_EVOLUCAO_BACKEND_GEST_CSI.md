@@ -244,12 +244,12 @@ Ao final deste plano, o GEST CSI deverá:
 
 #### E04 — health check do Apps Script atual
 
-- **Status:** [ ] PENDENTE
+- **Status:** [x] OK
 - **Entrega:** endpoint mínimo de saúde e verificação da implantação usada em produção.
 - **Critério de OK:** responde 200 em monitor externo; informa versão sem expor dados; alerta após falhas consecutivas.
 - **Testes:** público, autenticado, timeout e implantação removida.
-- **Progresso em 14/09/2026:** implementação concluída no branch de evolução; endpoint público mínimo, detalhe administrativo protegido, monitor com timeout e três tentativas e workflow de incidente prontos. A implantação pública ainda responde com o contrato legado `clickup-sync`, por isso a entrega permanece corretamente pendente.
-- **Evidência parcial:** [`VALIDACAO_HEALTH_CHECK_E04.md`](./VALIDACAO_HEALTH_CHECK_E04.md), `60/60` testes aprovados e monitor externo rejeitando a implantação antiga após três respostas incompatíveis.
+- **Conclusão em 15/09/2026:** versão imutável `285`, construída exclusivamente sobre a versão estável `283`, validada em homologação e promovida para a mesma URL de produção. Endpoint público respondeu três vezes consecutivas com HTTP 200, `status=ready` e versão `2026-09-15-health-v1`; login, histórico, portfólio, CMAX e página pública passaram no smoke pós-publicação. O workflow externo foi ativado no branch principal com três tentativas e abertura de incidente após falhas consecutivas.
+- **Evidência:** [`VALIDACAO_HEALTH_CHECK_E04.md`](./VALIDACAO_HEALTH_CHECK_E04.md), `60/60` testes aprovados, implantação Apps Script `285` e execução manual aprovada do monitor externo.
 
 #### E05 — autorização uniforme no legado
 

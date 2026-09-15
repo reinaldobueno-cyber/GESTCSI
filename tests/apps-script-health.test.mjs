@@ -21,7 +21,7 @@ function healthy(overrides = {}) {
     status: 'ready',
     schema_version: 1,
     version: EXPECTED_APPS_SCRIPT_VERSION,
-    checked_at: '2026-09-14T12:00:00.000Z',
+    checked_at: '2026-09-15T12:00:00.000Z',
     visibility: 'public',
     ...overrides
   };

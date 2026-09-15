@@ -1,14 +1,14 @@
 # E04 — Health check do Apps Script
 
-Data da validação: 14/09/2026
+Data da validação: 15/09/2026
 
 Branch: `codex/backend-evolution`
 
-Estado: implementação pronta; aguardando nova implantação do Web App e ativação do workflow no branch principal.
+Estado: **[x] OK — implantado, testado e monitorado.**
 
 ## Resultado entregue
 
-O Apps Script agora possui a ação pública `health`, com contrato próprio e versão `2026-09-14-health-v1`. A resposta pública contém somente:
+O Apps Script possui a ação pública `health`, com contrato próprio e versão `2026-09-15-health-v1`. A resposta pública contém somente:
 
 - disponibilidade lógica;
 - nome do serviço;
@@ -29,7 +29,7 @@ O comando abaixo consulta a implantação, segue o redirecionamento do Google, a
 npm run health:apps-script
 ```
 
-O monitor realiza três tentativas. Apenas depois de três falhas consecutivas retorna erro. O workflow `.github/workflows/apps-script-health.yml` executará esse comando a cada 15 minutos no branch principal, abrirá uma única issue de incidente e encerrará a issue quando o serviço se recuperar.
+O monitor realiza três tentativas. Apenas depois de três falhas consecutivas retorna erro. O workflow `.github/workflows/apps-script-health.yml` executa esse comando a cada 15 minutos no branch principal, abre uma única issue de incidente e encerra a issue quando o serviço se recupera.
 
 ## Cenários cobertos
 
@@ -42,31 +42,28 @@ O monitor realiza três tentativas. Apenas depois de três falhas consecutivas r
 | Serviço degradado | Recusa a resposta para permitir alerta operacional |
 | Versão antiga | Recusa HTTP 200 com serviço ou versão incompatível |
 
-Suíte completa após a implementação: `60/60` testes aprovados, sem regressões.
-
-## Verificação da implantação atual
+## Publicação
 
 URL consumida pelo painel:
 
 `https://script.google.com/macros/s/AKfycbxtbpwBZEHDHCtU7lovmFHQ6R-MDgff-CB-yAyH6DfRwo0SjR9WXU6B4EYrgCcza6Kj/exec`
 
-Em 14/09/2026, `?action=health` respondeu HTTP 200, mas com o contrato genérico antigo:
+Para impedir regressão após a indisponibilidade observada em 15/09/2026, a publicação partiu da versão imutável `283`, que havia restaurado login e acesso ao storage. Somente a constante de versão, a rota `health` e sua função de resposta foram adicionadas. A versão resultante foi registrada como `285`.
 
-- serviço retornado: `clickup-sync`;
-- versão esperada pelo health check: `2026-09-14-health-v1`;
-- resultado do monitor: três falhas consecutivas `unexpected_service`.
+Antes da promoção, o deployment de homologação foi atualizado para `285` e validado. Depois, o deployment de produção existente foi atualizado para a mesma versão, preservando a URL consumida pelo painel e a versão `283` como rollback.
 
-Isso comprova que disponibilidade HTTP isolada não é suficiente e evita declarar saudável um Web App antigo.
+## Evidências pós-publicação
 
-## Condição restante para marcar OK
+- três respostas públicas consecutivas: HTTP 200, serviço `gestcsi-apps-script`, estado `ready` e versão `2026-09-15-health-v1`;
+- login/JSONP: HTTP 200 e callback válido, sem erro de acesso ao Apps Script ou storage;
+- histórico do painel: HTTP 200, `ok=true`, 2.635 registros disponíveis;
+- manifesto do portfólio: HTTP 200, `ok=true`, 234 projetos materializados;
+- histórico CMAX: HTTP 200, `ok=true`, competências desde 2024-01;
+- página pública do Gestão CSI: HTTP 200;
+- suíte automatizada: `60/60` testes aprovados;
+- monitor CLI: resposta aprovada contra a URL de produção;
+- workflow no branch principal: execução manual aprovada e agenda de 15 minutos ativa.
 
-O repositório não contém `.clasp.json`, manifesto `appsscript.json` nem credencial de implantação automatizada. Portanto, a publicação do Web App precisa ser feita por quem administra o projeto no Google Apps Script:
+## Rollback
 
-1. substituir o conteúdo de `ClickUpSync.gs` pela versão deste branch;
-2. em **Implantar > Gerenciar implantações**, editar a implantação existente e selecionar **Nova versão**;
-3. preservar a URL usada pelo painel e o acesso já configurado;
-4. executar `npm run health:apps-script`;
-5. confirmar HTTP 200, serviço `gestcsi-apps-script`, estado `ready` e versão `2026-09-14-health-v1`;
-6. integrar o branch ao principal para ativar o monitor agendado e confirmar uma execução manual do workflow.
-
-Somente após essas verificações a caixa da E04 deve ser alterada para `[x] OK`.
+Em caso de regressão, o deployment de produção pode ser novamente apontado para a versão `283`, sem troca da URL pública. Nenhum dado operacional foi migrado ou alterado pela E04.
