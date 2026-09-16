@@ -21,6 +21,6 @@ O endpoint `ContentService` do Apps Script redireciona a resposta para `script.g
 
 ## Limite desta entrega
 
-Este documento não cria Worker, conta, domínio, secrets nem deployment; também não marca E05 ou E09 como OK. O commit local do primeiro lote POST e os testes simulados são preparação para homologação, não prova de navegador nem correção publicada dos projetos `<=2025`.
+O protótipo local [`gateway/`](./gateway/) agora contém uma ponte de homologação desligada por padrão, com login/sessão opaca, logout com CSRF e leitura histórica paginada. Isso não cria conta, domínio, banco, secrets nem deployment; tampouco marca E05 ou E09 como OK. O primeiro lote POST, a ponte e os testes simulados são preparação para homologação, não prova de navegador nem correção publicada dos projetos `<=2025`.
 
 Fontes primárias: [Cloudflare Static Assets e binding](https://developers.cloudflare.com/workers/static-assets/binding/), [Cloudflare Workers Best Practices](https://developers.cloudflare.com/workers/best-practices/workers-best-practices/), [Google Apps Script Content Service](https://developers.google.com/apps-script/guides/content/).

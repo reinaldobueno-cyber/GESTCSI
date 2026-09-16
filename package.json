@@ -7,6 +7,7 @@
     "preview": "node scripts/serve.mjs",
     "baseline:capture": "node scripts/capture-baseline.mjs",
     "health:apps-script": "node scripts/check-apps-script-health.mjs",
-    "audit:e05": "node scripts/audit-e05.mjs"
+    "audit:e05": "node scripts/audit-e05.mjs",
+    "gateway:assets": "node gateway/scripts/build-assets.mjs"
   }
 }

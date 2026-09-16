@@ -10,3 +10,6 @@ remote_index*.html
 script.extract.js
 style.extract.css
 GESTCSI-codex-pr/
+gateway/dist/
+gateway/.dev.vars
+gateway/wrangler.jsonc
