@@ -14791,7 +14791,10 @@ function gestaoBuildClickupProductivity(list) {
   });
   return { base: base, buckets: buckets, consultores: rows };
 }
-function gestaoMetricCell(obj) {
+function gestaoMetricCell(obj, incomplete) {
+  if (incomplete) return ['projetos', 'tasks concl.', 'tasks pend.', 'marcos concl.', 'marcos pend.', 'atrasados', 'sem update'].map(function(label) {
+    return '<div class="tower-metric"><strong>—</strong><span>'+label+'</span></div>';
+  }).join('');
   return '<div class="tower-metric"><strong>'+fn(obj.projetos)+'</strong><span>projetos</span></div>'+
     '<div class="tower-metric"><strong>'+fn(obj.tasksConcluidas)+'</strong><span>tasks concl.</span></div>'+
     '<div class="tower-metric"><strong>'+fn(obj.tasksPendentes)+'</strong><span>tasks pend.</span></div>'+
@@ -14810,23 +14813,29 @@ function gestaoRenderClickupProductivity(list, meta) {
   meta = meta || {};
   var data = gestaoBuildClickupProductivity(Array.isArray(list) ? list : []);
   var b = data.buckets;
+  var historicalUnavailable = !!meta.erro;
   var cards = [b.legacy, b.current, b.total].map(function(item) {
-    return '<div class="tower-kpi"><div class="tower-kpi-top"><div class="tower-kpi-icon">'+(item.key === 'legacy' ? '≤25' : item.key === 'current' ? '26' : 'Σ')+'</div><span class="tower-kpi-trend">ClickUp</span></div><div class="tower-kpi-value">'+item.projetos.length+'</div><div class="tower-kpi-label">'+item.label+'</div><div class="tower-kpi-sub">'+gestaoTotalConcluidos(item)+' concluídos • '+item.tasksPendentes+' tasks pend. • '+item.marcosPendentes+' marcos pend.</div><div class="tower-risk-meta" style="margin-top:10px">'+gestaoAuditButton(item.atrasados+' atrasados','atrasados',item.key)+gestaoAuditButton(item.semUpdate+' sem update','semUpdate',item.key)+'</div></div>';
+    var incomplete = historicalUnavailable && item.key !== 'current';
+    var count = incomplete ? (item.key === 'legacy' ? '—' : '≥'+b.current.projetos.length) : item.projetos.length;
+    var sub = incomplete ? (item.key === 'legacy' ? 'Inventário histórico não carregado.' : 'Total parcial: somente projetos 2026 confirmados.') : gestaoTotalConcluidos(item)+' concluídos • '+item.tasksPendentes+' tasks pend. • '+item.marcosPendentes+' marcos pend.';
+    var risk = incomplete ? '<span class="tower-kpi-trend">Auditoria indisponível</span>' : gestaoAuditButton(item.atrasados+' atrasados','atrasados',item.key)+gestaoAuditButton(item.semUpdate+' sem update','semUpdate',item.key);
+    return '<div class="tower-kpi"><div class="tower-kpi-top"><div class="tower-kpi-icon">'+(item.key === 'legacy' ? '≤25' : item.key === 'current' ? '26' : 'Σ')+'</div><span class="tower-kpi-trend">ClickUp</span></div><div class="tower-kpi-value">'+count+'</div><div class="tower-kpi-label">'+item.label+(incomplete && item.key === 'total' ? ' (PARCIAL)' : '')+'</div><div class="tower-kpi-sub">'+sub+'</div><div class="tower-risk-meta" style="margin-top:10px">'+risk+'</div></div>';
   }).join('');
   var rows = data.consultores.map(function(c) {
     var examples = c.exemplos.slice(0, 4).map(function(e) {
       return '<div class="tower-risk-row" style="grid-template-columns:1fr auto"><div><div class="tower-risk-name">'+escapeHtml(e.cliente)+'</div><div class="tower-risk-meta">'+towerBadge(e.bucket, 'g')+towerBadge(e.concluidos+' concluído(s)', 'g')+(e.atrasado ? towerBadge('atrasado', 'r') : '')+(e.semUpdate !== null && e.semUpdate >= 7 ? towerBadge(e.semUpdate+'d sem update', 'o') : '')+'</div></div><div>'+e.acao+'</div></div>';
     }).join('') || '<div class="tower-empty">Sem itens concluídos ou atrasados para destacar.</div>';
-    return '<div class="tower-panel"><div class="tower-panel-head"><div><button type="button" class="tower-panel-title" style="border:0;background:transparent;padding:0;cursor:pointer;text-align:left" onclick="return gestaoOpenConsultorAudit(\''+jsQuote(c.key || c.nome)+'\')">'+escapeHtml(c.nome)+'</button><div class="tower-panel-note">Clique no nome para auditar todos os projetos, histórico e 2026</div></div></div><div class="tower-panel-body"><div class="tower-cons-row" style="grid-template-columns:1fr repeat(7,76px)"><div><div class="tower-cons-name">Total</div><div class="tower-cons-meta">todos os projetos ClickUp carregados</div></div>'+gestaoMetricCell(c.total)+'</div><div class="tower-cons-row" style="grid-template-columns:1fr repeat(7,76px)"><div><div class="tower-cons-name">Histórico <= 2025</div><div class="tower-cons-meta">inventário ClickUp isolado</div></div>'+gestaoMetricCell(c.legacy)+'</div><div class="tower-cons-row" style="grid-template-columns:1fr repeat(7,76px)"><div><div class="tower-cons-name">Projetos 2026</div><div class="tower-cons-meta">carteira atual da Lais / ClickUp</div></div>'+gestaoMetricCell(c.current)+'</div><div class="tower-risk-list" style="margin-top:14px">'+examples+'</div></div></div>';
+    return '<div class="tower-panel"><div class="tower-panel-head"><div><button type="button" class="tower-panel-title" style="border:0;background:transparent;padding:0;cursor:pointer;text-align:left" onclick="return gestaoOpenConsultorAudit(\''+jsQuote(c.key || c.nome)+'\')">'+escapeHtml(c.nome)+'</button><div class="tower-panel-note">'+(historicalUnavailable ? 'Histórico indisponível; dados deste consultor são parciais' : 'Clique no nome para auditar todos os projetos, histórico e 2026')+'</div></div></div><div class="tower-panel-body"><div class="tower-cons-row" style="grid-template-columns:1fr repeat(7,76px)"><div><div class="tower-cons-name">Total</div><div class="tower-cons-meta">'+(historicalUnavailable ? 'total parcial; histórico não carregado' : 'todos os projetos ClickUp carregados')+'</div></div>'+gestaoMetricCell(c.total, historicalUnavailable)+'</div><div class="tower-cons-row" style="grid-template-columns:1fr repeat(7,76px)"><div><div class="tower-cons-name">Histórico <= 2025</div><div class="tower-cons-meta">'+(historicalUnavailable ? 'inventário indisponível' : 'inventário ClickUp isolado')+'</div></div>'+gestaoMetricCell(c.legacy, historicalUnavailable)+'</div><div class="tower-cons-row" style="grid-template-columns:1fr repeat(7,76px)"><div><div class="tower-cons-name">Projetos 2026</div><div class="tower-cons-meta">carteira atual da Lais / ClickUp</div></div>'+gestaoMetricCell(c.current)+'</div><div class="tower-risk-list" style="margin-top:14px">'+examples+'</div></div></div>';
   }).join('') || '<div class="tower-empty">Nenhum projeto com rastreio ClickUp encontrado.</div>';
   var legacyNote = b.legacy.projetos.length || meta.erro ? '' : '<div class="dashx-focus-note" style="margin-bottom:14px"><div><strong>Atenção:</strong> nenhum projeto histórico foi encontrado no inventário ClickUp.</div><div class="dashx-focus-hint">Rode no Sheets: ClickUp Sync > Importar projetos dos spaces históricos e depois Sincronizar inventário ClickUp.</div></div>';
   var erro = meta.erro ? '<div class="dashx-focus-note" style="margin-bottom:14px"><div><strong>Inventário histórico indisponível:</strong> '+escapeHtml(meta.erro)+'</div><div class="dashx-focus-hint">Os projetos 2026 continuam visíveis; o histórico será recuperado na próxima resposta válida.</div></div>' : '';
   var aviso = meta.aviso ? '<div class="dashx-focus-note" style="margin-bottom:14px"><div><strong>Inventário histórico em cache:</strong> '+escapeHtml(meta.aviso)+'</div><div class="dashx-focus-hint">Os números permanecem visíveis enquanto a fonte é atualizada.</div></div>' : '';
-  return '<div class="dashx-shell"><div class="dashx-hero"><div class="dashx-hero-top"><div class="dashx-title-wrap"><div class="dashx-eyebrow">Gestão ClickUp</div><div class="dashx-title">Produtividade ClickUp por consultor</div><div class="dashx-sub">Visão isolada da Gestão: histórico vem do CLICKUP_INVENTARIO e 2026 vem da base mensal aprovada. Não altera Dashboard, Projetos ou Executivo.</div></div><div class="dashx-meta"><span class="dashx-meta-chip"><b>Fonte</b> Gestão isolada</span><span class="dashx-meta-chip"><b>Projetos</b> '+data.base.length+'</span></div></div></div>'+erro+aviso+legacyNote+'<div class="tower-kpis">'+cards+'</div>'+gestaoRenderClickupUserActivityShell()+'<div class="dashx-stack">'+rows+'</div></div>';
+  return '<div class="dashx-shell"><div class="dashx-hero"><div class="dashx-hero-top"><div class="dashx-title-wrap"><div class="dashx-eyebrow">Gestão ClickUp</div><div class="dashx-title">Produtividade ClickUp por consultor</div><div class="dashx-sub">Visão isolada da Gestão: histórico vem do CLICKUP_INVENTARIO e 2026 vem da base mensal aprovada. Não altera Dashboard, Projetos ou Executivo.</div></div><div class="dashx-meta"><span class="dashx-meta-chip"><b>Fonte</b> Gestão isolada</span><span class="dashx-meta-chip"><b>Projetos</b> '+(historicalUnavailable ? '≥'+b.current.projetos.length+' (parcial)' : data.base.length)+'</span></div></div></div>'+erro+aviso+legacyNote+'<div class="tower-kpis">'+cards+'</div>'+gestaoRenderClickupUserActivityShell()+'<div class="dashx-stack">'+rows+'</div></div>';
 }
 var GESTAO_CLICKUP_INVENTORY = null;
 var GESTAO_CLICKUP_INVENTORY_LOADING = null;
 var GESTAO_CLICKUP_VIEW_DATA = [];
+var GESTAO_CLICKUP_HISTORY_UNAVAILABLE = false;
 var GESTAO_CLICKUP_USER_ACTIVITY = null;
 var GESTAO_CLICKUP_USER_ACTIVITY_LOADING = null;
 var GESTAO_CLICKUP_ACTIVITY_DAY_KEY = '';
@@ -15375,10 +15384,12 @@ function gestaoLoadClickUpInventory() {
   if (GESTAO_CLICKUP_INVENTORY_LOADING) return GESTAO_CLICKUP_INVENTORY_LOADING;
   var userKey = String((AUTH_STATE.user && (AUTH_STATE.user.username || AUTH_STATE.user.email)) || 'anon').toLowerCase();
   var cacheKey = 'gestcsi_clickup_inventory_v2_'+userKey;
+  var minHistoricalProjects = 201;
   function readCache() {
     try {
       var cached = JSON.parse(localStorage.getItem(cacheKey) || 'null');
       if (!cached || !Array.isArray(cached.projetos) || !cached.saved_at) return null;
+      if (cached.projetos.length < minHistoricalProjects) return null;
       if (Date.now() - Number(cached.saved_at) > 7 * 24 * 60 * 60 * 1000) return null;
       return cached.projetos.map(gestaoNormalizeInventoryProject);
     } catch (e) { return null; }
@@ -15411,7 +15422,12 @@ function gestaoLoadClickUpInventory() {
         }
         collected = collected.concat(resp.projetos);
         pageCount += 1;
-        if (!resp.has_more) return {ok:true, projetos:collected, total:collected.length, paged:true};
+        if (!resp.has_more) {
+          if (collected.length < minHistoricalProjects) {
+            throw new Error('Inventário ClickUp histórico incompleto: '+collected.length+' projeto(s), abaixo do piso '+minHistoricalProjects+'.');
+          }
+          return {ok:true, projetos:collected, total:collected.length, paged:true};
+        }
         var nextOffset = Number(resp.next_offset);
         if (!isFinite(nextOffset) || nextOffset <= offset || pageCount >= 20) {
           throw new Error('Paginação inválida ao carregar o inventário ClickUp.');
@@ -15494,6 +15510,10 @@ function gestaoFilterProjects(mode, bucket, consultor) {
   }));
 }
 function gestaoOpenAudit(mode, bucket) {
+  if (GESTAO_CLICKUP_HISTORY_UNAVAILABLE && bucket !== 'current') {
+    dashOpenAuditModal('Gestão ClickUp — histórico indisponível', '<div class="dashx-focus-note"><div><strong>Auditoria incompleta:</strong> o inventário histórico não foi carregado.</div><div class="dashx-focus-hint">Os projetos 2026 permanecem disponíveis no recorte 2026.</div></div>');
+    return false;
+  }
   var list = gestaoFilterProjects(mode, bucket, '');
   var label = mode === 'atrasados' ? 'Projetos em atraso' : mode === 'semUpdate' ? 'Projetos sem update' : 'Projetos';
   var rows = list.length ? list.map(function(p) {
@@ -15510,7 +15530,7 @@ function gestaoOpenAudit(mode, bucket) {
   return false;
 }
 function gestaoOpenConsultorAudit(consultor) {
-  var hist = gestaoFilterProjects('todos', 'legacy', consultor);
+  var hist = GESTAO_CLICKUP_HISTORY_UNAVAILABLE ? [] : gestaoFilterProjects('todos', 'legacy', consultor);
   var cur = gestaoFilterProjects('todos', 'current', consultor);
   var displayName = hist.concat(cur).reduce(function(best, p) {
     return gestaoConsultorLabel(best, p && p.consultor);
@@ -15519,7 +15539,7 @@ function gestaoOpenConsultorAudit(consultor) {
     var rows = list.length ? list.map(function(p){ return gestaoProjectRow(p, gestaoIsProjectLate(p) ? 'Atrasado' : ''); }).join('') : '<tr class="empty-row"><td colspan="10">Nenhum projeto.</td></tr>';
     return '<div class="dashx-chart-title" style="font-size:14px;margin:16px 0 8px">'+title+' • '+list.length+' projeto(s)</div><div class="dashx-table-wrap"><table class="dashx-table"><thead><tr><th>Projeto</th><th>Status</th><th>Fases concl.</th><th>Tasks concl.</th><th>Tasks pend.</th><th>Marcos concl.</th><th>Marcos pend.</th><th>Sem update</th><th>Auditoria</th><th>Ação</th></tr></thead><tbody>'+rows+'</tbody></table></div>';
   }
-  var html = '<div class="dashx-focus-note"><div><strong>'+escapeHtml(displayName)+':</strong> relação completa da Gestão ClickUp.</div><div class="dashx-focus-hint">'+hist.length+' histórico • '+cur.length+' em 2026</div></div>'+section('Histórico <= 2025', hist)+section('Projetos 2026', cur);
+  var html = '<div class="dashx-focus-note"><div><strong>'+escapeHtml(displayName)+':</strong> '+(GESTAO_CLICKUP_HISTORY_UNAVAILABLE ? 'relação parcial da Gestão ClickUp.' : 'relação completa da Gestão ClickUp.')+'</div><div class="dashx-focus-hint">'+(GESTAO_CLICKUP_HISTORY_UNAVAILABLE ? 'Histórico indisponível' : hist.length+' histórico')+' • '+cur.length+' em 2026</div></div>'+(GESTAO_CLICKUP_HISTORY_UNAVAILABLE ? '' : section('Histórico <= 2025', hist))+section('Projetos 2026', cur);
   dashOpenAuditModal('Gestão ClickUp — '+displayName, html);
   return false;
 }
@@ -15530,6 +15550,7 @@ function initControlTower() {
   gestaoLoadClickUpInventory().then(function(projetos) {
     var viewData = gestaoBuildViewData(projetos);
     GESTAO_CLICKUP_VIEW_DATA = viewData;
+    GESTAO_CLICKUP_HISTORY_UNAVAILABLE = false;
     el.innerHTML = gestaoRenderClickupProductivity(viewData, { aviso: projetos._inventoryWarning || '' });
     gestaoReloadClickUpUserActivity(false);
     hideSidebarBadge('n-tower');
@@ -15537,6 +15558,7 @@ function initControlTower() {
     var msg = error && error.message ? error.message : String(error || 'Erro desconhecido');
     var fallbackView = gestaoBuildViewData([]);
     GESTAO_CLICKUP_VIEW_DATA = fallbackView;
+    GESTAO_CLICKUP_HISTORY_UNAVAILABLE = true;
     el.innerHTML = gestaoRenderClickupProductivity(fallbackView, { erro: msg });
     gestaoReloadClickUpUserActivity(false);
     hideSidebarBadge('n-tower');
